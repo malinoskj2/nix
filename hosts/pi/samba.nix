@@ -19,13 +19,13 @@
         "map to guest" = "bad user";
       };
       public = {
-          browseable = "yes";
-          path = "/media";
-          "read only" = "no";
-          "guest ok" = "yes";
-          "create mask" = "0644";
-          "directory mask" = "0755";
-          "force user" = "pi";
+        browseable = "yes";
+        path = "/media";
+        "read only" = "no";
+        "guest ok" = "yes";
+        "create mask" = "0644";
+        "directory mask" = "0755";
+        "force user" = "pi";
       };
     };
   };
