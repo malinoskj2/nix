@@ -17,9 +17,9 @@
       channelsConfig.allowUnfree = true;
 
       sharedOverlays = [ (import ./overlays/derivations.nix) ];
-      extraSpecialArgs = { 
-	inherit inputs; 
-	secrets = import /secret/secrets.nix;
+      extraSpecialArgs = {
+        inherit inputs;
+        secrets = import /secret/secrets.nix;
       };
 
       hostDefaults.modules = [
@@ -36,7 +36,7 @@
           ./hosts/home/configuration.nix
           { home-manager.users.jesse = import ./users/jesse; }
         ];
-	specialArgs = { secrets = import /secret/secrets.nix; };
+        specialArgs = { secrets = import /secret/secrets.nix; };
       };
 
       hosts.katana = {
