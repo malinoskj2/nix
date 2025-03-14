@@ -6,8 +6,9 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  boot.kernelPackages =
-    pkgs.linuxPackages_6_6; # add pkgs.linuxPackages_latest back when not broken for nvidia
+  # boot.kernelPackages =
+    # pkgs.linuxPackages_6_6; # add pkgs.linuxPackages_latest back when not broken for nvidia
+  boot.kernelPackages = pkgs.linuxPackages_latest; # add pkgs.linuxPackages_latest back when not broken for nvidia
 
   boot.initrd.availableKernelModules = [
     "xhci_pci"
