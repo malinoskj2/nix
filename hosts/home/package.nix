@@ -10,5 +10,6 @@
     usbutils
     pciutils
     lshw
+    uutils-coreutils
   ];
 }
