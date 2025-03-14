@@ -10,6 +10,6 @@
     usbutils
     pciutils
     lshw
-    uutils-coreutils
+    uutils-coreutils-noprefix
   ];
 }
