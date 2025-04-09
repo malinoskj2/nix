@@ -153,5 +153,6 @@
     openzone-cursors
     capitaine-cursors
     neovim
+    zed-editor
   ];
 }
