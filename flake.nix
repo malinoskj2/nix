@@ -2,10 +2,10 @@
   description = ":)";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
     utils.url = "github:gytis-ivaskevicius/flake-utils-plus";
     home-manager = {
-      url = "github:nix-community/home-manager/release-24.11";
+      url = "github:nix-community/home-manager/release-25.11";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -17,10 +17,10 @@
       channelsConfig.allowUnfree = true;
 
       sharedOverlays = [ (import ./overlays/derivations.nix) ];
-      extraSpecialArgs = {
-        inherit inputs;
-        secrets = import /secret/secrets.nix;
-      };
+      # extraSpecialArgs = {
+      #   inherit inputs;
+      #  secrets = import /secret/secrets.nix;
+      #A };
 
       hostDefaults.modules = [
         home-manager.nixosModules.home-manager

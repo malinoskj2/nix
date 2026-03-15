@@ -20,7 +20,7 @@
   hardware = {
     graphics = {
       enable = true;
-      extraPackages = with pkgs; [ vaapiVdpau libvdpau-va-gl ];
+      extraPackages = with pkgs; [ libva-vdpau-driver libvdpau-va-gl ];
       extraPackages32 = with pkgs.pkgsi686Linux; [ libva ];
     };
     nvidia = {
@@ -29,30 +29,6 @@
       nvidiaSettings = false;
       forceFullCompositionPipeline = true;
       powerManagement.enable = true;
-      # package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
-      #   version = "555.58";
-      #   sha256_64bit = "sha256-bXvcXkg2kQZuCNKRZM5QoTaTjF4l2TtrsKUvyicj5ew=";
-      #   sha256_aarch64 = "sha256-7XswQwW1iFP4ji5mbRQ6PVEhD4SGWpjUJe1o8zoXYRE=";
-      #   openSha256 = "sha256-hEAmFISMuXm8tbsrB+WiUcEFuSGRNZ37aKWvf0WJ2/c=";
-      #   settingsSha256 =
-      #     "sha256-vWnrXlBCb3K5uVkDFmJDVq51wrCoqgPF03lSjZOuU8M="; # "sha256-m2rNASJp0i0Ez2OuqL+JpgEF0Yd8sYVCyrOoo/ln2a4=";
-      #   persistencedSha256 =
-      #     lib.fakeHash; # "sha256-XaPN8jVTjdag9frLPgBtqvO/goB5zxeGzaTU0CdL6C4=";
-      # };
-#      package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
-#        version = "570.86.16"; # use new 570 drivers
-#        sha256_64bit = "sha256-RWPqS7ZUJH9JEAWlfHLGdqrNlavhaR1xMyzs8lJhy9U=";
-#        openSha256 = "sha256-DuVNA63+pJ8IB7Tw2gM4HbwlOh1bcDg2AN2mbEU9VPE=";
-#        settingsSha256 = "sha256-9rtqh64TyhDF5fFAYiWl3oDHzKJqyOW3abpcf2iNRT8=";
-#        usePersistenced = false;
-#      };
-      package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
-        version = "570.133.07"; # use new 570 drivers
-	sha256_64bit = "sha256-LUPmTFgb5e9VTemIixqpADfvbUX1QoTT2dztwI3E3CY=";
-        openSha256 = "sha256-DuVNA63+pJ8IB7Tw2gM4HbwlOh1bcDg2AN2mbEU9VPE=";
-        settingsSha256 = "sha256-9rtqh64TyhDF5fFAYiWl3oDHzKJqyOW3abpcf2iNRT8=";
-        usePersistenced = false;
-      };
     };
   };
 

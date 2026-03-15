@@ -1,11 +1,9 @@
-{ config, pkgs, secrets, ... }:
+{ config, pkgs, ... }:
 
 {
   networking.hostName = "home";
 
-  networking.interfaces.enp4s0.useDHCP = true;
-
-  networking.extraHosts = secrets.extraHosts;
+  networking.interfaces.enp8s0.useDHCP = true;
 
   networking.firewall.enable = false;
 }
