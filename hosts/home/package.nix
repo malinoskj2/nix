@@ -5,7 +5,6 @@
     wget
     git
     docker-compose
-    clang_13
     unzip
     usbutils
     pciutils

@@ -6,7 +6,7 @@
   home = {
     username = "jesse";
     homeDirectory = "/home/jesse";
-    stateVersion = "24.11";
+    stateVersion = "25.11";
   };
 
   home.file = {
@@ -66,32 +66,16 @@
     mpv
     feh
     jetbrains.datagrip
-    stylua
-    sumneko-lua-language-server
-    xclip
     ffmpeg
     pavucontrol
     imagemagick
     file
-    shellcheck
-    bitwarden-cli
     gnumake
     envsubst
-    redis
-    mysql80
     killall
     zip
     tree
     nixfmt
-    jetbrains.phpstorm
-    xorg.xev
-    xorg.xkbcomp
-    xorg.xmodmap
-    terraform
-    terraformer
-    pre-commit
-    awscli2
-    xdotool
     starship
     cargo
     mediainfo
@@ -100,49 +84,24 @@
     pandoc
     dig
     whois
-    sox
-    iperf
     jq
-    mesa
-    glmark2
-    glxinfo
-    i7z
-    lm_sensors
     firefox
     google-chrome
     nss
     nssTools
-    php
-    php82Packages.composer
-    php82Packages.php-codesniffer
     postman
     nodejs
     twilio-cli
     nmap
-    speedtest-cli
-    nodePackages.intelephense
-    luajit
     hyprpaper
     waybar
     grim
     slurp
     wl-clipboard
-    obs-studio
     libnotify
     wl-color-picker
-    eww
-    python3
-    python312Packages.pip
-    hyprlock
-    yaml-language-server
-    docker-compose-language-service
-    dockerfile-language-server-nodejs
-    vscode-langservers-extracted
     p7zip
     unrar
-    php82Packages.phpmd
-    neovide
-    smartmontools
     bruno
     xorg.xlsclients
     nwg-look
