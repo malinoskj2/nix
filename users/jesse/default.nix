@@ -1,4 +1,9 @@
-{ config, pkgs, inputs, ... }:
+{
+  config,
+  pkgs,
+  inputs,
+  ...
+}:
 
 {
   programs.home-manager.enable = true;
@@ -114,5 +119,6 @@
     capitaine-cursors
     neovim
     zed-editor
+    codex
   ];
 }
