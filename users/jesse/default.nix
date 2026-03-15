@@ -76,6 +76,7 @@
     zip
     tree
     nixfmt
+    nil
     starship
     cargo
     mediainfo
