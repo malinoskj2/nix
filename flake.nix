@@ -10,12 +10,18 @@
     };
   };
 
-  outputs = { self, nixpkgs, utils, home-manager, ... }@inputs:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      utils,
+      home-manager,
+      ...
+    }@inputs:
     utils.lib.mkFlake {
       inherit self inputs;
 
       channelsConfig.allowUnfree = true;
-
       sharedOverlays = [ (import ./overlays/derivations.nix) ];
       # extraSpecialArgs = {
       #   inherit inputs;
@@ -36,7 +42,9 @@
           ./hosts/home/configuration.nix
           { home-manager.users.jesse = import ./users/jesse; }
         ];
-        specialArgs = { secrets = import /secret/secrets.nix; };
+        specialArgs = {
+          secrets = import /secret/secrets.nix;
+        };
       };
 
       hosts.katana = {
