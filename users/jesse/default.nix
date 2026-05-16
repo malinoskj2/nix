@@ -67,6 +67,7 @@
     eza
     tldr
     tokei
+    gitleaks
     alacritty
     mpv
     feh
