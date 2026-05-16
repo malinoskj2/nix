@@ -13,6 +13,7 @@
     ./user.nix
     ./virtualisation.nix
     ./program.nix
+    ./secure-boot.nix
   ];
 
   system.stateVersion = "25.11";
