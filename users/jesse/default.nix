@@ -121,5 +121,6 @@
     neovim
     zed-editor
     codex
+    claude-code
   ];
 }
