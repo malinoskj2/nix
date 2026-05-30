@@ -122,5 +122,6 @@
     zed-editor
     codex
     claude-code
+    source2viewer-cli
   ];
 }
