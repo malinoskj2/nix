@@ -5,6 +5,12 @@
   ...
 }:
 
+let
+  unstable = import inputs.nixpkgs-unstable {
+    system = pkgs.stdenv.hostPlatform.system;
+    config.allowUnfree = true;
+  };
+in
 {
   programs.home-manager.enable = true;
 
@@ -71,7 +77,7 @@
     alacritty
     mpv
     feh
-    jetbrains.datagrip
+    unstable.jetbrains.datagrip
     ffmpeg
     pavucontrol
     imagemagick
