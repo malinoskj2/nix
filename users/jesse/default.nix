@@ -125,9 +125,9 @@ in
     openzone-cursors
     capitaine-cursors
     neovim
-    zed-editor
-    codex
-    claude-code
+    unstable.zed-editor
+    unstable.codex
+    unstable.claude-code
     source2viewer-cli
   ];
 }
