@@ -25,6 +25,7 @@
   hardware = {
     graphics = {
       enable = true;
+      enable32Bit = true;
       extraPackages = with pkgs; [ libva-vdpau-driver libvdpau-va-gl ];
       extraPackages32 = with pkgs.pkgsi686Linux; [ libva ];
     };
@@ -49,7 +50,6 @@
     WLR_NO_HARDWARE_CURSORS = "1";
     NIXOS_OZONE_WL = "1";
     MOZ_ENABLE_WAYLAND = "1";
-    SDL_VIDEODRIVER = "wayland";
     _JAVA_AWT_WM_NONREPARENTING = "1";
     CLUTTER_BACKEND = "wayland";
     XDG_CURRENT_DESKTOP = "Hyprland";
@@ -59,4 +59,3 @@
     ANTHROPIC_MODEL = "claude-opus-4-8";
   };
 }
-
