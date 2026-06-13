@@ -10,5 +10,7 @@
     pciutils
     lshw
     uutils-coreutils-noprefix
+    hyprpaper
+    waybar
   ];
 }
