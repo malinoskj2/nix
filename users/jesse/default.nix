@@ -100,6 +100,7 @@ in
     jq
     firefox
     google-chrome
+    chromium
     nss
     nssTools
     postman

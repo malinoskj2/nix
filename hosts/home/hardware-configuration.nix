@@ -14,7 +14,8 @@
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-amd" ];
   boot.extraModulePackages = [ ];
-  boot.tmp.useTmpfs = true;
+  boot.tmp.useTmpfs = false;
+  boot.tmp.cleanOnBoot = true;
 
   fileSystems."/" =
     { device = "/dev/disk/by-uuid/2de0b376-57d3-46ec-9240-455d1636e636";
