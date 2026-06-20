@@ -130,5 +130,6 @@ in
     unstable.codex
     unstable.claude-code
     source2viewer-cli
+    ktx-tools
   ];
 }
