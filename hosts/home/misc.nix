@@ -5,6 +5,14 @@
   time.timeZone = "US/Eastern";
   i18n.defaultLocale = "en_US.UTF-8";
 
+  # 16 GiB swapfile on ext4 root; NixOS creates /swapfile on activation.
+  swapDevices = [
+    {
+      device = "/swapfile";
+      size = 16 * 1024;
+    }
+  ];
+
   nix = {
     extraOptions = "experimental-features = nix-command flakes";
     settings = {
