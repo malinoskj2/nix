@@ -131,5 +131,6 @@ in
     unstable.claude-code
     source2viewer-cli
     ktx-tools
+    python3
   ];
 }
