@@ -132,5 +132,6 @@ in
     source2viewer-cli
     ktx-tools
     python3
+    ghidra
   ];
 }
