@@ -16,6 +16,7 @@
     ./virtualisation.nix
     ./program.nix
     ./secure-boot.nix
+    ./scheduler.nix
   ];
 
   system.stateVersion = "25.11";
