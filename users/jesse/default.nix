@@ -90,6 +90,7 @@ in
     nixfmt
     nil
     starship
+    zoxide
     cargo
     mediainfo
     redis
