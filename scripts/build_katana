@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Build the `katana` host. Usage: ./scripts/build_katana [switch|test|boot]
+set -e
+cd "$(dirname "$0")/.."
+sudo nixos-rebuild "${1:-switch}" --flake ".#katana"
