@@ -9,6 +9,7 @@
     usbutils
     pciutils
     lshw
+    libva-utils
     uutils-coreutils-noprefix
     hyprpaper
     waybar
