@@ -2,9 +2,11 @@
 { pkgs, ... }:
 
 {
-  # Latest mainline kernel: ships sched-ext (CONFIG_SCHED_CLASS_EXT) and the
-  # AMD 3D V-Cache optimizer, no out-of-tree kernel needed.
-  boot.kernelPackages = pkgs.linuxPackages_latest;
+  # 6.12 LTS: ships sched-ext (CONFIG_SCHED_CLASS_EXT) and the AMD 3D V-Cache
+  # optimizer, no out-of-tree kernel needed. Pinned off linuxPackages_latest
+  # because kernel >=6.17 removed linux/of_gpio.h, which nvidia 580.142 still
+  # #includes — the driver fails to build against 7.x.
+  boot.kernelPackages = pkgs.linuxPackages_6_12;
 
   # sched-ext userspace scheduler. scx_bpfland prioritizes interactive tasks
   # and is CCD-cache aware — keeps the desktop responsive under load. If the
