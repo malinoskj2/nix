@@ -133,5 +133,6 @@ in
     ktx-tools
     python3
     ghidra
+    vulkan-tools
   ];
 }
