@@ -100,10 +100,7 @@ in
     whois
     jq
     firefox
-    # Force XWayland: wayland-ozone can't create Vulkan surfaces, which breaks
-    # on-screen WebGPU (device lost on canvas swapchain init). x11/XWayland
-    # gives working Vulkan surfaces. Overrides NIXOS_OZONE_WL=1 for chrome only.
-    (google-chrome.override { commandLineArgs = "--ozone-platform=x11"; })
+    google-chrome
     chromium
     nss
     nssTools
