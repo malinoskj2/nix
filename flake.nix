@@ -61,5 +61,13 @@
         system = "aarch64-linux";
         modules = [ ./hosts/pi/configuration.nix ];
       };
+
+      hosts.media = {
+        system = "x86_64-linux";
+        modules = [ ./hosts/media/configuration.nix ];
+        specialArgs = {
+          secrets = import /secret/secrets.nix;
+        };
+      };
     };
 }
