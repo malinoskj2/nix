@@ -4,8 +4,6 @@
 {
   services.openssh = {
     enable = true;
-    # Non-default port cuts the bulk of untargeted scan noise. Update the
-    # firewall/reverse-proxy and your ~/.ssh/config to match.
     ports = [ 2222 ];
     openFirewall = true;
     settings = {
