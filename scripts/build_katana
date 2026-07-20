@@ -2,4 +2,6 @@
 # Build the `katana` host. Usage: ./scripts/build_katana [switch|test|boot]
 set -e
 cd "$(dirname "$0")/.."
-sudo nixos-rebuild "${1:-switch}" --flake ".#katana"
+# --impure: users/jesse pulls home.file sources from absolute /home/jesse/env
+# paths, which pure evaluation rejects. build_home passes it for the same reason.
+sudo nixos-rebuild "${1:-switch}" --impure --flake ".#katana"

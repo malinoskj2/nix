@@ -11,7 +11,6 @@
     ./font.nix
     ./package.nix
     ./user.nix
-    ./virtualisation.nix
     ./program.nix
   ];
 

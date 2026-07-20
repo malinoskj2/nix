@@ -1,14 +1,10 @@
-{ config, pkgs, secrets, ... }:
+{ config, pkgs, ... }:
 
 {
   networking.hostName = "katana";
 
-  networking.wireless = {
-    enable = true;
-    networks.MALINOSKY_5GHZ.psk = secrets.wifiPsk.home;
-  };
-
-  networking.interfaces.wlp3s0.useDHCP = true;
-
+  # No declarative interfaces or wireless networks here on purpose. The
+  # NixOS default (networking.useDHCP) already leases on every interface,
+  # and wifi is joined imperatively with ~/env/script/sys/wifi_connect.
   networking.firewall.enable = true;
 }

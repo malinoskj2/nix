@@ -13,5 +13,8 @@
     uutils-coreutils-noprefix
     hyprpaper
     waybar
+
+    # Pulls in the full dotnet SDK, so keep it off the other hosts
+    source2viewer-cli
   ];
 }

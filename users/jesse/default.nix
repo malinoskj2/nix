@@ -130,7 +130,6 @@ in
     unstable.zed-editor
     unstable.codex
     unstable.claude-code
-    source2viewer-cli
     ktx-tools
     python3
     ghidra

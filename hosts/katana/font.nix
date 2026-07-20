@@ -7,7 +7,8 @@
     fira-mono
     fira-code
     fira-code-symbols
-    (nerdfonts.override { fonts = [ "FiraCode" "DroidSansMono" ]; })
+    nerd-fonts.fira-code
+    nerd-fonts.droid-sans-mono
     otf-apple
   ];
 }
