@@ -8,7 +8,6 @@
       "wheel"
       "network"
       "video"
-      "docker"
       "audio"
       "disk"
       "networkmanager"

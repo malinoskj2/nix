@@ -4,11 +4,15 @@
     vim
     wget
     git
-    docker-compose
-    clang_13
     unzip
     usbutils
     pciutils
+    lshw
     read-edid
+    uutils-coreutils-noprefix
+
+    # Needed by ~/env/script/sys/wifi_connect
+    iw
+    wpa_supplicant
   ];
 }
