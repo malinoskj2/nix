@@ -29,9 +29,9 @@
       ];
     };
 
-    # 2.7TB WD (WD30EZRZ), ext4 label "anime". Holds the relocated slice of the
-    # anime library; consumed directly by the containers (plex /anime4,
-    # qbittorrent /downloads/anime4) via pi-media-stack/docker-compose.yml.
+    # 2.7TB WD (WD30EZRZ). Holds a relocated slice of the media library,
+    # consumed directly by the Plex and qBittorrent containers via
+    # pi-media-stack/docker-compose.yml.
     "/mnt/media4" = {
       device = "/dev/disk/by-uuid/8eb80012-a38b-4b82-9c63-eb0e17cfb490";
       fsType = "ext4";
@@ -55,8 +55,8 @@
         "nofail"
       ];
     };
-    "/media/storage/media/anime_ova" = {
-      device = "/mnt/media2/anime_ova";
+    "/media/storage/media/legacy_media" = {
+      device = "/mnt/media2/legacy_media";
       options = [
         "bind"
         "nofail"
