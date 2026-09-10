@@ -6,7 +6,6 @@
     ./misc.nix
     ./network.nix
     ./openvpn.nix
-    ./samba-mount.nix
     ./sound.nix
     ./x.nix
     ./wayland.nix
