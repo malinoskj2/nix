@@ -57,6 +57,5 @@
     XDG_SESSION_DESKTOP = "Hyprland";
     GTK_USE_PORTAL = "1";
     NIXOS_XDG_OPEN_USE_PORTAL = "1";
-    ANTHROPIC_MODEL = "claude-opus-4-8";
   };
 }
