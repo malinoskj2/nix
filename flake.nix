@@ -9,6 +9,10 @@
       url = "github:nix-community/home-manager/release-25.11";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nix-index-database = {
+      url = "github:nix-community/nix-index-database";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -17,6 +21,7 @@
       nixpkgs,
       utils,
       home-manager,
+      nix-index-database,
       ...
     }@inputs:
     utils.lib.mkFlake {
@@ -42,6 +47,8 @@
         system = "x86_64-linux";
         modules = [
           ./hosts/home/configuration.nix
+          nix-index-database.nixosModules.nix-index
+          { programs.nix-index-database.comma.enable = true; }
           { home-manager.users.jesse = import ./users/jesse; }
         ];
         specialArgs = {

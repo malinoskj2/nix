@@ -91,7 +91,18 @@ in
     nil
     starship
     zoxide
+    rustc
     cargo
+    clippy
+    rustfmt
+    rust-analyzer
+    clang
+    mold
+    pkg-config
+    lldb
+    bacon
+    cargo-nextest
+    cargo-audit
     mediainfo
     redis
     bc
