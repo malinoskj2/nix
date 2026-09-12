@@ -12,6 +12,39 @@
       install_url = "https://addons.mozilla.org/firefox/downloads/latest/firefox-color/latest.xpi";
       installation_mode = "force_installed";
     };
+    # Firefox did not reliably import newly generated user.js values for this
+    # existing profile. Apply these through the Preferences policy instead so
+    # Sync, experiments, and Firefox Home cannot overwrite the Nix config.
+    policies.Preferences = {
+      "media.hardware-video-decoding.force-enabled" = {
+        Value = true;
+        Status = "locked";
+      };
+      "gfx.content.skia-font-cache-size" = {
+        Value = 20;
+        Status = "locked";
+      };
+      "gfx.canvas.accelerated.cache-size" = {
+        Value = 512;
+        Status = "locked";
+      };
+      "image.mem.decode_bytes_at_a_time" = {
+        Value = 32768;
+        Status = "locked";
+      };
+      "browser.tabs.unloadOnLowMemory" = {
+        Value = true;
+        Status = "locked";
+      };
+      "browser.newtabpage.activity-stream.feeds.topsites" = {
+        Value = false;
+        Status = "locked";
+      };
+      "browser.newtabpage.activity-stream.feeds.section.topstories" = {
+        Value = false;
+        Status = "locked";
+      };
+    };
     profiles.default = {
       id = 0;
       isDefault = true;
@@ -24,22 +57,6 @@
         "browser.nova.enabled" = true;
         "WaveFox.HorizontalTabs.AttachedTabs" = true;
 
-        # Performance tuning for this host (Wayland, NVIDIA, 32 GiB RAM).
-        # Firefox 137+ requires this override for video decoding through
-        # nvidia-vaapi-driver; the remaining cache sizes are conservative
-        # Betterfox defaults that trade a little RAM for less repeated work.
-        "media.hardware-video-decoding.force-enabled" = true;
-        "gfx.content.skia-font-cache-size" = 20;
-        "gfx.canvas.accelerated.cache-size" = 512;
-        "image.mem.decode_bytes_at_a_time" = 32768;
-        # Avoid swapping or an OOM by discarding least-recently-used tabs only
-        # when Linux reports low memory. Pinned/media/WebRTC tabs are
-        # deprioritized, and unloaded tabs remain visible and reload on demand.
-        "browser.tabs.unloadOnLowMemory" = true;
-
-        # Keep Firefox Home free of shortcuts and recommended stories.
-        "browser.newtabpage.activity-stream.feeds.topsites" = false;
-        "browser.newtabpage.activity-stream.feeds.section.topstories" = false;
       };
       # Transparent chrome lets Hyprland's window blur show through; page content stays opaque.
       # Transparency is declared first because, for !important rules, earlier layers win,
