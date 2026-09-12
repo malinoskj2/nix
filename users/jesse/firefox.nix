@@ -23,6 +23,23 @@
         # WaveFox 0.6.x targets the Nova UI.
         "browser.nova.enabled" = true;
         "WaveFox.HorizontalTabs.AttachedTabs" = true;
+
+        # Performance tuning for this host (Wayland, NVIDIA, 32 GiB RAM).
+        # Firefox 137+ requires this override for video decoding through
+        # nvidia-vaapi-driver; the remaining cache sizes are conservative
+        # Betterfox defaults that trade a little RAM for less repeated work.
+        "media.hardware-video-decoding.force-enabled" = true;
+        "gfx.content.skia-font-cache-size" = 20;
+        "gfx.canvas.accelerated.cache-size" = 512;
+        "image.mem.decode_bytes_at_a_time" = 32768;
+        # Avoid swapping or an OOM by discarding least-recently-used tabs only
+        # when Linux reports low memory. Pinned/media/WebRTC tabs are
+        # deprioritized, and unloaded tabs remain visible and reload on demand.
+        "browser.tabs.unloadOnLowMemory" = true;
+
+        # Keep Firefox Home free of shortcuts and recommended stories.
+        "browser.newtabpage.activity-stream.feeds.topsites" = false;
+        "browser.newtabpage.activity-stream.feeds.section.topstories" = false;
       };
       # Transparent chrome lets Hyprland's window blur show through; page content stays opaque.
       # Transparency is declared first because, for !important rules, earlier layers win,
