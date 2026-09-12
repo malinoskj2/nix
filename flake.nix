@@ -13,6 +13,15 @@
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    catppuccin = {
+      url = "github:catppuccin/nix/release-26.05";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    # Pinned to the release matching nixpkgs' Firefox major version.
+    wavefox = {
+      url = "github:QNetITQ/WaveFox/0.6.155";
+      flake = false;
+    };
   };
 
   outputs =
@@ -22,6 +31,7 @@
       utils,
       home-manager,
       nix-index-database,
+      catppuccin,
       ...
     }@inputs:
     utils.lib.mkFlake {
@@ -40,6 +50,8 @@
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;
           home-manager.extraSpecialArgs = { inherit inputs; };
+          home-manager.backupFileExtension = "hm-bak";
+          home-manager.sharedModules = [ catppuccin.homeModules.catppuccin ];
         }
       ];
 
