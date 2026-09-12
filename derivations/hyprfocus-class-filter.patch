@@ -1,0 +1,45 @@
+--- a/main.cpp
++++ b/main.cpp
+@@ -5,6 +5,7 @@
+ 
+ #include <hyprland/src/includes.hpp>
+ #include <any>
++#include <regex>
+ #include <sstream>
+ 
+ #define private public
+@@ -39,6 +40,7 @@
+     SP<Config::Values::CFloatValue>  fadeOpacity;
+     SP<Config::Values::CFloatValue>  shrinkPercentage;
+     SP<Config::Values::CFloatValue>  slideHeight;
++    SP<Config::Values::CStringValue> windowClass;
+ } configValues;
+ 
+ // Do NOT change this function.
+@@ -70,6 +72,15 @@
+ 
+     lastWindow = window;
+ 
++    const auto CLASS = configValues.windowClass->value();
++    if (!CLASS.empty()) {
++        // an invalid regex must not throw inside the compositor
++        try {
++            if (!std::regex_match(window->m_class, std::regex(CLASS)))
++                return;
++        } catch (const std::regex_error&) { return; }
++    }
++
+     const auto mode = isMouseReason(reason)
+         ? configValues.mouseFocusAnimation->value()
+         : configValues.keyboardFocusAnimation->value();
+@@ -170,7 +181,10 @@
+     HyprlandAPI::addConfigValueV2(PHANDLE, configValues.mouseFocusAnimation);
+     HyprlandAPI::addConfigValueV2(PHANDLE, configValues.fadeOpacity);
+     HyprlandAPI::addConfigValueV2(PHANDLE, configValues.shrinkPercentage);
++    configValues.windowClass = makeShared<Config::Values::CStringValue>("plugin:hyprfocus:class", "only animate windows whose class matches this regex (empty = all)", "");
++
+     HyprlandAPI::addConfigValueV2(PHANDLE, configValues.slideHeight);
++    HyprlandAPI::addConfigValueV2(PHANDLE, configValues.windowClass);
+ 
+     // this will not be cleaned up after we are unloaded but it doesn't really matter,
+     // as if we create this again it will just overwrite the old one.
