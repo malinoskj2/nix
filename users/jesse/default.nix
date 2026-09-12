@@ -121,6 +121,7 @@ in
     nmap
     hyprpaper
     mpvpaper
+    neowall
     socat
     waybar
     grim

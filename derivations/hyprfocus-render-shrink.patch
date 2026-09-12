@@ -60,7 +60,7 @@
  static bool isMouseReason(Desktop::eFocusReason r) {
      return r == Desktop::FOCUS_REASON_CLICK || r == Desktop::FOCUS_REASON_FFM;
  }
-@@ -106,9 +159,11 @@
+@@ -110,9 +163,11 @@
          });
      }
  
@@ -73,7 +73,7 @@
          window->m_realPosition->setConfig(PIN);
          window->m_realSize->setConfig(PIN);
  
-@@ -129,7 +184,16 @@
+@@ -133,7 +188,16 @@
              } else
                  w->layoutTarget()->recalc();
  
@@ -91,7 +91,7 @@
          });
      } else if (has("slide")) {
          const auto ORIGINAL = window->m_realPosition->goal();
-@@ -165,7 +229,20 @@
+@@ -169,7 +233,20 @@
          throw std::runtime_error("[hww] Version mismatch");
      }
  
@@ -113,7 +113,7 @@
  
      configValues.enable = makeShared<Config::Values::CBoolValue>("plugin:hyprfocus:enable", "enable or disable the plugin", true);
      configValues.animateFloating = makeShared<Config::Values::CBoolValue>("plugin:hyprfocus:animate_floating", "animate floating windows", true);
-@@ -197,6 +274,8 @@
+@@ -201,6 +278,8 @@
  }
  
  APICALL EXPORT void PLUGIN_EXIT() {
@@ -122,7 +122,7 @@
      // reset the callbacks to avoid crashes
      for (const auto& w : g_pCompositor->m_windows) {
          if (!validMapped(w))
-@@ -206,4 +285,10 @@
+@@ -210,4 +289,10 @@
          w->m_realPosition->setCallbackOnEnd(nullptr);
          w->alpha(Desktop::View::WINDOW_ALPHA_ACTIVE)->setCallbackOnEnd(nullptr);
      }
