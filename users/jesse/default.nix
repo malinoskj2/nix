@@ -66,7 +66,6 @@ in
   home.packages = with pkgs; [
     gnupg
     bat
-    neofetch
     htop-vim
     ripgrep
     fd
@@ -131,7 +130,7 @@ in
     p7zip
     unrar
     bruno
-    xorg.xlsclients
+    xlsclients
     nwg-look
     glib
     graphite-cursors
