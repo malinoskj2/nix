@@ -16,10 +16,14 @@
  } configValues;
  
  // Do NOT change this function.
-@@ -70,6 +72,15 @@
+@@ -70,6 +72,19 @@
  
      lastWindow = window;
  
++    // a freshly mapped window is already popping in, don't animate on top of that
++    if (reason == Desktop::FOCUS_REASON_NEW_WINDOW)
++        return;
++
 +    const auto CLASS = configValues.windowClass->value();
 +    if (!CLASS.empty()) {
 +        // an invalid regex must not throw inside the compositor
@@ -32,7 +36,7 @@
      const auto mode = isMouseReason(reason)
          ? configValues.mouseFocusAnimation->value()
          : configValues.keyboardFocusAnimation->value();
-@@ -170,7 +181,10 @@
+@@ -170,7 +185,10 @@
      HyprlandAPI::addConfigValueV2(PHANDLE, configValues.mouseFocusAnimation);
      HyprlandAPI::addConfigValueV2(PHANDLE, configValues.fadeOpacity);
      HyprlandAPI::addConfigValueV2(PHANDLE, configValues.shrinkPercentage);

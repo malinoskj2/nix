@@ -26,7 +26,8 @@ hyprlandPlugins.mkHyprlandPlugin rec {
   sourceRoot = "${src.name}/hyprfocus";
 
   patches = [
-    # Adds plugin:hyprfocus:class so the animation can be limited to specific windows.
+    # Adds plugin:hyprfocus:class so the animation can be limited to specific windows,
+    # and skips newly mapped windows.
     ./hyprfocus-class-filter.patch
     # Lets *_focus_animation take a list like "flash,shrink" to run both at once.
     ./hyprfocus-combined-modes.patch
