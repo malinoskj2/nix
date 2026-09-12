@@ -1,0 +1,39 @@
+--- a/main.cpp
++++ b/main.cpp
+@@ -85,13 +85,13 @@
+         ? configValues.mouseFocusAnimation->value()
+         : configValues.keyboardFocusAnimation->value();
+ 
+-    if (mode == "none")
+-        return;
++    // mode is a comma-separated list, e.g. "flash,shrink"
++    const auto has = [&mode](const std::string& m) { return std::ranges::contains(CVarList(mode, 0, ','), m); };
+ 
+     const auto PIN  = Config::animationTree()->getAnimationPropertyConfig("hyprfocusIn");
+     const auto POUT = Config::animationTree()->getAnimationPropertyConfig("hyprfocusOut");
+ 
+-    if (mode == "flash") {
++    if (has("flash")) {
+         const auto ORIGINAL = window->alpha(Desktop::View::WINDOW_ALPHA_ACTIVE)->goal();
+         window->alpha(Desktop::View::WINDOW_ALPHA_ACTIVE)->setConfig(PIN);
+         *window->alpha(Desktop::View::WINDOW_ALPHA_ACTIVE) = configValues.fadeOpacity->value();
+@@ -104,7 +104,9 @@
+ 
+             w->alpha(Desktop::View::WINDOW_ALPHA_ACTIVE)->setCallbackOnEnd(nullptr);
+         });
+-    } else if (mode == "shrink") {
++    }
++
++    if (has("shrink")) {
+         const auto ORIGINAL = CBox{window->m_realPosition->goal(), window->m_realSize->goal()};
+ 
+         window->m_realPosition->setConfig(PIN);
+@@ -129,7 +131,7 @@
+ 
+             w->m_realSize->setCallbackOnEnd(nullptr);
+         });
+-    } else if (mode == "slide") {
++    } else if (has("slide")) {
+         const auto ORIGINAL = window->m_realPosition->goal();
+ 
+         window->m_realPosition->setConfig(PIN);

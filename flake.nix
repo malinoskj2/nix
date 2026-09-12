@@ -17,6 +17,9 @@
       url = "github:catppuccin/nix/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Hyprland (0.55.4) and its plugins come from this exact nixpkgs rev so `nix flake update`
+    # can't move them; the hyprfocus patches rely on Hyprland internals. Bump deliberately.
+    nixpkgs-hyprland.url = "github:nixos/nixpkgs/21a67dc470149f337cecafbe965d8d252a390518";
     # Pinned to the release matching nixpkgs' Firefox major version.
     wavefox = {
       url = "github:QNetITQ/WaveFox/0.6.155";
@@ -38,7 +41,16 @@
       inherit self inputs;
 
       channelsConfig.allowUnfree = true;
-      sharedOverlays = [ (import ./overlays/derivations.nix) ];
+      sharedOverlays = [
+        (import ./overlays/derivations.nix)
+        (final: prev: {
+          inherit (inputs.nixpkgs-hyprland.legacyPackages.${prev.stdenv.hostPlatform.system})
+            hyprland
+            hyprlandPlugins
+            xdg-desktop-portal-hyprland
+            ;
+        })
+      ];
       # extraSpecialArgs = {
       #   inherit inputs;
       #  secrets = import /secret/secrets.nix;
