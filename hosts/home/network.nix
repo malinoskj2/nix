@@ -3,7 +3,9 @@
 {
   networking.hostName = "home";
 
-  networking.interfaces.enp8s0.useDHCP = true;
+  # Noctalia's network integration talks to NetworkManager over D-Bus.
+  # Let NetworkManager own the interfaces and create the wired DHCP profile.
+  networking.networkmanager.enable = true;
 
   networking.firewall.enable = false;
 }
