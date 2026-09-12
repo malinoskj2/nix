@@ -120,6 +120,8 @@ in
     twilio-cli
     nmap
     hyprpaper
+    mpvpaper
+    socat
     waybar
     grim
     slurp
