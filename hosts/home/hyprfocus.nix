@@ -7,7 +7,9 @@
 
     plugin {
       hyprfocus {
-        class = ^(firefox|dev\.zed\.Zed)$
+        # Match every Hyprland window. Noctalia's bar and launcher icon are
+        # layer-shell surfaces, so they are not animated.
+        class = ^.*$
         keyboard_focus_animation = shrink
         mouse_focus_animation = shrink
         shrink_percentage = 0.99
