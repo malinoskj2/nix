@@ -12,6 +12,8 @@ let
   };
 in
 {
+  imports = [ ./firefox.nix ];
+
   programs.home-manager.enable = true;
 
   home = {
@@ -109,7 +111,6 @@ in
     dig
     whois
     jq
-    firefox
     google-chrome
     chromium
     nss
