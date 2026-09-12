@@ -121,7 +121,7 @@ in
     nmap
     hyprpaper
     mpvpaper
-    neowall
+    inputs.neowall-src.packages.${pkgs.stdenv.hostPlatform.system}.default
     socat
     waybar
     grim
