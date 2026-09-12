@@ -43,6 +43,7 @@
 
     "/media/storage/media/tv_cartoon" = {
       device = "/mnt/media2/tv_cartoon";
+      fsType = "auto";
       options = [
         "bind"
         "nofail"
@@ -50,6 +51,7 @@
     };
     "/media/storage/media/tv" = {
       device = "/mnt/media2/tv";
+      fsType = "auto";
       options = [
         "bind"
         "nofail"
@@ -57,6 +59,7 @@
     };
     "/media/storage/media/legacy_media" = {
       device = "/mnt/media2/legacy_media";
+      fsType = "auto";
       options = [
         "bind"
         "nofail"
@@ -64,6 +67,7 @@
     };
     "/media/storage/media/movies" = {
       device = "/mnt/media3/movies";
+      fsType = "auto";
       options = [
         "bind"
         "nofail"
