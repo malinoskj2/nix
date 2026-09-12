@@ -5,8 +5,13 @@
   lib,
   cmake,
   fetchFromGitHub,
+  hyprland,
   hyprlandPlugins,
 }:
+
+# The patches hook and poke Hyprland internals, so any Hyprland change needs them re-checked.
+assert lib.assertMsg (hyprland.version == "0.55.4")
+  "hyprfocus patches were written against Hyprland 0.55.4 but got ${hyprland.version}; re-check derivations/hyprfocus-*.patch before bumping the nixpkgs-hyprland pin.";
 
 hyprlandPlugins.mkHyprlandPlugin rec {
   pluginName = "hyprfocus";
@@ -20,8 +25,14 @@ hyprlandPlugins.mkHyprlandPlugin rec {
   };
   sourceRoot = "${src.name}/hyprfocus";
 
-  # Adds plugin:hyprfocus:class so the animation can be limited to specific windows.
-  patches = [ ./hyprfocus-class-filter.patch ];
+  patches = [
+    # Adds plugin:hyprfocus:class so the animation can be limited to specific windows.
+    ./hyprfocus-class-filter.patch
+    # Lets *_focus_animation take a list like "flash,shrink" to run both at once.
+    ./hyprfocus-combined-modes.patch
+    # Makes shrink a render-time scale instead of resizing the client.
+    ./hyprfocus-render-shrink.patch
+  ];
 
   nativeBuildInputs = [ cmake ];
 

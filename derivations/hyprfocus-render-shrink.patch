@@ -1,0 +1,135 @@
+--- a/main.cpp
++++ b/main.cpp
+@@ -48,6 +48,59 @@
+     return HYPRLAND_API_VERSION;
+ }
+ 
++// Shrink is done purely at render time. While a window shrinks and grows back we
++//  - drop Hyprland's sendWindowSize for it, so the client is never configured to the shrunk size and
++//    doesn't relayout (Firefox visibly rescales its page otherwise), and
++//  - set m_animatingIn, which makes the renderer scale the buffer into the smaller box instead of
++//    cropping it (same path Hyprland uses for popin).
++struct SHeldWindow {
++    PHLWINDOWREF window;
++    bool         setAnimatingIn = false;
++};
++static std::vector<SHeldWindow> heldWindows;
++static CFunctionHook*           g_pSendWindowSizeHook = nullptr;
++
++// Held globally and dropped in PLUGIN_EXIT: dlclose can't actually unload this .so (it has
++// STB_GNU_UNIQUE symbols), so a function-local static listener would outlive an unload and keep
++// animating alongside the next loaded copy.
++static Hyprutils::Signal::CHyprSignalListener g_focusListener;
++
++static bool isHeld(const Desktop::View::CWindow* w) {
++    return std::ranges::any_of(heldWindows, [w](const auto& e) { return e.window.get() == w; });
++}
++
++typedef void (*origSendWindowSize)(Desktop::View::CWindow*, bool);
++static void hkSendWindowSize(Desktop::View::CWindow* thisptr, bool force) {
++    if (isHeld(thisptr))
++        return;
++
++    (*(origSendWindowSize)g_pSendWindowSizeHook->m_original)(thisptr, force);
++}
++
++static void holdClientResize(PHLWINDOW w) {
++    std::erase_if(heldWindows, [](const auto& e) { return !e.window; });
++
++    if (isHeld(w.get()))
++        return;
++
++    heldWindows.emplace_back(SHeldWindow{w, !w->m_animatingIn});
++    w->m_animatingIn = true;
++}
++
++static void releaseClientResize(PHLWINDOW w) {
++    const auto it = std::ranges::find_if(heldWindows, [&w](const auto& e) { return e.window.get() == w.get(); });
++    if (it == heldWindows.end())
++        return;
++
++    if (it->setAnimatingIn)
++        w->m_animatingIn = false;
++    heldWindows.erase(it);
++
++    // no-op unless the layout changed the size while sends were held
++    if (w->m_isMapped)
++        w->sendWindowSize();
++}
++
+ static bool isMouseReason(Desktop::eFocusReason r) {
+     return r == Desktop::FOCUS_REASON_CLICK || r == Desktop::FOCUS_REASON_FFM;
+ }
+@@ -106,9 +159,11 @@
+         });
+     }
+ 
+-    if (has("shrink")) {
++    if (has("shrink") && g_pSendWindowSizeHook) {
+         const auto ORIGINAL = CBox{window->m_realPosition->goal(), window->m_realSize->goal()};
+ 
++        holdClientResize(window);
++
+         window->m_realPosition->setConfig(PIN);
+         window->m_realSize->setConfig(PIN);
+ 
+@@ -129,7 +184,16 @@
+             } else
+                 w->layoutTarget()->recalc();
+ 
+-            w->m_realSize->setCallbackOnEnd(nullptr);
++            // keep the render-only scaling through the grow-back as well
++            if (w->m_realSize->isBeingAnimated())
++                w->m_realSize->setCallbackOnEnd([w](WP<CBaseAnimatedVariable> pav) {
++                    if (w)
++                        releaseClientResize(w.lock());
++                });
++            else {
++                w->m_realSize->setCallbackOnEnd(nullptr);
++                releaseClientResize(w.lock());
++            }
+         });
+     } else if (has("slide")) {
+         const auto ORIGINAL = window->m_realPosition->goal();
+@@ -165,7 +229,20 @@
+         throw std::runtime_error("[hww] Version mismatch");
+     }
+ 
+-    static auto P = Event::bus()->m_events.window.active.listen([&](PHLWINDOW w, Desktop::eFocusReason r) { onFocusChange(w, r); });
++    for (auto& fn : HyprlandAPI::findFunctionsByName(PHANDLE, "sendWindowSize")) {
++        if (!fn.demangled.contains("CWindow::sendWindowSize"))
++            continue;
++
++        g_pSendWindowSizeHook = HyprlandAPI::createFunctionHook(PHANDLE, fn.address, (void*)&hkSendWindowSize);
++        break;
++    }
++
++    if (!g_pSendWindowSizeHook || !g_pSendWindowSizeHook->hook()) {
++        g_pSendWindowSizeHook = nullptr;
++        HyprlandAPI::addNotification(PHANDLE, "[hyprfocus] Failed to hook sendWindowSize, shrink is disabled", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
++    }
++
++    g_focusListener = Event::bus()->m_events.window.active.listen([&](PHLWINDOW w, Desktop::eFocusReason r) { onFocusChange(w, r); });
+ 
+     configValues.enable = makeShared<Config::Values::CBoolValue>("plugin:hyprfocus:enable", "enable or disable the plugin", true);
+     configValues.animateFloating = makeShared<Config::Values::CBoolValue>("plugin:hyprfocus:animate_floating", "animate floating windows", true);
+@@ -197,6 +274,8 @@
+ }
+ 
+ APICALL EXPORT void PLUGIN_EXIT() {
++    g_focusListener.reset();
++
+     // reset the callbacks to avoid crashes
+     for (const auto& w : g_pCompositor->m_windows) {
+         if (!validMapped(w))
+@@ -206,4 +285,10 @@
+         w->m_realPosition->setCallbackOnEnd(nullptr);
+         w->alpha(Desktop::View::WINDOW_ALPHA_ACTIVE)->setCallbackOnEnd(nullptr);
+     }
++
++    // hooks are removed after this returns, so let the held sends through now
++    for (const auto& w : g_pCompositor->m_windows) {
++        if (isHeld(w.get()))
++            releaseClientResize(w);
++    }
+ }
