@@ -36,11 +36,17 @@
         Value = true;
         Status = "locked";
       };
-      "browser.newtabpage.activity-stream.feeds.topsites" = {
+      # Keep sponsored shortcuts and sponsored stories off Firefox Home while
+      # retaining ordinary shortcuts and recommendations.
+      "browser.newtabpage.activity-stream.showSponsoredTopSites" = {
         Value = false;
         Status = "locked";
       };
-      "browser.newtabpage.activity-stream.feeds.section.topstories" = {
+      "browser.newtabpage.activity-stream.showSponsored" = {
+        Value = false;
+        Status = "locked";
+      };
+      "browser.newtabpage.activity-stream.showSponsoredCheckboxes" = {
         Value = false;
         Status = "locked";
       };
