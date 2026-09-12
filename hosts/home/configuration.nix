@@ -9,6 +9,7 @@
     ./sound.nix
     ./x.nix
     ./wayland.nix
+    ./hyprfocus.nix
     ./font.nix
     ./package.nix
     ./user.nix
