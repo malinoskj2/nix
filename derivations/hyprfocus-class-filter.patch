@@ -16,12 +16,14 @@
  } configValues;
  
  // Do NOT change this function.
-@@ -70,6 +72,19 @@
+@@ -70,6 +72,21 @@
  
      lastWindow = window;
  
-+    // a freshly mapped window is already popping in, don't animate on top of that
-+    if (reason == Desktop::FOCUS_REASON_NEW_WINDOW)
++    // Mapping can focus before popin starts; either opening callback can clear m_animatingIn.
++    // Wait for both geometry animations before taking over their goals and callbacks.
++    if (reason == Desktop::FOCUS_REASON_NEW_WINDOW || window->m_firstMap || window->m_animatingIn ||
++        window->m_realPosition->isBeingAnimated() || window->m_realSize->isBeingAnimated())
 +        return;
 +
 +    const auto CLASS = configValues.windowClass->value();
@@ -36,7 +38,7 @@
      const auto mode = isMouseReason(reason)
          ? configValues.mouseFocusAnimation->value()
          : configValues.keyboardFocusAnimation->value();
-@@ -170,7 +185,10 @@
+@@ -170,7 +187,10 @@
      HyprlandAPI::addConfigValueV2(PHANDLE, configValues.mouseFocusAnimation);
      HyprlandAPI::addConfigValueV2(PHANDLE, configValues.fadeOpacity);
      HyprlandAPI::addConfigValueV2(PHANDLE, configValues.shrinkPercentage);

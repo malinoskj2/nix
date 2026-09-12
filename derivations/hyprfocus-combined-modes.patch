@@ -1,6 +1,6 @@
 --- a/main.cpp
 +++ b/main.cpp
-@@ -89,13 +89,13 @@
+@@ -91,13 +91,13 @@
          ? configValues.mouseFocusAnimation->value()
          : configValues.keyboardFocusAnimation->value();
  
@@ -17,7 +17,7 @@
          const auto ORIGINAL = window->alpha(Desktop::View::WINDOW_ALPHA_ACTIVE)->goal();
          window->alpha(Desktop::View::WINDOW_ALPHA_ACTIVE)->setConfig(PIN);
          *window->alpha(Desktop::View::WINDOW_ALPHA_ACTIVE) = configValues.fadeOpacity->value();
-@@ -108,7 +108,9 @@
+@@ -110,7 +110,9 @@
  
              w->alpha(Desktop::View::WINDOW_ALPHA_ACTIVE)->setCallbackOnEnd(nullptr);
          });
@@ -28,7 +28,7 @@
          const auto ORIGINAL = CBox{window->m_realPosition->goal(), window->m_realSize->goal()};
  
          window->m_realPosition->setConfig(PIN);
-@@ -133,7 +135,7 @@
+@@ -135,7 +137,7 @@
  
              w->m_realSize->setCallbackOnEnd(nullptr);
          });
