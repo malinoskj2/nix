@@ -62,6 +62,10 @@ in
       source = "/home/jesse/env/config/fastfetch";
       target = ".config/fastfetch";
     };
+    datagrip-glass-header = {
+      source = ../../scripts/datagrip-glass-header.groovy;
+      target = ".config/JetBrains/DataGrip${pkgs.lib.versions.majorMinor unstable.jetbrains.datagrip.version}/extensions/com.intellij/startup/glass-header.groovy";
+    };
   };
 
   services.gpg-agent = {
