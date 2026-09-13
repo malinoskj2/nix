@@ -21,18 +21,12 @@
       url = "github:catppuccin/nix/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Hyprland (0.55.4) and its plugins come from this exact nixpkgs rev so `nix flake update`
-    # can't move them; the hyprfocus patches rely on Hyprland internals. Bump deliberately.
     nixpkgs-hyprland.url = "github:nixos/nixpkgs/21a67dc470149f337cecafbe965d8d252a390518";
-    # Adds Hyprbars title font weight without crossing into its Hyprland 0.56 API changes.
     hyprland-plugins-src = {
       url = "github:hyprwm/hyprland-plugins/1cb37fad68dff5f5840010c314fed5809b4ee66f";
       flake = false;
     };
-    # Firefox comes from this exact nixpkgs rev (155.0.1) so `nix flake update` can't
-    # move it out from under WaveFox. Bump this and the wavefox tag below together.
     nixpkgs-firefox.url = "github:nixos/nixpkgs/21a67dc470149f337cecafbe965d8d252a390518";
-    # Pinned to the release matching nixpkgs-firefox's Firefox major version.
     wavefox = {
       url = "github:QNetITQ/WaveFox/0.6.155";
       flake = false;
@@ -70,11 +64,6 @@
             ;
         })
       ];
-      # extraSpecialArgs = {
-      #   inherit inputs;
-      #  secrets = import /secret/secrets.nix;
-      #A };
-
       hostDefaults.modules = [
         home-manager.nixosModules.home-manager
         {
