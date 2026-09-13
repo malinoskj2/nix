@@ -29,7 +29,10 @@
       url = "github:hyprwm/hyprland-plugins/1cb37fad68dff5f5840010c314fed5809b4ee66f";
       flake = false;
     };
-    # Pinned to the release matching nixpkgs' Firefox major version.
+    # Firefox comes from this exact nixpkgs rev (155.0.1) so `nix flake update` can't
+    # move it out from under WaveFox. Bump this and the wavefox tag below together.
+    nixpkgs-firefox.url = "github:nixos/nixpkgs/21a67dc470149f337cecafbe965d8d252a390518";
+    # Pinned to the release matching nixpkgs-firefox's Firefox major version.
     wavefox = {
       url = "github:QNetITQ/WaveFox/0.6.155";
       flake = false;
@@ -59,6 +62,11 @@
             hyprland
             hyprlandPlugins
             xdg-desktop-portal-hyprland
+            ;
+        })
+        (final: prev: {
+          inherit (inputs.nixpkgs-firefox.legacyPackages.${prev.stdenv.hostPlatform.system})
+            firefox
             ;
         })
       ];
