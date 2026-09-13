@@ -1,6 +1,6 @@
 # Hyprland advertises server-side decorations on Wayland, so Alacritty's
 # `window.decorations = "Full"` only produces Hyprland's border.  Hyprbars
-# supplies the title bar and window controls that Hyprland intentionally omits.
+# supplies the title bar that Hyprland intentionally omits.
 { pkgs, ... }:
 
 {
@@ -11,21 +11,17 @@
       hyprbars {
         # Matches the Firefox toolbox / Zed title bar glass.
         bar_color = rgba(11111b8c)
-        bar_blur = true
-        bar_height = 28
+        # Blur drops the bar's corner rounding in this hyprbars version.
+        bar_blur = false
+        bar_height = 12
         col.text = rgb(d7dae0)
-        bar_title_enabled = true
+        bar_title_enabled = false
         bar_text_size = 15
         bar_text_weight = 600
         bar_text_font = SF Pro Display
         bar_text_align = center
-        bar_buttons_alignment = right
         bar_part_of_window = true
         bar_precedence_over_border = true
-        icon_on_hover = false
-
-        hyprbars-button = rgb(e28c8c), 12, , hyprctl dispatch killactive, rgb(1e1e28)
-        hyprbars-button = rgb(b3e1a3), 12, , hyprctl dispatch fullscreen 1, rgb(1e1e28)
         on_double_click = hyprctl dispatch fullscreen 1
       }
     }
