@@ -149,5 +149,6 @@ in
     python3
     ghidra
     vulkan-tools
+    fastfetch
   ];
 }
