@@ -12,7 +12,10 @@ let
   };
 in
 {
-  imports = [ ./firefox.nix ];
+  imports = [
+    ./firefox.nix
+    ./dolphin.nix
+  ];
 
   programs.home-manager.enable = true;
 
