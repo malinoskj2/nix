@@ -55,6 +55,10 @@ in
       source = "/home/jesse/env/config/gtk/xsettingsd.conf";
       target = ".config/xsettingsd/xsettingsd.conf";
     };
+    fastfetch = {
+      source = "/home/jesse/env/config/fastfetch";
+      target = ".config/fastfetch";
+    };
   };
 
   services.gpg-agent = {
