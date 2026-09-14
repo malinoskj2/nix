@@ -1,10 +1,6 @@
 # Wayland
 {
-  services,
-  programs,
   pkgs,
-  lib,
-  config,
   ...
 }:
 

@@ -1,12 +1,14 @@
 # Program
-{ config, pkgs, ... }:
+{ pkgs, ... }:
 
 {
-  programs.ssh.askPassword = "";
-  programs.ssh.startAgent = true;
-  programs.zsh.enable = true;
-  programs.nix-ld.enable = true;
-  programs.nix-ld.libraries = with pkgs; [
-    libcap
-  ];
+  programs = {
+    ssh.askPassword = "";
+    ssh.startAgent = true;
+    zsh.enable = true;
+    nix-ld.enable = true;
+    nix-ld.libraries = with pkgs; [
+      libcap
+    ];
+  };
 }

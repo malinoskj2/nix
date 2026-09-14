@@ -1,5 +1,5 @@
 # Systemd
-{ systemd, ... }:
+_:
 
 {
   systemd.settings.Manager = {

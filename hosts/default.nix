@@ -59,6 +59,26 @@ in
     { pkgs, ... }:
     {
       formatter = pkgs.nixfmt-tree;
+
+      checks = {
+        # hardware-configuration.nix files are machine-generated; keep them generated
+        # rather than hand-editing them to satisfy the linters.
+        statix = pkgs.runCommand "statix-check" { nativeBuildInputs = [ pkgs.statix ]; } ''
+          cd ${self}
+          statix check . --ignore 'hosts/*/hardware-configuration.nix'
+          touch $out
+        '';
+
+        deadnix =
+          pkgs.runCommand "deadnix-check"
+            {
+              nativeBuildInputs = [ pkgs.deadnix ];
+            }
+            ''
+              deadnix --fail ${self} --exclude ${self}/hosts/home/hardware-configuration.nix ${self}/hosts/katana/hardware-configuration.nix ${self}/hosts/media/hardware-configuration.nix
+              touch $out
+            '';
+      };
     };
 
   flake.nixosConfigurations = {

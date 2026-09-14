@@ -1,11 +1,5 @@
 # X11
-{
-  config,
-  pkgs,
-  lib,
-  ...
-}:
-{
+_: {
   services.xserver = {
     enable = true;
     autorun = false;
@@ -13,8 +7,10 @@
     autoRepeatDelay = 260;
     autoRepeatInterval = 18;
     displayManager.startx.enable = true;
-    windowManager.bspwm.enable = true;
-    windowManager.bspwm.configFile = "/home/jesse/env/config/bspwm/bspwmrc";
-    windowManager.bspwm.sxhkd.configFile = "/home/jesse/env/config/sxhkd/sxhkdrc";
+    windowManager.bspwm = {
+      enable = true;
+      configFile = "/home/jesse/env/config/bspwm/bspwmrc";
+      sxhkd.configFile = "/home/jesse/env/config/sxhkd/sxhkdrc";
+    };
   };
 }
