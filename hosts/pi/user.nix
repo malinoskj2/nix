@@ -1,12 +1,14 @@
 # User
-{ users, secrets, ... }:
+{ users, ... }:
 
 {
   users = {
     users.pi = {
       isNormalUser = true;
-      password = secrets.password;
-      extraGroups = [ "wheel" "docker" ];
+      extraGroups = [
+        "wheel"
+        "docker"
+      ];
     };
   };
 }

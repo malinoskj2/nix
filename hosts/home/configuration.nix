@@ -5,7 +5,6 @@
     ./hardware-configuration.nix
     ./misc.nix
     ./network.nix
-    ./openvpn.nix
     ./sound.nix
     ./wayland.nix
     ./font.nix

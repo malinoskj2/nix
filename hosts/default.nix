@@ -83,7 +83,6 @@ in
 
     media = mkHost {
       modules = [ ./media/configuration.nix ];
-      specialArgs.secrets = import /secret/secrets.nix;
     };
   };
 }
