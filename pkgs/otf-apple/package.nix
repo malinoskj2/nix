@@ -1,12 +1,12 @@
 # Taken from https://github.com/KubqoA/dotfiles/tree/main/packages/otf-apple
-{ fetchurl, lib, p7zip, stdenv }:
+{ p7zip, stdenv }:
 
 stdenv.mkDerivation {
-  name = "otf-apple";
+  pname = "otf-apple";
   version = "1.0";
 
-  buildInputs = [ p7zip ];
-  src = [
+  nativeBuildInputs = [ p7zip ];
+  srcs = [
     /secret/fonts/NY.dmg
     /secret/fonts/SF-Compact.dmg
     /secret/fonts/SF-Mono.dmg
