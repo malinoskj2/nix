@@ -16,14 +16,6 @@
       inherit (inputs.nixpkgs-firefox.legacyPackages.${system}) firefox;
     };
 
-  # Every pkgs/<name>/package.nix becomes pkgs.<name>.
-  additions =
-    final: prev:
-    prev.lib.packagesFromDirectoryRecursive {
-      inherit (final) callPackage;
-      directory = ../pkgs;
-    };
-
   modifications = final: prev: {
     hyprlandPlugins = prev.hyprlandPlugins // {
       # The patches hook and poke Hyprland internals, so any Hyprland change needs them re-checked.
