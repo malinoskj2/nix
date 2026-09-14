@@ -131,7 +131,6 @@ in
     twilio-cli
     nmap
     hyprpaper
-    mpvpaper
     inputs.neowall-src.packages.${pkgs.stdenv.hostPlatform.system}.default
     socat
     waybar
@@ -155,7 +154,6 @@ in
     unstable.zed-editor
     unstable.codex
     unstable.claude-code
-    unstable.noctalia
     ktx-tools
     python3
     ghidra

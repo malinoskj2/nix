@@ -32,22 +32,17 @@ Do not treat the Hyprland inputs as ordinary flake-lock updates:
 
 - `nixpkgs-hyprland` supplies Hyprland, `hyprlandPlugins`, and
   `xdg-desktop-portal-hyprland` from an exact nixpkgs revision.
-- `hyprland-plugins-src` supplies the custom `hyprbars` source from an exact
-  upstream commit.
-- `derivations/hyprfocus.nix` fetches another exact `hyprland-plugins` commit
-  and applies all three `derivations/hyprfocus-*.patch` files.
-- Both `derivations/hyprbars.nix` and `derivations/hyprfocus.nix` assert the
+- `hyprbars` comes from that revision's matching `hyprlandPlugins` set.
+- `derivations/hyprfocus.nix` overrides that same set's hyprfocus source and
+  applies all three `derivations/hyprfocus-*.patch` files.
+- `derivations/hyprfocus.nix` and the desktop Home Manager module assert the
   exact supported Hyprland version.
 
-When upgrading Hyprland, update the nixpkgs revision, both plugin source pins,
-derivation versions and hashes, and version assertions together. Rebase and
-review every hyprfocus patch against the new Hyprland/plugin internals, then
-build the `home` host. A plain `nix flake update` will not advance the inputs
-whose revisions are embedded in their URLs.
-
-The comment in `derivations/hyprfocus.nix` mentions `hyprpm.toml`, but no such
-file is currently tracked; the active pins are in `flake.nix` and the
-derivation itself.
+When upgrading Hyprland, update the exact nixpkgs revision and version
+assertions together. Rebase and review every hyprfocus patch against the new
+Hyprland/plugin internals, confirm the revision's hyprbars has the required
+features, then build the `home` host. A plain `nix flake update` will not advance
+the input whose revision is embedded in its URL.
 
 ### Firefox and WaveFox must remain compatible
 
@@ -73,8 +68,9 @@ The configuration depends on files outside this repository:
 
 - `/secret/secrets.nix` for the `home` and `media` hosts.
 - `/secret/fonts` for the custom Apple font derivation.
-- `/home/jesse/env` for Home Manager dotfile sources used by `home` and
-  `katana`.
+- `/home/jesse/env` for remaining shared Home Manager dotfile sources used by
+  `home` and `katana`. The `home` Hyprland and Noctalia desktop is fully owned
+  by `users/jesse/desktop-home` and must not gain a dependency on `env` again.
 
 Do not copy secrets into the repository. Use `--impure` when evaluating or
 building hosts that reference these absolute paths. The existing build scripts
@@ -83,4 +79,3 @@ encode the expected flags for `home`, `katana`, and `pi`.
 Generated `hardware-configuration.nix` files should not be hand-edited during
 an update. Also remember that newly added Nix source files must be tracked by
 Git before flake evaluation can see them.
-
