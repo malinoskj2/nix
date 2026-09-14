@@ -14,8 +14,8 @@ let
     nixpkgs.config.allowUnfree = true;
     # modifications patches the pinned Hyprland plugin set, so it must come after pins.
     nixpkgs.overlays = with self.overlays; [
+      inputs.apple-fonts.overlays.default
       pins
-      additions
       modifications
     ];
 

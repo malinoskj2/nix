@@ -8,7 +8,6 @@ The following external dependencies are required to build the flake provided by 
 - my [dot files repository](https://github.com/malinoskj2/dot) must be present
   for the remaining shared shell and application dotfiles. The `home` Hyprland
   and Noctalia desktop configuration no longer reads from it.
-- `/secret/fonts` directory must exist with required fonts
 
 
 ## Hosts
