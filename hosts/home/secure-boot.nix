@@ -31,26 +31,6 @@
 #   6. Reboot and enable Secure Boot in your BIOS/UEFI firmware settings.
 #
 # ============================================================
-# MIGRATING FROM LANZABOOTE
-# ============================================================
-#
-#   lanzaboote stored keys in /etc/secureboot (set via pkiBundle).
-#   Limine uses sbctl's default location: /var/lib/sbctl.
-#
-#   If you already enrolled lanzaboote's keys into your firmware,
-#   you have two options:
-#
-#   Option A (recommended — re-enroll fresh keys):
-#     1. Enter BIOS Setup Mode to clear all enrolled keys.
-#     2. Follow the ONE-TIME SETUP steps above from scratch.
-#
-#   Option B (reuse existing keys — copy them to sbctl's path):
-#     1. sudo mkdir -p /var/lib/sbctl/keys
-#     2. sudo cp -r /etc/secureboot/keys/* /var/lib/sbctl/keys/
-#     3. sudo sbctl import-keys  # if your sbctl version supports it
-#     Then proceed from step 4 of ONE-TIME SETUP.
-#
-# ============================================================
 # ONGOING
 # ============================================================
 #
