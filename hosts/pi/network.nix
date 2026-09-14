@@ -1,5 +1,5 @@
 # Network
-{ networking, ... }:
+_:
 
 {
   networking = {

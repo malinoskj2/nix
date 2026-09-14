@@ -1,5 +1,5 @@
 # User
-{ users, ... }:
+_:
 
 {
   users = {

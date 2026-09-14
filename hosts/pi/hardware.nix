@@ -6,12 +6,14 @@
 
   nixpkgs.hostPlatform = "aarch64-linux";
 
-  boot.tmp.useTmpfs = true;
-  boot.kernelModules = [ "iwlwifi" ];
-  boot.kernelParams = [
-    "cgroup_enable=memory"
-    "swapaccount=1"
-  ];
+  boot = {
+    tmp.useTmpfs = true;
+    kernelModules = [ "iwlwifi" ];
+    kernelParams = [
+      "cgroup_enable=memory"
+      "swapaccount=1"
+    ];
+  };
 
   fileSystems = {
     "/" = {

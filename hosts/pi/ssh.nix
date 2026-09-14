@@ -1,5 +1,5 @@
 # SSH
-{ services, ... }:
+_:
 
 {
   services.openssh = {

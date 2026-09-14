@@ -1,11 +1,13 @@
-{ config, pkgs, ... }:
+_:
 
 {
-  networking.hostName = "home";
+  networking = {
+    hostName = "home";
 
-  # Noctalia's network integration talks to NetworkManager over D-Bus.
-  # Let NetworkManager own the interfaces and create the wired DHCP profile.
-  networking.networkmanager.enable = true;
+    # Noctalia's network integration talks to NetworkManager over D-Bus.
+    # Let NetworkManager own the interfaces and create the wired DHCP profile.
+    networkmanager.enable = true;
 
-  networking.firewall.enable = false;
+    firewall.enable = false;
+  };
 }

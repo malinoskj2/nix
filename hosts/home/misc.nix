@@ -1,5 +1,5 @@
 # Misc
-{ config, pkgs, ... }:
+{ pkgs, ... }:
 
 {
   time.timeZone = "US/Eastern";

@@ -1,5 +1,5 @@
 # Font
-{ config, pkgs, ... }:
+{ pkgs, ... }:
 
 {
   fonts.packages = with pkgs; [

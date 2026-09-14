@@ -1,5 +1,5 @@
 # SSH — key-only, hardened for eventual internet exposure.
-{ ... }:
+_:
 
 {
   services.openssh = {
