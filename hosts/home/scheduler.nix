@@ -16,13 +16,20 @@
     # -m performance: bias tasks onto the fastest cores (still spills to all
     # cores under multithreaded load). -S: pin high-wakeup tasks to their CPU
     # to cut runqueue lock contention and keep cache/CCD locality.
-    extraArgs = [ "-m" "performance" "-S" ];
+    extraArgs = [
+      "-m"
+      "performance"
+      "-S"
+    ];
   };
 
   # amd_pstate active EPP is the running default; pin it explicitly.
   # preempt=full: switch PREEMPT_DYNAMIC to full preemption for lower
   # worst-case scheduling latency.
-  boot.kernelParams = [ "amd_pstate=active" "preempt=full" ];
+  boot.kernelParams = [
+    "amd_pstate=active"
+    "preempt=full"
+  ];
 
   # AMD 3D V-Cache Optimizer (amd_x3d_vcache). Bias the scheduler's
   # preferred-core ranking toward the high-frequency CCD1 — best for general

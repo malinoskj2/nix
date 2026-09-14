@@ -17,4 +17,3 @@
   # Fix for pipewire-pulse breaking recently
   systemd.user.services.pipewire-pulse.path = [ pkgs.pulseaudio ];
 }
-
