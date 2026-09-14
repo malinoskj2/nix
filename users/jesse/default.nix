@@ -54,10 +54,6 @@ in
       source = "/home/jesse/env/config/gtk/index.theme";
       target = ".icons/default/index.theme";
     };
-    xsettingsd = {
-      source = "/home/jesse/env/config/gtk/xsettingsd.conf";
-      target = ".config/xsettingsd/xsettingsd.conf";
-    };
     fastfetch = {
       source = "/home/jesse/env/config/fastfetch";
       target = ".config/fastfetch";
