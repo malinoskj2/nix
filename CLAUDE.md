@@ -90,9 +90,9 @@ building `home` and `katana`. Hosts are applied with
 `nh os switch --impure` (`programs.nh` in `hosts/default.nix`); `media` and
 `pi` need no `--impure`.
 
-`nixos-hardware` is pinned to an exact 2021 commit in its URL to keep `pi`'s
-Raspberry Pi 4 module unchanged. Bumping it swaps the kernel and firmware
-handling, so treat it as a hardware change and test on the device.
+`nixos-hardware` is pinned to an exact commit in its URL, so `nix flake update`
+will not advance it. It supplies `pi`'s Raspberry Pi 4 kernel and firmware
+handling, so treat a bump as a hardware change and test on the device.
 
 Generated `hardware-configuration.nix` files should not be hand-edited during
 an update. Also remember that newly added Nix source files must be tracked by
