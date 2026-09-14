@@ -4,7 +4,6 @@ let
   inherit (inputs)
     nixpkgs
     home-manager
-    nix-index-database
     catppuccin
     ;
 
@@ -87,24 +86,11 @@ in
 
   flake.nixosConfigurations = {
     home = mkHost {
-      modules = [
-        ./home/configuration.nix
-        nix-index-database.nixosModules.nix-index
-        { programs.nix-index-database.comma.enable = true; }
-        {
-          home-manager.users.jesse.imports = [
-            ../users/jesse
-            ../users/jesse/desktop-home
-          ];
-        }
-      ];
+      modules = [ ./home/configuration.nix ];
     };
 
     katana = mkHost {
-      modules = [
-        ./katana/configuration.nix
-        { home-manager.users.jesse = import ../users/jesse; }
-      ];
+      modules = [ ./katana/configuration.nix ];
     };
 
     pi = mkHost {
