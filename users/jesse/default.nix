@@ -1,5 +1,6 @@
 {
   pkgs,
+  lib,
   ...
 }:
 
@@ -24,7 +25,7 @@
 
   xdg.configFile."fastfetch".source = "/home/jesse/env/config/fastfetch";
 
-  home.file.".config/JetBrains/DataGrip${pkgs.lib.versions.majorMinor pkgs.unstable.jetbrains.datagrip.version}/extensions/com.intellij/startup/glass-header.groovy".source =
+  home.file.".config/JetBrains/DataGrip${lib.versions.majorMinor pkgs.unstable.jetbrains.datagrip.version}/extensions/com.intellij/startup/glass-header.groovy".source =
     ../../scripts/datagrip-glass-header.groovy;
 
   services.gpg-agent = {
