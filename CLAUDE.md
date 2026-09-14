@@ -85,13 +85,14 @@ baseline, not the current NixOS or Home Manager release.
 Manager dotfile sources. The `home` Hyprland and Noctalia desktop is fully owned
 by `users/jesse/desktop-home` and must not gain a dependency on `env` again.
 
-`pi` fetches nixos-hardware with an unpinned `fetchTarball`, so it is impure
-too.
-
 Do not copy secrets into the repository. Use `--impure` when evaluating or
-building `home`, `katana` and `pi`. Hosts are applied with
-`nh os switch --impure` (`programs.nh` in `hosts/default.nix`); `media` needs
-no `--impure`.
+building `home` and `katana`. Hosts are applied with
+`nh os switch --impure` (`programs.nh` in `hosts/default.nix`); `media` and
+`pi` need no `--impure`.
+
+`nixos-hardware` is pinned to an exact 2021 commit in its URL to keep `pi`'s
+Raspberry Pi 4 module unchanged. Bumping it swaps the kernel and firmware
+handling, so treat it as a hardware change and test on the device.
 
 Generated `hardware-configuration.nix` files should not be hand-edited during
 an update. Also remember that newly added Nix source files must be tracked by
