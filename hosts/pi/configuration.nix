@@ -14,4 +14,6 @@
     ./misc.nix
     ./samba.nix
   ];
+
+  system.stateVersion = "24.11";
 }
