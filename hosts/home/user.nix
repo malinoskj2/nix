@@ -1,19 +1,5 @@
-# User
-{ pkgs, ... }:
-
 {
-  users.users.jesse = {
-    isNormalUser = true;
-    extraGroups = [
-      "wheel"
-      "network"
-      "video"
-      "docker"
-      "audio"
-      "disk"
-      "networkmanager"
-      "systemd-journal"
-    ];
-    shell = pkgs.zsh;
-  };
+  imports = [ ../../modules/nixos/desktop.nix ];
+
+  users.users.jesse.extraGroups = [ "docker" ];
 }
