@@ -8,28 +8,38 @@ let
     catppuccin
     ;
 
-  common = {
-    imports = [ home-manager.nixosModules.home-manager ];
+  common =
+    { config, ... }:
+    {
+      imports = [ home-manager.nixosModules.home-manager ];
 
-    nixpkgs.config.allowUnfree = true;
-    # modifications patches the pinned Hyprland plugin set, so it must come after pins.
-    nixpkgs.overlays = with self.overlays; [
-      inputs.apple-fonts.overlays.default
-      unstable
-      pins
-      modifications
-    ];
+      nixpkgs.config.allowUnfree = true;
+      # modifications patches the pinned Hyprland plugin set, so it must come after pins.
+      nixpkgs.overlays = with self.overlays; [
+        inputs.apple-fonts.overlays.default
+        unstable
+        pins
+        modifications
+      ];
 
-    system.configurationRevision = self.rev or self.dirtyRev or null;
+      system.configurationRevision = self.rev or self.dirtyRev or null;
 
-    home-manager = {
-      useGlobalPkgs = true;
-      useUserPackages = true;
-      extraSpecialArgs = { inherit inputs; };
-      backupFileExtension = "hm-bak";
-      sharedModules = [ catppuccin.homeModules.catppuccin ];
+      programs.nh = {
+        enable = true;
+        flake = "/home/jesse/nix";
+        # media keeps its own nix.gc schedule.
+        clean.enable = !config.nix.gc.automatic;
+        clean.extraArgs = "--keep-since 7d --keep 5";
+      };
+
+      home-manager = {
+        useGlobalPkgs = true;
+        useUserPackages = true;
+        extraSpecialArgs = { inherit inputs; };
+        backupFileExtension = "hm-bak";
+        sharedModules = [ catppuccin.homeModules.catppuccin ];
+      };
     };
-  };
 
   mkHost =
     {

@@ -89,8 +89,9 @@ The configuration depends on files outside this repository:
   by `users/jesse/desktop-home` and must not gain a dependency on `env` again.
 
 Do not copy secrets into the repository. Use `--impure` when evaluating or
-building hosts that reference these absolute paths. The existing build scripts
-encode the expected flags for `home`, `katana`, and `pi`.
+building hosts that reference these absolute paths. Hosts are applied with
+`nh os switch --impure` (`programs.nh` in `hosts/default.nix`); `pi` needs no
+`--impure`.
 
 Generated `hardware-configuration.nix` files should not be hand-edited during
 an update. Also remember that newly added Nix source files must be tracked by
