@@ -14,4 +14,6 @@
     ./package.nix
     ./misc.nix
   ];
+
+  system.stateVersion = "25.11";
 }
