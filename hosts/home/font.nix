@@ -8,7 +8,6 @@
     fira-code
     fira-code-symbols
     nerd-fonts.fira-code
-    nerd-fonts.droid-sans-mono
     otf-apple
   ];
 }
