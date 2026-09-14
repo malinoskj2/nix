@@ -7,6 +7,11 @@
   imports = [
     ./firefox.nix
     ./dolphin.nix
+    ./git.nix
+    ./zsh.nix
+    ./mpv.nix
+    ./starship.nix
+    ./cursor.nix
   ];
 
   programs.home-manager.enable = true;
@@ -17,44 +22,10 @@
     stateVersion = "25.11";
   };
 
-  home.file = {
-    zsh = {
-      source = "/home/jesse/env/zsh/zshrc";
-      target = ".zshrc";
-    };
-    git = {
-      source = "/home/jesse/env/config/git/gitconfig";
-      target = ".gitconfig";
-    };
-    mpv = {
-      source = "/home/jesse/env/config/mpv/mpv.conf";
-      target = ".config/mpv/mpv.conf";
-    };
-    starship = {
-      source = "/home/jesse/env/config/starship/starship.toml";
-      target = ".config/starship.toml";
-    };
-    gtk2 = {
-      source = "/home/jesse/env/config/gtk/gtkrc-2.0";
-      target = ".gtkrc-2.0";
-    };
-    gtk3 = {
-      source = "/home/jesse/env/config/gtk/settings.ini";
-      target = ".config/gtk-3.0/settings.ini";
-    };
-    icon-theme = {
-      source = "/home/jesse/env/config/gtk/index.theme";
-      target = ".icons/default/index.theme";
-    };
-    fastfetch = {
-      source = "/home/jesse/env/config/fastfetch";
-      target = ".config/fastfetch";
-    };
-    datagrip-glass-header = {
-      source = ../../scripts/datagrip-glass-header.groovy;
-      target = ".config/JetBrains/DataGrip${pkgs.lib.versions.majorMinor pkgs.unstable.jetbrains.datagrip.version}/extensions/com.intellij/startup/glass-header.groovy";
-    };
-  };
+  xdg.configFile."fastfetch".source = "/home/jesse/env/config/fastfetch";
+
+  home.file.".config/JetBrains/DataGrip${pkgs.lib.versions.majorMinor pkgs.unstable.jetbrains.datagrip.version}/extensions/com.intellij/startup/glass-header.groovy".source =
+    ../../scripts/datagrip-glass-header.groovy;
 
   services.gpg-agent = {
     enable = true;
@@ -73,7 +44,6 @@
     tokei
     gitleaks
     alacritty
-    mpv
     unstable.jetbrains.datagrip
     ffmpeg
     pavucontrol
@@ -86,7 +56,6 @@
     tree
     nixfmt
     nil
-    starship
     zoxide
     rustc
     cargo
