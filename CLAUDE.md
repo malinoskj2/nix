@@ -13,7 +13,8 @@ The flake uses flake-parts. `hosts/default.nix` is a flake-parts module that
 builds every host with `nixpkgs.lib.nixosSystem` and holds the module shared by
 all of them (overlays, unfree, Home Manager wiring). Host modules live under
 `hosts/<name>/`; shared user configuration lives under
-`users/jesse/`. Overlays live in `overlays/default.nix`: `pins` takes packages
+`users/jesse/`. Overlays live in `overlays/default.nix`: `unstable` exposes
+`nixpkgs-unstable` as `pkgs.unstable`, `pins` takes packages
 from exact nixpkgs revisions, and `modifications` overrides existing packages,
 using patches from `patches/<package>/`. The `apple-fonts` input's overlay adds
 `pkgs.sf-pro`, `sf-compact`, `sf-mono` and `ny`.
