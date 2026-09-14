@@ -55,6 +55,12 @@ let
     };
 in
 {
+  perSystem =
+    { pkgs, ... }:
+    {
+      formatter = pkgs.nixfmt-tree;
+    };
+
   flake.nixosConfigurations = {
     home = mkHost {
       modules = [
