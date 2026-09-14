@@ -1,33 +1,46 @@
 # Wayland
-{ services, programs, pkgs, lib, config, ... }:
+{
+  services,
+  programs,
+  pkgs,
+  lib,
+  config,
+  ...
+}:
 
 {
   programs.hyprland = {
     enable = true;
-    xwayland = { enable = true; };
+    xwayland = {
+      enable = true;
+    };
   };
 
   xdg = {
     autostart.enable = true;
     portal = {
       enable = true;
-      extraPortals = [ pkgs.xdg-desktop-portal pkgs.xdg-desktop-portal-gtk ];
+      extraPortals = [
+        pkgs.xdg-desktop-portal
+        pkgs.xdg-desktop-portal-gtk
+      ];
     };
   };
 
   hardware = {
     graphics = {
       enable = true;
-      extraPackages = with pkgs; [ libva-vdpau-driver libvdpau-va-gl ];
+      extraPackages = with pkgs; [
+        libva-vdpau-driver
+        libvdpau-va-gl
+      ];
       extraPackages32 = with pkgs.pkgsi686Linux; [ libva ];
     };
   };
 
   environment.sessionVariables = {
-    POLKIT_AUTH_AGENT =
-      "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1";
-    GSETTINGS_SCHEMA_DIR =
-      "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}/glib-2.0/schemas";
+    POLKIT_AUTH_AGENT = "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1";
+    GSETTINGS_SCHEMA_DIR = "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}/glib-2.0/schemas";
     XDG_SESSION_TYPE = "wayland";
     WLR_NO_HARDWARE_CURSORS = "1";
     NIXOS_OZONE_WL = "1";
@@ -41,4 +54,3 @@
     NIXOS_XDG_OPEN_USE_PORTAL = "1";
   };
 }
-
