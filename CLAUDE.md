@@ -9,7 +9,10 @@ This is a multi-host NixOS flake:
 - `pi`: aarch64 server.
 - `media`: media server with Docker and NVIDIA transcoding.
 
-Host modules live under `hosts/`; shared user configuration lives under
+The flake uses flake-parts. `hosts/default.nix` is a flake-parts module that
+builds every host with `nixpkgs.lib.nixosSystem` and holds the module shared by
+all of them (overlays, unfree, Home Manager wiring). Host modules live under
+`hosts/<name>/`; shared user configuration lives under
 `users/jesse/`. Overlays live in `overlays/default.nix`: `pins` takes packages
 from exact nixpkgs revisions, `additions` exposes every `pkgs/<name>/package.nix`
 as `pkgs.<name>`, and `modifications` overrides existing packages, using
@@ -68,7 +71,7 @@ baseline, not the current NixOS or Home Manager release.
 
 The configuration depends on files outside this repository:
 
-- `/secret/secrets.nix` for the `home` and `media` hosts.
+- `/secret/secrets.nix` for the `media` host.
 - `/secret/fonts` for the custom Apple font derivation.
 - `/home/jesse/env` for remaining shared Home Manager dotfile sources used by
   `home` and `katana`. The `home` Hyprland and Noctalia desktop is fully owned

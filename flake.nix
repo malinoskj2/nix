@@ -1,10 +1,13 @@
 {
-  description = ":)";
+  description = "NixOS configurations for home, katana, pi and media";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
-    utils.url = "github:gytis-ivaskevicius/flake-utils-plus";
+    flake-parts = {
+      url = "github:hercules-ci/flake-parts";
+      inputs.nixpkgs-lib.follows = "nixpkgs";
+    };
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -26,76 +29,15 @@
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      utils,
-      home-manager,
-      nix-index-database,
-      catppuccin,
-      ...
-    }@inputs:
-    let
-      overlays = import ./overlays { inherit inputs; };
-    in
-    utils.lib.mkFlake {
-      inherit self inputs;
-
-      channelsConfig.allowUnfree = true;
-      # modifications patches the pinned Hyprland plugin set, so it must come after pins.
-      sharedOverlays = with overlays; [
-        pins
-        additions
-        modifications
-      ];
-      hostDefaults.modules = [
-        home-manager.nixosModules.home-manager
-        {
-          home-manager.useGlobalPkgs = true;
-          home-manager.useUserPackages = true;
-          home-manager.extraSpecialArgs = { inherit inputs; };
-          home-manager.backupFileExtension = "hm-bak";
-          home-manager.sharedModules = [ catppuccin.homeModules.catppuccin ];
-        }
+    inputs@{ flake-parts, ... }:
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
       ];
 
-      hosts.home = {
-        system = "x86_64-linux";
-        modules = [
-          ./hosts/home/configuration.nix
-          nix-index-database.nixosModules.nix-index
-          { programs.nix-index-database.comma.enable = true; }
-          {
-            home-manager.users.jesse.imports = [
-              ./users/jesse
-              ./users/jesse/desktop-home
-            ];
-          }
-        ];
-        specialArgs = {
-          secrets = import /secret/secrets.nix;
-        };
-      };
+      imports = [ ./hosts ];
 
-      hosts.katana = {
-        system = "x86_64-linux";
-        modules = [
-          ./hosts/katana/configuration.nix
-          { home-manager.users.jesse = import ./users/jesse; }
-        ];
-      };
-
-      hosts.pi = {
-        system = "aarch64-linux";
-        modules = [ ./hosts/pi/configuration.nix ];
-      };
-
-      hosts.media = {
-        system = "x86_64-linux";
-        modules = [ ./hosts/media/configuration.nix ];
-        specialArgs = {
-          secrets = import /secret/secrets.nix;
-        };
-      };
+      flake.overlays = import ./overlays { inherit inputs; };
     };
 }
