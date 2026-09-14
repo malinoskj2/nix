@@ -1,12 +1,24 @@
 # Wayland
-{ services, programs, pkgs, lib, config, ... }:
+{
+  services,
+  programs,
+  pkgs,
+  lib,
+  config,
+  ...
+}:
 
 {
-  boot.kernelParams = [ "nvidia-drm.modeset=1" "nvidia-drm.fbdev=1" ];
+  boot.kernelParams = [
+    "nvidia-drm.modeset=1"
+    "nvidia-drm.fbdev=1"
+  ];
 
   programs.hyprland = {
     enable = true;
-    xwayland = { enable = true; };
+    xwayland = {
+      enable = true;
+    };
   };
 
   xdg = {
@@ -26,7 +38,7 @@
     graphics = {
       enable = true;
       enable32Bit = true;
-      extraPackages = with pkgs; [ nvidia-vaapi-driver libva-vdpau-driver libvdpau-va-gl ];
+      extraPackages = with pkgs; [ nvidia-vaapi-driver ];
       extraPackages32 = with pkgs.pkgsi686Linux; [ libva ];
     };
     nvidia = {
@@ -42,16 +54,13 @@
       modesetting.enable = true;
       open = true;
       nvidiaSettings = false;
-      forceFullCompositionPipeline = true;
       powerManagement.enable = true;
     };
   };
 
   environment.sessionVariables = {
-    POLKIT_AUTH_AGENT =
-      "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1";
-    GSETTINGS_SCHEMA_DIR =
-      "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}/glib-2.0/schemas";
+    POLKIT_AUTH_AGENT = "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1";
+    GSETTINGS_SCHEMA_DIR = "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}/glib-2.0/schemas";
     LIBVA_DRIVER_NAME = "nvidia";
     MOZ_DISABLE_RDD_SANDBOX = "1";
     XDG_SESSION_TYPE = "wayland";
