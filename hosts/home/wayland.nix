@@ -8,6 +8,9 @@
 {
   programs.hyprland.enable = true;
 
+  # The nvidia module keys off this even without an X server.
+  services.xserver.videoDrivers = [ "nvidia" ];
+
   hardware = {
     graphics = {
       enable32Bit = true;
