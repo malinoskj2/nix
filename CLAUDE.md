@@ -81,17 +81,17 @@ baseline, not the current NixOS or Home Manager release.
 
 ### Evaluation is intentionally impure on some hosts
 
-The configuration depends on files outside this repository:
+`home` and `katana` depend on `/home/jesse/env` for remaining shared Home
+Manager dotfile sources. The `home` Hyprland and Noctalia desktop is fully owned
+by `users/jesse/desktop-home` and must not gain a dependency on `env` again.
 
-- `/secret/secrets.nix` for the `media` host.
-- `/home/jesse/env` for remaining shared Home Manager dotfile sources used by
-  `home` and `katana`. The `home` Hyprland and Noctalia desktop is fully owned
-  by `users/jesse/desktop-home` and must not gain a dependency on `env` again.
+`pi` fetches nixos-hardware with an unpinned `fetchTarball`, so it is impure
+too.
 
 Do not copy secrets into the repository. Use `--impure` when evaluating or
-building hosts that reference these absolute paths. Hosts are applied with
-`nh os switch --impure` (`programs.nh` in `hosts/default.nix`); `pi` needs no
-`--impure`.
+building `home`, `katana` and `pi`. Hosts are applied with
+`nh os switch --impure` (`programs.nh` in `hosts/default.nix`); `media` needs
+no `--impure`.
 
 Generated `hardware-configuration.nix` files should not be hand-edited during
 an update. Also remember that newly added Nix source files must be tracked by
