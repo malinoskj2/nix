@@ -1,7 +1,5 @@
 {
-  config,
   inputs,
-  lib,
   pkgs,
   ...
 }:
@@ -77,28 +75,6 @@ in
       recursive = true;
     };
   };
-
-  # These were manually-created links, so Home Manager did not know to remove
-  # them. Unlink only the known legacy paths; their source files remain intact
-  # for rollback. The Lua entry point and Noctalia files are then linked from
-  # the Nix store by the declarations above.
-  home.activation.removeLegacyDesktopLinks = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
-    for relativePath in \
-      hypr/hyprland.conf \
-      hypr/hyprpaper.conf \
-      hypr/hyprlock.conf \
-      noctalia/config.toml \
-      waybar/config \
-      waybar/style.css \
-      ../.local/share/noctalia/plugins/control-button \
-      ../.local/share/noctalia/plugins/hypr-workspaces
-    do
-      legacyPath="${config.home.homeDirectory}/.config/$relativePath"
-      if [ -L "$legacyPath" ]; then
-        $DRY_RUN_CMD rm -- "$legacyPath"
-      fi
-    done
-  '';
 
   systemd.user.services.wallpaper-autopause = {
     Unit = {

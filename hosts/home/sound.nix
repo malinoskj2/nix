@@ -12,7 +12,6 @@
 
   # Text to Speech
   services.speechd.enable = false;
-  services.orca.enable = false;
 
   # Fix for pipewire-pulse breaking recently
   systemd.user.services.pipewire-pulse.path = [ pkgs.pulseaudio ];
