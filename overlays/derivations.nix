@@ -1,8 +1,5 @@
-{ hyprlandPluginsSrc }:
 self: super: {
   otf-apple = super.callPackage ./../derivations/otf-apple.nix { };
-  hyprbars = super.callPackage ./../derivations/hyprbars.nix {
-    src = "${hyprlandPluginsSrc}/hyprbars";
-  };
+  # The coupled Hyprland overlay is ordered before this one in flake.nix.
   hyprfocus = super.callPackage ./../derivations/hyprfocus.nix { };
 }
