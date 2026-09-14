@@ -1,0 +1,11 @@
+id          = "jesse/control-button"
+name        = "Control Button"
+version     = "1.0.0"
+plugin_api  = 3
+author      = "jesse"
+icon        = "adjustments-horizontal"
+description = "Floating glass button that toggles the control center."
+
+[[desktop_widget]]
+id    = "button"
+entry = "button.luau"

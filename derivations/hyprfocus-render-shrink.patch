@@ -66,31 +66,31 @@
  
 -    if (has("shrink")) {
 +    if (has("shrink") && g_pSendWindowSizeHook) {
-         const auto ORIGINAL = CBox{window->m_realPosition->goal(), window->m_realSize->goal()};
+         const auto ORIGINAL = CBox{window->positionAnimation()->goal(), window->sizeAnimation()->goal()};
  
 +        holdClientResize(window);
 +
-         window->m_realPosition->setConfig(PIN);
-         window->m_realSize->setConfig(PIN);
+         window->positionAnimation()->setConfig(PIN);
+         window->sizeAnimation()->setConfig(PIN);
  
 @@ -135,7 +190,16 @@
              } else
                  w->layoutTarget()->recalc();
  
--            w->m_realSize->setCallbackOnEnd(nullptr);
+-            w->sizeAnimation()->setCallbackOnEnd(nullptr);
 +            // keep the render-only scaling through the grow-back as well
-+            if (w->m_realSize->isBeingAnimated())
-+                w->m_realSize->setCallbackOnEnd([w](WP<CBaseAnimatedVariable> pav) {
++            if (w->sizeAnimation()->isBeingAnimated())
++                w->sizeAnimation()->setCallbackOnEnd([w](WP<CBaseAnimatedVariable> pav) {
 +                    if (w)
 +                        releaseClientResize(w.lock());
 +                });
 +            else {
-+                w->m_realSize->setCallbackOnEnd(nullptr);
++                w->sizeAnimation()->setCallbackOnEnd(nullptr);
 +                releaseClientResize(w.lock());
 +            }
          });
      } else if (has("slide")) {
-         const auto ORIGINAL = window->m_realPosition->goal();
+         const auto ORIGINAL = window->positionAnimation()->goal();
 @@ -171,7 +235,20 @@
          throw std::runtime_error("[hww] Version mismatch");
      }
@@ -120,15 +120,15 @@
 +    g_focusListener.reset();
 +
      // reset the callbacks to avoid crashes
-     for (const auto& w : g_pCompositor->m_windows) {
-         if (!validMapped(w))
+     for (const auto& w : Desktop::windowState()->windows()) {
+         if (!Desktop::View::validMapped(w))
 @@ -212,4 +291,10 @@
-         w->m_realPosition->setCallbackOnEnd(nullptr);
+         w->positionAnimation()->setCallbackOnEnd(nullptr);
          w->alpha(Desktop::View::WINDOW_ALPHA_ACTIVE)->setCallbackOnEnd(nullptr);
      }
 +
 +    // hooks are removed after this returns, so let the held sends through now
-+    for (const auto& w : g_pCompositor->m_windows) {
++    for (const auto& w : Desktop::windowState()->windows()) {
 +        if (isHeld(w.get()))
 +            releaseClientResize(w);
 +    }

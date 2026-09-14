@@ -1,0 +1,303 @@
+# Noctalia v5. GUI changes land in ~/.local/state/noctalia/settings.toml and
+# override this file; fold them back here with `noctalia config export`.
+
+[shell]
+font_family = "SF Pro Display"
+
+    [shell.launcher]
+    compact = true
+
+    [shell.panel]
+    transparency_mode = "glass"
+
+    [shell.screen_corners]
+    enabled = true
+
+    [shell.screenshot]
+    save_to_file      = true
+    directory         = "/tmp/screenshot"
+    filename_pattern  = "%s"
+    copy_to_clipboard = true
+
+[theme]
+source            = "builtin"
+builtin           = "Catppuccin"
+community_palette = "Oxocarbon"
+mode              = "dark"
+
+    [theme.templates]
+    enable_builtin_templates   = false
+    enable_community_templates = false
+
+[wallpaper]
+directory = "/home/jesse/.wallpapers"
+
+    [wallpaper.default]
+    path = "/home/jesse/.wallpapers/default"
+
+    [wallpaper.automation]
+    recursive = false
+
+[plugins]
+auto_update = "none"
+enabled     = ["noctalia/mpvpaper", "jesse/control-button", "jesse/hypr-workspaces"]
+
+[plugin_settings."noctalia/mpvpaper"]
+video_directory = "/home/jesse/.wallpapers/video"
+# Pausing is handled per monitor by the Home Manager wallpaper-autopause service;
+# instances start paused until that script decides they should play.
+auto_pause = "off"
+mpv_options = "pause=yes"
+
+# Glass to match the control button pill: faint fill, 30% white outline, no shadow.
+# No per-side border option; margin_edge = -1 pushes the top outline off-screen.
+[bar.default]
+background_opacity = 0.08
+border             = "#ffffff4d"
+border_width       = 1
+shadow             = false
+margin_edge        = -1
+
+    # Invisible group just to give status icons macOS-like spacing.
+    [[bar.default.capsule_group]]
+    id             = "status"
+    members        = ["volume", "network"]
+    opacity        = 0.0
+    padding        = 0.0
+    widget_spacing = 10
+
+    [bar.default.monitor.DP-1]
+    match   = "DP-1"
+    enabled = false
+
+    [bar.default.monitor.DP-2]
+    match     = "DP-2"
+    thickness = 32
+    start     = ["text_2", "jesse/hypr-workspaces:workspaces"]
+    center    = ["active_window"]
+    # "tray" temporarily removed from the front of end.
+    end       = ["media", "group:status", "network_date_separator", "clock"]
+
+[widget.active_window]
+font_weight = 600
+
+[widget.clock]
+font_weight = 600
+format      = "{:%a %d %b  %I:%M %p}"
+
+[widget.control-center]
+color                 = "primary"
+scale                 = 1.35
+custom_image          = "/run/current-system/sw/share/icons/hicolor/256x256/apps/nix-snowflake-white.png"
+custom_image_colorize = true
+capsule               = true
+capsule_fill          = "primary"
+capsule_opacity       = 0.15
+capsule_radius        = 14
+
+[widget.media]
+hide_when_no_media = true
+capsule            = true
+capsule_fill       = "secondary"
+capsule_opacity    = 0.07
+capsule_radius     = 6
+
+# White icons at 70% opacity.
+[widget.network]
+show_label = false
+color      = "#ffffffb3"
+
+[widget.network_date_separator]
+type        = "text"
+text        = "✦"
+font_scale  = 0.72
+color       = "secondary"
+icon_color  = "secondary"
+interactive = false
+
+[widget.session]
+glyph = "powersaver"
+
+[widget.text_2]
+type        = "text"
+enabled     = false
+text        = ""
+font_family = "FiraCode Nerd Font Mono"
+font_scale  = 1.42
+color       = "secondary"
+icon_color  = "secondary"
+
+[widget.volume]
+show_label = false
+color      = "#ffffffb3"
+
+[widget.workspaces]
+focused_color  = "primary"
+occupied_color = "outline"
+empty_color    = "surface_variant"
+
+[dock]
+position            = "left"
+icon_size           = 30
+item_spacing        = 0
+main_axis_padding   = 24
+cross_axis_padding  = 0
+magnification_scale = 1.05
+show_instance_count = false
+
+[desktop_widgets]
+schema_version = 2
+widget_order   = ["desktop-widget-cc"]
+
+    [desktop_widgets.grid]
+    visible        = false
+    cell_size      = 16
+    major_interval = 4
+
+    [desktop_widgets.widget.desktop-widget-cc]
+    type             = "jesse/control-button:button"
+    output           = "DP-2"
+    cx               = 50.0
+    cy               = 16.0
+    box_width        = 52.0
+    box_height       = 24.0
+    placement_width  = 1920.0
+    placement_height = 1080.0
+    rotation         = 0.0
+
+        [desktop_widgets.widget.desktop-widget-cc.settings]
+        background = false
+
+[lockscreen]
+enabled  = true
+monitors = ["DP-2"]
+
+[lockscreen_widgets]
+enabled        = true
+schema_version = 2
+widget_order   = [
+    "lockscreen-login-box@DP-1",
+    "lockscreen-login-box@DP-2",
+    "lockscreen-widget-e7e7ee0c6d3c2be4",
+    "lockscreen-widget-6bf9176bc28055a6",
+]
+
+    [lockscreen_widgets.grid]
+    visible        = true
+    cell_size      = 16
+    major_interval = 4
+
+    [lockscreen_widgets.widget."lockscreen-login-box@DP-1"]
+    type             = "login_box"
+    output           = "DP-1"
+    cx               = 540.0
+    cy               = 1738.0
+    box_width        = 810.0
+    box_height       = 196.0
+    placement_width  = 1080.0
+    placement_height = 1920.0
+    rotation         = 0.0
+
+        [lockscreen_widgets.widget."lockscreen-login-box@DP-1".settings]
+        layout               = "regular"
+        background_color     = "surface_variant"
+        background_opacity   = 0.88
+        background_radius    = 12.0
+        input_opacity        = 1.0
+        input_radius         = 6.0
+        center_password_text = false
+        show_caps_lock       = true
+        show_keyboard_layout = true
+        show_login_button    = true
+        show_media           = true
+        show_session_buttons = true
+        show_unlock_hint     = true
+        show_weather         = true
+
+    [lockscreen_widgets.widget."lockscreen-login-box@DP-2"]
+    type             = "login_box"
+    output           = "DP-2"
+    cx               = 960.0
+    cy               = 698.0
+    box_width        = 360.0
+    box_height       = 70.0
+    placement_width  = 1920.0
+    placement_height = 1080.0
+    rotation         = 0.0
+
+        [lockscreen_widgets.widget."lockscreen-login-box@DP-2".settings]
+        layout               = "compact"
+        background_color     = "surface_variant"
+        background_opacity   = 0.88
+        background_radius    = 12.0
+        input_opacity        = 1.0
+        input_radius         = 6.0
+        center_password_text = false
+        show_caps_lock       = true
+        show_keyboard_layout = true
+        show_login_button    = true
+        show_media           = false
+        show_session_buttons = true
+        show_unlock_hint     = false
+        show_weather         = false
+
+    [lockscreen_widgets.widget.lockscreen-widget-e7e7ee0c6d3c2be4]
+    type             = "sticker"
+    output           = "DP-2"
+    cx               = 960.0
+    cy               = 460.0
+    box_width        = 128.0
+    box_height       = 128.0
+    placement_width  = 1920.0
+    placement_height = 1080.0
+    rotation         = 0.0
+
+        [lockscreen_widgets.widget.lockscreen-widget-e7e7ee0c6d3c2be4.settings]
+        image_path = "/home/jesse/.avatar/avatar.jpg"
+        opacity    = 1.0
+
+    [lockscreen_widgets.widget.lockscreen-widget-6bf9176bc28055a6]
+    type             = "label"
+    output           = "DP-2"
+    cx               = 960.0
+    cy               = 560.0
+    box_width        = 140.0
+    box_height       = 48.0
+    placement_width  = 1920.0
+    placement_height = 1080.0
+    rotation         = 0.0
+
+        [lockscreen_widgets.widget.lockscreen-widget-6bf9176bc28055a6.settings]
+        title       = "jesse"
+        font_family = "SF Pro Display"
+        color       = "on_surface"
+        shadow      = true
+
+[idle]
+behavior_order = ["lock", "screen_off", "suspend"]
+
+[idle.behavior.lock]
+action  = "lock"
+timeout = 1800
+
+# locked_timeout is what applies once locked, so it drives everything after the
+# 30 min lock: screens off 1 min later, suspend 1.5 h later (2 h idle total).
+[idle.behavior.screen_off]
+action         = "screen_off"
+timeout        = 0
+locked_timeout = 60
+
+[idle.behavior.suspend]
+action         = "suspend"
+timeout        = 7200
+locked_timeout = 5400
+
+[system.monitor]
+cpu_poll_seconds     = 20
+disk_poll_seconds    = 20
+gpu_poll_seconds     = 20
+memory_poll_seconds  = 20
+network_poll_seconds = 20
+
+[weather]
+enabled = false

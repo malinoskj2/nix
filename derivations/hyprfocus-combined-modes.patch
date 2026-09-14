@@ -25,15 +25,15 @@
 +    }
 +
 +    if (has("shrink")) {
-         const auto ORIGINAL = CBox{window->m_realPosition->goal(), window->m_realSize->goal()};
+         const auto ORIGINAL = CBox{window->positionAnimation()->goal(), window->sizeAnimation()->goal()};
  
-         window->m_realPosition->setConfig(PIN);
+         window->positionAnimation()->setConfig(PIN);
 @@ -135,7 +137,7 @@
  
-             w->m_realSize->setCallbackOnEnd(nullptr);
+             w->sizeAnimation()->setCallbackOnEnd(nullptr);
          });
 -    } else if (mode == "slide") {
 +    } else if (has("slide")) {
-         const auto ORIGINAL = window->m_realPosition->goal();
+         const auto ORIGINAL = window->positionAnimation()->goal();
  
-         window->m_realPosition->setConfig(PIN);
+         window->positionAnimation()->setConfig(PIN);

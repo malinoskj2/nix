@@ -21,11 +21,7 @@
       url = "github:catppuccin/nix/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nixpkgs-hyprland.url = "github:nixos/nixpkgs/21a67dc470149f337cecafbe965d8d252a390518";
-    hyprland-plugins-src = {
-      url = "github:hyprwm/hyprland-plugins/1cb37fad68dff5f5840010c314fed5809b4ee66f";
-      flake = false;
-    };
+    nixpkgs-hyprland.url = "github:nixos/nixpkgs/8ce4ef6cb6f871616146b9fe26d2a5ae594e94fe";
     nixpkgs-firefox.url = "github:nixos/nixpkgs/21a67dc470149f337cecafbe965d8d252a390518";
     wavefox = {
       url = "github:QNetITQ/WaveFox/0.6.155";
@@ -48,9 +44,6 @@
 
       channelsConfig.allowUnfree = true;
       sharedOverlays = [
-        (import ./overlays/derivations.nix {
-          hyprlandPluginsSrc = inputs.hyprland-plugins-src;
-        })
         (final: prev: {
           inherit (inputs.nixpkgs-hyprland.legacyPackages.${prev.stdenv.hostPlatform.system})
             hyprland
@@ -58,6 +51,7 @@
             xdg-desktop-portal-hyprland
             ;
         })
+        (import ./overlays/derivations.nix)
         (final: prev: {
           inherit (inputs.nixpkgs-firefox.legacyPackages.${prev.stdenv.hostPlatform.system})
             firefox
@@ -81,7 +75,12 @@
           ./hosts/home/configuration.nix
           nix-index-database.nixosModules.nix-index
           { programs.nix-index-database.comma.enable = true; }
-          { home-manager.users.jesse = import ./users/jesse; }
+          {
+            home-manager.users.jesse.imports = [
+              ./users/jesse
+              ./users/jesse/desktop-home
+            ];
+          }
         ];
         specialArgs = {
           secrets = import /secret/secrets.nix;

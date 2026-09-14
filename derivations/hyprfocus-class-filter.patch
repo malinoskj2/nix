@@ -23,7 +23,7 @@
 +    // Mapping can focus before popin starts; either opening callback can clear m_animatingIn.
 +    // Wait for both geometry animations before taking over their goals and callbacks.
 +    if (reason == Desktop::FOCUS_REASON_NEW_WINDOW || window->m_firstMap || window->m_animatingIn ||
-+        window->m_realPosition->isBeingAnimated() || window->m_realSize->isBeingAnimated())
++        window->positionAnimation()->isBeingAnimated() || window->sizeAnimation()->isBeingAnimated())
 +        return;
 +
 +    const auto CLASS = configValues.windowClass->value();
