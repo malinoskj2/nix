@@ -15,4 +15,6 @@
   ];
 
   system.stateVersion = "24.11";
+
+  home-manager.users.jesse = import ../../users/jesse;
 }
