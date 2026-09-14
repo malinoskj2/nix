@@ -10,8 +10,10 @@ This is a multi-host NixOS flake:
 - `media`: media server with Docker and NVIDIA transcoding.
 
 Host modules live under `hosts/`; shared user configuration lives under
-`users/jesse/`; custom packages and patches live under `derivations/` and are
-exported through `overlays/derivations.nix`.
+`users/jesse/`. Overlays live in `overlays/default.nix`: `pins` takes packages
+from exact nixpkgs revisions, `additions` exposes every `pkgs/<name>/package.nix`
+as `pkgs.<name>`, and `modifications` overrides existing packages, using
+patches from `patches/<package>/`.
 
 Format changed Nix files with `nixfmt`. Prefer evaluating or building the
 affected host before applying it, and do not run a `switch` unless explicitly
@@ -33,10 +35,10 @@ Do not treat the Hyprland inputs as ordinary flake-lock updates:
 - `nixpkgs-hyprland` supplies Hyprland, `hyprlandPlugins`, and
   `xdg-desktop-portal-hyprland` from an exact nixpkgs revision.
 - `hyprbars` comes from that revision's matching `hyprlandPlugins` set.
-- `derivations/hyprfocus.nix` overrides that same set's hyprfocus source and
-  applies all three `derivations/hyprfocus-*.patch` files.
-- `derivations/hyprfocus.nix` and the desktop Home Manager module assert the
-  exact supported Hyprland version.
+- The `modifications` overlay in `overlays/default.nix` overrides that same
+  set's hyprfocus and applies all three `patches/hyprfocus/*.patch` files.
+- That overlay and the desktop Home Manager module assert the exact supported
+  Hyprland version.
 
 When upgrading Hyprland, update the exact nixpkgs revision and version
 assertions together. Rebase and review every hyprfocus patch against the new

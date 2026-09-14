@@ -39,7 +39,7 @@ let
 
   hyprlandConfig = pkgs.replaceVars ./hyprland/hyprland.lua {
     hyprbars = "${pkgs.hyprlandPlugins.hyprbars}/lib/libhyprbars.so";
-    hyprfocus = "${pkgs.hyprfocus}/lib/libhyprfocus.so";
+    hyprfocus = "${pkgs.hyprlandPlugins.hyprfocus}/lib/libhyprfocus.so";
     inherit wallpaperRandomize;
     noctalia = "${noctalia}/bin/noctalia";
   };

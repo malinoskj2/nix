@@ -35,24 +35,18 @@
       catppuccin,
       ...
     }@inputs:
+    let
+      overlays = import ./overlays { inherit inputs; };
+    in
     utils.lib.mkFlake {
       inherit self inputs;
 
       channelsConfig.allowUnfree = true;
-      sharedOverlays = [
-        (final: prev: {
-          inherit (inputs.nixpkgs-hyprland.legacyPackages.${prev.stdenv.hostPlatform.system})
-            hyprland
-            hyprlandPlugins
-            xdg-desktop-portal-hyprland
-            ;
-        })
-        (import ./overlays/derivations.nix)
-        (final: prev: {
-          inherit (inputs.nixpkgs-firefox.legacyPackages.${prev.stdenv.hostPlatform.system})
-            firefox
-            ;
-        })
+      # modifications patches the pinned Hyprland plugin set, so it must come after pins.
+      sharedOverlays = with overlays; [
+        pins
+        additions
+        modifications
       ];
       hostDefaults.modules = [
         home-manager.nixosModules.home-manager
