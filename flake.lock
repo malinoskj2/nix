@@ -160,6 +160,22 @@
         "type": "github"
       }
     },
+    "nixos-hardware": {
+      "locked": {
+        "lastModified": 1620893076,
+        "narHash": "sha256-nG54zqew1hSRG4jUsPGNlhl9Sy9Vl/8OLxGR2oMB4Bk=",
+        "owner": "NixOS",
+        "repo": "nixos-hardware",
+        "rev": "936e4649098d6a5e0762058cb7687be1b2d90550",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixos-hardware",
+        "rev": "936e4649098d6a5e0762058cb7687be1b2d90550",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1789114715,
@@ -243,6 +259,7 @@
         "flake-parts": "flake-parts",
         "home-manager": "home-manager",
         "nix-index-database": "nix-index-database",
+        "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs",
         "nixpkgs-firefox": "nixpkgs-firefox",
         "nixpkgs-hyprland": "nixpkgs-hyprland",
