@@ -1,6 +1,13 @@
 { inputs }:
 
 {
+  unstable = final: prev: {
+    unstable = import inputs.nixpkgs-unstable {
+      inherit (final.stdenv.hostPlatform) system;
+      inherit (final) config;
+    };
+  };
+
   # Packages taken from exact nixpkgs revisions. See CLAUDE.md before bumping either input.
   pins =
     final: prev:

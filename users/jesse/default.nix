@@ -1,16 +1,9 @@
 {
   config,
   pkgs,
-  inputs,
   ...
 }:
 
-let
-  unstable = import inputs.nixpkgs-unstable {
-    system = pkgs.stdenv.hostPlatform.system;
-    config.allowUnfree = true;
-  };
-in
 {
   imports = [
     ./firefox.nix
@@ -60,7 +53,7 @@ in
     };
     datagrip-glass-header = {
       source = ../../scripts/datagrip-glass-header.groovy;
-      target = ".config/JetBrains/DataGrip${pkgs.lib.versions.majorMinor unstable.jetbrains.datagrip.version}/extensions/com.intellij/startup/glass-header.groovy";
+      target = ".config/JetBrains/DataGrip${pkgs.lib.versions.majorMinor pkgs.unstable.jetbrains.datagrip.version}/extensions/com.intellij/startup/glass-header.groovy";
     };
   };
 
