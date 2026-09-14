@@ -1,19 +1,17 @@
 # Hardware
-{ boot, fileSystems, ... }:
+{ inputs, ... }:
 
 {
-  imports = [
-    "${
-      fetchTarball
-      "https://github.com/NixOS/nixos-hardware/archive/936e4649098d6a5e0762058cb7687be1b2d90550.tar.gz"
-    }/raspberry-pi/4"
-  ];
+  imports = [ inputs.nixos-hardware.nixosModules.raspberry-pi-4 ];
 
   nixpkgs.hostPlatform = "aarch64-linux";
 
   boot.tmp.useTmpfs = true;
   boot.kernelModules = [ "iwlwifi" ];
-  boot.kernelParams = [ "cgroup_enable=memory" "swapaccount=1" ];
+  boot.kernelParams = [
+    "cgroup_enable=memory"
+    "swapaccount=1"
+  ];
 
   fileSystems = {
     "/" = {
