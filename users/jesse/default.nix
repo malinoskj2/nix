@@ -70,10 +70,8 @@ in
 
   services.gpg-agent = {
     enable = true;
-    enableSshSupport = true;
     defaultCacheTtl = 50400;
     maxCacheTtl = 50400;
-    maxCacheTtlSsh = 50400;
   };
 
   home.packages = with pkgs; [
@@ -88,7 +86,6 @@ in
     gitleaks
     alacritty
     mpv
-    feh
     unstable.jetbrains.datagrip
     ffmpeg
     pavucontrol
@@ -116,7 +113,6 @@ in
     cargo-nextest
     cargo-audit
     mediainfo
-    redis
     bc
     pandoc
     dig
@@ -124,32 +120,14 @@ in
     jq
     google-chrome
     chromium
-    nss
     nssTools
-    postman
     nodejs
-    twilio-cli
     nmap
-    hyprpaper
-    inputs.neowall-src.packages.${pkgs.stdenv.hostPlatform.system}.default
-    socat
-    waybar
-    grim
-    slurp
     wl-clipboard
-    libnotify
-    wl-color-picker
     p7zip
     unrar
-    bruno
-    xlsclients
-    nwg-look
     glib
-    graphite-cursors
-    quintom-cursor-theme
-    whitesur-cursors
     openzone-cursors
-    capitaine-cursors
     neovim
     unstable.zed-editor
     unstable.codex
