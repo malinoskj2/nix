@@ -26,6 +26,10 @@
       url = "github:QNetITQ/WaveFox/0.6.155";
       flake = false;
     };
+    apple-fonts = {
+      url = "github:Lyndeno/apple-fonts.nix/69f20e9ba294420e4b6407a827c6b5aea3afcc12";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =

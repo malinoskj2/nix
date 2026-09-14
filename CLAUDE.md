@@ -14,9 +14,9 @@ builds every host with `nixpkgs.lib.nixosSystem` and holds the module shared by
 all of them (overlays, unfree, Home Manager wiring). Host modules live under
 `hosts/<name>/`; shared user configuration lives under
 `users/jesse/`. Overlays live in `overlays/default.nix`: `pins` takes packages
-from exact nixpkgs revisions, `additions` exposes every `pkgs/<name>/package.nix`
-as `pkgs.<name>`, and `modifications` overrides existing packages, using
-patches from `patches/<package>/`.
+from exact nixpkgs revisions, and `modifications` overrides existing packages,
+using patches from `patches/<package>/`. The `apple-fonts` input's overlay adds
+`pkgs.sf-pro`, `sf-compact`, `sf-mono` and `ny`.
 
 Format changed Nix files with `nixfmt`. Prefer evaluating or building the
 affected host before applying it, and do not run a `switch` unless explicitly
@@ -57,6 +57,17 @@ Afterward, verify `users/jesse/firefox.nix`: its Nova setting, imported WaveFox
 CSS, cascade-layer ordering, and transparent chrome can all be sensitive to a
 Firefox or WaveFox UI change.
 
+### Apple fonts are pinned to a community flake revision
+
+`apple-fonts` (`github:Lyndeno/apple-fonts.nix`) is pinned to an exact commit
+in its URL, so `nix flake update` will not advance it. Its lock records the
+hash of each `.dmg` from Apple's download URLs, and Apple replaces those files
+in place. Once Apple ships a new version, a machine without a cached copy fails
+to fetch with a hash mismatch. The fix is to bump the pinned commit to a newer
+one (upstream updates the font hashes daily), then `nix flake lock`. Afterward,
+check that `users/jesse/dolphin.nix` still finds `SF-Pro-Text-*.otf` in
+`${pkgs.sf-pro}/share/fonts/opentype`.
+
 ### Other manual version pins
 
 The `home` host defines a custom NVIDIA driver in `hosts/home/wayland.nix`.
@@ -72,7 +83,6 @@ baseline, not the current NixOS or Home Manager release.
 The configuration depends on files outside this repository:
 
 - `/secret/secrets.nix` for the `media` host.
-- `/secret/fonts` for the custom Apple font derivation.
 - `/home/jesse/env` for remaining shared Home Manager dotfile sources used by
   `home` and `katana`. The `home` Hyprland and Noctalia desktop is fully owned
   by `users/jesse/desktop-home` and must not gain a dependency on `env` again.

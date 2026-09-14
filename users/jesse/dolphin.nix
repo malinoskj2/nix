@@ -99,7 +99,7 @@ let
       { nativeBuildInputs = [ (pkgs.python3.withPackages (p: [ p.fonttools ])) ]; }
       ''
         mkdir $out
-        python3 - "${pkgs.otf-apple}/share/fonts/opentype/SF Pro" $out <<'EOF'
+        python3 - "${pkgs.sf-pro}/share/fonts/opentype" $out <<'EOF'
         import glob, os, sys
         from fontTools.ttLib import TTFont
         for f in glob.glob(sys.argv[1] + "/SF-Pro-Text-*.otf"):

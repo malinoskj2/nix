@@ -9,6 +9,9 @@
     fira-code-symbols
     nerd-fonts.fira-code
     nerd-fonts.droid-sans-mono
-    otf-apple
+    sf-pro
+    sf-compact
+    sf-mono
+    ny
   ];
 }
