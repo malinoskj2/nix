@@ -2,15 +2,17 @@
 { config, pkgs, ... }:
 
 {
-  hardware.graphics.enable = true;
   services.xserver.videoDrivers = [ "nvidia" ];
 
-  hardware.nvidia = {
-    open = false;
-    modesetting.enable = true;
-    nvidiaPersistenced = true;
-    package = config.boot.kernelPackages.nvidiaPackages.stable;
+  hardware = {
+    graphics.enable = true;
+    nvidia = {
+      open = false;
+      modesetting.enable = true;
+      nvidiaPersistenced = true;
+      package = config.boot.kernelPackages.nvidiaPackages.stable;
+    };
+    nvidia-container-toolkit.enable = true;
   };
-  hardware.nvidia-container-toolkit.enable = true;
   environment.systemPackages = with pkgs; [ nvtopPackages.nvidia ];
 }

@@ -1,5 +1,5 @@
 # Virtualization
-{ virtualization, ... }:
+_:
 
 {
   virtualisation.docker.enable = true;

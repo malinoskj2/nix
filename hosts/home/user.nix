@@ -1,5 +1,5 @@
 # User
-{ config, pkgs, ... }:
+{ pkgs, ... }:
 
 {
   users.users.jesse = {

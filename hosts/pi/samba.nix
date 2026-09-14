@@ -1,5 +1,5 @@
 # Samba
-{ services, ... }:
+_:
 
 {
   # Make sure to manually add samba password for user
