@@ -1,45 +1,17 @@
 # Wayland
 {
-  services,
-  programs,
   pkgs,
-  lib,
   config,
   ...
 }:
 
 {
-  boot.kernelParams = [
-    "nvidia-drm.modeset=1"
-    "nvidia-drm.fbdev=1"
-  ];
-
-  programs.hyprland = {
-    enable = true;
-    xwayland = {
-      enable = true;
-    };
-  };
-
-  xdg = {
-    autostart.enable = true;
-
-    portal = {
-      enable = true;
-
-      extraPortals = [
-        pkgs.xdg-desktop-portal-hyprland
-        pkgs.xdg-desktop-portal-gtk
-      ];
-    };
-  };
+  programs.hyprland.enable = true;
 
   hardware = {
     graphics = {
-      enable = true;
       enable32Bit = true;
       extraPackages = with pkgs; [ nvidia-vaapi-driver ];
-      extraPackages32 = with pkgs.pkgsi686Linux; [ libva ];
     };
     nvidia = {
       # Newer than 26.05's 595.71.05; hashes from nixos-unstable's production driver.
