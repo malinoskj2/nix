@@ -14,6 +14,10 @@ let
       imports = [ home-manager.nixosModules.home-manager ];
 
       nixpkgs.config.allowUnfree = true;
+      nix.settings.experimental-features = [
+        "nix-command"
+        "flakes"
+      ];
       # modifications patches the pinned Hyprland plugin set, so it must come after pins.
       nixpkgs.overlays = with self.overlays; [
         inputs.apple-fonts.overlays.default

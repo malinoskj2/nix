@@ -20,7 +20,7 @@
       url = "github:catppuccin/nix/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nixos-hardware.url = "github:NixOS/nixos-hardware/936e4649098d6a5e0762058cb7687be1b2d90550";
+    nixos-hardware.url = "github:NixOS/nixos-hardware/d40fd26f323c898b0c195d41aa5efadd85f57832";
     nixpkgs-hyprland.url = "github:nixos/nixpkgs/8ce4ef6cb6f871616146b9fe26d2a5ae594e94fe";
     nixpkgs-firefox.url = "github:nixos/nixpkgs/21a67dc470149f337cecafbe965d8d252a390518";
     wavefox = {

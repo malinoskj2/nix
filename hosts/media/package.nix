@@ -2,8 +2,6 @@
 { pkgs, ... }:
 
 {
-  nix.extraOptions = "experimental-features = nix-command flakes";
-
   environment.systemPackages = with pkgs; [
     vim
     git
