@@ -31,6 +31,18 @@ let
     text = builtins.readFile ./scripts/wallpaper-autopause.sh;
   };
 
+  wallpaperSelect = pkgs.writeShellApplication {
+    name = "wallpaper_select";
+    runtimeInputs = [
+      noctalia
+      pkgs.hyprland
+      pkgs.jq
+      pkgs.socat
+      pkgs.findutils
+    ];
+    text = builtins.readFile ./scripts/wallpaper_select.sh;
+  };
+
   hyprlandConfig = pkgs.replaceVars ./hyprland/hyprland.lua {
     hyprbars = "${pkgs.hyprlandPlugins.hyprbars}/lib/libhyprbars.so";
     hyprfocus = "${pkgs.hyprlandPlugins.hyprfocus}/lib/libhyprfocus.so";
@@ -51,6 +63,7 @@ in
     pkgs.mpvpaper
     pkgs.socat
     wallpaperRandomize
+    wallpaperSelect
   ];
 
   xdg.configFile = {
