@@ -1,5 +1,8 @@
 { lib, pkgs, ... }:
 
+let
+  isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
+in
 {
   programs.zed-editor = {
     enable = true;
@@ -20,21 +23,27 @@
       # --- Theme ---
       # Requires the "Catppuccin" extension: command palette → "zed: extensions" → search "Catppuccin"
       cli_default_open_behavior = "existing_window";
+      # Darwin gets both ACP integrations without repository-forced permission
+      # modes; the existing Linux defaults remain unchanged.
       agent_servers = {
         "codex-acp" = {
+          type = "registry";
+        }
+        // lib.optionalAttrs (!isDarwin) {
           default_config_options = {
             reasoning_effort = "medium";
             mode = "agent-full-access";
           };
-          type = "registry";
         };
         "claude-acp" = {
+          type = "registry";
+        }
+        // lib.optionalAttrs (!isDarwin) {
           default_config_options = {
             model = "haiku";
             mode = "auto";
             effort = "max";
           };
-          type = "registry";
         };
       };
       project_panel = {
@@ -50,34 +59,6 @@
         dock = "left";
       };
       icon_theme = "Catppuccin Mocha";
-      language_models = {
-        ollama = {
-          api_url = "http://localhost:11434";
-          available_models = [
-            {
-              name = "devstral-small-2:24b";
-              display_name = "Devstral Small 2 24B";
-              max_tokens = 32768;
-            }
-          ];
-        };
-      };
-      agent = {
-        dock = "right";
-        always_allow_tool_actions = true;
-        default_model = {
-          provider = "ollama";
-          model = "devstral-small-2:24b";
-        };
-        model_parameters = [
-          {
-            provider = "ollama";
-            model = "devstral-small-2:24b";
-            display_name = "Devstral Small 2 24B";
-            max_tokens = 32768;
-          }
-        ];
-      };
       theme = {
         mode = "dark";
         light = "Catppuccin Latte";
@@ -335,6 +316,34 @@
             show_other_hints = true;
           };
         };
+      };
+    }
+    // lib.optionalAttrs (!isDarwin) {
+      language_models.ollama = {
+        api_url = "http://localhost:11434";
+        available_models = [
+          {
+            name = "devstral-small-2:24b";
+            display_name = "Devstral Small 2 24B";
+            max_tokens = 32768;
+          }
+        ];
+      };
+      agent = {
+        dock = "right";
+        always_allow_tool_actions = true;
+        default_model = {
+          provider = "ollama";
+          model = "devstral-small-2:24b";
+        };
+        model_parameters = [
+          {
+            provider = "ollama";
+            model = "devstral-small-2:24b";
+            display_name = "Devstral Small 2 24B";
+            max_tokens = 32768;
+          }
+        ];
       };
     };
 

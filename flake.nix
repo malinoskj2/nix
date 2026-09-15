@@ -1,9 +1,14 @@
 {
-  description = "NixOS configurations for home, katana, pi and media";
+  description = "NixOS and nix-darwin configurations";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
+    nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-26.05-darwin";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    nix-darwin = {
+      url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
+      inputs.nixpkgs.follows = "nixpkgs-darwin";
+    };
     flake-parts = {
       url = "github:hercules-ci/flake-parts";
       inputs.nixpkgs-lib.follows = "nixpkgs";
@@ -39,6 +44,7 @@
       systems = [
         "x86_64-linux"
         "aarch64-linux"
+        "aarch64-darwin"
       ];
 
       imports = [ ./hosts ];

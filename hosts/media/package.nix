@@ -5,7 +5,7 @@
   environment.systemPackages = with pkgs; [
     vim
     git
-    htop-vim
+    htop-vim-navigation
     ripgrep
     fd
     tmux

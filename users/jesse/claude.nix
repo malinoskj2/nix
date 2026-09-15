@@ -1,6 +1,7 @@
 { lib, pkgs, ... }:
 
 let
+  isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
   settingsOverlay = pkgs.writeText "claude-settings-overlay.json" (
     builtins.toJSON {
       permissions = {
@@ -40,6 +41,8 @@ in
   programs.claude-code = {
     enable = true;
     package = pkgs.unstable.claude-code;
+  }
+  // lib.optionalAttrs (!isDarwin) {
     context = ./claude/CLAUDE.md;
   };
 
@@ -49,14 +52,19 @@ in
   # overlay the nix-declared static keys onto the live file at activation:
   # live file first so its runtime-managed keys survive, overlay last so it
   # wins on the 5 static keys.
-  home.activation.claudeSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    claudeSettings="$HOME/.claude/settings.json"
-    if [[ -f "$claudeSettings" ]]; then
-      run ${lib.getExe' pkgs.jq "jq"} -s '.[0] * .[1]' "$claudeSettings" "${settingsOverlay}" > /tmp/claude-settings-merged.json
-      run mv /tmp/claude-settings-merged.json "$claudeSettings"
-    else
-      run mkdir -p "$(dirname "$claudeSettings")"
-      run cp "${settingsOverlay}" "$claudeSettings"
-    fi
-  '';
+  home.activation.claudeSettings = lib.mkIf (!isDarwin) (
+    lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      claudeSettings="$HOME/.claude/settings.json"
+      if [[ -f "$claudeSettings" ]]; then
+        claudeSettingsTmp="$(${lib.getExe' pkgs.coreutils "mktemp"} "''${TMPDIR:-/tmp}/claude-settings.XXXXXX")"
+        trap 'rm -f "$claudeSettingsTmp"' EXIT
+        run ${lib.getExe' pkgs.jq "jq"} -s '.[0] * .[1]' "$claudeSettings" "${settingsOverlay}" > "$claudeSettingsTmp"
+        run mv "$claudeSettingsTmp" "$claudeSettings"
+        trap - EXIT
+      else
+        run mkdir -p "$(dirname "$claudeSettings")"
+        run cp "${settingsOverlay}" "$claudeSettings"
+      fi
+    ''
+  );
 }

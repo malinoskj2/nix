@@ -4,7 +4,7 @@
 {
   environment.systemPackages = with pkgs; [
     vim
-    htop-vim
+    htop-vim-navigation
     ripgrep
     git
     docker-compose

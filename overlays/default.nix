@@ -23,6 +23,44 @@
       inherit (inputs.nixpkgs-firefox.legacyPackages.${system}) firefox;
     };
 
+  htopVimNavigation = _final: prev: {
+    htop-vim-navigation =
+      assert prev.lib.assertMsg
+        (builtins.elem prev.htop.version [
+          "3.5.1"
+          "3.5.3"
+        ])
+        "The local htop Vim-navigation patch was written for htop 3.5.1 and 3.5.3; re-check it before updating htop.";
+      prev.htop.overrideAttrs (old: {
+        pname = "htop-vim-navigation";
+        patches = (old.patches or [ ]) ++ [
+          (builtins.toFile "htop-vim-navigation.patch" ''
+            diff --git a/ScreenManager.c b/ScreenManager.c
+            --- a/ScreenManager.c
+            +++ b/ScreenManager.c
+            @@ -330,6 +330,14 @@ void ScreenManager_run(ScreenManager* this, Panel** lastFocus, int* lastKey, con
+                   continue;
+                }
+
+            +      /* Use Vim navigation outside text-entry modes. */
+            +      if (!panelFocus->cursorOn) {
+            +         if (ch == 'h') ch = KEY_LEFT;
+            +         if (ch == 'j') ch = KEY_DOWN;
+            +         if (ch == 'k') ch = KEY_UP;
+            +         if (ch == 'l') ch = KEY_RIGHT;
+            +      }
+            +
+                switch (ch) {
+                   case KEY_ALT('H'): ch = KEY_LEFT; break;
+                   case KEY_ALT('J'): ch = KEY_DOWN; break;
+          '')
+        ];
+        meta = old.meta // {
+          description = "${old.meta.description}, with local h/j/k/l navigation";
+        };
+      });
+  };
+
   modifications = final: prev: {
     hyprlandPlugins = prev.hyprlandPlugins // {
       # The patches hook and poke Hyprland internals, so any Hyprland change needs them re-checked.

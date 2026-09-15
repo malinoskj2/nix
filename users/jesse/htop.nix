@@ -3,7 +3,7 @@
 {
   programs.htop = {
     enable = true;
-    package = pkgs.htop-vim;
+    package = pkgs.htop-vim-navigation;
 
     settings = with config.lib.htop.fields; {
       htop_version = "3.5.1";
