@@ -7,7 +7,10 @@
     includes = [
       {
         condition = "gitdir:~/projects/work/";
-        path = "~/env/config/git/work_gitconfig";
+        contents = {
+          user.email = "jmalinosky@insiderealestate.com";
+          commit.gpgsign = false;
+        };
       }
     ];
 
@@ -34,7 +37,6 @@
         editor = "vim";
         pager = "less -R";
         autocrlf = false;
-        excludesfile = "/home/jesse/env/config/git/gitignore_global";
       };
 
       merge.ff = "yes";
@@ -50,4 +52,13 @@
       safe.directory = "/home/jesse/nix";
     };
   };
+
+  programs.git.ignores = [
+    ".idea/"
+    "docker-compose.override.yml"
+    "/storage/"
+    "phpcs.xml"
+    "phpmd.xml"
+    "**/.claude/settings.local.json"
+  ];
 }

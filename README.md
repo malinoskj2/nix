@@ -31,12 +31,12 @@ Used for network filesharing and any other service I want to be accessible to th
 First build, from a clone of the repository:
 
 ```sh
-sudo nixos-rebuild switch --impure --flake '.#$YOUR_HOST' # home, katana, pi, or media
+sudo nixos-rebuild switch --flake '.#$YOUR_HOST' # home, katana, pi, or media
 ```
 
 After that, [nh](https://github.com/nix-community/nh) is installed and knows
 where the flake lives. It picks the host from the hostname:
 
 ```sh
-nh os switch --impure   # or: test, boot; add --ask to confirm the diff first
+nh os switch   # or: test, boot; add --ask to confirm the diff first
 ```
