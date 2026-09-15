@@ -13,7 +13,7 @@
     ./mpv.nix
     ./starship.nix
     ./cursor.nix
-    ./scripts
+    ../../scripts
     ./fastfetch.nix
     ./htop.nix
     ./zed.nix
@@ -30,7 +30,7 @@
   };
 
   home.file.".config/JetBrains/DataGrip${lib.versions.majorMinor pkgs.unstable.jetbrains.datagrip.version}/extensions/com.intellij/startup/glass-header.groovy".source =
-    ../../scripts/datagrip-glass-header.groovy;
+    ./datagrip-glass-header.groovy;
 
   services.gpg-agent = {
     enable = true;
