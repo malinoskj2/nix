@@ -79,16 +79,16 @@ Never bump `system.stateVersion` or `home.stateVersion` as part of a routine
 package/channel update. Those values describe the installation's compatibility
 baseline, not the current NixOS or Home Manager release.
 
-### Evaluation is intentionally impure on some hosts
+### Dotfiles are fully declared in this repo
 
-`home` and `katana` depend on `/home/jesse/env` for remaining shared Home
-Manager dotfile sources. The `home` Hyprland and Noctalia desktop is fully owned
-by `users/jesse/desktop-home` and must not gain a dependency on `env` again.
+All dotfiles that used to live in `~/env` are now declared as Home Manager
+options in this repo. No host needs `--impure` to evaluate any more. The
+`home` Hyprland and Noctalia desktop is fully owned by
+`users/jesse/desktop-home` and must not gain a dependency on `env` again.
 
-Do not copy secrets into the repository. Use `--impure` when evaluating or
-building `home` and `katana`. Hosts are applied with
-`nh os switch --impure` (`programs.nh` in `hosts/default.nix`); `media` and
-`pi` need no `--impure`.
+Do not copy secrets into the repository. Hosts are applied with
+`nh os switch` (`programs.nh` in `hosts/default.nix`); no host needs
+`--impure`.
 
 `nixos-hardware` is pinned to an exact commit in its URL, so `nix flake update`
 will not advance it. It supplies `pi`'s Raspberry Pi 4 kernel and firmware

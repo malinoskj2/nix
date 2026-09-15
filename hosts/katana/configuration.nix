@@ -7,7 +7,6 @@
     ./misc.nix
     ./network.nix
     ./sound.nix
-    ./x.nix
     ./wayland.nix
     ./font.nix
     ./package.nix

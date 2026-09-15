@@ -5,6 +5,7 @@
   programs = {
     ssh.startAgent = true;
     zsh.enable = true;
+    zsh.enableGlobalCompInit = false;
     steam.enable = true;
     gamemode.enable = true;
     obs-studio = {

@@ -1,8 +1,7 @@
 {
   programs.starship = {
     enable = true;
-    # /home/jesse/env/zsh/zshrc already runs `starship init zsh`.
-    enableZshIntegration = false;
+    enableZshIntegration = true;
     settings = {
       add_newline = false;
 

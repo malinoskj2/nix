@@ -13,6 +13,12 @@
     ./mpv.nix
     ./starship.nix
     ./cursor.nix
+    ./scripts
+    ./fastfetch.nix
+    ./htop.nix
+    ./zed.nix
+    ./alacritty.nix
+    ./claude.nix
   ];
 
   programs.home-manager.enable = true;
@@ -22,8 +28,6 @@
     homeDirectory = "/home/jesse";
     stateVersion = "25.11";
   };
-
-  xdg.configFile."fastfetch".source = "/home/jesse/env/config/fastfetch";
 
   home.file.".config/JetBrains/DataGrip${lib.versions.majorMinor pkgs.unstable.jetbrains.datagrip.version}/extensions/com.intellij/startup/glass-header.groovy".source =
     ../../scripts/datagrip-glass-header.groovy;
@@ -36,15 +40,12 @@
 
   home.packages = with pkgs; [
     gnupg
-    bat
-    htop-vim
     ripgrep
     fd
     eza
     tldr
     tokei
     gitleaks
-    alacritty
     unstable.jetbrains.datagrip
     ffmpeg
     pavucontrol
@@ -57,7 +58,6 @@
     tree
     nixfmt
     nil
-    zoxide
     rustc
     cargo
     clippy
@@ -87,13 +87,10 @@
     glib
     openzone-cursors
     neovim
-    unstable.zed-editor
     unstable.codex
-    unstable.claude-code
     ktx-tools
     python3
     ghidra
     vulkan-tools
-    fastfetch
   ];
 }
