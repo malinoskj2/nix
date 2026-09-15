@@ -1,52 +1,15 @@
 {
+  jesseScripts,
   pkgs,
   ...
 }:
 
 let
   noctalia = pkgs.unstable.noctalia;
-
-  wallpaperRandomize = pkgs.writeShellApplication {
-    name = "wallpaper-randomize";
-    runtimeInputs = with pkgs; [
-      coreutils
-      findutils
-      jq
-    ];
-    text = builtins.readFile ./scripts/wallpaper-randomize.sh;
-  };
-
-  wallpaperAutopause = pkgs.writeShellApplication {
-    name = "wallpaper-autopause";
-    runtimeInputs = [
-      noctalia
-      pkgs.coreutils
-      pkgs.dbus
-      pkgs.glib
-      pkgs.hyprland
-      pkgs.jq
-      pkgs.socat
-      pkgs.systemd
-    ];
-    text = builtins.readFile ./scripts/wallpaper-autopause.sh;
-  };
-
-  wallpaperSelect = pkgs.writeShellApplication {
-    name = "wallpaper_select";
-    runtimeInputs = [
-      noctalia
-      pkgs.hyprland
-      pkgs.jq
-      pkgs.socat
-      pkgs.findutils
-    ];
-    text = builtins.readFile ./scripts/wallpaper_select.sh;
-  };
-
   hyprlandConfig = pkgs.replaceVars ./hyprland/hyprland.lua {
     hyprbars = "${pkgs.hyprlandPlugins.hyprbars}/lib/libhyprbars.so";
     hyprfocus = "${pkgs.hyprlandPlugins.hyprfocus}/lib/libhyprfocus.so";
-    inherit wallpaperRandomize;
+    wallpaperRandomize = jesseScripts.wallpaperRandomize;
     noctalia = "${noctalia}/bin/noctalia";
   };
 in
@@ -62,8 +25,6 @@ in
     noctalia
     pkgs.mpvpaper
     pkgs.socat
-    wallpaperRandomize
-    wallpaperSelect
   ];
 
   xdg.configFile = {
@@ -90,7 +51,7 @@ in
       PartOf = [ "graphical-session.target" ];
     };
     Service = {
-      ExecStart = "${wallpaperAutopause}/bin/wallpaper-autopause";
+      ExecStart = "${jesseScripts.wallpaperAutopause}/bin/wallpaper-autopause";
       Restart = "on-failure";
       RestartSec = 2;
     };

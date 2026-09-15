@@ -55,12 +55,12 @@ show_claude_usage() {
   printf 'Claude\n'
 
   if [[ ! -r "$claude_auth_file" ]]; then
-    printf '  unavailable: %s not found; run `claude` and sign in\n' "$claude_auth_file"
+    printf "  unavailable: %s not found; run 'claude' and sign in\n" "$claude_auth_file"
     return 1
   fi
 
   if ! access_token="$(jq -er '.claudeAiOauth.accessToken' "$claude_auth_file")"; then
-    printf '  unavailable: OAuth token missing; run `claude` and sign in\n'
+    printf "  unavailable: OAuth token missing; run 'claude' and sign in\n"
     return 1
   fi
 
@@ -97,13 +97,13 @@ show_codex_usage() {
   printf 'Codex\n'
 
   if [[ ! -r "$codex_auth_file" ]]; then
-    printf '  unavailable: %s not found; run `codex login`\n' "$codex_auth_file"
+    printf "  unavailable: %s not found; run 'codex login'\n" "$codex_auth_file"
     return 1
   fi
 
   if ! access_token="$(jq -er '.tokens.access_token' "$codex_auth_file")" ||
     ! account_id="$(jq -er '.tokens.account_id' "$codex_auth_file")"; then
-    printf '  unavailable: OAuth credentials missing; run `codex login`\n'
+    printf "  unavailable: OAuth credentials missing; run 'codex login'\n"
     return 1
   fi
 
@@ -117,7 +117,7 @@ show_codex_usage() {
         printf 'header = "ChatGPT-Account-Id: %s"\n' "$account_id"
       )
   )"; then
-    printf '  unavailable: usage request failed; run `codex login` to refresh login\n'
+    printf "  unavailable: usage request failed; run 'codex login' to refresh login\n"
     return 1
   fi
 
