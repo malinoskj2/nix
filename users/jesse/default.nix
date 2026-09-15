@@ -8,7 +8,6 @@
   imports = [
     ./firefox.nix
     ./dolphin.nix
-    ./git.nix
     ./zsh.nix
     ./mpv.nix
     ./starship.nix

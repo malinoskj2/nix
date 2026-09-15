@@ -8,6 +8,8 @@ This is a multi-host NixOS flake:
 - `katana`: ThinkPad, with the shared Home Manager configuration.
 - `pi`: aarch64 server.
 - `media`: media server with Docker and NVIDIA transcoding.
+- `macbook`: Apple-silicon nix-darwin host with a conservative,
+  user-scoped Home Manager profile.
 
 The flake uses flake-parts. `hosts/default.nix` is a flake-parts module that
 builds every host with `nixpkgs.lib.nixosSystem` and holds the module shared by
@@ -18,6 +20,11 @@ all of them (overlays, unfree, Home Manager wiring). Host modules live under
 from exact nixpkgs revisions, and `modifications` overrides existing packages,
 using patches from `patches/<package>/`. The `apple-fonts` input's overlay adds
 `pkgs.sf-pro`, `sf-compact`, `sf-mono` and `ny`.
+
+Darwin uses a separate `mkDarwinHost`, release-matched `nixpkgs-darwin` and
+`nix-darwin` inputs, and only the `unstable` overlay. Do not add the
+Linux-specific `pins` or `modifications` overlays to Darwin. Determinate Nix
+owns the Mac's Nix installation, so keep `nix.enable = false`.
 
 Format changed Nix files with `nixfmt`. Prefer evaluating or building the
 affected host before applying it, and do not run a `switch` unless explicitly

@@ -9,7 +9,7 @@ let
   hyprlandConfig = pkgs.replaceVars ./hyprland/hyprland.lua {
     hyprbars = "${pkgs.hyprlandPlugins.hyprbars}/lib/libhyprbars.so";
     hyprfocus = "${pkgs.hyprlandPlugins.hyprfocus}/lib/libhyprfocus.so";
-    wallpaperRandomize = jesseScripts.wallpaperRandomize;
+    inherit (jesseScripts) wallpaperRandomize;
     noctalia = "${noctalia}/bin/noctalia";
   };
 in

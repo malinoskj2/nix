@@ -3,11 +3,12 @@
 let
   inherit (inputs)
     nixpkgs
+    nix-darwin
     home-manager
     catppuccin
     ;
 
-  common =
+  commonNixos =
     { config, ... }:
     {
       imports = [ home-manager.nixosModules.home-manager ];
@@ -23,6 +24,7 @@ let
         unstable
         pins
         modifications
+        htopVimNavigation
       ];
 
       system.configurationRevision = self.rev or self.dirtyRev or null;
@@ -44,6 +46,26 @@ let
       };
     };
 
+  commonDarwin = {
+    imports = [ home-manager.darwinModules.home-manager ];
+
+    nixpkgs.config.allowUnfree = true;
+    nixpkgs.overlays = with self.overlays; [
+      unstable
+      htopVimNavigation
+    ];
+
+    system.configurationRevision = self.rev or self.dirtyRev or null;
+
+    home-manager = {
+      useGlobalPkgs = true;
+      useUserPackages = true;
+      extraSpecialArgs = { inherit inputs; };
+      backupFileExtension = "hm-bak";
+      sharedModules = [ catppuccin.homeModules.catppuccin ];
+    };
+  };
+
   mkHost =
     {
       modules,
@@ -54,7 +76,20 @@ let
         inherit inputs;
       }
       // specialArgs;
-      modules = [ common ] ++ modules;
+      modules = [ commonNixos ] ++ modules;
+    };
+
+  mkDarwinHost =
+    {
+      modules,
+      specialArgs ? { },
+    }:
+    nix-darwin.lib.darwinSystem {
+      specialArgs = {
+        inherit inputs;
+      }
+      // specialArgs;
+      modules = [ commonDarwin ] ++ modules;
     };
 in
 {
@@ -100,5 +135,9 @@ in
     media = mkHost {
       modules = [ ./media/configuration.nix ];
     };
+  };
+
+  flake.darwinConfigurations.macbook = mkDarwinHost {
+    modules = [ ./macbook/configuration.nix ];
   };
 }

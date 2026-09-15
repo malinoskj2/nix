@@ -13,4 +13,10 @@ url="${url%.git}"
 branch="$(git branch --show-current)"
 [ -n "$branch" ] && url="$url/tree/$branch"
 
-${BROWSER:-xdg-open} "$url"
+if [ -n "${BROWSER:-}" ]; then
+	"$BROWSER" "$url"
+elif command -v open >/dev/null 2>&1; then
+	open "$url"
+else
+	xdg-open "$url"
+fi

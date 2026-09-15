@@ -1,9 +1,13 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 
+let
+  inherit (pkgs.stdenv.hostPlatform) isDarwin isLinux;
+in
 {
   programs = {
     zsh = {
@@ -45,7 +49,6 @@
         fd = "fd -H";
         du = "du -sh";
         ldate = ''date +"%I:%M %p"'';
-        lsblk = "lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINT";
         ls = "eza -1F";
         ll = "eza -llh";
         tree = "eza --long --tree --level=4";
@@ -54,6 +57,9 @@
         cargorunbt = "RUST_BACKTRACE=1 cargo run";
         cargotestprint = "cargo test -- --nocapture";
         dockerc = "docker compose";
+      }
+      // lib.optionalAttrs isLinux {
+        lsblk = "lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINT";
       };
 
       completionInit = ''
@@ -109,12 +115,18 @@
       LC_TIME = "en_US.UTF-8";
       CHARSET = "UTF-8";
       LS_COLORS = "di=34:ex=35";
-      BROWSER = "firefox";
-      DOWNLOAD = "/media/scratch/download";
       SSH_ASKPASS_REQUIRE = "never";
       ANTHROPIC_MODEL = "claude-opus-5";
-      MOZ_WEBRENDER = "1";
       LIBGIT2_SYS_USE_PKG_CONFIG = "1";
+    }
+    // lib.optionalAttrs isDarwin {
+      BROWSER = "open";
+      DOWNLOAD = "$HOME/Downloads";
+    }
+    // lib.optionalAttrs isLinux {
+      BROWSER = "firefox";
+      DOWNLOAD = "/media/scratch/download";
+      MOZ_WEBRENDER = "1";
       _JAVA_AWT_WM_NONREPARENTING = "1";
     };
 

@@ -1,6 +1,9 @@
+{ pkgs, ... }:
+
 {
   programs.alacritty = {
     enable = true;
+    package = pkgs.alacritty;
 
     settings = {
       bell = {
@@ -80,7 +83,7 @@
 
       hints.enabled = [
         {
-          command = "xdg-open";
+          command = if pkgs.stdenv.hostPlatform.isDarwin then "open" else "xdg-open";
           post_processing = true;
           # Home Manager collapses `\\` to `\` after generating TOML.
           regex = "(ipfs:|ipns:|magnet:|mailto:|gemini:|gopher:|https:|http:|news:|file:|git:|ssh:|ftp:)[^\\u0000-\\u001F\\u007F-\\u009F<>\"\\\\s{-}\\\\^\\u27E8\\u27E9`]+";
