@@ -7,6 +7,12 @@
 
 let
   inherit (pkgs.stdenv.hostPlatform) isDarwin isLinux;
+
+  zshClaudeCommand = pkgs.callPackage ../../derivations/zsh-claude-command {
+    claude-code = pkgs.unstable.claude-code;
+    codex = pkgs.unstable.codex;
+    coreutils = pkgs.coreutils;
+  };
 in
 {
   programs = {
@@ -39,6 +45,14 @@ in
       localVariables = {
         ZSH_AUTOSUGGEST_USE_ASYNC = true;
       };
+
+      plugins = [
+        {
+          name = "zsh-claude-command";
+          src = zshClaudeCommand;
+          file = "share/zsh-claude-command/zsh-claude-command.plugin.zsh";
+        }
+      ];
 
       shellAliases = {
         cmd = "type -m '*'";

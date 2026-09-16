@@ -38,9 +38,9 @@
             diff --git a/ScreenManager.c b/ScreenManager.c
             --- a/ScreenManager.c
             +++ b/ScreenManager.c
-            @@ -330,6 +330,14 @@ void ScreenManager_run(ScreenManager* this, Panel** lastFocus, int* lastKey, con
-                   continue;
-                }
+            @@ -349,6 +349,14 @@
+                      continue;
+                   }
 
             +      /* Use Vim navigation outside text-entry modes. */
             +      if (!panelFocus->cursorOn) {
@@ -50,9 +50,9 @@
             +         if (ch == 'l') ch = KEY_RIGHT;
             +      }
             +
-                switch (ch) {
-                   case KEY_ALT('H'): ch = KEY_LEFT; break;
-                   case KEY_ALT('J'): ch = KEY_DOWN; break;
+                   switch (ch) {
+                      case KEY_ALT('H'): ch = KEY_LEFT; break;
+                      case KEY_ALT('J'): ch = KEY_DOWN; break;
           '')
         ];
         meta = old.meta // {
