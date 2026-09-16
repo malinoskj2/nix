@@ -1,0 +1,181 @@
+# Turn "# request" into a command using the authenticated Claude Code CLI.
+
+typeset -g ZSH_CLAUDE_COMMAND_MODEL="${ZSH_CLAUDE_COMMAND_MODEL:-}"
+typeset -g ZSH_CLAUDE_COMMAND_PROMPT_EXTEND="${ZSH_CLAUDE_COMMAND_PROMPT_EXTEND:-}"
+
+_zsh_claude_command_trim() {
+  emulate -L zsh
+  setopt extended_glob
+
+  REPLY="${1##[[:space:]]#}"
+  REPLY="${REPLY%%[[:space:]]#}"
+}
+
+_zsh_claude_command_error_kind() {
+  emulate -L zsh
+
+  local output="${(L)1}"
+  if [[ "$output" == *"rate limit"* || "$output" == *"usage limit"* || "$output" == *"quota"* || "$output" == *"too many requests"* || "$output" == *"429"* ]]; then
+    REPLY="usage limit"
+  elif [[ "$output" == *"not authenticated"* || "$output" == *"unauthenticated"* || "$output" == *"authentication"* || "$output" == *"login required"* || "$output" == *"please log in"* || "$output" == *"invalid api key"* || "$output" == *"invalid_api_key"* || "$output" == *"401"* || "$output" == *"403"* ]]; then
+    REPLY="authentication"
+  else
+    REPLY=""
+  fi
+}
+
+_zsh_claude_command_normalize_response() {
+  emulate -L zsh
+
+  local response="${1//$'\r'/}"
+  _zsh_claude_command_trim "$response"
+  response="$REPLY"
+
+  local backtick=$'\x60'
+  local fence="${backtick}${backtick}${backtick}"
+  if [[ "$response" == "$fence"* ]]; then
+    response="${response#*$'\n'}"
+    if [[ "${response[-4,-1]}" == $'\n'"$fence" ]]; then
+      response="${response[1,-5]}"
+    fi
+    _zsh_claude_command_trim "$response"
+    response="$REPLY"
+  elif [[ "${response[1]}" == "$backtick" && "${response[-1]}" == "$backtick" ]]; then
+    response="${response[2,-2]}"
+  fi
+
+  REPLY="$response"
+}
+
+_zsh_claude_command_accept_line() {
+  # This is the hot path for every normal command: one builtin pattern match,
+  # then an immediate handoff to Zsh's builtin accept-line widget.
+  if [[ "$BUFFER" != '# '* ]]; then
+    zle .accept-line
+    return
+  fi
+
+  # Pasted scripts arrive as multiline buffers. Submit them normally so their
+  # comments never become AI requests.
+  if [[ "$BUFFER" == *$'\n'* ]]; then
+    zle .accept-line
+    return
+  fi
+
+  emulate -L zsh
+  setopt no_aliases pipe_fail
+
+  local query="${BUFFER[3,-1]}"
+  _zsh_claude_command_trim "$query"
+  query="$REPLY"
+
+  if [[ -z "$query" ]]; then
+    zle .accept-line
+    return
+  fi
+
+  local system_prompt="You generate shell commands for an interactive zsh session.
+Return exactly one syntactically correct, single-line command and nothing else.
+Do not use Markdown, code fences, comments, or explanations.
+The command must be safe to review: never claim that it has already run.
+Operating system: ${OSTYPE}. Current directory: ${PWD}.
+Prefer rg over grep, fd over find, bat over cat, and eza over ls."
+
+  if [[ -n "$ZSH_CLAUDE_COMMAND_PROMPT_EXTEND" ]]; then
+    system_prompt+=$'\n'"$ZSH_CLAUDE_COMMAND_PROMPT_EXTEND"
+  fi
+
+  local -a claude_args=(
+    --print
+    --output-format text
+    --safe-mode
+    --no-session-persistence
+    --permission-prompts none
+    --tools ''
+    --effort low
+    --system-prompt "$system_prompt"
+  )
+  if [[ -n "$ZSH_CLAUDE_COMMAND_MODEL" ]]; then
+    claude_args+=(--model "$ZSH_CLAUDE_COMMAND_MODEL")
+  fi
+
+  zle -M "Generating command with Claude…"
+  zle redisplay
+
+  local temp_dir
+  temp_dir=$("@mktemp@" -d "${TMPDIR:-/tmp}/zsh-claude-command.XXXXXX")
+  if [[ $? -ne 0 || -z "$temp_dir" ]]; then
+    zle -M "CLI error: could not create temporary files; your buffer was left unchanged"
+    return 0
+  fi
+
+  local error_file="$temp_dir/error"
+  local response_file="$temp_dir/response"
+  local prompt_file="$temp_dir/system-prompt"
+  print -r -- "$system_prompt" > "$prompt_file"
+
+  local response error_text exit_status provider="Claude"
+  response=$("@claude@" "${claude_args[@]}" -- "$query" 2>"$error_file")
+  exit_status=$?
+
+  if (( exit_status != 0 )); then
+    error_text="$(<"$error_file")"
+    _zsh_claude_command_error_kind "$error_text"
+    local claude_error_kind="$REPLY"
+
+    if [[ -z "$claude_error_kind" ]]; then
+      "@rm@" -rf -- "$temp_dir"
+      zle -M "CLI error: Claude failed (exit ${exit_status}); your buffer was left unchanged"
+      return 0
+    fi
+
+    zle -M "Claude ${claude_error_kind} unavailable; trying Codex…"
+    zle redisplay
+
+    "@codex@" exec \
+      --ephemeral \
+      --ignore-user-config \
+      --ignore-rules \
+      --skip-git-repo-check \
+      --sandbox read-only \
+      --color never \
+      --output-last-message "$response_file" \
+      --config "model_instructions_file=\"${prompt_file}\"" \
+      -- "$query" \
+      >/dev/null 2>"$error_file"
+    exit_status=$?
+
+    if (( exit_status != 0 )); then
+      error_text="$(<"$error_file")"
+      _zsh_claude_command_error_kind "$error_text"
+      local codex_error_kind="$REPLY"
+      "@rm@" -rf -- "$temp_dir"
+
+      if [[ -n "$codex_error_kind" ]]; then
+        zle -M "CLI error: Claude ${claude_error_kind}; Codex ${codex_error_kind}. Your buffer was left unchanged"
+      else
+        zle -M "CLI error: Claude ${claude_error_kind}; Codex failed (exit ${exit_status}). Your buffer was left unchanged"
+      fi
+      return 0
+    fi
+
+    response="$(<"$response_file")"
+    provider="Codex"
+  fi
+
+  "@rm@" -rf -- "$temp_dir"
+  _zsh_claude_command_normalize_response "$response"
+  response="$REPLY"
+
+  if [[ -z "$response" || "$response" == *$'\n'* ]]; then
+    zle -M "${provider} returned an empty or multiline response; your buffer was left unchanged"
+    return 0
+  fi
+
+  BUFFER="$response"
+  CURSOR=${#BUFFER}
+  zle -M ""
+  zle redisplay
+}
+
+zle -N accept-line _zsh_claude_command_accept_line
