@@ -23,7 +23,7 @@
 #        sudo nix-shell -p sbctl -- sbctl enroll-keys -m -f
 #
 #   4. Rebuild and switch:
-#        sudo nixos-rebuild switch --flake .#home
+#        nh os switch
 #
 #   5. Verify the Limine EFI binary is signed:
 #        sudo sbctl verify
@@ -35,7 +35,7 @@
 # ============================================================
 #
 #   Limine will automatically sign its EFI binary and hash new
-#   kernels/initrds on each nixos-rebuild. No manual steps needed
+#   kernels/initrds on each system rebuild. No manual steps needed
 #   after initial setup.
 #
 # ============================================================
@@ -48,13 +48,8 @@
 #   authorities, which is what allows Windows to continue booting
 #   with Secure Boot enabled.
 
-{ lib, pkgs, ... }:
+{ pkgs, ... }:
 {
-  # Limine replaces systemd-boot as the bootloader.
-  # hardware-configuration.nix sets systemd-boot.enable = true, so we
-  # must force it off here to avoid the two-bootloader conflict.
-  boot.loader.systemd-boot.enable = lib.mkForce false;
-
   boot.loader.limine = {
     enable = true;
 

@@ -6,15 +6,17 @@
     ./boot.nix
     ./misc.nix
     ./network.nix
-    ./sound.nix
     ./wayland.nix
-    ./font.nix
     ./package.nix
     ./user.nix
     ./virtualisation.nix
     ./program.nix
     ./secure-boot.nix
     ./scheduler.nix
+    ../../modules/nixos/audio.nix
+    ../../modules/nixos/base.nix
+    ../../modules/nixos/fonts.nix
+    ../../modules/nixos/wayland.nix
     inputs.nix-index-database.nixosModules.nix-index
   ];
 

@@ -5,96 +5,130 @@
 }:
 
 let
+  inherit (pkgs.stdenv.hostPlatform) isDarwin isLinux;
   scripts = import ../../derivations/scripts.nix { inherit pkgs; };
+
+  scriptPackages =
+    if isLinux then
+      builtins.attrValues scripts
+    else
+      with scripts;
+      [
+        aiUsage
+        gitCommitu
+        gitOpen
+        pubip
+      ];
+
+  commonPackages = with pkgs; [
+    gnupg
+    ripgrep
+    fd
+    eza
+    tldr
+    tokei
+    file
+    gnumake
+    envsubst
+    zip
+    tree
+    nixfmt
+    nil
+    rustc
+    cargo
+    clippy
+    rustfmt
+    rust-analyzer
+    pkg-config
+    bacon
+    cargo-nextest
+    cargo-audit
+    bc
+    pandoc
+    whois
+    jq
+    nssTools
+    nodejs
+    nmap
+    p7zip
+    unrar
+    neovim
+    unstable.codex
+    python3
+  ];
+
+  linuxPackages = with pkgs; [
+    gitleaks
+    unstable.jetbrains.datagrip
+    ffmpeg
+    pavucontrol
+    imagemagick
+    killall
+    clang
+    mold
+    lldb
+    mediainfo
+    dig
+    google-chrome
+    chromium
+    wl-clipboard
+    glib
+    openzone-cursors
+    ktx-tools
+    ghidra
+    vulkan-tools
+  ];
+
+  darwinPackages = with pkgs; [
+    git
+    jetbrains.datagrip
+    firefox-bin
+    mpv
+    htop-vim-navigation
+    vim
+    wget
+    unzip
+  ];
 in
 {
   imports = [
-    ./firefox.nix
-    ./dolphin.nix
-    ./git.nix
     ./zsh.nix
-    ./mpv.nix
     ./starship.nix
-    ./cursor.nix
     ./fastfetch.nix
-    ./htop.nix
     ./zed.nix
     ./alacritty.nix
     ./claude.nix
+  ]
+  ++ lib.optionals isLinux [
+    ./firefox.nix
+    ./dolphin.nix
+    ./git.nix
+    ./mpv.nix
+    ./cursor.nix
+    ./htop.nix
   ];
 
   programs.home-manager.enable = true;
 
   home = {
+    stateVersion = if isDarwin then "26.05" else "25.11";
+    packages =
+      scriptPackages
+      ++ commonPackages
+      ++ lib.optionals isLinux linuxPackages
+      ++ lib.optionals isDarwin darwinPackages;
+  }
+  // lib.optionalAttrs isLinux {
     username = "jesse";
     homeDirectory = "/home/jesse";
-    stateVersion = "25.11";
+    file.".config/JetBrains/DataGrip${lib.versions.majorMinor pkgs.unstable.jetbrains.datagrip.version}/extensions/com.intellij/startup/glass-header.groovy".source =
+      ./datagrip-glass-header.groovy;
   };
-
-  home.file.".config/JetBrains/DataGrip${lib.versions.majorMinor pkgs.unstable.jetbrains.datagrip.version}/extensions/com.intellij/startup/glass-header.groovy".source =
-    ./datagrip-glass-header.groovy;
-
+}
+// lib.optionalAttrs isLinux {
   services.gpg-agent = {
     enable = true;
     defaultCacheTtl = 50400;
     maxCacheTtl = 50400;
   };
-
-  home.packages =
-    builtins.attrValues scripts
-    ++ (with pkgs; [
-      gnupg
-      ripgrep
-      fd
-      eza
-      tldr
-      tokei
-      gitleaks
-      unstable.jetbrains.datagrip
-      ffmpeg
-      pavucontrol
-      imagemagick
-      file
-      gnumake
-      envsubst
-      killall
-      zip
-      tree
-      nixfmt
-      nil
-      rustc
-      cargo
-      clippy
-      rustfmt
-      rust-analyzer
-      clang
-      mold
-      pkg-config
-      lldb
-      bacon
-      cargo-nextest
-      cargo-audit
-      mediainfo
-      bc
-      pandoc
-      dig
-      whois
-      jq
-      google-chrome
-      chromium
-      nssTools
-      nodejs
-      nmap
-      wl-clipboard
-      p7zip
-      unrar
-      glib
-      openzone-cursors
-      neovim
-      unstable.codex
-      ktx-tools
-      python3
-      ghidra
-      vulkan-tools
-    ]);
 }

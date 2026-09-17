@@ -11,7 +11,7 @@ let
   zshClaudeCommand = pkgs.callPackage ../../derivations/zsh-claude-command {
     claude-code = pkgs.unstable.claude-code;
     codex = pkgs.unstable.codex;
-    coreutils = pkgs.coreutils;
+    inherit (pkgs) coreutils;
   };
 in
 {
