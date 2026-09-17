@@ -1,6 +1,5 @@
-# Catppuccin v1 flavors plus the glass opacities the translucent apps share, so Firefox, Zed,
-# Dolphin and the desktop draw from one source. The values are copied from catppuccin/palette
-# because reading config.catppuccin.sources.palette would be import-from-derivation.
+# Values are copied from catppuccin/palette because reading
+# config.catppuccin.sources.palette would be import-from-derivation.
 { lib, ... }:
 let
   # "rrggbb" -> [ r g b ]

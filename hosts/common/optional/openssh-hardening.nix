@@ -1,4 +1,3 @@
-# An enabled, key-only sshd for internet-facing hosts; each host sets its own port and AllowUsers.
 {
   services.openssh = {
     enable = true;

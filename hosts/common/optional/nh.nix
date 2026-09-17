@@ -1,4 +1,3 @@
-# nh, pointed at the flake checkout in jesse's home directory.
 { lib, ... }:
 {
   programs.nh = {

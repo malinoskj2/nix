@@ -42,7 +42,6 @@ in
     ];
 
     userSettings = {
-      # macOS keeps each ACP agent's default options.
       agent_servers = {
         claude-acp = {
           type = "registry";
@@ -81,7 +80,6 @@ in
 
       # Two glass layers span the window, as in Firefox's userChrome, so blur reads as one pane.
       theme_overrides.${darkTheme} = {
-        # The window root is crust glass.
         "background.appearance" = "transparent";
         background = withAlpha mocha.crust glass.root;
 
@@ -94,7 +92,6 @@ in
         "tab.inactive_background" = transparent;
         "scrollbar.track.background" = transparent;
 
-        # Content stacks a base layer on the root.
         "tab.active_background" = withAlpha mocha.base glass.layer;
         "toolbar.background" = withAlpha mocha.base glass.layer;
         "terminal.background" = withAlpha mocha.base glass.layer;
@@ -160,7 +157,6 @@ in
         };
       };
     }
-    # macOS keeps Zed's default agent panel and language models.
     // lib.optionalAttrs (!isDarwin) {
       agent = {
         dock = "right";

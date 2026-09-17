@@ -1,4 +1,3 @@
-# pi: Raspberry Pi 4, LAN Samba share and Docker host.
 { inputs, pkgs, ... }:
 {
   imports = [

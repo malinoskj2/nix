@@ -1,5 +1,3 @@
-# Exports the overlays and defines each platform's nixpkgs arguments, which both the hosts
-# and perSystem's pkgs use, so per-system outputs build what the hosts install.
 {
   inputs,
   lib,
@@ -17,7 +15,6 @@ let
   };
 
   nixpkgsArgs = {
-    # Pins and the Apple fonts serve only the Linux desktops; see docs/updating.md.
     linux = mkNixpkgsArgs [
       self.overlays.pins
       inputs.apple-fonts.overlays.default

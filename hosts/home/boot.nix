@@ -1,7 +1,3 @@
-# Limine with Secure Boot. sbctl signs only Limine's EFI binary; Limine then refuses
-# any kernel or initrd whose checksum doesn't match the one recorded at build time.
-# Windows lives on another SSD and is picked from the firmware boot menu.
-#
 # One-time setup, before enabling Secure Boot in firmware:
 #   1. Put Secure Boot into Setup Mode (clear the enrolled keys).
 #   2. Run `sudo sbctl create-keys`.

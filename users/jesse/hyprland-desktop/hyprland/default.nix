@@ -1,5 +1,3 @@
-# Hyprland, configured in Lua. Store paths, palette colors and monitor names reach hyprland.lua
-# through the injected `nix` table, and the build fails on a Hyprland the config wasn't written for.
 {
   config,
   lib,
@@ -30,7 +28,6 @@ in
 
     configType = "lua";
 
-    # Home Manager renders this as `local nix = { ... }` ahead of hyprland.lua.
     settings.nix._var = {
       inherit hyprctl palette;
       alpha = {

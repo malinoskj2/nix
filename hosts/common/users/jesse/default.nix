@@ -1,4 +1,3 @@
-# jesse's account and SSH key, shared by every host he logs in to.
 {
   config,
   lib,

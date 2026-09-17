@@ -15,7 +15,6 @@ htop.overrideAttrs (old: {
   pname = "htop-vim-navigation";
 
   patches = (old.patches or [ ]) ++ [
-    # Makes h/j/k/l move like the arrow keys whenever no text field has focus.
     ./vim-navigation.patch
   ];
 

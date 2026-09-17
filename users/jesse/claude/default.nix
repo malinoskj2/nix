@@ -67,7 +67,6 @@ in
       };
     }
 
-    # macOS leaves CLAUDE.md and settings.json unmanaged.
     (lib.mkIf (!isDarwin) {
       programs.claude-code.context = ./CLAUDE.md;
 

@@ -12,7 +12,6 @@
           "git_branch"
           "git_status"
         ]
-        # Language and environment modules that appear only in a matching project or shell.
         ++ [
           "bun"
           "c"

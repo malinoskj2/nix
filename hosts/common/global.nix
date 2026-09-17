@@ -1,4 +1,3 @@
-# Baseline shared by every NixOS host.
 { lib, pkgs, ... }:
 {
   # The order reaches nix.conf, so this list stays unsorted.

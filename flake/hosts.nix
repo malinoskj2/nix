@@ -1,5 +1,3 @@
-# Provides mkHost.nixos and mkHost.darwin, which build hosts/<name>/configuration.nix with the
-# platform's nixpkgs arguments and flake revision. flake.nix lists the hosts.
 {
   inputs,
   nixpkgsArgs,

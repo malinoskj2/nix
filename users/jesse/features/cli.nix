@@ -1,4 +1,3 @@
-# Command-line tools and scripts every profile shares, macOS included.
 { pkgs, ... }:
 {
   home.packages = with pkgs; [

@@ -1,5 +1,3 @@
-# Noctalia, the desktop shell, with two local plugins. The build checks everything Noctalia loads:
-# it validates the config and lints each plugin directory.
 {
   config,
   lib,
@@ -17,7 +15,6 @@ let
     width = 52;
   };
 
-  # Prepends `local nix = { ... }` to a Luau script, the shape hyprland.lua receives.
   withNix =
     file: values:
     pkgs.writeText (baseNameOf file) (

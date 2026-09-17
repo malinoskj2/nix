@@ -1,4 +1,3 @@
-# PipeWire audio, with ALSA and PulseAudio compatibility.
 {
   security.rtkit.enable = true;
 

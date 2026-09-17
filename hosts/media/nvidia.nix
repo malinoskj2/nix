@@ -1,4 +1,3 @@
-# NVIDIA driver with NVENC for hardware transcoding inside containers.
 {
   hardware = {
     nvidia-container-toolkit.enable = true;

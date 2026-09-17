@@ -1,4 +1,4 @@
-# Media library disks. Trees moved off /media are bound back so container paths stay unchanged.
+# Trees moved off /media are bound back so container paths stay unchanged.
 let
   mkDisk = uuid: {
     device = "/dev/disk/by-uuid/${uuid}";

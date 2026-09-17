@@ -1,4 +1,3 @@
-# CPU scheduling tuned for the Ryzen 9 9950X3D's two CCDs.
 { pkgs, ... }:
 {
   # 6.18 LTS includes sched-ext and the AMD 3D V-Cache driver, and unlike

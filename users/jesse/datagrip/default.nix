@@ -1,4 +1,3 @@
-# DataGrip with a startup script that makes the editor header translucent.
 # The config directory is versioned, so its name is derived from the installed package.
 { lib, pkgs, ... }:
 let

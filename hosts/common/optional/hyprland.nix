@@ -1,4 +1,3 @@
-# Hyprland session for graphical hosts.
 { pkgs, ... }:
 let
   schemas = pkgs.gsettings-desktop-schemas;
