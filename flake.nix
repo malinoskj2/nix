@@ -2,7 +2,6 @@
   description = "NixOS and nix-darwin configurations";
 
   inputs = {
-    # Release branches: all track NixOS 26.05 and move together; see docs/updating.md.
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
@@ -18,7 +17,6 @@
       inputs.nixpkgs.follows = "nixpkgs-darwin";
     };
 
-    # Independent branches: none is tied to the NixOS release.
     flake-parts = {
       url = "github:hercules-ci/flake-parts";
       inputs.nixpkgs-lib.follows = "nixpkgs";
@@ -33,25 +31,19 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Exact commit: Hyprland, its plugins and the portal move together with the
-    # version assertions and the hyprfocus patches; see docs/updating.md.
     nixpkgs-hyprland.url = "github:nixos/nixpkgs/8ce4ef6cb6f871616146b9fe26d2a5ae594e94fe";
 
-    # Exact commit: Firefox's major version must match WaveFox; see docs/updating.md.
     nixpkgs-firefox.url = "github:nixos/nixpkgs/21a67dc470149f337cecafbe965d8d252a390518";
     wavefox = {
       url = "github:QNetITQ/WaveFox/0.6.155";
       flake = false;
     };
 
-    # Exact commit: apple-fonts records hashes of Apple's .dmg files, but Apple replaces
-    # them in place, so a hash mismatch calls for a newer commit; see docs/updating.md.
     apple-fonts = {
       url = "github:Lyndeno/apple-fonts.nix/3861e2249cb244bfbc7cfab2303c152cf5f9d9e9";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Exact commit: pi's Raspberry Pi 4 kernel and firmware; a bump needs a test on the device.
     nixos-hardware = {
       url = "github:nixos/nixos-hardware/d40fd26f323c898b0c195d41aa5efadd85f57832";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -77,7 +69,6 @@
           ./flake/nixpkgs.nix
         ];
 
-        # Each builds hosts/<name>/configuration.nix; see flake/hosts.nix.
         flake = {
           nixosConfigurations = lib.genAttrs [
             "home"
@@ -89,8 +80,6 @@
           darwinConfigurations = lib.genAttrs [ "macbook" ] mkHost.darwin;
         };
 
-        # Each is pkgs/<name>/package.nix, taken from the overlaid pkgs so it's the derivation
-        # hosts install. flake/checks.nix fails if a package in pkgs/ is missing here.
         perSystem =
           { pkgs, ... }:
           {

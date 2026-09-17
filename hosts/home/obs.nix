@@ -1,4 +1,3 @@
-# OBS Studio with NVENC encoding and Wayland capture.
 { pkgs, ... }:
 {
   programs.obs-studio = {

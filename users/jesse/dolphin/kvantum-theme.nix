@@ -1,6 +1,3 @@
-# Catppuccin Mocha Mauve with its top bar turned into the crust glass of the Firefox toolbox,
-# the Zed title bar and hyprbars, edited by users/jesse/dolphin/kvantum-glass.py.
-#
 # Kvantum paints a window with its "Window" element only when a toolbar sits at the
 # window's top-left pixel, otherwise with "Dialog". So the toolbar keeps an invisible frame
 # (dropping it puts a button there and the main window resolves to Dialog), Window carries

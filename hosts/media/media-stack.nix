@@ -1,4 +1,3 @@
-# Docker daemon settings and a weekly image update for the Compose media stack.
 { pkgs, ... }:
 let
   # The Compose project lives in its own checkout, outside this repository.

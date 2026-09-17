@@ -1,4 +1,3 @@
-# media: Intel desktop with an NVIDIA RTX 3060 Ti, internet-facing Docker media server.
 { pkgs, ... }:
 {
   imports = [
@@ -29,7 +28,6 @@
     firewall = {
       allowPing = false;
 
-      # HTTP and HTTPS for the reverse proxy, and 32400 for Plex.
       allowedTCPPorts = [
         80
         443

@@ -1,4 +1,3 @@
-# Papirus-Dark with its mimetype icons recolored to the Catppuccin palette, under its own name.
 {
   name,
   palette,

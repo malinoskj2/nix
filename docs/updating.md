@@ -5,13 +5,7 @@ to an exact revision in their URL, or have to move together with something
 else. `nix flake update` doesn't move a pin like that, and bumping it by hand
 without its partners gives a build error at best and a broken desktop at worst.
 
-This file is the reference for every update rule. `CLAUDE.md` imports it, and
-the comments in [`flake.nix`](../flake.nix),
-[`flake/nixpkgs.nix`](../flake/nixpkgs.nix),
-[`overlays/default.nix`](../overlays/default.nix),
-[`hosts/home/nvidia.nix`](../hosts/home/nvidia.nix),
-[`users/jesse/firefox.nix`](../users/jesse/firefox.nix) and
-[`update.yml`](../.github/workflows/update.yml) point here.
+This file is the reference for every update rule, and `CLAUDE.md` imports it.
 
 ## Routine update
 

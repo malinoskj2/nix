@@ -1,5 +1,3 @@
-# Graphical and media apps the Linux workstations share under any desktop,
-# with their session defaults and the GPG agent that signs commits.
 { pkgs, ... }:
 {
   imports = [

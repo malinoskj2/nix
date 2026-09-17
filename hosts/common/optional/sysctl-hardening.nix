@@ -1,5 +1,3 @@
-# Kernel hardening for internet-facing hosts, trading local debugging convenience
-# for less exposure to unprivileged users and forged packets.
 {
   boot.kernel.sysctl = {
     "kernel.dmesg_restrict" = 1;

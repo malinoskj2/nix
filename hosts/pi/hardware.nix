@@ -1,4 +1,3 @@
-# Hand-written hardware configuration: the Pi has no generated hardware-configuration.nix.
 let
   mkDisk = label: fsType: {
     device = "/dev/disk/by-label/${label}";

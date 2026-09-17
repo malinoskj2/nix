@@ -1,4 +1,3 @@
-# Dolphin with Catppuccin glass theming, set up to work outside a Plasma session.
 { config, pkgs, ... }:
 let
   inherit (config) palette;

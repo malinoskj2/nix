@@ -24,7 +24,7 @@ It isn't meant to be imported as-is. Borrow whatever's useful.
 
 | Path | Contents |
 | --- | --- |
-| [`flake.nix`](flake.nix) | Inputs, with a comment on each pinned one, the host list and the exported packages |
+| [`flake.nix`](flake.nix) | Inputs, the host list and the exported packages |
 | [`flake/`](flake) | flake-parts modules: how hosts are built, how nixpkgs is instantiated (unfree, overlay order), checks, formatter, devshell |
 | [`hosts/<name>/`](hosts) | One directory per machine. `configuration.nix` is the entry point, and its imports list what the machine runs. |
 | [`hosts/common/`](hosts/common) | Shared modules: the baseline for every NixOS host, Home Manager settings, opt-in modules under `optional/`, and accounts under `users/` |

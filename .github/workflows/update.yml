@@ -1,9 +1,5 @@
 name: Update flake.lock
 
-# Updates the lock, builds every host against it, and opens a pull request only
-# if that passed. Inputs pinned in their flake.nix URL don't move; see
-# docs/updating.md.
-
 on:
   schedule:
     - cron: "17 4 * * 1"

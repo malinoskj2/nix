@@ -1,5 +1,3 @@
-# Baseline for machines jesse develops on: they fetch nix-community builds, run prebuilt
-# toolchains and language servers, keep SSH keys in an agent, and inspect local hardware.
 { pkgs, ... }:
 {
   nix.settings = {

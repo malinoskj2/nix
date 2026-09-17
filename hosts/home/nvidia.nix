@@ -1,4 +1,3 @@
-# NVIDIA driver and the environment its Wayland and VA-API support need.
 { config, pkgs, ... }:
 {
   hardware = {
@@ -8,7 +7,6 @@
     };
 
     nvidia = {
-      # Hashes come from nixos-unstable's production driver; see docs/updating.md.
       package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
         version = "595.99.02";
         sha256_64bit = "sha256-6HR3lYv3YwcFSTJL1a1slI66btIQ5EAFs+/4SUD24ew=";

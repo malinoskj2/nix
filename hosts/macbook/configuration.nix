@@ -1,4 +1,3 @@
-# macbook: Apple-silicon MacBook, nix-darwin workstation.
 { inputs, pkgs, ... }:
 let
   # Check the name with `id -un` and its home in Directory Service before activation.

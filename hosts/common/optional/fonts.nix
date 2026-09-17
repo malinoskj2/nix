@@ -1,4 +1,3 @@
-# Fonts for graphical hosts; sf-* and ny come from the apple-fonts overlay.
 { pkgs, ... }:
 {
   # The order reaches fontconfig's font directory list, so this list stays unsorted.

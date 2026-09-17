@@ -76,7 +76,6 @@ in
           action = "ScrollPageDown";
         }
 
-        # Pass Shift+PageUp/PageDown to the application instead of scrolling.
         {
           key = "PageUp";
           mods = "Shift";

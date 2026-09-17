@@ -1,4 +1,3 @@
-# katana: ThinkPad X230 laptop, Hyprland workstation.
 { pkgs, ... }:
 {
   imports = [

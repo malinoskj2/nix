@@ -1,5 +1,3 @@
-# Additions for machines jesse sits at: device groups, the journal without sudo,
-# and Home Manager with the profile named after the host.
 { config, inputs, ... }:
 {
   imports = [

@@ -1,5 +1,3 @@
-# Builds this system's hosts, the local packages they install directly and the devshell, and
-# fails if a package in pkgs/ available on this system is missing from flake.nix's packages.
 { lib, self, ... }:
 {
   perSystem =

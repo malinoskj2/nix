@@ -1,4 +1,3 @@
-# Defines a package for each pkgs/<name>/package.nix, which overlays.additions exposes as pkgs.<name>.
 { pkgs }:
 let
   # The hosts install claude-code, codex and noctalia from pkgs.unstable; wrappers use those builds.

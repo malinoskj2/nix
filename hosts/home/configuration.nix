@@ -1,4 +1,3 @@
-# home: Ryzen 9 9950X3D desktop with an NVIDIA GPU, Hyprland workstation.
 { inputs, pkgs, ... }:
 {
   imports = [

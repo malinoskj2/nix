@@ -9,15 +9,12 @@ let
     };
 in
 {
-  # Adds the local packages from pkgs/ as pkgs.<name>.
   additions = final: _prev: import ../pkgs { pkgs = final; };
 
-  # Exposes nixpkgs-unstable as pkgs.unstable.
   unstable = final: _prev: {
     unstable = importNixpkgs inputs.nixpkgs-unstable final;
   };
 
-  # Takes packages from exact nixpkgs commits and patches hyprfocus; see docs/updating.md.
   pins =
     final: _prev:
     let
@@ -48,12 +45,8 @@ in
             __intentionallyOverridingVersion = true;
 
             patches = (old.patches or [ ]) ++ [
-              # Adds plugin:hyprfocus:class to animate only windows whose class matches, and
-              # skips windows that are still opening.
               ./patches/hyprfocus/class-filter.patch
-              # Lets *_focus_animation take a list like "flash,shrink" to run both at once.
               ./patches/hyprfocus/combined-modes.patch
-              # Makes shrink a render-time scale instead of resizing the client.
               ./patches/hyprfocus/render-shrink.patch
             ];
 

@@ -23,7 +23,6 @@ let
     color: percent: "rgba(${lib.concatMapStringsSep ", " toString (rgb color)}, ${opacity percent})";
 in
 {
-  # The wavefox input's release must match nixpkgs-firefox's major version; see docs/updating.md.
   home.file."${cfg.profilesPath}/${cfg.profiles.default.path}/chrome/wavefox".source =
     "${inputs.wavefox}/chrome";
 
@@ -37,7 +36,6 @@ in
         installation_mode = "force_installed";
       };
 
-      # Hides sponsored shortcuts and stories only; ordinary ones stay.
       FirefoxHome = {
         Locked = true;
         SponsoredStories = false;

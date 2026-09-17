@@ -1,4 +1,3 @@
-# Rust toolchain and cargo helpers; crates that bind libgit2 link the system library via pkg-config.
 { pkgs, ... }:
 {
   home.packages = with pkgs; [
