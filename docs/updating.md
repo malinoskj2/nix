@@ -23,11 +23,9 @@ opens a pull request only when every check passes.
 
 ### The release
 
-`nixpkgs`, `home-manager`, `catppuccin`, `nixpkgs-darwin` and `nix-darwin` all
-follow branches for the same NixOS release. To change release, move all five to
-the new release's branches in one commit. The macOS switch command in
-[`docs/bootstrap.md`](bootstrap.md) runs `darwin-rebuild` from the locked
-`nix-darwin`, so it follows along.
+`nixpkgs`, `home-manager`, `catppuccin` and `nixpkgs-darwin` all follow
+branches for the same NixOS release. To change release, move all four to the new
+release's branches in one commit.
 
 `nixpkgs-unstable` doesn't follow the release. It supplies `pkgs.unstable` for
 the few packages that need something newer.

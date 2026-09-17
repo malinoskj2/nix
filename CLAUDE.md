@@ -2,14 +2,14 @@
 
 ## Repository overview
 
-This flake builds four NixOS hosts and one nix-darwin host:
+This flake builds four NixOS hosts and one standalone Home Manager host:
 
 - `home`: primary desktop, with Hyprland, NVIDIA and Home Manager.
 - `katana`: ThinkPad, with Hyprland and Home Manager.
 - `pi`: aarch64 server with its own `pi` user and no Home Manager.
 - `media`: media server with Docker and NVIDIA transcoding.
-- `macbook`: Apple-silicon nix-darwin host with a conservative, user-scoped
-  Home Manager profile.
+- `macbook`: Apple-silicon Mac with only a conservative Home Manager profile,
+  exported as `homeConfigurations.macbook`.
 
 ### Flake
 
@@ -19,8 +19,9 @@ the exported package list, and imports the single-concern modules in `flake/`:
 - `nixpkgs.nix`: each platform's nixpkgs arguments (unfree and the overlay
   list), used by both the hosts and `perSystem` pkgs, and the exported
   overlays.
-- `hosts.nix`: `mkHost.nixos` and `mkHost.darwin`, which build a host with its
-  platform's nixpkgs arguments and the configuration revision.
+- `hosts.nix`: `mkHost.nixos`, which builds a NixOS host with the Linux nixpkgs
+  arguments and the configuration revision, and `mkHost.darwin`, which builds a
+  standalone Home Manager profile with the aarch64-darwin `perSystem` pkgs.
 - `checks.nix`: `host-<name>` for each host on its system, `package-<name>` for
   the local packages those hosts install directly, and `devshell`. Evaluation
   fails if a package in `pkgs/` is missing from `flake.nix`'s `packages`.
@@ -29,13 +30,13 @@ the exported package list, and imports the single-concern modules in `flake/`:
 
 ### Hosts
 
-Each host's entry is `hosts/<name>/configuration.nix`: an import list plus host
+Each NixOS host's entry is `hosts/<name>/configuration.nix`: an import list plus host
 facts. Shared modules are imported explicitly by relative path from
 `hosts/common/`:
 
 - `global.nix`: what every NixOS host shares: flakes, git, vim, and a default
   timezone that pi overrides.
-- `home-manager.nix`: Home Manager settings, for NixOS and nix-darwin.
+- `home-manager.nix`: Home Manager settings for the NixOS hosts.
 - `users/jesse/default.nix`: jesse's account and SSH key, with the groups that
   exist on the host (docker, networkmanager).
 - `users/jesse/interactive.nix`: for machines jesse sits at. It adds hardware
@@ -57,7 +58,8 @@ modules) plus opt-in `users/jesse/features/`: `admin`, `cli`, `desktop`, `dev`,
 (mold linker) and `features/rust/std-sources.nix` (`RUST_SRC_PATH`). Single
 programs are flat modules at `users/jesse/<program>.nix` or
 `users/jesse/<program>/`, imported by `global/`, a feature or a profile.
-Identity comes from the OS account. `users/jesse/hyprland-desktop/` is the
+On NixOS, identity comes from the OS account; the `macbook` profile sets
+`home.username` and `home.homeDirectory` itself. `users/jesse/hyprland-desktop/` is the
 Hyprland and Noctalia desktop, imported only by the `home` profile.
 
 ### Packages, overlays and patches
@@ -98,12 +100,10 @@ restating rules here. On top of it, for agents:
 - Build the affected host (`nix flake check`, or
   `nix build .#nixosConfigurations.<host>.config.system.build.toplevel`) before
   proposing an apply. Never run `nh os switch`, `nixos-rebuild switch` or
-  `darwin-rebuild switch` unless explicitly asked.
+  `home-manager switch` unless explicitly asked.
 - `git add` new files before evaluating; flakes only see tracked files.
 - Never bump `system.stateVersion` or `home.stateVersion`, and never hand-edit
   `hardware-configuration.nix`.
-- Keep `nix.enable = false` on `macbook`; Determinate Nix owns its Nix
-  installation (see `docs/bootstrap.md`).
 - The `home` Hyprland and Noctalia desktop is fully declared under
   `users/jesse/hyprland-desktop/` and must not gain a dependency on the old
   `~/env` dotfiles checkout.

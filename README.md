@@ -2,7 +2,7 @@
 
 [![Check](https://github.com/malinoskj2/nix/actions/workflows/check.yml/badge.svg)](https://github.com/malinoskj2/nix/actions/workflows/check.yml)
 
-The NixOS and nix-darwin configuration for my machines, as one flake built with
+The NixOS and Home Manager configuration for my machines, as one flake built with
 [flake-parts](https://flake-parts.hercules-ci.com). The workstations (`home`,
 `katana`, `macbook`) also get their user environment through
 [Home Manager](https://github.com/nix-community/home-manager). The servers
@@ -18,7 +18,7 @@ It isn't meant to be imported as-is. Borrow whatever's useful.
 | [`katana`](hosts/katana) | ThinkPad X230 | `x86_64-linux` | Laptop. Hyprland, with the Home Manager tool set but not the `home` desktop. |
 | [`media`](hosts/media) | Intel, RTX 3060 Ti | `x86_64-linux` | Headless media server. Docker stack with NVIDIA transcoding, reachable from the internet. |
 | [`pi`](hosts/pi) | Raspberry Pi 4 | `aarch64-linux` | LAN box. Samba share and Docker. |
-| [`macbook`](hosts/macbook) | Apple silicon MacBook | `aarch64-darwin` | nix-darwin with a user-scoped Home Manager profile. Determinate Nix owns the Nix install. |
+| [`macbook`](users/jesse/profiles/macbook.nix) | Apple silicon MacBook | `aarch64-darwin` | Standalone Home Manager profile, no system configuration. Determinate Nix owns the Nix install. |
 
 ## Layout
 
@@ -33,11 +33,12 @@ It isn't meant to be imported as-is. Borrow whatever's useful.
 | [`overlays/`](overlays) | `additions` for the local packages, `pkgs.unstable`, Firefox and Hyprland from exact nixpkgs commits, and the hyprfocus patches |
 | [`docs/`](docs) | [`bootstrap.md`](docs/bootstrap.md) for setting up a host, [`updating.md`](docs/updating.md) for updating inputs |
 
-Each host is `nixosSystem` or `darwinSystem` applied to its own
-`configuration.nix`, listed in [`flake.nix`](flake.nix), plus the nixpkgs
-arguments and revision that [`flake/hosts.nix`](flake/hosts.nix) adds. There's no options framework. A host
-imports what it needs by path, Home Manager included, so to see what a machine
-runs, follow the imports from its `configuration.nix`.
+Each NixOS host is `nixosSystem` applied to its own `configuration.nix`, plus
+the nixpkgs arguments and revision that [`flake/hosts.nix`](flake/hosts.nix)
+adds. The Mac is `homeManagerConfiguration` applied to its profile. Both lists
+are in [`flake.nix`](flake.nix). There's no options framework. A host imports
+what it needs by path, Home Manager included, so to see what a machine runs,
+follow the imports from its entry point.
 
 ## Usage
 

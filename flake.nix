@@ -1,5 +1,5 @@
 {
-  description = "NixOS and nix-darwin configurations";
+  description = "NixOS and Home Manager configurations";
 
   inputs = {
     apple-fonts = {
@@ -28,13 +28,6 @@
       repo = "home-manager";
       ref = "release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
-    };
-    nix-darwin = {
-      type = "github";
-      owner = "nix-darwin";
-      repo = "nix-darwin";
-      ref = "nix-darwin-26.05";
-      inputs.nixpkgs.follows = "nixpkgs-darwin";
     };
     nix-index-database = {
       type = "github";
@@ -142,7 +135,7 @@
 
         flake = {
           nixosConfigurations = lib.genAttrs nixosHosts mkHost.nixos;
-          darwinConfigurations = lib.genAttrs darwinHosts mkHost.darwin;
+          homeConfigurations = lib.genAttrs darwinHosts mkHost.darwin;
         };
 
         perSystem =

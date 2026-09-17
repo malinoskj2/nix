@@ -35,7 +35,7 @@ let
         "Read(**/secrets/**)"
         "Bash(nh os switch:*)"
         "Bash(nixos-rebuild switch:*)"
-        "Bash(darwin-rebuild switch:*)"
+        "Bash(home-manager switch:*)"
         "Bash(git push --force:*)"
         "Bash(git push -f:*)"
         "Bash(git reset --hard:*)"

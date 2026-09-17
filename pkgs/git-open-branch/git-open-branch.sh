@@ -9,11 +9,15 @@ url="$(git remote get-url origin)" || exit 1
 case "$url" in
   git@*) url="https://$(printf '%s' "${url#git@}" | sed 's|:|/|')" ;;
   ssh://*) url="https://$(printf '%s' "${url#ssh://}" | sed 's|^[^@]*@||; s|:[0-9]*/|/|')" ;;
+  https://*@*) url="https://${url#https://*@}" ;;
 esac
 url="${url%.git}"
 
 branch="$(git branch --show-current)"
-url+="${branch:+/tree/$branch}"
+case "$url" in
+  https://bitbucket.org/*) url+="${branch:+/src/$branch}" ;;
+  *) url+="${branch:+/tree/$branch}" ;;
+esac
 
 if [[ -n "${BROWSER:-}" ]]; then
   "$BROWSER" "$url"

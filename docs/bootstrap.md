@@ -44,19 +44,17 @@ top of [`hosts/home/boot.nix`](../hosts/home/boot.nix). Its switch step is the
 `nixos-rebuild switch` above, and until that switch installs sbctl, run it
 through `nix-shell -p sbctl`.
 
-## macbook (nix-darwin)
+## macbook (Home Manager)
 
-Nix on the Mac comes from the
+The Mac has no system configuration, only a standalone Home Manager profile.
+Nix comes from the
 [Determinate Nix installer](https://install.determinate.systems/), which owns
-the daemon, `nix.conf` and garbage collection. That's why the host sets
-`nix.enable = false`. Install Homebrew separately too: nix-darwin drives
-`brew` for the declared casks but doesn't install it.
+the daemon, `nix.conf` and garbage collection.
 
-The host describes an existing account and doesn't create one. Check that
-`username` at the top of
-[`hosts/macbook/configuration.nix`](../hosts/macbook/configuration.nix) and the
-home directory the host derives from it, `/Users/<username>`, match the
-machine:
+The profile describes an existing account. Check that `home.username` and
+`home.homeDirectory` in
+[`users/jesse/profiles/macbook.nix`](../users/jesse/profiles/macbook.nix)
+match the machine:
 
 ```sh
 id -un
@@ -64,22 +62,13 @@ dscl . -read "/Users/$(id -un)" NFSHomeDirectory
 uname -m    # arm64
 ```
 
-If the name differs, change only `username`; the home path follows from it.
-Don't add a UID, GID, groups or shell.
-
-Build first, then check what activation would change:
-
-```sh
-nix run --inputs-from . nix-darwin#darwin-rebuild -- build --flake .#macbook
-nix run nixpkgs#nvd -- diff /run/current-system result   # skip on first run
-grep -nE 'dscl|scutil|systemsetup|networksetup|brew' result/activate
-```
-
-Stop if `result/activate` changes accounts, the hostname, system profiles,
-security or network settings, or Homebrew packages that aren't declared here.
-Otherwise, keep a second terminal open and switch with the `darwin-rebuild`
-from the `nix-darwin` this flake locks:
+Build first, then switch with the `home-manager` from the Home Manager this
+flake locks. `-b hm-bak` moves aside any existing dotfile Home Manager would
+replace:
 
 ```sh
-sudo nix run --inputs-from . nix-darwin#darwin-rebuild -- switch --flake .#macbook
+nix run --inputs-from . home-manager -- build --flake .#macbook
+nix run --inputs-from . home-manager -- switch -b hm-bak --flake .#macbook
 ```
+
+After the first switch, `home-manager` is on the `PATH`.
