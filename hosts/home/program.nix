@@ -3,9 +3,6 @@
 
 {
   programs = {
-    ssh.startAgent = true;
-    zsh.enable = true;
-    zsh.enableGlobalCompInit = false;
     steam.enable = true;
     gamemode.enable = true;
     obs-studio = {
@@ -17,9 +14,5 @@
         obs-pipewire-audio-capture
       ];
     };
-    nix-ld.enable = true;
-    nix-ld.libraries = with pkgs; [
-      libcap
-    ];
   };
 }

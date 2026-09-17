@@ -2,9 +2,6 @@
 { pkgs, ... }:
 
 {
-  time.timeZone = "America/New_York";
-  i18n.defaultLocale = "en_US.UTF-8";
-
   environment.sessionVariables = {
     # rust-analyzer can't resolve into std without the library sources
     RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
@@ -18,11 +15,4 @@
       size = 16 * 1024;
     }
   ];
-
-  nix.settings = {
-    substituters = [ "https://nix-community.cachix.org" ];
-    trusted-public-keys = [
-      "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
-    ];
-  };
 }

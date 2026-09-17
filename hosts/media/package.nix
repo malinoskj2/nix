@@ -12,7 +12,6 @@
     curl
     dnsutils
     lazydocker
-    docker-compose
     smartmontools
     iperf
     speedtest-cli

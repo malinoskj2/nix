@@ -38,7 +38,7 @@ in
   };
 
   home-manager.users.${username} = {
-    imports = [ ../../users/jesse/darwin.nix ];
+    imports = [ ../../users/jesse ];
     home = {
       inherit username homeDirectory;
     };

@@ -34,13 +34,9 @@
   };
 
   environment.sessionVariables = {
-    GSETTINGS_SCHEMA_DIR = "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}/glib-2.0/schemas";
     LIBVA_DRIVER_NAME = "nvidia";
     MOZ_DISABLE_RDD_SANDBOX = "1";
     GBM_BACKEND = "nvidia-drm";
     __GLX_VENDOR_LIBRARY_NAME = "nvidia";
-    NIXOS_OZONE_WL = "1";
-    _JAVA_AWT_WM_NONREPARENTING = "1";
-    NIXOS_XDG_OPEN_USE_PORTAL = "1";
   };
 }

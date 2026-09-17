@@ -11,7 +11,6 @@
     ./user.nix
     ./systemd.nix
     ./ssh.nix
-    ./misc.nix
     ./samba.nix
   ];
 

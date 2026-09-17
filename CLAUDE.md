@@ -16,15 +16,16 @@ builds every host with `nixpkgs.lib.nixosSystem` and holds the module shared by
 all of them (overlays, unfree, Home Manager wiring). Host modules live under
 `hosts/<name>/`; shared user configuration lives under
 `users/jesse/`. Overlays live in `overlays/default.nix`: `unstable` exposes
-`nixpkgs-unstable` as `pkgs.unstable`, `pins` takes packages
-from exact nixpkgs revisions, and `modifications` overrides existing packages,
-using patches from `patches/<package>/`. The `apple-fonts` input's overlay adds
-`pkgs.sf-pro`, `sf-compact`, `sf-mono` and `ny`.
+`nixpkgs-unstable` as `pkgs.unstable`, `pins` takes packages from exact nixpkgs
+revisions, `modifications` overrides existing packages using patches from
+`patches/<package>/`, and `htopVimNavigation` applies the local h/j/k/l
+navigation patch. The `apple-fonts` input's overlay adds `pkgs.sf-pro`,
+`sf-compact`, `sf-mono` and `ny`.
 
 Darwin uses a separate `mkDarwinHost`, release-matched `nixpkgs-darwin` and
-`nix-darwin` inputs, and only the `unstable` overlay. Do not add the
-Linux-specific `pins` or `modifications` overlays to Darwin. Determinate Nix
-owns the Mac's Nix installation, so keep `nix.enable = false`.
+`nix-darwin` inputs, and the `unstable` and `htopVimNavigation` overlays. Do
+not add the Linux-specific `pins` or `modifications` overlays to Darwin.
+Determinate Nix owns the Mac's Nix installation, so keep `nix.enable = false`.
 
 Format changed Nix files with `nixfmt`. Prefer evaluating or building the
 affected host before applying it, and do not run a `switch` unless explicitly

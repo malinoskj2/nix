@@ -4,14 +4,15 @@
   imports = [
     ./hardware-configuration.nix
     ./boot.nix
-    ./misc.nix
     ./network.nix
     ./sound.nix
     ./wayland.nix
     ./font.nix
     ./package.nix
-    ./user.nix
     ./program.nix
+    ../../modules/nixos/base.nix
+    ../../modules/nixos/desktop.nix
+    ../../modules/nixos/wayland.nix
   ];
 
   system.stateVersion = "24.11";
