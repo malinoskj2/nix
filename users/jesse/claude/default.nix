@@ -41,9 +41,10 @@ in
   programs.claude-code = {
     enable = true;
     package = pkgs.unstable.claude-code;
+    skills.gauntlet = ./skills/gauntlet;
   }
   // lib.optionalAttrs (!isDarwin) {
-    context = ./claude/CLAUDE.md;
+    context = ./CLAUDE.md;
   };
 
   # settings.json is written to at runtime by Claude Code itself (/model,
