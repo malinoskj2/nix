@@ -97,7 +97,7 @@ in
     ./fastfetch.nix
     ./zed.nix
     ./alacritty.nix
-    ./claude.nix
+    ./claude
   ]
   ++ lib.optionals isLinux [
     ./firefox.nix
