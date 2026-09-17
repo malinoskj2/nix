@@ -1,7 +1,7 @@
 # Updating
 
 Most inputs follow a branch and move with `nix flake update`. A few are pinned
-to an exact revision in their URL, or have to move together with something
+to an exact `rev` in `flake.nix`, or have to move together with something
 else. `nix flake update` doesn't move a pin like that, and bumping it by hand
 without its partners gives a build error at best and a broken desktop at worst.
 
