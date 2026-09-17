@@ -12,5 +12,5 @@ writeShellApplication {
     curl
     jq
   ];
-  text = builtins.readFile ./ai-usage;
+  text = builtins.readFile ./ai-usage.sh;
 }

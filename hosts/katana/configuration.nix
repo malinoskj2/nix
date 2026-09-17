@@ -1,4 +1,4 @@
-{ ... }:
+_:
 
 {
   imports = [
@@ -17,5 +17,5 @@
 
   system.stateVersion = "24.11";
 
-  home-manager.users.jesse = import ../../users/jesse;
+  home-manager.users.jesse.imports = [ ../../users/jesse ];
 }

@@ -1,13 +1,11 @@
-{
-  ...
-}:
+_:
 
 {
   imports = [
     ./hardware.nix
     ./network.nix
     ./package.nix
-    ./virtualization.nix
+    ./virtualisation.nix
     ./user.nix
     ./systemd.nix
     ./ssh.nix

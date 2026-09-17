@@ -4,7 +4,7 @@
 #
 # Needs root for scan/associate.
 
-CONF_DIR="/run/wifi_connect"
+CONF_DIR="/run/wifi-connect"
 LOG="$CONF_DIR/wpa_supplicant.log"
 
 die() {

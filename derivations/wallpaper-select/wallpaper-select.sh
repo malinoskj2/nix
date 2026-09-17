@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Pick a video from the wallpaper directory in the noctalia launcher and switch
 # a monitor's running wallpaper to it (default: the focused monitor).
-# Usage: wallpaper_select [monitor]
+# Usage: wallpaper-select [monitor]
 #
 # Loads the file straight into mpv over the plugin's IPC socket. The plugin
 # doesn't learn about it, so a noctalia restart reverts to its assignment.

@@ -6,11 +6,11 @@
 }:
 
 writeShellApplication {
-  name = "find_service";
+  name = "find-service";
   runtimeInputs = [
     gawk
     gnused
     nmap
   ];
-  text = builtins.readFile ./find_service.sh;
+  text = builtins.readFile ./find-service.sh;
 }

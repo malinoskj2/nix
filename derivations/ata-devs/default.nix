@@ -6,11 +6,11 @@
 }:
 
 writeShellApplication {
-  name = "ata_devs";
+  name = "ata-devs";
   runtimeInputs = [
     coreutils
     gnugrep
     gnused
   ];
-  text = builtins.readFile ./ata_devs.sh;
+  text = builtins.readFile ./ata-devs.sh;
 }
