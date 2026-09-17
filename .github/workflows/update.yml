@@ -73,7 +73,7 @@ jobs:
           {
             echo 'body<<EOF'
             echo "Every host built against this lock in [the update run]($RUN_URL)."
-            echo "Inputs pinned in their URL are unchanged; bump those by hand as [docs/updating.md]($DOCS_URL) describes."
+            echo "Inputs pinned to a rev are unchanged; bump those by hand as [docs/updating.md]($DOCS_URL) describes."
             echo
             echo '```'
             grep -E '^(•|  )' "$RUNNER_TEMP/flake-lock/update.log" || true

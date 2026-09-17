@@ -2,56 +2,95 @@
   description = "NixOS and nix-darwin configurations";
 
   inputs = {
-    nixpkgs = {
-      url = "github:nixos/nixpkgs/nixos-26.05";
-    };
-    home-manager = {
-      url = "github:nix-community/home-manager/release-26.05";
+    apple-fonts = {
+      type = "github";
+      owner = "Lyndeno";
+      repo = "apple-fonts.nix";
+      rev = "3861e2249cb244bfbc7cfab2303c152cf5f9d9e9";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     catppuccin = {
-      url = "github:catppuccin/nix/release-26.05";
+      type = "github";
+      owner = "catppuccin";
+      repo = "nix";
+      ref = "release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
-    };
-    nixpkgs-darwin = {
-      url = "github:nixos/nixpkgs/nixpkgs-26.05-darwin";
-    };
-    nix-darwin = {
-      url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
-      inputs.nixpkgs.follows = "nixpkgs-darwin";
     };
     flake-parts = {
-      url = "github:hercules-ci/flake-parts";
+      type = "github";
+      owner = "hercules-ci";
+      repo = "flake-parts";
       inputs.nixpkgs-lib.follows = "nixpkgs";
     };
+    home-manager = {
+      type = "github";
+      owner = "nix-community";
+      repo = "home-manager";
+      ref = "release-26.05";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    nix-darwin = {
+      type = "github";
+      owner = "nix-darwin";
+      repo = "nix-darwin";
+      ref = "nix-darwin-26.05";
+      inputs.nixpkgs.follows = "nixpkgs-darwin";
+    };
     nix-index-database = {
-      url = "github:nix-community/nix-index-database";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    nixpkgs-unstable = {
-      url = "github:nixos/nixpkgs/nixos-unstable";
-    };
-    treefmt-nix = {
-      url = "github:numtide/treefmt-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    nixpkgs-hyprland = {
-      url = "github:nixos/nixpkgs/8ce4ef6cb6f871616146b9fe26d2a5ae594e94fe";
-    };
-    nixpkgs-firefox = {
-      url = "github:nixos/nixpkgs/21a67dc470149f337cecafbe965d8d252a390518";
-    };
-    wavefox = {
-      url = "github:QNetITQ/WaveFox/0.6.155";
-      flake = false;
-    };
-    apple-fonts = {
-      url = "github:Lyndeno/apple-fonts.nix/3861e2249cb244bfbc7cfab2303c152cf5f9d9e9";
+      type = "github";
+      owner = "nix-community";
+      repo = "nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixos-hardware = {
-      url = "github:nixos/nixos-hardware/d40fd26f323c898b0c195d41aa5efadd85f57832";
+      type = "github";
+      owner = "nixos";
+      repo = "nixos-hardware";
+      rev = "d40fd26f323c898b0c195d41aa5efadd85f57832";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+    nixpkgs = {
+      type = "github";
+      owner = "nixos";
+      repo = "nixpkgs";
+      ref = "nixos-26.05";
+    };
+    nixpkgs-darwin = {
+      type = "github";
+      owner = "nixos";
+      repo = "nixpkgs";
+      ref = "nixpkgs-26.05-darwin";
+    };
+    nixpkgs-firefox = {
+      type = "github";
+      owner = "nixos";
+      repo = "nixpkgs";
+      rev = "21a67dc470149f337cecafbe965d8d252a390518";
+    };
+    nixpkgs-hyprland = {
+      type = "github";
+      owner = "nixos";
+      repo = "nixpkgs";
+      rev = "8ce4ef6cb6f871616146b9fe26d2a5ae594e94fe";
+    };
+    nixpkgs-unstable = {
+      type = "github";
+      owner = "nixos";
+      repo = "nixpkgs";
+      ref = "nixos-unstable";
+    };
+    treefmt-nix = {
+      type = "github";
+      owner = "numtide";
+      repo = "treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    wavefox = {
+      type = "github";
+      owner = "QNetITQ";
+      repo = "WaveFox";
+      ref = "0.6.155";
+      flake = false;
     };
   };
 
@@ -59,12 +98,39 @@
     inputs:
     inputs.flake-parts.lib.mkFlake { inherit inputs; } (
       { lib, mkHost, ... }:
-      {
+      let
         systems = [
           "aarch64-darwin"
           "aarch64-linux"
           "x86_64-linux"
         ];
+        nixosHosts = [
+          "home"
+          "katana"
+          "media"
+          "pi"
+        ];
+        darwinHosts = [
+          "macbook"
+        ];
+        packages = [
+          "ai-usage"
+          "ata-devs"
+          "battery"
+          "find-service"
+          "git-commitu"
+          "git-open-branch"
+          "htop-vim-navigation"
+          "pubip"
+          "wallpaper-autopause"
+          "wallpaper-randomize"
+          "wallpaper-select"
+          "wifi-connect"
+          "zsh-claude-command"
+        ];
+      in
+      {
+        inherit systems;
 
         imports = [
           ./flake/checks.nix
@@ -75,34 +141,15 @@
         ];
 
         flake = {
-          nixosConfigurations = lib.genAttrs [
-            "home"
-            "katana"
-            "media"
-            "pi"
-          ] mkHost.nixos;
-          darwinConfigurations = lib.genAttrs [ "macbook" ] mkHost.darwin;
+          nixosConfigurations = lib.genAttrs nixosHosts mkHost.nixos;
+          darwinConfigurations = lib.genAttrs darwinHosts mkHost.darwin;
         };
 
         perSystem =
           { pkgs, ... }:
           {
             packages = lib.filterAttrs (_: lib.meta.availableOn pkgs.stdenv.hostPlatform) (
-              lib.genAttrs [
-                "ai-usage"
-                "ata-devs"
-                "battery"
-                "find-service"
-                "git-commitu"
-                "git-open-branch"
-                "htop-vim-navigation"
-                "pubip"
-                "wallpaper-autopause"
-                "wallpaper-randomize"
-                "wallpaper-select"
-                "wifi-connect"
-                "zsh-claude-command"
-              ] (name: pkgs.${name})
+              lib.getAttrs packages pkgs
             );
           };
       }
