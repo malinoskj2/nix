@@ -22,6 +22,7 @@
     fira-mono
     firefox-bin
     git
+    btop
     htop-vim-navigation
     jetbrains.datagrip
     lato

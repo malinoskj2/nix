@@ -1,11 +1,12 @@
 { pkgs, ... }:
 {
   environment.systemPackages = with pkgs; [
+    btop
     htop-vim-navigation
 
     fd
     iperf
     ripgrep
-    speedtest-cli
+    ookla-speedtest
   ];
 }
