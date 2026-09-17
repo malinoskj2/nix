@@ -27,7 +27,7 @@ For a new machine:
    `<host>`.
 2. Save the output of `nixos-generate-config --show-hardware-config` next to it
    as `hardware-configuration.nix`.
-3. Add the host to the list in [`flake/hosts.nix`](../flake/hosts.nix).
+3. Add the host to the list in [`flake.nix`](../flake.nix).
 4. If jesse logs in to it, import
    [`hosts/common/users/jesse`](../hosts/common/users/jesse).
 5. If it gets Home Manager, also import

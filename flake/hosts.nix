@@ -1,7 +1,7 @@
-# Builds hosts/<name>/configuration.nix with the platform's nixpkgs arguments and flake revision.
+# Provides mkHost.nixos and mkHost.darwin, which build hosts/<name>/configuration.nix with the
+# platform's nixpkgs arguments and flake revision. flake.nix lists the hosts.
 {
   inputs,
-  lib,
   nixpkgsArgs,
   self,
   ...
@@ -20,26 +20,17 @@ let
         ../hosts/${name}/configuration.nix
       ];
     };
-
-  mkNixos = mkHost {
-    builder = inputs.nixpkgs.lib.nixosSystem;
-    platform = "linux";
-  };
-
-  mkDarwin = mkHost {
-    builder = inputs.nix-darwin.lib.darwinSystem;
-    platform = "darwin";
-  };
 in
 {
-  flake = {
-    nixosConfigurations = lib.genAttrs [
-      "home"
-      "katana"
-      "media"
-      "pi"
-    ] mkNixos;
+  _module.args.mkHost = {
+    nixos = mkHost {
+      builder = inputs.nixpkgs.lib.nixosSystem;
+      platform = "linux";
+    };
 
-    darwinConfigurations = lib.genAttrs [ "macbook" ] mkDarwin;
+    darwin = mkHost {
+      builder = inputs.nix-darwin.lib.darwinSystem;
+      platform = "darwin";
+    };
   };
 }

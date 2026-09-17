@@ -13,17 +13,17 @@ This flake builds four NixOS hosts and one nix-darwin host:
 
 ### Flake
 
-The flake uses flake-parts. `flake.nix` holds only inputs and imports the
-single-concern modules in `flake/`:
+The flake uses flake-parts. `flake.nix` holds the inputs, the host list and
+the exported package list, and imports the single-concern modules in `flake/`:
 
 - `nixpkgs.nix`: each platform's nixpkgs arguments (unfree and the overlay
   list), used by both the hosts and `perSystem` pkgs, and the exported
   overlays.
-- `hosts.nix`: the host list, each built with its platform's nixpkgs arguments
-  and the configuration revision.
-- `packages.nix`: the local packages, taken from the overlaid pkgs.
+- `hosts.nix`: `mkHost.nixos` and `mkHost.darwin`, which build a host with its
+  platform's nixpkgs arguments and the configuration revision.
 - `checks.nix`: `host-<name>` for each host on its system, `package-<name>` for
-  the local packages those hosts install directly, and `devshell`.
+  the local packages those hosts install directly, and `devshell`. Evaluation
+  fails if a package in `pkgs/` is missing from `flake.nix`'s `packages`.
 - `formatting.nix`: treefmt-nix.
 - `devshell.nix`: treefmt, nh, nixd, nvd and the formatters.
 
@@ -62,9 +62,9 @@ Hyprland and Noctalia desktop, imported only by the `home` profile.
 
 ### Packages, overlays and patches
 
-`pkgs/default.nix` is the single list of local packages
-(`pkgs/<name>/package.nix`), exposed by the `additions` overlay as
-`pkgs.<name>` and as `perSystem.packages`. Its `callPackage` supplies
+Each `pkgs/<name>/package.nix` is a local package. `pkgs/default.nix` picks up
+every directory, and the `additions` overlay exposes them as `pkgs.<name>`. A
+new package also goes in the `packages` list in `flake.nix`. Its `callPackage` supplies
 claude-code, codex and noctalia from `pkgs.unstable`. Install local packages by
 name. Linux-only packages set `meta.platforms`. `git-open-branch` installs the
 `git-open` command.
