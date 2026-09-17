@@ -16,7 +16,7 @@
     imagemagick
     ktx-tools
     mediainfo
-    pavucontrol
+    pwvucontrol
     vulkan-tools
     wl-clipboard
   ];

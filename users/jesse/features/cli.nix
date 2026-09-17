@@ -1,5 +1,10 @@
 { pkgs, ... }:
 {
+  programs.tealdeer = {
+    enable = true;
+    settings.updates.auto_update = true;
+  };
+
   home.packages = with pkgs; [
     ai-usage
     git-commitu
@@ -19,7 +24,6 @@
     p7zip
     pandoc
     ripgrep
-    tldr
     tokei
     tree
     unrar
