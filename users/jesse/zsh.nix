@@ -6,27 +6,22 @@
 }:
 let
   inherit (pkgs.stdenv.hostPlatform) isLinux;
-
   zcompdump = "${config.xdg.cacheHome}/zsh/zcompdump";
 in
 {
   programs = {
     bat.enable = true;
-
     zoxide = {
       enable = true;
-
       options = [
         "--cmd"
         "j"
       ];
     };
-
     zsh = {
       enable = true;
       autosuggestion.enable = true;
       defaultKeymap = "emacs";
-
       history = {
         path = "/tmp/.zsh_history";
         size = 1000;
@@ -45,7 +40,6 @@ in
         "LOCAL_TRAPS"
         "BSD_ECHO"
       ];
-
       plugins = [
         {
           name = "zsh-claude-command";
@@ -53,7 +47,6 @@ in
           file = "share/zsh-claude-command/zsh-claude-command.plugin.zsh";
         }
       ];
-
       shellAliases = {
         cargorunbt = "RUST_BACKTRACE=1 cargo run";
         cargotestbt = "RUST_BACKTRACE=1 cargo test -- --nocapture";
@@ -85,7 +78,6 @@ in
           compinit -d ${zcompdump}
         fi
       '';
-
       initContent = ''
         zstyle ':completion:*' matcher-list "" 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*' 'l:|=* r:|=*'
 

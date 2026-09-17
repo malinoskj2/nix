@@ -5,7 +5,6 @@
       enable32Bit = true;
       extraPackages = [ pkgs.nvidia-vaapi-driver ];
     };
-
     nvidia = {
       package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
         version = "595.99.02";
@@ -15,7 +14,6 @@
         settingsSha256 = "sha256-GYCcnxfKPrTCrsmd25sMyzfC5cqJQJx0c31haooyTYM=";
         persistencedSha256 = "sha256-VyKtF/HdHPQrHHK6opSO69M72LmnGZtauuchj9uuje8=";
       };
-
       modesetting.enable = true;
       nvidiaSettings = false;
       open = true;

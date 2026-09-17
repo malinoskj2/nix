@@ -7,11 +7,9 @@
 let
   inherit (config.palette) glass mocha withAlpha;
   inherit (pkgs.stdenv.hostPlatform) isDarwin;
-
   darkTheme = "Catppuccin Mocha";
   transparent = "#00000000";
   noParameterHints.inlay_hints.show_parameter_hints = false;
-
   ollamaModel = {
     name = "devstral-small-2:24b";
     display_name = "Devstral Small 2 24B";
@@ -29,18 +27,15 @@ in
   programs.zed-editor = {
     enable = true;
     package = pkgs.unstable.zed-editor;
-
     extensions = [
       "catppuccin"
       "catppuccin-icons"
       "nix"
     ];
-
     extraPackages = with pkgs; [
       nil
       nixfmt
     ];
-
     userSettings = {
       agent_servers = {
         claude-acp = {
@@ -53,7 +48,6 @@ in
             effort = "max";
           };
         };
-
         codex-acp = {
           type = "registry";
         }
@@ -71,7 +65,6 @@ in
       project_panel.dock = "left";
 
       icon_theme = darkTheme;
-
       theme = {
         mode = "dark";
         light = "Catppuccin Latte";
@@ -126,13 +119,11 @@ in
 
       lsp = {
         nil.initialization_options.formatting.command = [ "nixfmt" ];
-
         rust-analyzer = {
           # Zed's own download is dynamically linked and may not match the installed rustc.
           binary.path = lib.getExe pkgs.rust-analyzer;
           initialization_options.check.command = "clippy";
         };
-
         typescript-language-server.settings.completions.completeFunctionCalls = true;
       };
 
@@ -140,18 +131,14 @@ in
         JavaScript = noParameterHints // {
           language_servers = typescriptServers;
         };
-
         Nix.language_servers = [
           "nil"
           "..."
         ];
-
         Rust = noParameterHints // {
           tab_size = 4;
         };
-
         TSX.language_servers = typescriptServers;
-
         TypeScript = noParameterHints // {
           language_servers = typescriptServers;
         };
@@ -161,19 +148,16 @@ in
       agent = {
         dock = "right";
         tool_permissions.default = "allow";
-
         default_model = {
           provider = "ollama";
           model = ollamaModel.name;
         };
       };
-
       language_models.ollama = {
         api_url = "http://localhost:11434";
         available_models = [ ollamaModel ];
       };
     };
-
     userKeymaps = [
       { bindings."shift shift" = "file_finder::Toggle"; }
     ];

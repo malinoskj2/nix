@@ -3,7 +3,6 @@
   services.samba = {
     enable = true;
     openFirewall = true;
-
     settings = {
       global = {
         "hosts allow" = "192.168.1. 127.0.0.1 localhost";
@@ -12,7 +11,6 @@
         "netbios name" = "smbnix";
         "server string" = "smbnix";
       };
-
       public = {
         "create mask" = "0644";
         "force user" = "pi";

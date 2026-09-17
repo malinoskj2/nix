@@ -11,14 +11,11 @@ let
     opacity
     rgb
     ;
-
   cfg = config.programs.firefox;
-
   locked = value: {
     Status = "locked";
     Value = value;
   };
-
   rgba =
     color: percent: "rgba(${lib.concatMapStringsSep ", " toString (rgb color)}, ${opacity percent})";
 in
@@ -29,13 +26,11 @@ in
   programs.firefox = {
     enable = true;
     configPath = "${config.xdg.configHome}/mozilla/firefox";
-
     policies = {
       ExtensionSettings."FirefoxColor@mozilla.com" = {
         install_url = "https://addons.mozilla.org/firefox/downloads/latest/firefox-color/latest.xpi";
         installation_mode = "force_installed";
       };
-
       FirefoxHome = {
         Locked = true;
         SponsoredStories = false;
@@ -50,10 +45,8 @@ in
         "media.hardware-video-decoding.force-enabled" = true;
       };
     };
-
     profiles.default = {
       path = "oenjespe.default";
-
       settings = {
         "WaveFox.HorizontalTabs.AttachedTabs" = true;
         "toolkit.legacyUserProfileCustomizations.stylesheets" = true;

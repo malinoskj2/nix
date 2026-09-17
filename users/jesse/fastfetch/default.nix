@@ -7,12 +7,10 @@
 let
   inherit (config.palette) mocha rgb;
   inherit (pkgs.stdenv.hostPlatform) isLinux;
-
   mkModule = type: color: {
     inherit type;
     keyColor = "#${color}";
   };
-
   onLinux = lib.optional isLinux;
   swatch = color: "{#48;2;${lib.concatMapStringsSep ";" toString (rgb color)}}   ";
 
@@ -20,7 +18,6 @@ let
   # Two identical rows make each swatch a block rather than a thin stripe.
   swatchRow = {
     type = "custom";
-
     format =
       lib.concatMapStrings swatch [
         mocha.red
@@ -39,18 +36,15 @@ in
 {
   programs.fastfetch = {
     enable = true;
-
     settings = {
       display = {
         separator = "  ";
-
         color = {
           title = "#${mocha.mauve}";
           output = "#${mocha.text}";
           separator = "#${mocha.overlay0}";
         };
       };
-
       modules = lib.flatten [
         "title"
         "separator"
@@ -90,7 +84,6 @@ in
         type = "file";
         source = ./nixos.txt;
         padding.right = 2;
-
         color = {
           "1" = "#${mocha.mauve}";
           "2" = "#${mocha.pink}";

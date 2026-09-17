@@ -9,12 +9,10 @@ in
       enable = true;
       flags = [ "--all" ];
     };
-
     daemon.settings = {
       live-restore = true;
       log-driver = "json-file";
       no-new-privileges = true;
-
       log-opts = {
         max-file = "3";
         max-size = "10m";
@@ -29,22 +27,18 @@ in
       description = "Update media docker stack (compose pull + up -d)";
       requires = [ "docker.service" ];
       wants = [ "network-online.target" ];
-
       after = [
         "docker.service"
         "network-online.target"
       ];
-
       path = [ pkgs.docker-compose ];
 
       # systemd gives root units no HOME, and Compose reads registry auth from ~/.docker.
       environment.HOME = "/root";
-
       script = ''
         docker-compose pull
         docker-compose up -d
       '';
-
       serviceConfig = {
         Type = "oneshot";
         WorkingDirectory = composeDir;
@@ -54,7 +48,6 @@ in
     timers.docker-media-update = {
       description = "Weekly media docker stack update";
       wantedBy = [ "timers.target" ];
-
       timerConfig = {
         OnCalendar = "Sun *-*-* 04:00:00";
         Persistent = true;

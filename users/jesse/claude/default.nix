@@ -1,7 +1,6 @@
 { lib, pkgs, ... }:
 let
   inherit (pkgs.stdenv.hostPlatform) isDarwin;
-
   mergeSettings = ''
     .[0] as $live
     | .[1] as $nix
@@ -9,7 +8,6 @@ let
     | reduce ("allow", "deny") as $list (.;
         .permissions[$list] = (($live.permissions[$list] // []) as $kept | $kept + ($nix.permissions[$list] - $kept)))
   '';
-
   settingsOverlay = pkgs.writeText "claude-settings-overlay.json" (
     builtins.toJSON {
       # The order reaches settings.json, so this list stays unsorted.
@@ -48,7 +46,6 @@ let
         source = "github";
         repo = "JuliusBrussee/caveman";
       };
-
       enabledPlugins."caveman@caveman" = true;
       skipDangerousModePermissionPrompt = true;
       theme = "dark";
@@ -59,7 +56,6 @@ in
   config = lib.mkMerge [
     {
       home.sessionVariables.ANTHROPIC_MODEL = "claude-opus-5";
-
       programs.claude-code = {
         enable = true;
         package = pkgs.unstable.claude-code;

@@ -3,17 +3,14 @@ let
   mkDisk = uuid: {
     device = "/dev/disk/by-uuid/${uuid}";
     fsType = "ext4";
-
     options = [
       "noatime"
       "nofail"
     ];
   };
-
   mkBind = device: {
     inherit device;
     fsType = "auto";
-
     options = [
       "bind"
       "nofail"

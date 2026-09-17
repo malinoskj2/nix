@@ -11,13 +11,11 @@
       After = [ "graphical-session.target" ];
       PartOf = [ "graphical-session.target" ];
     };
-
     Service = {
       ExecStart = lib.getExe pkgs.wallpaper-autopause;
       Restart = "on-failure";
       RestartSec = 2;
     };
-
     Install.WantedBy = [ "graphical-session.target" ];
   };
 }

@@ -1,7 +1,6 @@
 {
   services.openssh = {
     enable = true;
-
     settings = {
       KbdInteractiveAuthentication = false;
       LoginGraceTime = 20;

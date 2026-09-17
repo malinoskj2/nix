@@ -12,7 +12,6 @@ in
     isNormalUser = true;
     shell = pkgs.zsh;
     openssh.authorizedKeys.keys = lib.splitString "\n" (lib.fileContents ./ssh.pub);
-
     extraGroups = [
       "wheel"
     ]

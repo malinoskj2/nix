@@ -2,10 +2,8 @@
 {
   programs.starship = {
     enable = true;
-
     settings = {
       add_newline = false;
-
       format = lib.concatMapStrings (module: "$" + module) (
         [
           "username"
@@ -46,14 +44,12 @@
         style_user = "bold";
         show_always = true;
       };
-
       git_branch = {
         format = "[$symbol$branch]($style) ";
         symbol = "➜ ";
         truncation_length = 7;
         truncation_symbol = "";
       };
-
       git_status = {
         style = "bold red";
         untracked = "!";
@@ -64,7 +60,6 @@
         behind = "";
         diverged = "";
       };
-
       character = {
         success_symbol = "[➜](bold green)";
         error_symbol = "[➜](bold red)";

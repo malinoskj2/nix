@@ -13,13 +13,11 @@ let
     ]
     ++ extraOverlays;
   };
-
   nixpkgsArgs = {
     linux = mkNixpkgsArgs [
       self.overlays.pins
       inputs.apple-fonts.overlays.default
     ];
-
     darwin = mkNixpkgsArgs [ ];
   };
 in
