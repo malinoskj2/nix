@@ -4,6 +4,9 @@
   ...
 }:
 
+let
+  scripts = import ../../derivations/scripts.nix { inherit pkgs; };
+in
 {
   imports = [
     ./firefox.nix
@@ -13,7 +16,6 @@
     ./mpv.nix
     ./starship.nix
     ./cursor.nix
-    ../../scripts
     ./fastfetch.nix
     ./htop.nix
     ./zed.nix
@@ -38,59 +40,61 @@
     maxCacheTtl = 50400;
   };
 
-  home.packages = with pkgs; [
-    gnupg
-    ripgrep
-    fd
-    eza
-    tldr
-    tokei
-    gitleaks
-    unstable.jetbrains.datagrip
-    ffmpeg
-    pavucontrol
-    imagemagick
-    file
-    gnumake
-    envsubst
-    killall
-    zip
-    tree
-    nixfmt
-    nil
-    rustc
-    cargo
-    clippy
-    rustfmt
-    rust-analyzer
-    clang
-    mold
-    pkg-config
-    lldb
-    bacon
-    cargo-nextest
-    cargo-audit
-    mediainfo
-    bc
-    pandoc
-    dig
-    whois
-    jq
-    google-chrome
-    chromium
-    nssTools
-    nodejs
-    nmap
-    wl-clipboard
-    p7zip
-    unrar
-    glib
-    openzone-cursors
-    neovim
-    unstable.codex
-    ktx-tools
-    python3
-    ghidra
-    vulkan-tools
-  ];
+  home.packages =
+    builtins.attrValues scripts
+    ++ (with pkgs; [
+      gnupg
+      ripgrep
+      fd
+      eza
+      tldr
+      tokei
+      gitleaks
+      unstable.jetbrains.datagrip
+      ffmpeg
+      pavucontrol
+      imagemagick
+      file
+      gnumake
+      envsubst
+      killall
+      zip
+      tree
+      nixfmt
+      nil
+      rustc
+      cargo
+      clippy
+      rustfmt
+      rust-analyzer
+      clang
+      mold
+      pkg-config
+      lldb
+      bacon
+      cargo-nextest
+      cargo-audit
+      mediainfo
+      bc
+      pandoc
+      dig
+      whois
+      jq
+      google-chrome
+      chromium
+      nssTools
+      nodejs
+      nmap
+      wl-clipboard
+      p7zip
+      unrar
+      glib
+      openzone-cursors
+      neovim
+      unstable.codex
+      ktx-tools
+      python3
+      ghidra
+      vulkan-tools
+    ]);
 }

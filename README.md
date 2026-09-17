@@ -52,7 +52,7 @@ and an Apple-silicon MacBook — declared end to end, dotfiles included.
 │   └── desktop-home/         Hyprland (Lua) + Noctalia shell & plugins
 ├── overlays/default.nix      unstable · pins · modifications · htopVimNavigation
 ├── patches/<package>/        out-of-tree patches applied by the overlays
-└── scripts/                  shell scripts packaged with writeShellApplication
+└── derivations/              one package directory per script or plugin
 ```
 
 ---

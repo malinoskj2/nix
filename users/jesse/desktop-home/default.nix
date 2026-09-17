@@ -1,15 +1,15 @@
 {
-  jesseScripts,
   pkgs,
   ...
 }:
 
 let
+  scripts = import ../../../derivations/scripts.nix { inherit pkgs; };
   noctalia = pkgs.unstable.noctalia;
   hyprlandConfig = pkgs.replaceVars ./hyprland/hyprland.lua {
     hyprbars = "${pkgs.hyprlandPlugins.hyprbars}/lib/libhyprbars.so";
     hyprfocus = "${pkgs.hyprlandPlugins.hyprfocus}/lib/libhyprfocus.so";
-    inherit (jesseScripts) wallpaperRandomize;
+    inherit (scripts) wallpaperRandomize;
     noctalia = "${noctalia}/bin/noctalia";
   };
 in
@@ -51,7 +51,7 @@ in
       PartOf = [ "graphical-session.target" ];
     };
     Service = {
-      ExecStart = "${jesseScripts.wallpaperAutopause}/bin/wallpaper-autopause";
+      ExecStart = "${scripts.wallpaperAutopause}/bin/wallpaper-autopause";
       Restart = "on-failure";
       RestartSec = 2;
     };
