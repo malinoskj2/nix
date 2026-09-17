@@ -1,17 +1,16 @@
-# pi: Raspberry Pi 4 (aarch64) sharing a media disk over Samba, plus Docker.
+# pi: Raspberry Pi 4, LAN Samba share and Docker host.
 { inputs, pkgs, ... }:
-
 {
   imports = [
     inputs.nixos-hardware.nixosModules.raspberry-pi-4
-    ./hardware.nix
 
     ../common/global.nix
     ../common/optional/docker.nix
-    ../common/optional/server-tools.nix
-    # nh's flake path is jesse's checkout, which pi doesn't have; kept for now.
+    # Only nh's store cleanup applies here, since pi has no checkout at nh's flake path.
     ../common/optional/nh.nix
+    ../common/optional/server-tools.nix
 
+    ./hardware.nix
     ./cgroups.nix
     ./samba.nix
   ];
@@ -22,20 +21,21 @@
     nameservers = [ "1.1.1.1" ];
   };
 
-  services.openssh.enable = true;
-
-  # No timezone yet (UTC); global.nix would otherwise set one.
-  time.timeZone = null;
-
   boot.tmp.useTmpfs = true;
+
+  # Overrides global.nix's default, leaving the clock on UTC.
+  time.timeZone = null;
 
   users.users.pi = {
     isNormalUser = true;
+
     extraGroups = [
-      "wheel"
       "docker"
+      "wheel"
     ];
   };
+
+  services.openssh.enable = true;
 
   environment.systemPackages = with pkgs; [
     hdparm

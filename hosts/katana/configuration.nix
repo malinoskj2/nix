@@ -1,43 +1,36 @@
-# katana: ThinkPad laptop running Hyprland.
+# katana: ThinkPad X230 laptop, Hyprland workstation.
 { pkgs, ... }:
-
 {
   imports = [
-    ./hardware-configuration.nix
-
     ../common/global.nix
-    ../common/users/jesse
-    ../common/users/jesse/workstation.nix
     ../common/optional/fonts.nix
     ../common/optional/hyprland.nix
     ../common/optional/nh.nix
     ../common/optional/pipewire.nix
     ../common/optional/systemd-boot.nix
     ../common/optional/workstation.nix
+    ../common/users/jesse
+    ../common/users/jesse/interactive.nix
+
+    ./hardware-configuration.nix
   ];
 
-  networking = {
-    hostName = "katana";
-
-    # No declarative interfaces or wireless networks on purpose. The NixOS
-    # default (networking.useDHCP) already leases on every interface, and wifi
-    # is joined imperatively with `wifi-connect`.
-  };
+  networking.hostName = "katana";
 
   hardware.graphics.extraPackages = with pkgs; [
     libva-vdpau-driver
     libvdpau-va-gl
   ];
 
+  fonts.packages = [ pkgs.nerd-fonts.droid-sans-mono ];
+
   environment.sessionVariables = {
-    SDL_VIDEODRIVER = "wayland";
     CLUTTER_BACKEND = "wayland";
+    GTK_USE_PORTAL = "1";
+    SDL_VIDEODRIVER = "wayland";
     XDG_CURRENT_DESKTOP = "Hyprland";
     XDG_SESSION_DESKTOP = "Hyprland";
-    GTK_USE_PORTAL = "1";
   };
-
-  fonts.packages = [ pkgs.nerd-fonts.droid-sans-mono ];
 
   environment.systemPackages = [ pkgs.read-edid ];
 

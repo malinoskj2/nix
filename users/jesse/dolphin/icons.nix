@@ -1,16 +1,16 @@
+# Papirus-Dark with its mimetype icons recolored to the Catppuccin palette, under its own name.
 {
-  runCommand,
-  python3,
-  writeText,
-  papirus,
-  palette,
   name,
+  palette,
+  papirus,
+  python3,
+  runCommand,
+  writeText,
 }:
 
 let
-  colors = writeText "catppuccin-palette.json" (builtins.toJSON { inherit (palette) mocha latte; });
+  colors = writeText "catppuccin-palette.json" (builtins.toJSON { inherit (palette) latte mocha; });
 in
-
 runCommand name { nativeBuildInputs = [ python3 ]; } ''
   mkdir -p $out/share/icons/${name}
   python3 ${./papirus-catppuccin.py} ${papirus}/share/icons/Papirus-Dark $out/share/icons/${name} ${name} ${colors}

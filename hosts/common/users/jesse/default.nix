@@ -1,4 +1,4 @@
-# jesse's account. Hosts add groups that only make sense there.
+# jesse's account and SSH key, shared by every host he logs in to.
 {
   config,
   lib,
@@ -12,6 +12,8 @@ in
   users.users.jesse = {
     isNormalUser = true;
     shell = pkgs.zsh;
+    openssh.authorizedKeys.keys = lib.splitString "\n" (lib.fileContents ./ssh.pub);
+
     extraGroups = [
       "wheel"
     ]
@@ -19,7 +21,6 @@ in
       "docker"
       "networkmanager"
     ];
-    openssh.authorizedKeys.keys = lib.splitString "\n" (lib.fileContents ./ssh.pub);
   };
 
   programs.zsh.enable = true;

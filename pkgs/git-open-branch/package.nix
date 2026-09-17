@@ -8,6 +8,7 @@
 }:
 
 writeShellApplication {
+  # The attribute is git-open-branch because nixpkgs already has an unrelated git-open package.
   name = "git-open";
   runtimeInputs = [
     git

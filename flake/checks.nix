@@ -1,4 +1,5 @@
-{ self, lib, ... }:
+# Builds this system's hosts, the local packages they install directly and the devshell.
+{ lib, self, ... }:
 {
   perSystem =
     { self', system, ... }:
@@ -7,22 +8,28 @@
         self.nixosConfigurations // self.darwinConfigurations
       );
 
-      # What hosts on this system install directly, system-wide or through Home Manager.
-      installed = lib.concatMap (
+      hostPackages =
         host:
-        host.config.environment.systemPackages
-        ++ lib.concatMap (user: user.home.packages) (lib.attrValues (host.config.home-manager.users or { }))
-      ) (lib.attrValues hosts);
-      isInstalled = package: lib.any (p: (p.outPath or null) == package.outPath) installed;
+        let
+          users = lib.attrValues (host.config.home-manager.users or { });
+        in
+        host.config.environment.systemPackages ++ lib.concatMap (user: user.home.packages) users;
+
+      installedPaths = lib.catAttrs "outPath" (lib.concatMap hostPackages (lib.attrValues hosts));
+
+      installedPackages = lib.filterAttrs (
+        _: package: lib.elem package.outPath installedPaths
+      ) self'.packages;
+
+      hostChecks = lib.mapAttrs' (
+        name: host: lib.nameValuePair "host-${name}" host.config.system.build.toplevel
+      ) hosts;
+
+      packageChecks = lib.mapAttrs' (
+        name: package: lib.nameValuePair "package-${name}" package
+      ) installedPackages;
     in
     {
-      checks =
-        lib.mapAttrs' (name: host: lib.nameValuePair "host-${name}" host.config.system.build.toplevel) hosts
-        // lib.mapAttrs' (name: lib.nameValuePair "package-${name}") (
-          lib.filterAttrs (_: isInstalled) self'.packages
-        )
-        // {
-          devshell = self'.devShells.default;
-        };
+      checks = hostChecks // packageChecks // { devshell = self'.devShells.default; };
     };
 }

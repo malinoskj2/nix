@@ -1,4 +1,4 @@
-# Machine administration: hardware and network helpers.
+# Machine administration: hardware, service, process and network tools.
 { pkgs, ... }:
 {
   imports = [ ../htop.nix ];
@@ -8,7 +8,8 @@
     battery
     find-service
     wifi-connect
-    killall
+
     dig
+    killall
   ];
 }

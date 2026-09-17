@@ -27,7 +27,7 @@ writeShellApplication {
   ];
   text = builtins.readFile ./wifi-connect.sh;
   meta = {
-    description = "Scan for and join a wifi network imperatively";
+    description = "Scan for and join a Wi-Fi network interactively";
     platforms = lib.platforms.linux;
   };
 }

@@ -1,12 +1,11 @@
-# Home Manager settings for NixOS and nix-darwin hosts; each host also imports
-# its platform's Home Manager module.
+# Home Manager settings shared by NixOS and nix-darwin. Importers add the platform's module.
 { inputs, ... }:
 {
   home-manager = {
+    backupFileExtension = "hm-bak";
+    extraSpecialArgs = { inherit inputs; };
+    sharedModules = [ inputs.catppuccin.homeModules.catppuccin ];
     useGlobalPkgs = true;
     useUserPackages = true;
-    extraSpecialArgs = { inherit inputs; };
-    backupFileExtension = "hm-bak";
-    sharedModules = [ inputs.catppuccin.homeModules.catppuccin ];
   };
 }

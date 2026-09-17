@@ -1,13 +1,16 @@
 { lib, pkgs, ... }:
-
 let
+  inherit (pkgs.stdenv.hostPlatform) isDarwin;
+
+  # Nix strings have no escape for ESC, but JSON's \u escape does.
   esc = builtins.fromJSON ''"\u001B"'';
 
-  # Pre-v1 Catppuccin terminal colours. Alacritty was never moved to the v1 Mocha palette in
-  # palette.nix, and doing so would visibly change the terminal.
+  # Pre-v1 Catppuccin terminal colors. Mocha would visibly change the terminal,
+  # so these stay independent of users/jesse/global/palette.nix.
   legacyColors = rec {
     background = "0x1E1E28";
     foreground = "0xD7DAE0";
+
     ansi = {
       black = "0x6E6C7C";
       red = "0xE28C8C";
@@ -30,12 +33,12 @@ in
 
         indexed_colors = [
           {
-            color = "0xECBFBD";
             index = 16;
+            color = "0xECBFBD";
           }
           {
-            color = "0x3E4058";
             index = 17;
+            color = "0x3E4058";
           }
         ];
 
@@ -56,6 +59,7 @@ in
 
       font = {
         size = 10.0;
+
         normal = {
           family = "FiraCode Nerd Font";
           style = "Medium";
@@ -71,6 +75,7 @@ in
           key = "F2";
           action = "ScrollPageDown";
         }
+
         # Pass Shift+PageUp/PageDown to the application instead of scrolling.
         {
           key = "PageUp";
@@ -82,6 +87,7 @@ in
           mods = "Shift";
           chars = "${esc}[6;2~";
         }
+
         {
           key = "Enter";
           mods = "Shift";
@@ -89,7 +95,7 @@ in
         }
       ]
       # Alacritty's macOS defaults use Command for these.
-      ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+      ++ lib.optionals isDarwin [
         {
           key = "V";
           mods = "Control|Shift";
@@ -124,10 +130,12 @@ in
 
       window = {
         dynamic_padding = true;
+
         dimensions = {
           columns = 80;
           lines = 40;
         };
+
         padding = {
           x = 13;
           y = 13;

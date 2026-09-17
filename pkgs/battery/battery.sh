@@ -1,3 +1,7 @@
 #!/usr/bin/env bash
-cat /sys/class/power_supply/BAT0/capacity
-cat /sys/class/power_supply/BAT0/status
+# Print the laptop battery's charge percentage and status, one per line.
+
+readonly supply=/sys/class/power_supply/BAT0
+
+cat "$supply/capacity"
+cat "$supply/status"

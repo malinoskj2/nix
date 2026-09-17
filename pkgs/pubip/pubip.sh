@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Outputs current public ip
+# Print this network's public IP address as seen by Amazon's checkip service.
 
-SOURCE='checkip.amazonaws.com'
-
-curl "$SOURCE"
+curl checkip.amazonaws.com

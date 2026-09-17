@@ -2,18 +2,20 @@
 {
   imports = [
     ../global
+
     ../features/cli.nix
     ../features/dev.nix
     ../features/rust
   ];
 
   home.packages = with pkgs; [
-    # Stable DataGrip, without the glass header; Linux uses features/datagrip.
-    jetbrains.datagrip
+    # This profile stays conservative, so programs with shared modules install as plain packages.
     firefox-bin
     git
     htop-vim-navigation
+    jetbrains.datagrip
     mpv
+
     unzip
     vim
     wget

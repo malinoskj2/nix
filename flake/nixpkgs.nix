@@ -1,6 +1,5 @@
-# How nixpkgs is instantiated. Hosts get these arguments through their nixpkgs
-# options (flake/hosts.nix) and perSystem pkgs through `import`, so packages,
-# checks and the devshell build exactly what the hosts build.
+# Exports the overlays and defines each platform's nixpkgs arguments, which both the hosts
+# and perSystem's pkgs use, so per-system outputs build what the hosts install.
 {
   inputs,
   lib,
@@ -8,24 +7,23 @@
   ...
 }:
 let
+  mkNixpkgsArgs = extraOverlays: {
+    config.allowUnfree = true;
+    overlays = [
+      self.overlays.additions
+      self.overlays.unstable
+    ]
+    ++ extraOverlays;
+  };
+
   nixpkgsArgs = {
-    linux = {
-      config.allowUnfree = true;
-      overlays = [
-        self.overlays.additions
-        inputs.apple-fonts.overlays.default
-        self.overlays.unstable
-        self.overlays.pins
-      ];
-    };
-    # pins takes Linux-only packages from Linux nixpkgs revisions.
-    darwin = {
-      config.allowUnfree = true;
-      overlays = [
-        self.overlays.additions
-        self.overlays.unstable
-      ];
-    };
+    # Pins and the Apple fonts serve only the Linux desktops; see docs/updating.md.
+    linux = mkNixpkgsArgs [
+      self.overlays.pins
+      inputs.apple-fonts.overlays.default
+    ];
+
+    darwin = mkNixpkgsArgs [ ];
   };
 in
 {

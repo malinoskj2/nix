@@ -1,0 +1,11 @@
+id          = "jesse/hypr-workspaces"
+name        = "Hyprland Workspaces"
+version     = "1.0.0"
+plugin_api  = 24
+author      = "jesse"
+icon        = "layout-grid"
+description = "Workspace pills colored per workspace like the snowflake logo."
+
+[[widget]]
+id    = "workspaces"
+entry = "workspaces.luau"

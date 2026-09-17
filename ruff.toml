@@ -1,1 +1,2 @@
+# Code may reach 120 columns, as in .stylua.toml; comments wrap at 100 by convention, not by ruff.
 line-length = 120

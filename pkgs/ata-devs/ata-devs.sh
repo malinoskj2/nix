@@ -1,37 +1,25 @@
 #!/usr/bin/env bash
-# note: inspired by Peter
-# Copied from https://serverfault.com/questions/244944/linux-ata-errors-translating-to-a-device-name
+# Map the ataN.NN port names in kernel ATA errors to their sd block devices.
 #
-# *UPDATE 1* now we're no longer parsing ls output
-# *UPDATE 2* now we're using an array instead of the <<< operator, which on its
-# part insists on a writable /tmp directory:
-# restricted environments with read-only access often won't allow you that
-
-# save original IFS
-OLDIFS="$IFS"
+# USB disks have no ATA port and are reported as such.
+#
+# Adapted from https://serverfault.com/q/244944.
 
 shopt -s nullglob
-for i in /sys/block/sd*; do
-	readlink "$i" |
-		sed 's^\.\./devices^/sys/devices^ ;
+
+for block in /sys/block/sd*; do
+  readlink "$block" |
+    sed 's^\.\./devices^/sys/devices^ ;
       s^/host[0-9]\{1,2\}/target^ ^ ;
       s^/[0-9]\{1,2\}\(:[0-9]\)\{3\}/block/^ ^' |
-		while IFS=' ' read -r Path HostFull ID; do
+    while IFS=' ' read -r path scsi_target device; do
+      IFS=: read -r host channel id <<<"$scsi_target"
 
-			# shellcheck disable=SC2206 # word-splitting on IFS=: is the point; quoting would defeat it
-			IFS=: h=($HostFull)
-			HostMain=${h[0]}
-			HostMid=${h[1]}
-			HostSub=${h[2]}
-
-			if echo "$Path" | grep -q '/usb[0-9]*/'; then
-				echo "(Device $ID is not an ATA device, but a USB device [e. g. a pen drive])"
-			else
-				echo "$ID: ata$(< "$Path/host$HostMain/scsi_host/host$HostMain/unique_id").$HostMid$HostSub"
-			fi
-
-		done
+      if [[ "$path" =~ /usb[0-9]*/ ]]; then
+        echo "(Device $device is not an ATA device, but a USB device [e. g. a pen drive])"
+      else
+        port_file="$path/host$host/scsi_host/host$host/unique_id"
+        echo "$device: ata$(<"$port_file").$channel$id"
+      fi
+    done
 done
-
-# restore original IFS
-IFS="$OLDIFS"

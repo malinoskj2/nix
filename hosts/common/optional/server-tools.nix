@@ -2,8 +2,9 @@
 { pkgs, ... }:
 {
   environment.systemPackages = with pkgs; [
-    fd
     htop-vim-navigation
+
+    fd
     iperf
     ripgrep
     speedtest-cli

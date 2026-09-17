@@ -6,6 +6,10 @@
       pkgs,
       ...
     }:
+    let
+      # Editors call the formatters directly, and ruff-check and ruff-format share one package.
+      formatters = lib.unique (lib.attrValues config.treefmt.build.programs);
+    in
     {
       devShells.default = pkgs.mkShellNoCC {
         packages = [
@@ -14,8 +18,7 @@
           pkgs.nixd
           pkgs.nvd
         ]
-        # ruff-check and ruff-format share one package.
-        ++ lib.unique (builtins.attrValues config.treefmt.build.programs);
+        ++ formatters;
       };
     };
 }

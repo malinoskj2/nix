@@ -1,38 +1,58 @@
 #!/usr/bin/env bash
-# Give each assigned monitor a random video wallpaper. Run before noctalia
-# starts: the mpvpaper plugin reads assignments.json at boot and keeps that
-# video until the next launch. Avoids repeating a monitor's previous video and,
-# when there are enough videos, showing the same one on two monitors.
-# Also forces slideshow mode off, which is what makes the plugin poll mpv.
+# Give each monitor with a Noctalia video wallpaper a random video from ~/.wallpapers/video.
+#
+# The script runs before Noctalia starts: the mpvpaper plugin reads assignments.json at launch and
+# keeps that video until the next launch. Monitors without an existing assignment are left alone.
+# Slideshow mode is forced off, since only then does the plugin poll mpv.
 
-VIDEO_DIR="$HOME/.wallpapers/video"
-STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/noctalia/mpvpaper"
-STATE_FILE="$STATE_DIR/assignments.json"
+readonly video_dir="$HOME/.wallpapers/video"
+readonly mpvpaper_dir="${XDG_STATE_HOME:-$HOME/.local/state}/noctalia/mpvpaper"
+readonly state_file="$mpvpaper_dir/assignments.json"
 
-mkdir -p "$STATE_DIR"
-echo '{"interval":0}' >"$STATE_DIR/slideshow_override.json"
+# Prints the first entry of videos that is neither the monitor's previous video nor in
+# used_videos. With too few videos, it settles for any but the previous one, then for the first.
+pick_video() {
+  local previous="$1"
+  local video
 
-mapfile -t connectors < <(jq -r '.assignments // {} | keys[]' "$STATE_FILE" 2>/dev/null)
-mapfile -t videos < <(find "$VIDEO_DIR" -maxdepth 1 -type f -regextype egrep -iregex '.*\.(mp4|webm|mkv|mov|gif)' | shuf)
-[ ${#connectors[@]} -gt 0 ] && [ ${#videos[@]} -gt 0 ] || exit 0
-
-declare -A used
-new='{}'
-for c in "${connectors[@]}"; do
-  prev=$(jq -r --arg c "$c" '.assignments[$c]' "$STATE_FILE")
-  pick=
-  for v in "${videos[@]}"; do
-    [ "$v" != "$prev" ] && [ -z "${used[$v]:-}" ] && { pick=$v; break; }
+  for video in "${videos[@]}"; do
+    if [[ "$video" != "$previous" && -z "${used_videos[$video]:-}" ]]; then
+      printf '%s\n' "$video"
+      return
+    fi
   done
-  if [ -z "$pick" ]; then
-    for v in "${videos[@]}"; do
-      [ "$v" != "$prev" ] && { pick=$v; break; }
-    done
-  fi
-  pick=${pick:-${videos[0]}}
-  used[$pick]=1
-  new=$(jq --arg c "$c" --arg v "$pick" '.[$c] = $v' <<<"$new")
+
+  for video in "${videos[@]}"; do
+    if [[ "$video" != "$previous" ]]; then
+      printf '%s\n' "$video"
+      return
+    fi
+  done
+
+  printf '%s\n' "${videos[0]}"
+}
+
+mkdir -p "$mpvpaper_dir"
+printf '{"interval":0}\n' >"$mpvpaper_dir/slideshow_override.json"
+
+mapfile -t connectors < <(jq -r '.assignments // {} | keys[]' "$state_file" 2>/dev/null)
+mapfile -t videos < <(
+  find "$video_dir" -maxdepth 1 -type f -regextype egrep -iregex '.*\.(mp4|webm|mkv|mov|gif)' |
+    shuf
+)
+((${#connectors[@]} > 0 && ${#videos[@]} > 0)) || exit 0
+
+declare -A used_videos=()
+assignments='{}'
+for connector in "${connectors[@]}"; do
+  previous="$(jq -r --arg connector "$connector" '.assignments[$connector]' "$state_file")"
+  video="$(pick_video "$previous")"
+  used_videos["$video"]=1
+  assignments="$(
+    jq --arg connector "$connector" --arg video "$video" '.[$connector] = $video' <<<"$assignments"
+  )"
 done
 
-tmp=$(mktemp "$STATE_FILE.XXXXXX")
-jq --argjson a "$new" '.assignments = $a' "$STATE_FILE" >"$tmp" && mv "$tmp" "$STATE_FILE"
+temp_file="$(mktemp "$state_file.XXXXXX")"
+jq --argjson assignments "$assignments" '.assignments = $assignments' "$state_file" >"$temp_file" &&
+  mv "$temp_file" "$state_file"

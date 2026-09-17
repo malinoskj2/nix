@@ -1,15 +1,18 @@
-# Escalating bans for repeat offenders; private LAN ranges are never banned
-# (the NixOS module always exempts loopback).
+# fail2ban for internet-facing hosts, with bans that grow for repeat offenders.
 {
   services.fail2ban = {
     enable = true;
-    maxretry = 4;
     bantime = "1h";
+    maxretry = 4;
+
     bantime-increment = {
       enable = true;
-      maxtime = "48h";
       factor = "4";
+      maxtime = "48h";
     };
+
+    # Private LAN ranges are never banned; the NixOS module always exempts loopback.
+    # The order reaches jail.local, so this list stays unsorted.
     ignoreIP = [
       "192.168.0.0/16"
       "10.0.0.0/8"

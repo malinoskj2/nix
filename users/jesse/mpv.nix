@@ -2,22 +2,19 @@
   programs.mpv = {
     enable = true;
     defaultProfiles = [ "high-quality" ];
-    config = {
-      video-sync = "display-resample";
-      interpolation = true;
-      shuffle = true;
-      loop-playlist = true;
 
+    config = {
+      hdr-compute-peak = true;
       hwdec = "nvdec";
       hwdec-codecs = "all";
-
-      ytdl-format = "bestvideo[height<=?1080]+bestaudio/best";
-
-      tone-mapping = "hable";
-      hdr-compute-peak = true;
-
+      interpolation = true;
+      loop-playlist = true;
       osd-font = "Fira Mono";
+      shuffle = true;
       sub-font = "Lato";
+      tone-mapping = "hable";
+      video-sync = "display-resample";
+      ytdl-format = "bestvideo[height<=?1080]+bestaudio/best";
     };
   };
 }

@@ -1,24 +1,18 @@
 #!/usr/bin/env bash
+# Print the remaining Claude Code and Codex usage limits.
+#
+# The OAuth credentials are the ones each CLI stores at sign-in, under $CLAUDE_CONFIG_DIR
+# (default ~/.claude) and $CODEX_HOME (default ~/.codex). The script exits 1 when either
+# provider's limits are unavailable.
 
-set -uo pipefail
-
-readonly claude_auth_file="${CLAUDE_CONFIG_DIR:-${HOME}/.claude}/.credentials.json"
-readonly codex_auth_file="${CODEX_HOME:-${HOME}/.codex}/auth.json"
-
-for dependency in curl jq date; do
-  if ! command -v "$dependency" >/dev/null 2>&1; then
-    printf 'error: required command not found: %s\n' "$dependency" >&2
-    exit 1
-  fi
-done
+readonly claude_auth_file="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.credentials.json"
+readonly codex_auth_file="${CODEX_HOME:-$HOME/.codex}/auth.json"
 
 format_duration() {
   local total_seconds="$1"
   local days hours minutes
 
-  if ((total_seconds < 0)); then
-    total_seconds=0
-  fi
+  ((total_seconds >= 0)) || total_seconds=0
 
   days=$((total_seconds / 86400))
   hours=$(((total_seconds % 86400) / 3600))

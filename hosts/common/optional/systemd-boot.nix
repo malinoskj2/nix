@@ -1,6 +1,7 @@
+# systemd-boot for UEFI hosts without Secure Boot.
 {
   boot.loader = {
-    systemd-boot.enable = true;
     efi.canTouchEfiVariables = true;
+    systemd-boot.enable = true;
   };
 }
