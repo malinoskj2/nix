@@ -6,7 +6,8 @@ let
     .[0] as $live
     | .[1] as $nix
     | ($live * $nix)
-    | .permissions.allow = (($live.permissions.allow // []) as $kept | $kept + ($nix.permissions.allow - $kept))
+    | reduce ("allow", "deny") as $list (.;
+        .permissions[$list] = (($live.permissions[$list] // []) as $kept | $kept + ($nix.permissions[$list] - $kept)))
   '';
 
   settingsOverlay = pkgs.writeText "claude-settings-overlay.json" (
@@ -26,6 +27,21 @@ let
         "Bash(git show:*)"
         "Bash(nix flake show:*)"
         "Bash(nix flake check:*)"
+      ];
+
+      # Deny rules hold even when permission prompts are bypassed.
+      permissions.deny = [
+        "Read(~/.ssh/**)"
+        "Read(~/.gnupg/**)"
+        "Read(**/.env)"
+        "Read(**/secrets/**)"
+        "Bash(nh os switch:*)"
+        "Bash(nixos-rebuild switch:*)"
+        "Bash(darwin-rebuild switch:*)"
+        "Bash(git push --force:*)"
+        "Bash(git push -f:*)"
+        "Bash(git reset --hard:*)"
+        "Bash(rm -rf /:*)"
       ];
 
       extraKnownMarketplaces.caveman.source = {
