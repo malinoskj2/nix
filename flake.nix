@@ -32,18 +32,15 @@
     };
 
     nixpkgs-hyprland.url = "github:nixos/nixpkgs/8ce4ef6cb6f871616146b9fe26d2a5ae594e94fe";
-
     nixpkgs-firefox.url = "github:nixos/nixpkgs/21a67dc470149f337cecafbe965d8d252a390518";
     wavefox = {
       url = "github:QNetITQ/WaveFox/0.6.155";
       flake = false;
     };
-
     apple-fonts = {
       url = "github:Lyndeno/apple-fonts.nix/3861e2249cb244bfbc7cfab2303c152cf5f9d9e9";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
     nixos-hardware = {
       url = "github:nixos/nixos-hardware/d40fd26f323c898b0c195d41aa5efadd85f57832";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -76,7 +73,6 @@
             "media"
             "pi"
           ] mkHost.nixos;
-
           darwinConfigurations = lib.genAttrs [ "macbook" ] mkHost.darwin;
         };
 

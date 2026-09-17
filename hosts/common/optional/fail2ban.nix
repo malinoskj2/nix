@@ -3,7 +3,6 @@
     enable = true;
     bantime = "1h";
     maxretry = 4;
-
     bantime-increment = {
       enable = true;
       factor = "4";

@@ -25,7 +25,6 @@ in
       builder = inputs.nixpkgs.lib.nixosSystem;
       platform = "linux";
     };
-
     darwin = mkHost {
       builder = inputs.nix-darwin.lib.darwinSystem;
       platform = "darwin";

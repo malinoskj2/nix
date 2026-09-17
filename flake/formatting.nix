@@ -9,20 +9,17 @@
       ruff-check.enable = true;
       ruff-format.enable = true;
       shellcheck.enable = true;
-
       shfmt = {
         enable = true;
         # Simplifying would unquote the expansions that the scripts quote inside [[ ]].
         simplify = false;
       };
-
       statix.enable = true;
       stylua.enable = true;
     };
 
     settings = {
       global.excludes = [ "hosts/*/hardware-configuration.nix" ];
-
       formatter = {
         # direnv's stdlib, not a standalone shell script.
         shellcheck.excludes = [ ".envrc" ];

@@ -1,19 +1,15 @@
 { config, pkgs, ... }:
 let
   inherit (config) palette;
-
   iconTheme = "Papirus-Dark-Catppuccin";
   kvantumTheme = "catppuccin-mocha-mauve-glass";
   viewFont = "sf-pro-text-dolphin";
   viewFontFamily = "SF Pro Text Dolphin";
-
   papirus = pkgs.catppuccin-papirus-folders.override {
     flavor = "mocha";
     accent = "peach";
   };
-
   dolphin = pkgs.callPackage ./package.nix { inherit iconTheme palette viewFontFamily; };
-
   icons = pkgs.callPackage ./icons.nix {
     inherit palette papirus;
     name = iconTheme;
@@ -38,7 +34,6 @@ in
       catppuccin-kvantum = config.catppuccin.sources.kvantum;
       name = kvantumTheme;
     };
-
     "Kvantum/kvantum.kvconfig".text = ''
       [General]
       theme=${kvantumTheme}

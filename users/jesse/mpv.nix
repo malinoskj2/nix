@@ -2,7 +2,6 @@
   programs.mpv = {
     enable = true;
     defaultProfiles = [ "high-quality" ];
-
     config = {
       hdr-compute-peak = true;
       hwdec = "nvdec";

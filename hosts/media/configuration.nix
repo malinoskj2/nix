@@ -19,15 +19,12 @@
 
   networking = {
     hostName = "media";
-
     nameservers = [
       "1.1.1.1"
       "9.9.9.9"
     ];
-
     firewall = {
       allowPing = false;
-
       allowedTCPPorts = [
         80
         443
@@ -38,7 +35,6 @@
 
   nix = {
     settings.auto-optimise-store = true;
-
     gc = {
       automatic = true;
       dates = "weekly";

@@ -11,7 +11,6 @@ in
   programs.htop = {
     enable = true;
     package = pkgs.htop-vim-navigation;
-
     settings = {
       screen_tabs = true;
 

@@ -10,7 +10,6 @@ let
   legacyColors = rec {
     background = "0x1E1E28";
     foreground = "0xD7DAE0";
-
     ansi = {
       black = "0x6E6C7C";
       red = "0xE28C8C";
@@ -26,11 +25,9 @@ in
 {
   programs.alacritty = {
     enable = true;
-
     settings = {
       colors = {
         draw_bold_text_with_bright_colors = true;
-
         indexed_colors = [
           {
             index = 16;
@@ -41,31 +38,24 @@ in
             color = "0x3E4058";
           }
         ];
-
         normal = legacyColors.ansi;
         bright = legacyColors.ansi;
-
         cursor = {
           cursor = legacyColors.ansi.green;
           text = legacyColors.background;
         };
-
         primary = {
           inherit (legacyColors) background foreground;
         };
       };
-
       cursor.style = "Underline";
-
       font = {
         size = 10.0;
-
         normal = {
           family = "FiraCode Nerd Font";
           style = "Medium";
         };
       };
-
       keyboard.bindings = [
         {
           key = "F1";
@@ -126,15 +116,12 @@ in
           action = "DecreaseFontSize";
         }
       ];
-
       window = {
         dynamic_padding = true;
-
         dimensions = {
           columns = 80;
           lines = 40;
         };
-
         padding = {
           x = 13;
           y = 13;

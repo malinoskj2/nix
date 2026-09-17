@@ -14,7 +14,6 @@
 let
   qtFont = family: size: "${family},${toString size},-1,5,400,0,0,0,0,0,0,0,0,0,0,1";
   uiFont = qtFont "SF Pro Text";
-
   catppuccinKde = catppuccin-kde.override {
     flavour = [ "mocha" ];
     accents = [ "mauve" ];
@@ -33,11 +32,9 @@ let
           smallestReadableFont = uiFont 8;
           fixed = qtFont "FiraCode Nerd Font" 10;
         };
-
         Icons.Theme = iconTheme;
       }
     );
-
     dolphinrc = writeText "dolphinrc" (
       lib.generators.toINI { } {
         IconsMode = {
@@ -49,7 +46,6 @@ let
       }
     );
   };
-
   colors = linkFarm "dolphin-colors" {
     kdeglobals = "${catppuccinKde}/share/color-schemes/CatppuccinMochaMauve.colors";
   };
@@ -59,7 +55,6 @@ let
     PlacesPanel { background-color: #${palette.mocha.mantle}; }
     QMainWindow::separator { background-color: #${palette.mocha.mantle}; }
   '';
-
   qtPlugins = lib.makeSearchPath kdePackages.qtbase.qtPluginPrefix [
     kdePackages.plasma-integration
     kdePackages.qtstyleplugin-kvantum

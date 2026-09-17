@@ -27,7 +27,6 @@
 
   users.users.pi = {
     isNormalUser = true;
-
     extraGroups = [
       "docker"
       "wheel"

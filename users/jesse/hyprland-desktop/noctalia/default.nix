@@ -7,14 +7,12 @@
 }:
 let
   inherit (pkgs.unstable) noctalia;
-
   controlButton = {
     fps = 30;
     frame_count = 48;
     height = 24;
     width = 52;
   };
-
   withNix =
     file: values:
     pkgs.writeText (baseNameOf file) (
@@ -35,7 +33,6 @@ let
       ${lib.concatLines (lib.mapAttrsToList (file: path: "ln -s ${path} $out/${file}") links)}
       noctalia plugins lint $out
     '';
-
   hyprctl = lib.getExe' osConfig.programs.hyprland.package "hyprctl";
   palette = config.palette.mocha;
 
@@ -48,7 +45,6 @@ let
     "mauve"
     "pink"
   ];
-
   controlButtonFrames =
     pkgs.runCommand "noctalia-control-button-frames"
       {
@@ -67,16 +63,13 @@ let
           --palette ${lib.escapeShellArg (builtins.toJSON palette)} \
           --lambdas ${lib.escapeShellArg (builtins.toJSON lambdaColors)}
       '';
-
   plugins = {
     control-button = {
       "button.luau" = withNix ./plugins/control-button/button.luau (
         controlButton // { noctalia = lib.getExe noctalia; }
       );
-
       frames = controlButtonFrames;
     };
-
     hypr-workspaces = {
       "workspaces.luau" = withNix ./plugins/hypr-workspaces/workspaces.luau {
         inherit hyprctl;

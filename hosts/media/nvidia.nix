@@ -1,7 +1,6 @@
 {
   hardware = {
     nvidia-container-toolkit.enable = true;
-
     nvidia = {
       nvidiaPersistenced = true;
 

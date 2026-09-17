@@ -25,9 +25,7 @@ in
     # The NixOS module installs both.
     package = null;
     portalPackage = null;
-
     configType = "lua";
-
     settings.nix._var = {
       inherit hyprctl palette;
       alpha = {
@@ -51,7 +49,6 @@ in
         last = 5;
       };
     };
-
     extraConfig = builtins.readFile ./hyprland.lua;
   };
 
@@ -61,7 +58,6 @@ in
       diagnostics.globals = [ "hl" ];
       workspace.library = [ "${hyprland}/share/hypr/stubs" ];
     };
-
     "hypr/actions.lua".source = ./actions.lua;
   };
 }

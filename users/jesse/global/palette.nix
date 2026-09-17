@@ -23,7 +23,6 @@ in
     type = lib.types.raw;
     readOnly = true;
     description = "Catppuccin colors as bare `rrggbb` strings, glass opacities and color helpers.";
-
     default = {
       mocha = {
         rosewater = "f5e0dc";
