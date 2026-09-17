@@ -24,5 +24,5 @@ writeShellApplication {
     util-linux
     wpa_supplicant
   ];
-  text = builtins.readFile ./wifi_connect.sh;
+  text = builtins.readFile ./wifi-connect.sh;
 }

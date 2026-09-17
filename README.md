@@ -79,12 +79,12 @@ flowchart TD
     KAT --> HM
     HOME --> DH["users/jesse/desktop-home"]
     KAT --> DH
-    MAC --> DW["users/jesse/darwin.nix"]
+    MAC --> HM
 ```
 
 The overlay order matters: `modifications` patches the pinned Hyprland plugin
-set, so it must come **after** `pins`. Darwin gets only `unstable` — never the
-Linux-specific `pins` or `modifications`.
+set, so it must come **after** `pins`. Darwin gets `unstable` and
+`htopVimNavigation`, but never the Linux-specific `pins` or `modifications`.
 
 ---
 

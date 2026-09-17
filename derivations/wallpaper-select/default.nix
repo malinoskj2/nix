@@ -9,7 +9,7 @@
 }:
 
 writeShellApplication {
-  name = "wallpaper_select";
+  name = "wallpaper-select";
   runtimeInputs = [
     noctalia
     coreutils
@@ -18,5 +18,5 @@ writeShellApplication {
     jq
     socat
   ];
-  text = builtins.readFile ./wallpaper_select.sh;
+  text = builtins.readFile ./wallpaper-select.sh;
 }

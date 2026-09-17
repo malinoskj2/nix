@@ -1,5 +1,7 @@
 # Package
-{ pkgs, ... }: {
+{ pkgs, ... }:
+
+{
   environment.systemPackages = with pkgs; [
     docker-compose
     libva-utils

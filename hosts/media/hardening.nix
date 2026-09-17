@@ -17,13 +17,6 @@ _:
     ];
   };
 
-  nix.gc = {
-    automatic = true;
-    dates = "weekly";
-    options = "--delete-older-than 21d";
-  };
-  nix.settings.auto-optimise-store = true;
-
   boot.kernel.sysctl = {
     "kernel.kptr_restrict" = 2;
     "kernel.dmesg_restrict" = 1;
@@ -34,9 +27,8 @@ _:
     "net.ipv6.conf.all.accept_redirects" = 0;
     "net.ipv4.conf.all.accept_source_route" = 0;
     "net.ipv4.tcp_syncookies" = 1;
+    "vm.swappiness" = 10;
   };
 
   security.sudo.execWheelOnly = true;
-
-  boot.kernel.sysctl."vm.swappiness" = 10;
 }

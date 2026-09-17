@@ -32,7 +32,7 @@ let
       programs.nh = {
         enable = true;
         flake = "/home/jesse/nix";
-        # media keeps its own nix.gc schedule.
+        # The media host sets its own nix.gc schedule in its misc module.
         clean.enable = !config.nix.gc.automatic;
         clean.extraArgs = "--keep-since 7d --keep 5";
       };
