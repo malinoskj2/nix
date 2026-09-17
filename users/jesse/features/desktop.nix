@@ -10,6 +10,7 @@
   ];
 
   home.packages = with pkgs; [
+    blender
     chromium
     ffmpeg
     glib
