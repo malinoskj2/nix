@@ -1,18 +1,30 @@
-# Catppuccin v1 flavours plus the glass opacities the translucent apps share, so Firefox, Zed,
-# Dolphin and the desktop draw from one source. Hand-copied from catppuccin/palette: reading
-# config.catppuccin.sources.palette at evaluation time would be import-from-derivation.
+# Catppuccin v1 flavors plus the glass opacities the translucent apps share, so Firefox, Zed,
+# Dolphin and the desktop draw from one source. The values are copied from catppuccin/palette
+# because reading config.catppuccin.sources.palette would be import-from-derivation.
 { lib, ... }:
-
 let
-  # 55 -> "8c": an opacity percentage as the two-digit hex alpha byte that follows rrggbb
+  # "rrggbb" -> [ r g b ]
+  rgb = hex: lib.genList (i: lib.fromHexString (builtins.substring (i * 2) 2 hex)) 3;
+
+  # 55 -> "0.55", 60 -> "0.6"
+  opacity =
+    percent:
+    assert percent > 0 && percent < 100;
+    "0." + lib.removeSuffix "0" (lib.fixedWidthString 2 "0" (toString percent));
+
+  # 55 -> "8c"
   alphaHex =
     percent: lib.toLower (lib.fixedWidthString 2 "0" (lib.toHexString ((percent * 255 + 50) / 100)));
+
+  # "rrggbb" 55 -> "#rrggbb8c"
+  withAlpha = hex: percent: "#${hex}${alphaHex percent}";
 in
 {
   options.palette = lib.mkOption {
     type = lib.types.raw;
     readOnly = true;
-    description = "Catppuccin colours as bare `rrggbb` strings, glass opacities and colour helpers.";
+    description = "Catppuccin colors as bare `rrggbb` strings, glass opacities and color helpers.";
+
     default = {
       mocha = {
         rosewater = "f5e0dc";
@@ -81,25 +93,12 @@ in
         solid = 90;
       };
 
-      # "rrggbb" -> [ r g b ]
-      rgb =
-        hex:
-        map (i: lib.fromHexString (builtins.substring i 2 hex)) [
-          0
-          2
-          4
-        ];
-
-      # 55 -> "0.55", 60 -> "0.6"
-      opacity =
-        percent:
-        assert percent > 0 && percent < 100;
-        "0." + lib.removeSuffix "0" (lib.fixedWidthString 2 "0" (toString percent));
-
-      inherit alphaHex;
-
-      # "rrggbb" 55 -> "#rrggbb8c"
-      withAlpha = hex: percent: "#${hex}${alphaHex percent}";
+      inherit
+        alphaHex
+        opacity
+        rgb
+        withAlpha
+        ;
     };
   };
 }

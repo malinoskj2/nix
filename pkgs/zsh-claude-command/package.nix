@@ -15,5 +15,5 @@ replaceVarsWith {
     mktemp = lib.getExe' coreutils "mktemp";
     rm = lib.getExe' coreutils "rm";
   };
-  meta.description = "Zsh widget that turns a `# request` line into a command via Claude Code or Codex";
+  meta.description = "Turn natural-language requests into zsh commands with Claude Code or Codex";
 }

@@ -4,17 +4,29 @@
   lib,
   ...
 }:
-
 let
+  inherit (config.palette)
+    glass
+    mocha
+    opacity
+    rgb
+    ;
+
   cfg = config.programs.firefox;
-  inherit (config.palette) mocha glass;
+
+  locked = value: {
+    Status = "locked";
+    Value = value;
+  };
+
   rgba =
-    color: percent:
-    "rgba(${
-      lib.concatMapStringsSep ", " toString (config.palette.rgb color)
-    }, ${config.palette.opacity percent})";
+    color: percent: "rgba(${lib.concatMapStringsSep ", " toString (rgb color)}, ${opacity percent})";
 in
 {
+  # The wavefox input's release must match nixpkgs-firefox's major version; see docs/updating.md.
+  home.file."${cfg.profilesPath}/${cfg.profiles.default.path}/chrome/wavefox".source =
+    "${inputs.wavefox}/chrome";
+
   programs.firefox = {
     enable = true;
     configPath = "${config.xdg.configHome}/mozilla/firefox";
@@ -25,44 +37,42 @@ in
         installation_mode = "force_installed";
       };
 
-      # Locked by policy so Sync and experiments can't change them. The Preferences policy only
-      # accepts allowlisted prefixes; other prefs go in the profile's user.js below.
-      Preferences =
-        lib.mapAttrs
-          (_: Value: {
-            inherit Value;
-            Status = "locked";
-          })
-          {
-            "media.hardware-video-decoding.force-enabled" = true;
-            "gfx.content.skia-font-cache-size" = 20;
-            "gfx.canvas.accelerated.cache-size" = 512;
-            "browser.tabs.unloadOnLowMemory" = true;
-          };
-
       # Hides sponsored shortcuts and stories only; ordinary ones stay.
       FirefoxHome = {
-        SponsoredTopSites = false;
-        SponsoredStories = false;
         Locked = true;
+        SponsoredStories = false;
+        SponsoredTopSites = false;
+      };
+
+      # Locked by policy so Sync and experiments can't change them.
+      Preferences = lib.mapAttrs (_: locked) {
+        "browser.tabs.unloadOnLowMemory" = true;
+        "gfx.canvas.accelerated.cache-size" = 512;
+        "gfx.content.skia-font-cache-size" = 20;
+        "media.hardware-video-decoding.force-enabled" = true;
       };
     };
 
     profiles.default = {
       path = "oenjespe.default";
+
       settings = {
+        "WaveFox.HorizontalTabs.AttachedTabs" = true;
         "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
-        # Not an allowlisted policy prefix, so Firefox would reject it there.
-        "image.mem.decode_bytes_at_a_time" = 32768;
-        # GTK toplevel is opaque without an ARGB visual, so transparent chrome would render solid.
-        "mozilla.widget.use-argb-visuals" = true;
+
         # WaveFox 0.6.x targets the Nova UI.
         "browser.nova.enabled" = true;
-        "WaveFox.HorizontalTabs.AttachedTabs" = true;
+
+        # Not an allowlisted prefix, so the Preferences policy would reject it.
+        "image.mem.decode_bytes_at_a_time" = 32768;
+
+        # GTK toplevel is opaque without an ARGB visual, so transparent chrome would render solid.
+        "mozilla.widget.use-argb-visuals" = true;
       };
-      # Transparent chrome lets Hyprland's window blur show through; page content stays opaque.
-      # Transparency is declared first because, for !important rules, earlier layers win,
-      # and WaveFox sets its backgrounds with !important in its own layers.
+
+      # Transparent chrome lets Hyprland's window blur show through; page content stays
+      # opaque. Transparency is declared first because earlier layers win for !important
+      # rules, and WaveFox sets its backgrounds with !important in its own layers.
       userChrome = ''
         @layer Transparency, BasicPriority, HighPriority, VeryHighPriority;
         @import "wavefox/userChrome.css";
@@ -79,10 +89,6 @@ in
       '';
     };
   };
-
-  # The wavefox input's release must match nixpkgs-firefox's major version.
-  home.file."${cfg.profilesPath}/${cfg.profiles.default.path}/chrome/wavefox".source =
-    "${inputs.wavefox}/chrome";
 
   catppuccin.firefox = {
     enable = true;

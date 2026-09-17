@@ -4,13 +4,24 @@
   pkgs,
   ...
 }:
-
 let
   inherit (pkgs.stdenv.hostPlatform) isLinux;
+
   zcompdump = "${config.xdg.cacheHome}/zsh/zcompdump";
 in
 {
   programs = {
+    bat.enable = true;
+
+    zoxide = {
+      enable = true;
+
+      options = [
+        "--cmd"
+        "j"
+      ];
+    };
+
     zsh = {
       enable = true;
       autosuggestion.enable = true;
@@ -25,6 +36,7 @@ in
         ignoreSpace = false;
       };
 
+      # The order reaches .zshrc, so this list stays unsorted.
       setOptions = [
         "EXTENDED_GLOB"
         "HIST_REDUCE_BLANKS"
@@ -43,22 +55,22 @@ in
       ];
 
       shellAliases = {
+        cargorunbt = "RUST_BACKTRACE=1 cargo run";
+        cargotestbt = "RUST_BACKTRACE=1 cargo test -- --nocapture";
+        cargotestprint = "cargo test -- --nocapture";
+        cat = "bat";
+        cls = "clear";
         cmd = "type -m '*'";
         df = "df -H";
-        cls = "clear";
-        rgi = "rg -i";
-        rgf = "rg --files --no-ignore --hidden -g";
-        fd = "fd -H";
-        du = "du -sh";
-        ldate = ''date +"%I:%M %p"'';
-        ls = "eza -1F";
-        ll = "eza -llh";
-        tree = "eza --long --tree --level=4";
-        cat = "bat";
-        cargotestbt = "RUST_BACKTRACE=1 cargo test -- --nocapture";
-        cargorunbt = "RUST_BACKTRACE=1 cargo run";
-        cargotestprint = "cargo test -- --nocapture";
         dockerc = "docker compose";
+        du = "du -sh";
+        fd = "fd -H";
+        ldate = ''date +"%I:%M %p"'';
+        ll = "eza -llh";
+        ls = "eza -1F";
+        rgf = "rg --files --no-ignore --hidden -g";
+        rgi = "rg -i";
+        tree = "eza --long --tree --level=4";
       }
       // lib.optionalAttrs isLinux {
         lsblk = "lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINT";
@@ -90,16 +102,6 @@ in
         bindkey '^L' autosuggest-accept
       '';
     };
-
-    zoxide = {
-      enable = true;
-      options = [
-        "--cmd"
-        "j"
-      ];
-    };
-
-    bat.enable = true;
   };
 
   home.activation.zcompdump = lib.hm.dag.entryAfter [ "writeBoundary" ] ''

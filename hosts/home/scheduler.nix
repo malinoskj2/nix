@@ -1,21 +1,25 @@
-# CPU scheduler + Ryzen 9 9950X3D dual-CCD tuning
+# CPU scheduling tuned for the Ryzen 9 9950X3D's two CCDs.
 { pkgs, ... }:
-
 {
-  # 6.18 LTS: ships sched-ext (CONFIG_SCHED_CLASS_EXT) and the AMD 3D V-Cache
-  # optimizer (amd_3d_vcache, 6.13+), no out-of-tree kernel needed. LTS over
-  # linuxPackages_latest so nvidia doesn't break on every kernel bump.
+  # 6.18 LTS includes sched-ext and the AMD 3D V-Cache driver, and unlike
+  # linuxPackages_latest it doesn't break the NVIDIA driver on every bump.
   boot.kernelPackages = pkgs.linuxPackages_6_18;
 
-  # sched-ext userspace scheduler. scx_bpfland prioritizes interactive tasks
-  # and is CCD-cache aware — keeps the desktop responsive under load. If the
-  # scheduler ever dies the kernel transparently falls back to EEVDF.
+  # amd_pstate=active keeps EPP-driven frequency control whatever the kernel's
+  # default mode, and preempt=full lowers worst-case scheduling latency.
+  boot.kernelParams = [
+    "amd_pstate=active"
+    "preempt=full"
+  ];
+
+  # scx_bpfland favors interactive tasks and knows the CCD cache topology;
+  # if it exits, the kernel falls back to its default EEVDF scheduler.
   services.scx = {
     enable = true;
     scheduler = "scx_bpfland";
-    # -m performance: bias tasks onto the fastest cores (still spills to all
-    # cores under multithreaded load). -S: pin high-wakeup tasks to their CPU
-    # to cut runqueue lock contention and keep cache/CCD locality.
+
+    # -m performance prefers the fastest cores; -S keeps high-wakeup tasks on their CPU
+    # for cache locality. Values follow their flags, so this list stays unsorted.
     extraArgs = [
       "-m"
       "performance"
@@ -23,18 +27,8 @@
     ];
   };
 
-  # amd_pstate active EPP is the running default; pin it explicitly.
-  # preempt=full: switch PREEMPT_DYNAMIC to full preemption for lower
-  # worst-case scheduling latency.
-  boot.kernelParams = [
-    "amd_pstate=active"
-    "preempt=full"
-  ];
-
-  # AMD 3D V-Cache Optimizer (amd_x3d_vcache). Bias the scheduler's
-  # preferred-core ranking toward the high-frequency CCD1 — best for general
-  # desktop/productivity. Switch to "cache" to favor the V-cache die for
-  # latency-bound work (games).
+  # The "frequency" mode ranks the high-frequency CCD1 first for desktop work;
+  # the "cache" mode ranks the V-Cache die first instead, which suits games.
   services.udev.extraRules = ''
     ACTION=="add", SUBSYSTEM=="platform", KERNEL=="AMDI0101:00", ATTR{amd_x3d_mode}="frequency"
   '';

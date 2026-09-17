@@ -1,8 +1,7 @@
 { inputs }:
-
 let
-  # Another nixpkgs source instantiated for the same platform and config as pkgs.
-  importAlongside =
+  # Imports another nixpkgs source with the platform and config of pkgs, so allowUnfree reaches it.
+  importNixpkgs =
     nixpkgs: pkgs:
     import nixpkgs {
       inherit (pkgs.stdenv.hostPlatform) system;
@@ -10,37 +9,47 @@ let
     };
 in
 {
-  # Local packages from pkgs/, as pkgs.<name>.
+  # Adds the local packages from pkgs/ as pkgs.<name>.
   additions = final: _prev: import ../pkgs { pkgs = final; };
 
+  # Exposes nixpkgs-unstable as pkgs.unstable.
   unstable = final: _prev: {
-    unstable = importAlongside inputs.nixpkgs-unstable final;
+    unstable = importNixpkgs inputs.nixpkgs-unstable final;
   };
 
-  # Packages taken from exact nixpkgs revisions. See docs/updating.md before bumping either input.
+  # Takes packages from exact nixpkgs commits and patches hyprfocus; see docs/updating.md.
   pins =
     final: _prev:
     let
-      hyprlandPkgs = importAlongside inputs.nixpkgs-hyprland final;
-      firefoxPkgs = importAlongside inputs.nixpkgs-firefox final;
-      inherit (hyprlandPkgs) hyprland hyprlandPlugins;
+      inherit (final) lib;
+      inherit (importNixpkgs inputs.nixpkgs-firefox final) firefox;
+
+      inherit (importNixpkgs inputs.nixpkgs-hyprland final)
+        hyprland
+        hyprlandPlugins
+        xdg-desktop-portal-hyprland
+        ;
+
+      supportedHyprlandVersions = [ "0.56.2" ];
     in
     {
-      inherit hyprland;
-      inherit (hyprlandPkgs) xdg-desktop-portal-hyprland;
-      inherit (firefoxPkgs) firefox;
+      inherit firefox hyprland xdg-desktop-portal-hyprland;
 
       hyprlandPlugins = hyprlandPlugins // {
-        # The patches hook and poke Hyprland internals, so any Hyprland change needs them re-checked.
+        # The patches hook Hyprland internals, so a clean apply to a new version proves nothing.
         hyprfocus =
-          assert final.lib.assertMsg (hyprland.version == "0.56.2")
-            "hyprfocus patches were written against Hyprland 0.56.2 but got ${hyprland.version}; re-check overlays/patches/hyprfocus/*.patch before bumping the nixpkgs-hyprland pin.";
+          assert lib.assertMsg (lib.elem hyprland.version supportedHyprlandVersions) (
+            "hyprfocus patches were written for Hyprland "
+            + "${lib.concatStringsSep ", " supportedHyprlandVersions}, not ${hyprland.version}; "
+            + "re-check them and update this assertion."
+          );
           hyprlandPlugins.hyprfocus.overrideAttrs (old: {
             version = "${old.version}-patched";
             __intentionallyOverridingVersion = true;
+
             patches = (old.patches or [ ]) ++ [
-              # Adds plugin:hyprfocus:class so the animation can be limited to specific windows,
-              # and skips newly mapped windows.
+              # Adds plugin:hyprfocus:class to animate only windows whose class matches, and
+              # skips windows that are still opening.
               ./patches/hyprfocus/class-filter.patch
               # Lets *_focus_animation take a list like "flash,shrink" to run both at once.
               ./patches/hyprfocus/combined-modes.patch
@@ -49,7 +58,7 @@ in
             ];
 
             meta = old.meta // {
-              description = "Hyprland focus animation plugin with local class filter, combined modes, and render-only shrink";
+              description = "${old.meta.description}, with local patches";
             };
           });
       };

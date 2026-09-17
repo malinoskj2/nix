@@ -1,18 +1,19 @@
 {
-  lib,
-  kdePackages,
   catppuccin-kde,
+  iconTheme,
+  kdePackages,
+  lib,
   linkFarm,
   makeWrapper,
-  symlinkJoin,
-  writeText,
   palette,
-  iconTheme,
+  symlinkJoin,
   viewFontFamily,
+  writeText,
 }:
 
 let
   qtFont = family: size: "${family},${toString size},-1,5,400,0,0,0,0,0,0,0,0,0,0,1";
+  uiFont = qtFont "SF Pro Text";
 
   catppuccinKde = catppuccin-kde.override {
     flavour = [ "mocha" ];
@@ -20,21 +21,23 @@ let
     winDecStyles = [ "modern" ];
   };
 
-  # Read-only defaults layered under ~/.config via XDG_CONFIG_DIRS, so Dolphin can still write its
-  # own settings there. KConfig merges kdeglobals across these directories.
-  settings = linkFarm "dolphin-defaults" {
+  # Read-only defaults layered under ~/.config through XDG_CONFIG_DIRS, so Dolphin still
+  # writes its own settings there. KConfig merges kdeglobals across these directories.
+  defaults = linkFarm "dolphin-defaults" {
     kdeglobals = writeText "kdeglobals" (
       lib.generators.toINI { } {
         General = {
-          font = qtFont "SF Pro Text" 10;
-          menuFont = qtFont "SF Pro Text" 10;
-          toolBarFont = qtFont "SF Pro Text" 10;
-          smallestReadableFont = qtFont "SF Pro Text" 8;
+          font = uiFont 10;
+          menuFont = uiFont 10;
+          toolBarFont = uiFont 10;
+          smallestReadableFont = uiFont 8;
           fixed = qtFont "FiraCode Nerd Font" 10;
         };
+
         Icons.Theme = iconTheme;
       }
     );
+
     dolphinrc = writeText "dolphinrc" (
       lib.generators.toINI { } {
         IconsMode = {
@@ -51,7 +54,7 @@ let
     kdeglobals = "${catppuccinKde}/share/color-schemes/CatppuccinMochaMauve.colors";
   };
 
-  # Places panel and the dock separator paint nothing themselves, so they'd show the window glass.
+  # The Places panel and dock separator paint nothing themselves, so they'd show the window glass.
   styleSheet = writeText "dolphin.qss" ''
     PlacesPanel { background-color: #${palette.mocha.mantle}; }
     QMainWindow::separator { background-color: #${palette.mocha.mantle}; }
@@ -67,15 +70,16 @@ let
     kdePackages.qtsvg
   ];
 in
-# Theme is passed as Qt flags rather than QT_* env vars so apps opened from Dolphin don't inherit it.
+# The theme goes in Qt flags, not QT_* variables, so apps opened from Dolphin don't inherit it.
 symlinkJoin {
   name = "dolphin-themed";
   paths = [ kdePackages.dolphin ];
   nativeBuildInputs = [ makeWrapper ];
+
   postBuild = ''
     wrapProgram $out/bin/dolphin \
       --prefix QT_PLUGIN_PATH : ${qtPlugins} \
-      --prefix XDG_CONFIG_DIRS : ${settings}:${colors} \
+      --prefix XDG_CONFIG_DIRS : ${defaults}:${colors} \
       --add-flags "-platformtheme kde -style kvantum -stylesheet ${styleSheet}"
 
     service=share/dbus-1/services/org.kde.dolphin.FileManager1.service

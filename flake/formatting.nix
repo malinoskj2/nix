@@ -6,12 +6,17 @@
     programs = {
       deadnix.enable = true;
       nixfmt.enable = true;
-      # Both read ruff.toml at the repository root.
       ruff-check.enable = true;
       ruff-format.enable = true;
       shellcheck.enable = true;
+
+      shfmt = {
+        enable = true;
+        # Simplifying would unquote the expansions that the scripts quote inside [[ ]].
+        simplify = false;
+      };
+
       statix.enable = true;
-      # Reads .stylua.toml at the repository root.
       stylua.enable = true;
     };
 
@@ -23,12 +28,11 @@
         # direnv's stdlib, not a standalone shell script.
         shellcheck.excludes = [ ".envrc" ];
 
+        # Indents switch cases; programs.shfmt has no option for it.
+        shfmt.options = [ "-ci" ];
+
         # Noctalia plugin scripts are Luau, which StyLua parses alongside Lua.
         stylua.includes = [ "*.luau" ];
-
-        # Not yet ruff-clean; remove once users/jesse/dolphin's scripts are formatted and fixed.
-        ruff-check.excludes = [ "users/jesse/dolphin/*.py" ];
-        ruff-format.excludes = [ "users/jesse/dolphin/*.py" ];
 
         # Lint before formatting so fixes are formatted in the same run.
         deadnix.priority = 1;

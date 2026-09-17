@@ -1,39 +1,36 @@
-# home: Ryzen 9 9950X3D desktop with an NVIDIA GPU, running Hyprland and the
-# Noctalia shell.
+# home: Ryzen 9 9950X3D desktop with an NVIDIA GPU, Hyprland workstation.
 { inputs, pkgs, ... }:
-
 {
   imports = [
-    ./hardware-configuration.nix
-    ./boot.nix
-    ./nvidia.nix
-    ./scheduler.nix
+    inputs.nix-index-database.nixosModules.nix-index
 
     ../common/global.nix
-    ../common/users/jesse
-    ../common/users/jesse/workstation.nix
     ../common/optional/docker.nix
     ../common/optional/fonts.nix
     ../common/optional/hyprland.nix
     ../common/optional/nh.nix
     ../common/optional/pipewire.nix
     ../common/optional/workstation.nix
+    ../common/users/jesse
+    ../common/users/jesse/interactive.nix
 
-    ./programs.nix
-    inputs.nix-index-database.nixosModules.nix-index
+    ./hardware-configuration.nix
+    ./boot.nix
+    ./gaming.nix
+    ./nvidia.nix
+    ./obs.nix
+    ./scheduler.nix
   ];
 
   networking = {
     hostName = "home";
-
-    # Noctalia's network integration talks to NetworkManager over D-Bus.
-    # Let NetworkManager own the interfaces and create the wired DHCP profile.
-    networkmanager.enable = true;
-
     firewall.enable = false;
+
+    # Noctalia's network integration talks to NetworkManager over D-Bus, so
+    # NetworkManager owns the interfaces and creates the wired DHCP profile.
+    networkmanager.enable = true;
   };
 
-  # 16 GiB swapfile on ext4 root; NixOS creates /swapfile on activation.
   swapDevices = [
     {
       device = "/swapfile";
@@ -46,7 +43,7 @@
   environment.systemPackages = with pkgs; [
     libva-utils
 
-    # Pulls in the full dotnet SDK, so keep it off the other hosts
+    # Pulls in the full .NET SDK, so only this host installs it.
     source2viewer-cli
   ];
 

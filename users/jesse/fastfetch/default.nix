@@ -4,36 +4,35 @@
   pkgs,
   ...
 }:
-
 let
-  inherit (pkgs.stdenv.hostPlatform) isLinux;
   inherit (config.palette) mocha rgb;
+  inherit (pkgs.stdenv.hostPlatform) isLinux;
 
-  module = type: color: {
+  mkModule = type: color: {
     inherit type;
     keyColor = "#${color}";
   };
-  onLinux = lib.optional isLinux;
 
-  # The colors module only shows the 16 ANSI colors, which have no peach. Two identical rows make
-  # each swatch a block rather than a thin stripe.
+  onLinux = lib.optional isLinux;
+  swatch = color: "{#48;2;${lib.concatMapStringsSep ";" toString (rgb color)}}   ";
+
+  # The colors module only shows the 16 ANSI colors, which have no peach.
+  # Two identical rows make each swatch a block rather than a thin stripe.
   swatchRow = {
     type = "custom";
+
     format =
-      lib.concatMapStrings (color: "{#48;2;${lib.concatMapStringsSep ";" toString (rgb color)}}   ") (
-        with mocha;
-        [
-          red
-          peach
-          yellow
-          green
-          teal
-          blue
-          lavender
-          mauve
-          pink
-        ]
-      )
+      lib.concatMapStrings swatch [
+        mocha.red
+        mocha.peach
+        mocha.yellow
+        mocha.green
+        mocha.teal
+        mocha.blue
+        mocha.lavender
+        mocha.mauve
+        mocha.pink
+      ]
       + "{#}";
   };
 in
@@ -44,6 +43,7 @@ in
     settings = {
       display = {
         separator = "  ";
+
         color = {
           title = "#${mocha.mauve}";
           output = "#${mocha.text}";
@@ -51,34 +51,33 @@ in
         };
       };
 
-      # macOS keeps the shorter module list (and pink terminal key) of the separate macOS config this
-      # file absorbed; that config never listed kernel, packages, wm to cursor, terminalfont or swap.
       modules = lib.flatten [
         "title"
         "separator"
-        (module "os" mocha.mauve)
-        (module "host" mocha.pink)
-        (onLinux (module "kernel" mocha.peach))
-        (module "uptime" mocha.yellow)
-        (onLinux (module "packages" mocha.teal))
-        (module "shell" mocha.lavender)
-        (module "display" mocha.mauve)
+        (mkModule "os" mocha.mauve)
+        (mkModule "host" mocha.pink)
+        (onLinux (mkModule "kernel" mocha.peach))
+        (mkModule "uptime" mocha.yellow)
+        (onLinux (mkModule "packages" mocha.teal))
+        (mkModule "shell" mocha.lavender)
+        (mkModule "display" mocha.mauve)
         (onLinux [
-          (module "wm" mocha.pink)
-          (module "theme" mocha.peach)
-          (module "icons" mocha.yellow)
-          (module "font" mocha.teal)
-          (module "cursor" mocha.lavender)
+          (mkModule "wm" mocha.pink)
+          (mkModule "theme" mocha.peach)
+          (mkModule "icons" mocha.yellow)
+          (mkModule "font" mocha.teal)
+          (mkModule "cursor" mocha.lavender)
         ])
-        (module "terminal" (if isLinux then mocha.mauve else mocha.pink))
-        (onLinux (module "terminalfont" mocha.pink))
-        (module "cpu" mocha.peach)
-        (module "gpu" mocha.yellow)
-        (module "memory" mocha.teal)
-        (onLinux (module "swap" mocha.lavender))
-        (module "disk" mocha.mauve)
-        (module "localip" mocha.pink)
-        (module "locale" mocha.peach)
+        # Pink follows display's mauve on macOS, where the Linux-only modules between them are gone.
+        (mkModule "terminal" (if isLinux then mocha.mauve else mocha.pink))
+        (onLinux (mkModule "terminalfont" mocha.pink))
+        (mkModule "cpu" mocha.peach)
+        (mkModule "gpu" mocha.yellow)
+        (mkModule "memory" mocha.teal)
+        (onLinux (mkModule "swap" mocha.lavender))
+        (mkModule "disk" mocha.mauve)
+        (mkModule "localip" mocha.pink)
+        (mkModule "locale" mocha.peach)
         (onLinux [
           "break"
           swatchRow
@@ -90,6 +89,8 @@ in
       logo = {
         type = "file";
         source = ./nixos.txt;
+        padding.right = 2;
+
         color = {
           "1" = "#${mocha.mauve}";
           "2" = "#${mocha.pink}";
@@ -98,7 +99,6 @@ in
           "5" = "#${mocha.teal}";
           "6" = "#${mocha.lavender}";
         };
-        padding.right = 2;
       };
     };
   };

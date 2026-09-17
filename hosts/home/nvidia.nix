@@ -1,17 +1,14 @@
 # NVIDIA driver and the environment its Wayland and VA-API support need.
 { config, pkgs, ... }:
-
 {
-  # The nvidia module keys off this even without an X server.
-  services.xserver.videoDrivers = [ "nvidia" ];
-
   hardware = {
     graphics = {
       enable32Bit = true;
-      extraPackages = with pkgs; [ nvidia-vaapi-driver ];
+      extraPackages = [ pkgs.nvidia-vaapi-driver ];
     };
+
     nvidia = {
-      # Newer than 26.05's 595.71.05; hashes from nixos-unstable's production driver.
+      # Hashes come from nixos-unstable's production driver; see docs/updating.md.
       package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
         version = "595.99.02";
         sha256_64bit = "sha256-6HR3lYv3YwcFSTJL1a1slI66btIQ5EAFs+/4SUD24ew=";
@@ -20,18 +17,25 @@
         settingsSha256 = "sha256-GYCcnxfKPrTCrsmd25sMyzfC5cqJQJx0c31haooyTYM=";
         persistencedSha256 = "sha256-VyKtF/HdHPQrHHK6opSO69M72LmnGZtauuchj9uuje8=";
       };
+
       modesetting.enable = true;
-      open = true;
       nvidiaSettings = false;
+      open = true;
       powerManagement.enable = true;
     };
   };
 
+  # The nvidia module keys off this even without an X server.
+  services.xserver.videoDrivers = [ "nvidia" ];
+
   environment.sessionVariables = {
-    LIBVA_DRIVER_NAME = "nvidia";
-    MOZ_DISABLE_RDD_SANDBOX = "1";
     GBM_BACKEND = "nvidia-drm";
+    LIBVA_DRIVER_NAME = "nvidia";
     __GLX_VENDOR_LIBRARY_NAME = "nvidia";
+
+    # Firefox's RDD sandbox blocks NVIDIA VA-API decoding.
+    MOZ_DISABLE_RDD_SANDBOX = "1";
+
     # nvidia-vaapi-driver's EGL backend doesn't work with current drivers.
     NVD_BACKEND = "direct";
   };

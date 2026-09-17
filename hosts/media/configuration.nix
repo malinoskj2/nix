@@ -1,36 +1,35 @@
-# media: Intel desktop with an RTX 3060 Ti, running the Docker media stack
-# (Plex, *arr, Caddy) with Seerr exposed to the internet.
+# media: Intel desktop with an NVIDIA RTX 3060 Ti, internet-facing Docker media server.
 { pkgs, ... }:
-
 {
   imports = [
-    ./hardware-configuration.nix
-    ./storage.nix
-    ./nvidia.nix
-
     ../common/global.nix
-    ../common/users/jesse
     ../common/optional/docker.nix
     ../common/optional/fail2ban.nix
     ../common/optional/nh.nix
-    ../common/optional/openssh-hardened.nix
+    ../common/optional/openssh-hardening.nix
     ../common/optional/server-tools.nix
     ../common/optional/sysctl-hardening.nix
     ../common/optional/systemd-boot.nix
+    ../common/users/jesse
 
+    ./hardware-configuration.nix
     ./media-stack.nix
+    ./nvidia.nix
+    ./storage.nix
   ];
-
-  boot.kernel.sysctl."vm.swappiness" = 10;
 
   networking = {
     hostName = "media";
+
     nameservers = [
       "1.1.1.1"
       "9.9.9.9"
     ];
+
     firewall = {
       allowPing = false;
+
+      # HTTP and HTTPS for the reverse proxy, and 32400 for Plex.
       allowedTCPPorts = [
         80
         443
@@ -39,13 +38,25 @@
     };
   };
 
-  # Accounts come only from this config, and jesse has no password: if the key
-  # is lost, recovery needs console access and a rebuild or boot into an old generation.
+  nix = {
+    settings.auto-optimise-store = true;
+
+    gc = {
+      automatic = true;
+      dates = "weekly";
+      options = "--delete-older-than 21d";
+    };
+  };
+
+  boot.kernel.sysctl."vm.swappiness" = 10;
+
+  # Accounts come only from this config, and jesse has no password: if the key is
+  # lost, recovery needs console access and a rebuild or a boot into an old generation.
   users.mutableUsers = false;
 
   security.sudo = {
-    wheelNeedsPassword = false;
     execWheelOnly = true;
+    wheelNeedsPassword = false;
   };
 
   services.openssh = {
@@ -53,17 +64,8 @@
     settings.AllowUsers = [ "jesse" ];
   };
 
-  # nix.gc owns cleanup here instead of nh.
+  # nix.gc cleans the store on this host instead.
   programs.nh.clean.enable = false;
-
-  nix = {
-    gc = {
-      automatic = true;
-      dates = "weekly";
-      options = "--delete-older-than 21d";
-    };
-    settings.auto-optimise-store = true;
-  };
 
   environment.systemPackages = with pkgs; [
     curl

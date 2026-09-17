@@ -1,4 +1,3 @@
-# Session environment shared by every profile.
 {
   home = {
     language = {
@@ -7,12 +6,12 @@
     };
 
     sessionVariables = {
-      PAGER = "less -R";
-      TERMINAL = "alacritty";
       CHARSET = "UTF-8";
       LS_COLORS = "di=34:ex=35";
+      PAGER = "less -R";
+      # Interactive shells also unset SSH_ASKPASS and GIT_ASKPASS; see users/jesse/zsh.nix.
       SSH_ASKPASS_REQUIRE = "never";
-      LIBGIT2_SYS_USE_PKG_CONFIG = "1";
+      TERMINAL = "alacritty";
     };
 
     sessionPath = [

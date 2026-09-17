@@ -1,5 +1,4 @@
-# Kept pending on-device verification; likely obsolete on systemd 260 and the
-# rpi 6.18 kernel, which enable these controllers and accounting by default.
+# Memory and swap cgroup accounting, which Docker's container resource limits rely on.
 {
   boot.kernelParams = [
     "cgroup_enable=memory"
@@ -7,8 +6,8 @@
   ];
 
   systemd.settings.Manager = {
-    DefaultCPUAccounting = true;
     DefaultBlockIOAccounting = true;
+    DefaultCPUAccounting = true;
     DefaultMemoryAccounting = true;
     DefaultTasksAccounting = true;
   };

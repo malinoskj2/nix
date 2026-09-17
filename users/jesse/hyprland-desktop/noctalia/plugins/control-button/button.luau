@@ -1,18 +1,19 @@
--- Frames are baked by render.py; the host can't draw gradients.
--- `nix` is the table of Nix-provided values that noctalia/default.nix prepends.
+-- `nix` is prepended by users/jesse/hyprland-desktop/noctalia/default.nix.
+-- The frames are prerendered because Noctalia's UI can't draw gradients; see render.py.
+
+-- Hover and clicks are event-driven, so the host's default 1s update tick is pure overhead.
+local UPDATE_INTERVAL_MS = 60 * 60 * 1000
 
 local hovered = false
-local elapsed = 0
+local elapsedMs = 0
 local shown = nil
-
--- Hover and clicks are event-driven; the host's default 1s update tick is pure overhead.
-noctalia.setUpdateInterval(3600000)
 
 local function framePath()
   if not hovered then
     return "frames/rest.png"
   end
-  return string.format("frames/hover-%02d.png", math.floor(elapsed * nix.fps / 1000) % nix.frame_count)
+
+  return string.format("frames/hover-%02d.png", math.floor(elapsedMs * nix.fps / 1000) % nix.frame_count)
 end
 
 local function render()
@@ -20,16 +21,17 @@ local function render()
   if path == shown then
     return
   end
+
   shown = path
   desktopWidget.render(ui.row({
     width = nix.width,
     height = nix.height,
     onClick = function()
-      noctalia.runAsync(nix.noctalia .. " msg panel-toggle control-center")
+      noctalia.runAsync({ nix.noctalia, "msg", "panel-toggle", "control-center" })
     end,
     onHover = function(state)
       hovered = state == "true"
-      elapsed = 0
+      elapsedMs = 0
       desktopWidget.setNeedsFrameTick(hovered)
       render()
     end,
@@ -38,12 +40,14 @@ local function render()
   }))
 end
 
+noctalia.setUpdateInterval(UPDATE_INTERVAL_MS)
+
 function update()
   desktopWidget.setNeedsFrameTick(hovered)
   render()
 end
 
 function onFrameTick(deltaMs)
-  elapsed = elapsed + (tonumber(deltaMs) or 0)
+  elapsedMs = elapsedMs + (tonumber(deltaMs) or 0)
   render()
 end

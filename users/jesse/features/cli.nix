@@ -1,4 +1,4 @@
-# Everyday command-line tools and local scripts.
+# Command-line tools and scripts every profile shares, macOS included.
 { pkgs, ... }:
 {
   home.packages = with pkgs; [

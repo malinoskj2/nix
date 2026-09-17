@@ -1,4 +1,4 @@
-# General development tools.
+# Language tooling and build helpers every profile shares, macOS included.
 { pkgs, ... }:
 {
   home.packages = with pkgs; [
@@ -8,6 +8,7 @@
     nodejs
     pkg-config
     python3
+
     unstable.codex
   ];
 }

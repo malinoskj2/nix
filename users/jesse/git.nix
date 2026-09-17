@@ -1,5 +1,4 @@
 { config, ... }:
-
 {
   programs.git = {
     enable = true;
@@ -16,22 +15,22 @@
       };
 
       alias = {
-        pom = "push origin master";
         cloners = "clone --recurse-submodules";
-        ruop = "remote update origin --prune";
         lg = "log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit";
+        pom = "push origin master";
+        ruop = "remote update origin --prune";
         subupdate = "submodule update --remote";
       };
 
-      core.editor = "vim";
-
       apply.whitespace = "fix";
+      core.editor = "vim";
       credential.helper = "cache --timeout 43200";
       diff.renames = "copies";
-      submodule.recurse = true;
       safe.directory = "${config.home.homeDirectory}/nix";
+      submodule.recurse = true;
     };
 
+    # The order reaches git's ignore file, so this list stays unsorted.
     ignores = [
       ".idea/"
       "docker-compose.override.yml"

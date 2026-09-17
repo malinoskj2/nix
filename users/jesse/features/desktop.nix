@@ -1,24 +1,25 @@
-# Graphical Linux desktop: browser, file manager, media and cursor.
+# Graphical and media apps the Linux workstations share under any desktop,
+# with their session defaults and the GPG agent that signs commits.
 { pkgs, ... }:
 {
   imports = [
-    ../cursor.nix
     ../dolphin
     ../firefox.nix
     ../mpv.nix
+    ../pointer-cursor.nix
   ];
 
   home.packages = with pkgs; [
-    ffmpeg
-    pavucontrol
-    imagemagick
-    mediainfo
-    google-chrome
     chromium
-    wl-clipboard
+    ffmpeg
     glib
+    google-chrome
+    imagemagick
     ktx-tools
+    mediainfo
+    pavucontrol
     vulkan-tools
+    wl-clipboard
   ];
 
   home.sessionVariables = {

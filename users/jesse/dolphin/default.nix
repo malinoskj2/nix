@@ -1,29 +1,36 @@
+# Dolphin with Catppuccin glass theming, set up to work outside a Plasma session.
 { config, pkgs, ... }:
-
 let
   inherit (config) palette;
-  kvantumTheme = "catppuccin-mocha-mauve-glass";
+
   iconTheme = "Papirus-Dark-Catppuccin";
+  kvantumTheme = "catppuccin-mocha-mauve-glass";
+  viewFont = "sf-pro-text-dolphin";
   viewFontFamily = "SF Pro Text Dolphin";
 
   papirus = pkgs.catppuccin-papirus-folders.override {
     flavor = "mocha";
     accent = "peach";
   };
+
+  dolphin = pkgs.callPackage ./package.nix { inherit iconTheme palette viewFontFamily; };
+
+  icons = pkgs.callPackage ./icons.nix {
+    inherit palette papirus;
+    name = iconTheme;
+  };
 in
 {
   home.packages = [
-    (pkgs.callPackage ./package.nix { inherit palette iconTheme viewFontFamily; })
+    dolphin
     pkgs.kdePackages.breeze-icons
     papirus
-    (pkgs.callPackage ./icons.nix {
-      inherit papirus palette;
-      name = iconTheme;
-    })
+    icons
   ];
 
-  xdg.dataFile."fonts/sf-pro-text-dolphin".source = pkgs.callPackage ./view-font.nix {
+  xdg.dataFile."fonts/${viewFont}".source = pkgs.callPackage ./view-font.nix {
     family = viewFontFamily;
+    name = viewFont;
   };
 
   xdg.configFile = {
@@ -32,11 +39,13 @@ in
       catppuccin-kvantum = config.catppuccin.sources.kvantum;
       name = kvantumTheme;
     };
+
     "Kvantum/kvantum.kvconfig".text = ''
       [General]
       theme=${kvantumTheme}
     '';
-    # kbuildsycoca finds no applications without a menu file, leaving "Open With" empty outside Plasma.
+
+    # Without a menu file, kbuildsycoca finds no apps and "Open With" stays empty outside Plasma.
     "menus/applications.menu".text = ''
       <!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN"
         "http://www.freedesktop.org/standards/menu-spec/1.0/menu.dtd">

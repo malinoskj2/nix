@@ -1,15 +1,13 @@
-# macbook: Apple-silicon MacBook on nix-darwin, with a user-scoped Home Manager
-# profile. Determinate Nix owns the Nix installation.
+# macbook: Apple-silicon MacBook, nix-darwin workstation.
 { inputs, pkgs, ... }:
-
 let
-  # Verify both values with `id -un` and Directory Service before activation.
+  # Check the name with `id -un` and its home in Directory Service before activation.
   username = "jmalinosky";
-  homeDirectory = "/Users/${username}";
 in
 {
   imports = [
     inputs.home-manager.darwinModules.home-manager
+
     ../common/home-manager.nix
   ];
 
@@ -18,25 +16,25 @@ in
   # Determinate Nix owns the daemon and nix.conf.
   nix.enable = false;
 
-  # This describes an existing local account; nix-darwin must not create it or
-  # change any of its identity fields.
-  system.primaryUser = username;
-  users.users.${username}.home = homeDirectory;
+  # Not listed in users.knownUsers, so nix-darwin never creates or modifies this account.
+  users.users.${username}.home = "/Users/${username}";
 
   fonts.packages = with pkgs; [
     fira-code
-    nerd-fonts.fira-code
     fira-mono
     lato
+    nerd-fonts.fira-code
   ];
 
   homebrew = {
     enable = true;
+
     onActivation = {
-      cleanup = "none";
       autoUpdate = false;
+      cleanup = "none";
       upgrade = false;
     };
+
     casks = [
       "chromium"
       "google-chrome"
@@ -44,9 +42,9 @@ in
     ];
   };
 
-  # Home Manager takes username and home directory from the account above.
-  home-manager.users.${username} = ../../users/jesse/hosts/macbook.nix;
+  # Home Manager takes the username and home directory from the account above.
+  home-manager.users.${username} = ../../users/jesse/profiles/macbook.nix;
 
-  # New-install compatibility baseline. Do not bump it during upgrades.
+  system.primaryUser = username;
   system.stateVersion = 7;
 }

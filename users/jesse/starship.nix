@@ -1,8 +1,8 @@
 { lib, ... }:
-
 {
   programs.starship = {
     enable = true;
+
     settings = {
       add_newline = false;
 
@@ -12,9 +12,7 @@
           "git_branch"
           "git_status"
         ]
-        # Not a considered choice: the config used to keep the default `$all` format and disable
-        # modules one by one, and these are the ones that list missed. They are kept only so the
-        # prompt still renders exactly as before.
+        # Language and environment modules that appear only in a matching project or shell.
         ++ [
           "bun"
           "c"
@@ -45,14 +43,14 @@
       );
 
       username = {
-        show_always = true;
         format = "[$user ]($style)";
         style_user = "bold";
+        show_always = true;
       };
 
       git_branch = {
-        symbol = "➜ ";
         format = "[$symbol$branch]($style) ";
+        symbol = "➜ ";
         truncation_length = 7;
         truncation_symbol = "";
       };

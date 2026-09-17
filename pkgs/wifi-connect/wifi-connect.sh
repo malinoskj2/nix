@@ -1,127 +1,129 @@
 #!/usr/bin/env bash
-# Interactive wifi join. Nothing about the network lives in nix: this scans,
-# prompts for an SSID and passphrase, and brings the link up imperatively.
+# Join a Wi-Fi network interactively: scan, pick an SSID, enter its passphrase.
 #
-# Needs root for scan/associate.
+# The script must run as root. Nothing about the network is declared in Nix: the generated
+# wpa_supplicant config lives under /run/wifi-connect, so a reboot forgets it.
 
-CONF_DIR="/run/wifi-connect"
-LOG="$CONF_DIR/wpa_supplicant.log"
+readonly conf_dir=/run/wifi-connect
+readonly log_file="$conf_dir/wpa_supplicant.log"
 
-die() {
-	echo "error: $*" >&2
-	exit 1
+warn() {
+  printf 'wifi-connect: %s\n' "$*" >&2
 }
 
-[ "$(id -u)" -eq 0 ] || die "must run as root (try: sudo $0)"
+die() {
+  warn "$@"
+  exit 1
+}
 
-for t in iw wpa_supplicant wpa_passphrase dhcpcd; do
-	command -v "$t" >/dev/null 2>&1 || die "missing '$t' - add it to the host's package.nix"
+is_connected() {
+  local interface="$1"
+
+  iw dev "$interface" link 2>/dev/null | grep -q "Connected to"
+}
+
+(($(id -u) == 0)) || die "must run as root (try: sudo wifi-connect)"
+
+ifaces=()
+shopt -s nullglob
+for wireless_dir in /sys/class/net/*/wireless; do
+  ifaces+=("$(basename "$(dirname "$wireless_dir")")")
 done
+shopt -u nullglob
+((${#ifaces[@]} > 0)) || die "no wireless interface found"
 
-# Pick the wireless interface. Prompt only when there is more than one.
-IFACES=()
-for d in /sys/class/net/*/wireless; do
-	[ -e "$d" ] && IFACES+=("$(basename "$(dirname "$d")")")
-done
-[ "${#IFACES[@]}" -gt 0 ] || die "no wireless interface found"
-
-if [ "${#IFACES[@]}" -eq 1 ]; then
-	IFACE="${IFACES[0]}"
+if ((${#ifaces[@]} == 1)); then
+  iface="${ifaces[0]}"
 else
-	echo "Wireless interfaces:"
-	select i in "${IFACES[@]}"; do
-		[ -n "$i" ] && {
-			IFACE="$i"
-			break
-		}
-	done
+  echo "Wireless interfaces:"
+  select candidate in "${ifaces[@]}"; do
+    [[ -n "$candidate" ]] && iface="$candidate" && break
+  done
 fi
-echo "Using interface: $IFACE"
+echo "Using interface: $iface"
 
 # A soft rfkill block makes the scan return nothing with no useful error.
-if command -v rfkill >/dev/null 2>&1 && rfkill list | grep -q "Soft blocked: yes"; then
-	echo "Unblocking rfkill..."
-	rfkill unblock wifi
+if rfkill list | grep -q "Soft blocked: yes"; then
+  echo "Unblocking rfkill..."
+  rfkill unblock wifi
 fi
 
-ip link set "$IFACE" up
+ip link set "$iface" up
 echo "Scanning..."
 
-# Sort by signal strength, strongest first, and drop hidden/empty SSIDs.
-mapfile -t SSIDS < <(
-	iw dev "$IFACE" scan 2>/dev/null |
-		awk '
-        /^BSS/          { sig=""; ssid="" }
-        /signal:/       { sig=$2 }
-        /^\tSSID: /     { ssid=substr($0, 8); if (ssid != "") print sig "\t" ssid }
-      ' |
-		sort -rn -k1,1 | awk -F'\t' '!seen[$2]++ { printf "%s (%s dBm)\n", $2, $1 }'
+# Networks are listed strongest first, once per SSID, without hidden ones.
+mapfile -t networks < <(
+  iw dev "$iface" scan 2>/dev/null |
+    awk '
+      /^BSS/      { sig = ""; ssid = "" }
+      /signal:/   { sig = $2 }
+      /^\tSSID: / { ssid = substr($0, 8); if (ssid != "") print sig "\t" ssid }
+    ' |
+    sort -rn -k1,1 |
+    awk -F'\t' '!seen[$2]++ { printf "%s (%s dBm)\n", $2, $1 }'
 )
-[ "${#SSIDS[@]}" -gt 0 ] || die "no networks found - is the antenna blocked?"
+((${#networks[@]} > 0)) || die "no networks found; is the antenna blocked?"
 
 echo
 echo "Networks:"
-select choice in "${SSIDS[@]}"; do
-	[ -n "$choice" ] && break
+select choice in "${networks[@]}"; do
+  [[ -n "$choice" ]] && break
 done
-SSID="${choice% (*}"
+ssid="${choice% (*}"
 
-printf 'Passphrase for %s (blank if open): ' "$SSID"
+printf 'Passphrase for %s (blank if open): ' "$ssid"
 stty -echo
-read -r PSK || true
+read -r passphrase || true
 stty echo
 echo
 
-mkdir -p "$CONF_DIR"
-chmod 700 "$CONF_DIR"
-CONF="$CONF_DIR/$IFACE.conf"
+mkdir -p "$conf_dir"
+chmod 700 "$conf_dir"
+conf_file="$conf_dir/$iface.conf"
 
-# wpa_passphrase writes the PSK hash, so the plaintext never hits disk.
-if [ -n "$PSK" ]; then
-	wpa_passphrase "$SSID" "$PSK" >"$CONF"
+# wpa_passphrase reads stdin only from a terminal, so the passphrase goes in its arguments. It also
+# echoes the passphrase back as a #psk comment; dropping that line leaves only the hash on disk.
+if [[ -n "$passphrase" ]]; then
+  wpa_passphrase "$ssid" "$passphrase" | grep -v $'^\t#psk=' >"$conf_file"
 else
-	cat >"$CONF" <<EOF
-network={
-	ssid="$SSID"
-	key_mgmt=NONE
-}
-EOF
+  printf 'network={\n\tssid="%s"\n\tkey_mgmt=NONE\n}\n' "$ssid" >"$conf_file"
 fi
-chmod 600 "$CONF"
+chmod 600 "$conf_file"
 
-# Replace any supplicant we started earlier for this interface.
-pkill -f "wpa_supplicant.*-i$IFACE" 2>/dev/null || true
+# A supplicant from an earlier run would keep driving the interface with its old network.
+pkill -f "wpa_supplicant.*-i$iface" 2>/dev/null || true
 sleep 1
 
 echo "Associating..."
-wpa_supplicant -B -i "$IFACE" -c "$CONF" -f "$LOG" >/dev/null
+wpa_supplicant -B -i "$iface" -c "$conf_file" -f "$log_file" >/dev/null
 
-# Associated != authenticated; poll until wpa_state reports COMPLETED.
-for _ in $(seq 1 30); do
-	if iw dev "$IFACE" link 2>/dev/null | grep -q "Connected to"; then break; fi
-	sleep 1
+# wpa_supplicant -B returns before association completes, so the script polls the link.
+for _ in {1..30}; do
+  is_connected "$iface" && break
+  sleep 1
 done
 
-if ! iw dev "$IFACE" link 2>/dev/null | grep -q "Connected to"; then
-	echo "failed to associate - last log lines:" >&2
-	tail -n 15 "$LOG" >&2 || true
-	exit 1
+if ! is_connected "$iface"; then
+  warn "failed to associate; last log lines:"
+  tail -n 15 "$log_file" >&2 || true
+  exit 1
 fi
 
 echo "Requesting DHCP lease..."
-dhcpcd -n "$IFACE" >/dev/null 2>&1 || dhcpcd "$IFACE" >/dev/null 2>&1 || true
+dhcpcd -n "$iface" >/dev/null 2>&1 || dhcpcd "$iface" >/dev/null 2>&1 || true
 
-for _ in $(seq 1 15); do
-	ADDR=$(ip -4 -br addr show "$IFACE" | awk '{print $3}') || true
-	[ -n "${ADDR:-}" ] && break
-	sleep 1
+address=
+for _ in {1..15}; do
+  address="$(ip -4 -br addr show "$iface" | awk '{print $3}')" || true
+  [[ -n "$address" ]] && break
+  sleep 1
 done
 
 echo
-if [ -n "${ADDR:-}" ]; then
-	echo "Connected to $SSID"
-	echo "  $IFACE: $ADDR"
+if [[ -n "$address" ]]; then
+  echo "Connected to $ssid"
+  echo "  $iface: $address"
 else
-	echo "Associated with $SSID but no DHCP lease yet."
-	echo "  check: ip addr show $IFACE"
+  echo "Associated with $ssid but no DHCP lease yet."
+  echo "  check: ip addr show $iface"
 fi

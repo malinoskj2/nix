@@ -4,5 +4,5 @@ writeShellApplication {
   name = "git-commitu";
   runtimeInputs = [ git ];
   text = builtins.readFile ./git-commitu.sh;
-  meta.description = "git commit with GPG signing disabled";
+  meta.description = "Run git commit with GPG signing disabled";
 }
