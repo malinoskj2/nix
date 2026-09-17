@@ -1,28 +1,54 @@
+{ lib, ... }:
+
 {
   programs.starship = {
     enable = true;
-    enableZshIntegration = true;
     settings = {
       add_newline = false;
 
-      aws.disabled = true;
-      battery.disabled = true;
-      cmake.disabled = true;
-      cobol.disabled = true;
-      cmd_duration.disabled = true;
-      conda.disabled = true;
-      crystal.disabled = true;
-      dart.disabled = true;
-      deno.disabled = true;
-      directory.disabled = true;
-      docker_context.disabled = true;
-      dotnet.disabled = true;
-      elixir.disabled = true;
-      elm.disabled = true;
-      env_var.disabled = true;
-      erlang.disabled = true;
-      fill.disabled = true;
-      gcloud.disabled = true;
+      format = lib.concatMapStrings (module: "$" + module) (
+        [
+          "username"
+          "git_branch"
+          "git_status"
+        ]
+        # Not a considered choice: the config used to keep the default `$all` format and disable
+        # modules one by one, and these are the ones that list missed. They are kept only so the
+        # prompt still renders exactly as before.
+        ++ [
+          "bun"
+          "c"
+          "daml"
+          "fortran"
+          "gleam"
+          "gradle"
+          "haskell"
+          "haxe"
+          "maven"
+          "mojo"
+          "odin"
+          "opa"
+          "quarto"
+          "raku"
+          "solidity"
+          "typst"
+          "xmake"
+          "buf"
+          "guix_shell"
+          "pixi"
+          "meson"
+          "spack"
+          "container"
+          "netns"
+        ]
+        ++ [ "character" ]
+      );
+
+      username = {
+        show_always = true;
+        format = "[$user ]($style)";
+        style_user = "bold";
+      };
 
       git_branch = {
         symbol = "➜ ";
@@ -31,12 +57,7 @@
         truncation_symbol = "";
       };
 
-      git_commit.disabled = true;
-      git_state.disabled = true;
-      git_metrics.disabled = true;
-
       git_status = {
-        disabled = false;
         style = "bold red";
         untracked = "!";
         modified = "!";
@@ -46,53 +67,6 @@
         behind = "";
         diverged = "";
       };
-
-      golang.disabled = true;
-      helm.disabled = true;
-      hostname.disabled = true;
-      java.disabled = true;
-      jobs.disabled = true;
-      julia.disabled = true;
-      kotlin.disabled = true;
-      kubernetes.disabled = true;
-      line_break.disabled = true;
-      lua.disabled = true;
-      memory_usage.disabled = true;
-      hg_branch.disabled = true;
-      nim.disabled = true;
-      nix_shell.disabled = true;
-      nodejs.disabled = true;
-      ocaml.disabled = true;
-      openstack.disabled = true;
-      package.disabled = true;
-      perl.disabled = true;
-      php.disabled = true;
-      pulumi.disabled = true;
-      purescript.disabled = true;
-      python.disabled = true;
-      rlang.disabled = true;
-      red.disabled = true;
-      ruby.disabled = true;
-      rust.disabled = true;
-      scala.disabled = true;
-      shell.disabled = true;
-      shlvl.disabled = true;
-      singularity.disabled = true;
-      status.disabled = true;
-      swift.disabled = true;
-      terraform.disabled = true;
-      time.disabled = true;
-
-      username = {
-        show_always = true;
-        format = "[$user ]($style)";
-        style_user = "bold normal";
-      };
-
-      vagrant.disabled = true;
-      vlang.disabled = true;
-      vcsh.disabled = true;
-      zig.disabled = true;
 
       character = {
         success_symbol = "[➜](bold green)";

@@ -1,8 +1,13 @@
+{ config, ... }:
+
 {
   programs.git = {
     enable = true;
 
-    signing.key = "6E46C98F55BE7FF3";
+    signing = {
+      format = "openpgp";
+      key = "6E46C98F55BE7FF3";
+    };
 
     settings = {
       user = {
@@ -18,37 +23,22 @@
         subupdate = "submodule update --remote";
       };
 
-      color.ui = "auto";
+      core.editor = "vim";
 
-      # Detect whitespace errors when applying a patch
       apply.whitespace = "fix";
-
-      core = {
-        editor = "vim";
-        pager = "less -R";
-        autocrlf = false;
-      };
-
-      merge.ff = "yes";
-      commit.gpgsign = false;
-      gpg.program = "gpg2";
       credential.helper = "cache --timeout 43200";
-
-      # Detect copies as well as renames
       diff.renames = "copies";
-
       submodule.recurse = true;
-
-      safe.directory = "/home/jesse/nix";
+      safe.directory = "${config.home.homeDirectory}/nix";
     };
-  };
 
-  programs.git.ignores = [
-    ".idea/"
-    "docker-compose.override.yml"
-    "/storage/"
-    "phpcs.xml"
-    "phpmd.xml"
-    "**/.claude/settings.local.json"
-  ];
+    ignores = [
+      ".idea/"
+      "docker-compose.override.yml"
+      "/storage/"
+      "phpcs.xml"
+      "phpmd.xml"
+      "**/.claude/settings.local.json"
+    ];
+  };
 }

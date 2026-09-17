@@ -1,19 +1,8 @@
-# Hardware
-{ inputs, ... }:
-
+# Hand-written: the Pi has no generated hardware-configuration.nix.
 {
-  imports = [ inputs.nixos-hardware.nixosModules.raspberry-pi-4 ];
-
   nixpkgs.hostPlatform = "aarch64-linux";
 
-  boot = {
-    tmp.useTmpfs = true;
-    kernelModules = [ "iwlwifi" ];
-    kernelParams = [
-      "cgroup_enable=memory"
-      "swapaccount=1"
-    ];
-  };
+  boot.kernelModules = [ "iwlwifi" ];
 
   fileSystems = {
     "/" = {

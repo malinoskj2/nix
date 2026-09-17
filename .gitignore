@@ -1,5 +1,4 @@
-secrets.nix
-ENV_PORT_PLAN.md
-MACBOOK_PLAN.md
-NIX_AUDIT.md
-mac_packs
+result
+result-*
+.ruff_cache/
+.direnv/

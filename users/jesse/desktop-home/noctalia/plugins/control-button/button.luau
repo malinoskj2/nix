@@ -1,20 +1,18 @@
 -- Frames are baked by render.py; the host can't draw gradients.
-local FRAMES = 48
-local FPS = 30
--- true = shimmer continuously at AMBIENT_FPS instead of only on hover.
-local AMBIENT = false
-local AMBIENT_FPS = 12
+-- `nix` is the table of Nix-provided values that noctalia/default.nix prepends.
 
 local hovered = false
 local elapsed = 0
 local shown = nil
 
+-- Hover and clicks are event-driven; the host's default 1s update tick is pure overhead.
+noctalia.setUpdateInterval(3600000)
+
 local function framePath()
-  if not hovered and not AMBIENT then
+  if not hovered then
     return "frames/rest.png"
   end
-  local fps = hovered and FPS or AMBIENT_FPS
-  return string.format("frames/hover-%02d.png", math.floor(elapsed * fps / 1000) % FRAMES)
+  return string.format("frames/hover-%02d.png", math.floor(elapsed * nix.fps / 1000) % nix.frame_count)
 end
 
 local function render()
@@ -24,34 +22,28 @@ local function render()
   end
   shown = path
   desktopWidget.render(ui.row({
-    width = 52,
-    height = 24,
-    onClick = "onClick",
-    onHover = "onHover",
+    width = nix.width,
+    height = nix.height,
+    onClick = function()
+      noctalia.runAsync(nix.noctalia .. " msg panel-toggle control-center")
+    end,
+    onHover = function(state)
+      hovered = state == "true"
+      elapsed = 0
+      desktopWidget.setNeedsFrameTick(hovered)
+      render()
+    end,
   }, {
-    ui.image({ path = path, width = 52, height = 24, fit = "stretch" }),
+    ui.image({ path = path, width = nix.width, height = nix.height, fit = "stretch" }),
   }))
 end
 
 function update()
-  -- Hover and clicks are event-driven; the host's default 1s update tick is pure overhead.
-  noctalia.setUpdateInterval(3600000)
-  desktopWidget.setNeedsFrameTick(hovered or AMBIENT)
-  render()
-end
-
-function onHover(state)
-  hovered = state == "true"
-  elapsed = 0
-  desktopWidget.setNeedsFrameTick(hovered or AMBIENT)
+  desktopWidget.setNeedsFrameTick(hovered)
   render()
 end
 
 function onFrameTick(deltaMs)
   elapsed = elapsed + (tonumber(deltaMs) or 0)
   render()
-end
-
-function onClick()
-  noctalia.runAsync("noctalia msg panel-toggle control-center")
 end

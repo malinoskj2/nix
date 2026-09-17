@@ -1,0 +1,76 @@
+name: Check
+
+on:
+  # No paths-ignore: a skipped workflow never reports, which would leave a
+  # required check pending on docs-only pull requests.
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # update.yml calls this with a candidate flake.lock before it opens a PR.
+  workflow_call:
+    inputs:
+      lock-artifact:
+        description: Name of an uploaded artifact containing flake.lock to check instead of the committed one
+        type: string
+        default: ""
+
+concurrency:
+  group: check-${{ github.ref }}-${{ inputs.lock-artifact }}
+  # Only superseded pull request pushes are cancelled; main and update runs finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  flake-check:
+    name: nix flake check (${{ matrix.system }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        # One native runner per system in flake.nix. flake/checks.nix builds each
+        # host on the system it runs on, so this builds every host with no emulation.
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-24.04
+          - system: aarch64-linux
+            runner: ubuntu-24.04-arm
+          - system: aarch64-darwin
+            runner: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - if: inputs.lock-artifact != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.lock-artifact }}
+
+      # The desktop closures don't fit in the default free space on the x86_64 runner.
+      - if: matrix.system == 'x86_64-linux'
+        uses: wimpysworld/nothing-but-nix@687c797a730352432950c707ab493fcc951818d7 # v10
+        with:
+          hatchet-protocol: carve
+
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Caches what cache.nixos.org lacks (unfree drivers, the Pi kernel, patched
+      # and local packages) in the GitHub Actions cache. That cache holds about
+      # 10 GB and evicts, so heavy paths are sometimes rebuilt.
+      - uses: DeterminateSystems/magic-nix-cache-action@84c0677f58dcedf3b91f8223ce36a9ea5b3c84b7 # v15
+        with:
+          use-flakehub: false
+
+      # Optional persistent cache. Skipped unless the CACHIX_NAME variable is set;
+      # pushes only when the CACHIX_AUTH_TOKEN secret is also available.
+      - if: vars.CACHIX_NAME != ''
+        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: ${{ vars.CACHIX_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - run: nix flake check --print-build-logs --keep-going

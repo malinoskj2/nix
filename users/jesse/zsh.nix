@@ -6,13 +6,8 @@
 }:
 
 let
-  inherit (pkgs.stdenv.hostPlatform) isDarwin isLinux;
-
-  zshClaudeCommand = pkgs.callPackage ../../derivations/zsh-claude-command {
-    claude-code = pkgs.unstable.claude-code;
-    codex = pkgs.unstable.codex;
-    inherit (pkgs) coreutils;
-  };
+  inherit (pkgs.stdenv.hostPlatform) isLinux;
+  zcompdump = "${config.xdg.cacheHome}/zsh/zcompdump";
 in
 {
   programs = {
@@ -25,16 +20,13 @@ in
         path = "/tmp/.zsh_history";
         size = 1000;
         save = 1000;
-        ignoreDups = true;
         expireDuplicatesFirst = true;
         findNoDups = true;
-        share = true;
         ignoreSpace = false;
       };
 
       setOptions = [
         "EXTENDED_GLOB"
-        "INC_APPEND_HISTORY"
         "HIST_REDUCE_BLANKS"
         "NO_BEEP"
         "NO_FLOW_CONTROL"
@@ -42,14 +34,10 @@ in
         "BSD_ECHO"
       ];
 
-      localVariables = {
-        ZSH_AUTOSUGGEST_USE_ASYNC = true;
-      };
-
       plugins = [
         {
           name = "zsh-claude-command";
-          src = zshClaudeCommand;
+          src = pkgs.zsh-claude-command;
           file = "share/zsh-claude-command/zsh-claude-command.plugin.zsh";
         }
       ];
@@ -76,28 +64,25 @@ in
         lsblk = "lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINT";
       };
 
+      # Skip compinit's checks when a dump exists; activation deletes it on every switch.
       completionInit = ''
         autoload -Uz compinit
-        _zcd=${config.xdg.cacheHome}/zsh/zcompdump
-        [[ -d ''${_zcd:h} ]] || mkdir -p ''${_zcd:h}
-        _stale=( ''${~_zcd}(N.mh+24) )
-        if [[ -s $_zcd && -z $_stale ]]; then
-          compinit -C -d $_zcd        # fast path: trust the dump
+        if [[ -s ${zcompdump} ]]; then
+          compinit -C -d ${zcompdump}
         else
-          compinit -d $_zcd && touch $_zcd   # full check, rebuilds if fpath changed
+          compinit -d ${zcompdump}
         fi
-        [[ $_zcd.zwc -nt $_zcd ]] || zcompile $_zcd &!
-        unset _zcd _stale
       '';
 
       initContent = ''
         zstyle ':completion:*' matcher-list "" 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*' 'l:|=* r:|=*'
 
+        # Prompt for passphrases in the terminal even when a parent process (NixOS exports an empty
+        # SSH_ASKPASS; editor terminals set GIT_ASKPASS) points ssh or git at a helper.
         unset SSH_ASKPASS
         unset GIT_ASKPASS
 
         bindkey -r "^S"
-        bindkey -r "^A"
         bindkey "^A" clear-screen
         bindkey '^H' backward-char
         bindkey '^J' down-line-or-history
@@ -117,36 +102,8 @@ in
     bat.enable = true;
   };
 
-  home = {
-    activation.zcompdump = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      run rm -f ${config.xdg.cacheHome}/zsh/zcompdump{,.zwc}
-    '';
-
-    sessionVariables = {
-      PAGER = "less -R";
-      TERMINAL = "alacritty";
-      LANG = "en_US.UTF-8";
-      LC_TIME = "en_US.UTF-8";
-      CHARSET = "UTF-8";
-      LS_COLORS = "di=34:ex=35";
-      SSH_ASKPASS_REQUIRE = "never";
-      ANTHROPIC_MODEL = "claude-opus-5";
-      LIBGIT2_SYS_USE_PKG_CONFIG = "1";
-    }
-    // lib.optionalAttrs isDarwin {
-      BROWSER = "open";
-      DOWNLOAD = "$HOME/Downloads";
-    }
-    // lib.optionalAttrs isLinux {
-      BROWSER = "firefox";
-      DOWNLOAD = "/media/scratch/download";
-      MOZ_WEBRENDER = "1";
-      _JAVA_AWT_WM_NONREPARENTING = "1";
-    };
-
-    sessionPath = [
-      "$HOME/.cargo/bin"
-      "$HOME/.local/bin"
-    ];
-  };
+  home.activation.zcompdump = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    run mkdir -p ${dirOf zcompdump}
+    run rm -f ${zcompdump} ${zcompdump}.zwc
+  '';
 }
