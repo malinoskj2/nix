@@ -60,20 +60,58 @@
 
   outputs =
     inputs:
-    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = [
-        "aarch64-darwin"
-        "aarch64-linux"
-        "x86_64-linux"
-      ];
+    inputs.flake-parts.lib.mkFlake { inherit inputs; } (
+      { lib, mkHost, ... }:
+      {
+        systems = [
+          "aarch64-darwin"
+          "aarch64-linux"
+          "x86_64-linux"
+        ];
 
-      imports = [
-        ./flake/checks.nix
-        ./flake/devshell.nix
-        ./flake/formatting.nix
-        ./flake/hosts.nix
-        ./flake/nixpkgs.nix
-        ./flake/packages.nix
-      ];
-    };
+        imports = [
+          ./flake/checks.nix
+          ./flake/devshell.nix
+          ./flake/formatting.nix
+          ./flake/hosts.nix
+          ./flake/nixpkgs.nix
+        ];
+
+        # Each builds hosts/<name>/configuration.nix; see flake/hosts.nix.
+        flake = {
+          nixosConfigurations = lib.genAttrs [
+            "home"
+            "katana"
+            "media"
+            "pi"
+          ] mkHost.nixos;
+
+          darwinConfigurations = lib.genAttrs [ "macbook" ] mkHost.darwin;
+        };
+
+        # Each is pkgs/<name>/package.nix, taken from the overlaid pkgs so it's the derivation
+        # hosts install. flake/checks.nix fails if a package in pkgs/ is missing here.
+        perSystem =
+          { pkgs, ... }:
+          {
+            packages = lib.filterAttrs (_: lib.meta.availableOn pkgs.stdenv.hostPlatform) (
+              lib.genAttrs [
+                "ai-usage"
+                "ata-devs"
+                "battery"
+                "find-service"
+                "git-commitu"
+                "git-open-branch"
+                "htop-vim-navigation"
+                "pubip"
+                "wallpaper-autopause"
+                "wallpaper-randomize"
+                "wallpaper-select"
+                "wifi-connect"
+                "zsh-claude-command"
+              ] (name: pkgs.${name})
+            );
+          };
+      }
+    );
 }

@@ -1,8 +1,14 @@
-# Builds this system's hosts, the local packages they install directly and the devshell.
+# Builds this system's hosts, the local packages they install directly and the devshell, and
+# fails if a package in pkgs/ available on this system is missing from flake.nix's packages.
 { lib, self, ... }:
 {
   perSystem =
-    { self', system, ... }:
+    {
+      pkgs,
+      self',
+      system,
+      ...
+    }:
     let
       hosts = lib.filterAttrs (_: host: host.pkgs.stdenv.hostPlatform.system == system) (
         self.nixosConfigurations // self.darwinConfigurations
@@ -21,6 +27,14 @@
         _: package: lib.elem package.outPath installedPaths
       ) self'.packages;
 
+      unexported = lib.subtractLists (lib.attrNames self'.packages) (
+        lib.attrNames (
+          lib.filterAttrs (_: lib.meta.availableOn pkgs.stdenv.hostPlatform) (
+            import ../pkgs { inherit pkgs; }
+          )
+        )
+      );
+
       hostChecks = lib.mapAttrs' (
         name: host: lib.nameValuePair "host-${name}" host.config.system.build.toplevel
       ) hosts;
@@ -30,6 +44,10 @@
       ) installedPackages;
     in
     {
-      checks = hostChecks // packageChecks // { devshell = self'.devShells.default; };
+      checks =
+        assert lib.assertMsg (
+          unexported == [ ]
+        ) "pkgs/ packages missing from packages in flake.nix: ${lib.concatStringsSep ", " unexported}";
+        hostChecks // packageChecks // { devshell = self'.devShells.default; };
     };
 }

@@ -24,8 +24,8 @@ It isn't meant to be imported as-is. Borrow whatever's useful.
 
 | Path | Contents |
 | --- | --- |
-| [`flake.nix`](flake.nix) | Inputs, with a comment on each pinned one |
-| [`flake/`](flake) | flake-parts modules: host list, how nixpkgs is instantiated (unfree, overlay order), packages, checks, formatter, devshell |
+| [`flake.nix`](flake.nix) | Inputs, with a comment on each pinned one, the host list and the exported packages |
+| [`flake/`](flake) | flake-parts modules: how hosts are built, how nixpkgs is instantiated (unfree, overlay order), checks, formatter, devshell |
 | [`hosts/<name>/`](hosts) | One directory per machine. `configuration.nix` is the entry point, and its imports list what the machine runs. |
 | [`hosts/common/`](hosts/common) | Shared modules: the baseline for every NixOS host, Home Manager settings, opt-in modules under `optional/`, and accounts under `users/` |
 | [`users/jesse/`](users/jesse) | Home Manager: `global/` shared by every profile, opt-in `features/`, one profile per machine in `profiles/`, the Hyprland desktop in `hyprland-desktop/`, and a module per program |
@@ -34,8 +34,8 @@ It isn't meant to be imported as-is. Borrow whatever's useful.
 | [`docs/`](docs) | [`bootstrap.md`](docs/bootstrap.md) for setting up a host, [`updating.md`](docs/updating.md) for updating inputs |
 
 Each host is `nixosSystem` or `darwinSystem` applied to its own
-`configuration.nix`, plus the nixpkgs arguments and revision that
-[`flake/hosts.nix`](flake/hosts.nix) adds. There's no options framework. A host
+`configuration.nix`, listed in [`flake.nix`](flake.nix), plus the nixpkgs
+arguments and revision that [`flake/hosts.nix`](flake/hosts.nix) adds. There's no options framework. A host
 imports what it needs by path, Home Manager included, so to see what a machine
 runs, follow the imports from its `configuration.nix`.
 
