@@ -1,68 +1,64 @@
 {
   config,
   inputs,
+  lib,
   ...
 }:
 
+let
+  cfg = config.programs.firefox;
+  inherit (config.palette) mocha glass;
+  rgba =
+    color: percent:
+    "rgba(${
+      lib.concatMapStringsSep ", " toString (config.palette.rgb color)
+    }, ${config.palette.opacity percent})";
+in
 {
   programs.firefox = {
     enable = true;
     configPath = "${config.xdg.configHome}/mozilla/firefox";
-    policies.ExtensionSettings."FirefoxColor@mozilla.com" = {
-      install_url = "https://addons.mozilla.org/firefox/downloads/latest/firefox-color/latest.xpi";
-      installation_mode = "force_installed";
-    };
-    # Firefox did not reliably import newly generated user.js values for this
-    # existing profile. Apply these through the Preferences policy instead so
-    # Sync, experiments, and Firefox Home cannot overwrite the Nix config.
-    policies.Preferences = {
-      "media.hardware-video-decoding.force-enabled" = {
-        Value = true;
-        Status = "locked";
+
+    policies = {
+      ExtensionSettings."FirefoxColor@mozilla.com" = {
+        install_url = "https://addons.mozilla.org/firefox/downloads/latest/firefox-color/latest.xpi";
+        installation_mode = "force_installed";
       };
-      "gfx.content.skia-font-cache-size" = {
-        Value = 20;
-        Status = "locked";
-      };
-      "gfx.canvas.accelerated.cache-size" = {
-        Value = 512;
-        Status = "locked";
-      };
-      "image.mem.decode_bytes_at_a_time" = {
-        Value = 32768;
-        Status = "locked";
-      };
-      "browser.tabs.unloadOnLowMemory" = {
-        Value = true;
-        Status = "locked";
-      };
-      # Keep sponsored shortcuts and sponsored stories off Firefox Home while
-      # retaining ordinary shortcuts and recommendations.
-      "browser.newtabpage.activity-stream.showSponsoredTopSites" = {
-        Value = false;
-        Status = "locked";
-      };
-      "browser.newtabpage.activity-stream.showSponsored" = {
-        Value = false;
-        Status = "locked";
-      };
-      "browser.newtabpage.activity-stream.showSponsoredCheckboxes" = {
-        Value = false;
-        Status = "locked";
+
+      # Locked by policy so Sync and experiments can't change them. The Preferences policy only
+      # accepts allowlisted prefixes; other prefs go in the profile's user.js below.
+      Preferences =
+        lib.mapAttrs
+          (_: Value: {
+            inherit Value;
+            Status = "locked";
+          })
+          {
+            "media.hardware-video-decoding.force-enabled" = true;
+            "gfx.content.skia-font-cache-size" = 20;
+            "gfx.canvas.accelerated.cache-size" = 512;
+            "browser.tabs.unloadOnLowMemory" = true;
+          };
+
+      # Hides sponsored shortcuts and stories only; ordinary ones stay.
+      FirefoxHome = {
+        SponsoredTopSites = false;
+        SponsoredStories = false;
+        Locked = true;
       };
     };
+
     profiles.default = {
-      id = 0;
-      isDefault = true;
       path = "oenjespe.default";
       settings = {
         "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
+        # Not an allowlisted policy prefix, so Firefox would reject it there.
+        "image.mem.decode_bytes_at_a_time" = 32768;
         # GTK toplevel is opaque without an ARGB visual, so transparent chrome would render solid.
         "mozilla.widget.use-argb-visuals" = true;
         # WaveFox 0.6.x targets the Nova UI.
         "browser.nova.enabled" = true;
         "WaveFox.HorizontalTabs.AttachedTabs" = true;
-
       };
       # Transparent chrome lets Hyprland's window blur show through; page content stays opaque.
       # Transparency is declared first because, for !important rules, earlier layers win,
@@ -73,10 +69,10 @@
 
         @layer Transparency {
           :root {
-            --toolbox-background-color: rgba(17, 17, 27, 0.55) !important;
-            --toolbox-background-color-inactive: rgba(17, 17, 27, 0.55) !important;
-            --toolbar-background-color: rgba(30, 30, 46, 0.55) !important;
-            --toolbar-field-background-color: rgba(24, 24, 37, 0.6) !important;
+            --toolbox-background-color: ${rgba mocha.crust glass.chrome} !important;
+            --toolbox-background-color-inactive: ${rgba mocha.crust glass.chrome} !important;
+            --toolbar-background-color: ${rgba mocha.base glass.chrome} !important;
+            --toolbar-field-background-color: ${rgba mocha.mantle glass.layer} !important;
           }
           #main-window { background: transparent !important; }
         }
@@ -84,7 +80,8 @@
     };
   };
 
-  xdg.configFile."mozilla/firefox/oenjespe.default/chrome/wavefox".source =
+  # The wavefox input's release must match nixpkgs-firefox's major version.
+  home.file."${cfg.profilesPath}/${cfg.profiles.default.path}/chrome/wavefox".source =
     "${inputs.wavefox}/chrome";
 
   catppuccin.firefox = {

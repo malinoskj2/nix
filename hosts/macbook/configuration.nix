@@ -1,4 +1,6 @@
-{ pkgs, ... }:
+# macbook: Apple-silicon MacBook on nix-darwin, with a user-scoped Home Manager
+# profile. Determinate Nix owns the Nix installation.
+{ inputs, pkgs, ... }:
 
 let
   # Verify both values with `id -un` and Directory Service before activation.
@@ -6,9 +8,14 @@ let
   homeDirectory = "/Users/${username}";
 in
 {
+  imports = [
+    inputs.home-manager.darwinModules.home-manager
+    ../common/home-manager.nix
+  ];
+
   nixpkgs.hostPlatform = "aarch64-darwin";
 
-  # Determinate Nix owns the installation, daemon, and nix.conf.
+  # Determinate Nix owns the daemon and nix.conf.
   nix.enable = false;
 
   # This describes an existing local account; nix-darwin must not create it or
@@ -37,13 +44,9 @@ in
     ];
   };
 
-  home-manager.users.${username} = {
-    imports = [ ../../users/jesse ];
-    home = {
-      inherit username homeDirectory;
-    };
-  };
+  # Home Manager takes username and home directory from the account above.
+  home-manager.users.${username} = ../../users/jesse/hosts/macbook.nix;
 
-  # New-install compatibility baselines. Do not bump these during upgrades.
+  # New-install compatibility baseline. Do not bump it during upgrades.
   system.stateVersion = 7;
 }

@@ -1,0 +1,18 @@
+diff --git a/ScreenManager.c b/ScreenManager.c
+--- a/ScreenManager.c
++++ b/ScreenManager.c
+@@ -349,6 +349,14 @@
+          continue;
+       }
+
++      /* Use Vim navigation outside text-entry modes. */
++      if (!panelFocus->cursorOn) {
++         if (ch == 'h') ch = KEY_LEFT;
++         if (ch == 'j') ch = KEY_DOWN;
++         if (ch == 'k') ch = KEY_UP;
++         if (ch == 'l') ch = KEY_RIGHT;
++      }
++
+       switch (ch) {
+          case KEY_ALT('H'): ch = KEY_LEFT; break;
+          case KEY_ALT('J'): ch = KEY_DOWN; break;

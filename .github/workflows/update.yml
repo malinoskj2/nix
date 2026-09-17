@@ -1,0 +1,106 @@
+name: Update flake.lock
+
+# Updates the lock, builds every host against it, and opens a pull request only
+# if that passed. Inputs pinned in their flake.nix URL don't move; see
+# docs/updating.md.
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  lock:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.update.outputs.changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: update
+        shell: bash
+        run: |
+          set -o pipefail
+          nix flake update 2>&1 | tee update.log
+          if git diff --quiet flake.lock; then
+            echo changed=false >> "$GITHUB_OUTPUT"
+          else
+            echo changed=true >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.update.outputs.changed == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flake-lock
+          path: |
+            flake.lock
+            update.log
+
+  check:
+    needs: lock
+    if: needs.lock.outputs.changed == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/check.yml
+    with:
+      lock-artifact: flake-lock
+    secrets: inherit
+
+  pull-request:
+    needs: check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: flake-lock
+          path: ${{ runner.temp }}/flake-lock
+
+      - id: body
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DOCS_URL: ${{ github.server_url }}/${{ github.repository }}/blob/main/docs/updating.md
+        run: |
+          mv "$RUNNER_TEMP/flake-lock/flake.lock" flake.lock
+          {
+            echo 'body<<EOF'
+            echo "Every host built against this lock in [the update run]($RUN_URL)."
+            echo "Inputs pinned in their URL are unchanged; bump those by hand as [docs/updating.md]($DOCS_URL) describes."
+            echo
+            echo '```'
+            grep -E '^(•|  )' "$RUNNER_TEMP/flake-lock/update.log" || true
+            echo '```'
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      # Optional. With a GitHub App configured, the pull request is opened as the
+      # App, so its pull_request checks run. Without one, GITHUB_TOKEN opens it
+      # and the body links the run that built it instead.
+      - id: app-token
+        if: vars.UPDATE_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.UPDATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.UPDATE_APP_PRIVATE_KEY }}
+
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.app-token.outputs.token || github.token }}
+          branch: flake-update
+          delete-branch: true
+          add-paths: flake.lock
+          commit-message: "flake.lock: update"
+          title: "flake.lock: update"
+          body: ${{ steps.body.outputs.body }}
