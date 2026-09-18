@@ -23,6 +23,8 @@ let
         "Bash(git diff:*)"
         "Bash(git branch:*)"
         "Bash(git show:*)"
+        "Bash(git add:*)"
+        "Bash(git commit:*)"
         "Bash(nix flake show:*)"
         "Bash(nix flake check:*)"
       ];
