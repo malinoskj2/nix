@@ -107,6 +107,7 @@
           "macbook"
         ];
         packages = [
+          "agent-sandbox"
           "ai-usage"
           "ata-devs"
           "battery"

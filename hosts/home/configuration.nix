@@ -40,6 +40,7 @@
   programs.nix-index-database.comma.enable = true;
 
   environment.systemPackages = with pkgs; [
+    agent-sandbox
     libva-utils
 
     # Pulls in the full .NET SDK, so only this host installs it.
