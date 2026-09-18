@@ -46,6 +46,7 @@ let
         source = "github";
         repo = "JuliusBrussee/caveman";
       };
+      env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
       enabledPlugins."caveman@caveman" = true;
       skipDangerousModePermissionPrompt = true;
       theme = "dark";
