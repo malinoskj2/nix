@@ -5,6 +5,7 @@
       enable32Bit = true;
       extraPackages = [ pkgs.nvidia-vaapi-driver ];
     };
+    nvidia-container-toolkit.enable = true;
     nvidia = {
       package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
         version = "595.99.02";
