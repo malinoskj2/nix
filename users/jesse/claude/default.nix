@@ -20,6 +20,7 @@ in
     skills = {
       gauntlet = ./skills/gauntlet;
       laravel-review-jesse = ./skills/laravel-review-jesse;
+      recommit = ./skills/recommit;
     };
 
     settings = {
