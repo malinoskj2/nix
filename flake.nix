@@ -111,6 +111,7 @@
           "ai-usage"
           "ata-devs"
           "battery"
+          "beads_rust"
           "find-service"
           "git-commitu"
           "git-open-branch"

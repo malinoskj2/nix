@@ -34,6 +34,7 @@
       "phpcs.xml"
       "phpmd.xml"
       "**/.claude/settings.local.json"
+      ".beads/"
     ];
   };
 }
