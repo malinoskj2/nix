@@ -100,4 +100,5 @@ else
 fi
 
 echo "agent-sandbox: VNC on 127.0.0.1:$vnc_port" >&2
-exec docker run "${args[@]}" "$AGENT_SANDBOX_REF" "$@"
+exec systemd-inhibit --what=idle --who=agent-sandbox --why="agent sandbox running" \
+  docker run "${args[@]}" "$AGENT_SANDBOX_REF" "$@"

@@ -36,6 +36,7 @@
   python3,
   ripgrep,
   sway,
+  systemd,
   tmux,
   unzip,
   wayvnc,
@@ -151,7 +152,10 @@ let
 in
 writeShellApplication {
   name = "agent-sandbox";
-  runtimeInputs = [ coreutils ];
+  runtimeInputs = [
+    coreutils
+    systemd
+  ];
   runtimeEnv = {
     AGENT_SANDBOX_IMAGE = image;
     AGENT_SANDBOX_REF = "${image.imageName}:${image.imageTag}";
