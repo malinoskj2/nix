@@ -88,6 +88,11 @@ for name in CLAUDE.md settings.json skills hooks agents commands output-styles p
   args+=(--volume "$src:$HOME/.claude/$name:ro")
 done
 
+for name in tasks tasks-archive; do
+  mkdir -p "$HOME/.claude/$name" "$sandbox_home/.claude/$name"
+  args+=(--volume "$HOME/.claude/$name:$HOME/.claude/$name")
+done
+
 if [[ -d $HOME/.claude/plugins/data ]]; then
   mkdir -p "$data/plugin-data"
   args+=(--volume "$data/plugin-data:$HOME/.claude/plugins/data")

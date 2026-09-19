@@ -1,4 +1,16 @@
-{ inputs, pkgs, ... }:
+{
+  inputs,
+  lib,
+  pkgs,
+  ...
+}:
+let
+  archive-completed-task = pkgs.writeShellApplication {
+    name = "archive-completed-task";
+    runtimeInputs = [ pkgs.jq ];
+    text = builtins.readFile ./archive-completed-task.sh;
+  };
+in
 {
   programs.claude-code = {
     enable = true;
@@ -22,6 +34,17 @@
         CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
         CLAUDE_CODE_ENABLE_TODO_TOOLS = "1";
       };
+      hooks.PostToolUse = [
+        {
+          matcher = "TaskUpdate";
+          hooks = [
+            {
+              type = "command";
+              command = lib.getExe archive-completed-task;
+            }
+          ];
+        }
+      ];
       statusLine = {
         type = "command";
         command = "bash ${inputs.caveman}/src/hooks/caveman-statusline.sh";
