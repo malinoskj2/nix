@@ -1,5 +1,6 @@
 {
   bashInteractive,
+  beads_rust,
   buildEnv,
   cacert,
   claude-code,
@@ -50,6 +51,7 @@ let
     name = "agent-sandbox-env";
     paths = [
       bashInteractive
+      beads_rust
       claude-code
       coreutils
       curl

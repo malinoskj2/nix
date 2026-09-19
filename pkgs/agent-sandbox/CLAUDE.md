@@ -24,4 +24,4 @@ If the display doesn't work, tell the user straight away instead of working arou
 
 ## Tools
 
-Nix talks to the host daemon. Get a missing tool with `nix shell nixpkgs#<package>` or `nix run nixpkgs#<package>`.
+`br` (beads_rust, the issue tracker) is installed. Nix talks to the host daemon. Get a missing tool with `nix shell nixpkgs#<package>` or `nix run nixpkgs#<package>`.
