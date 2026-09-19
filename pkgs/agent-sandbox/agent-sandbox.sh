@@ -45,6 +45,10 @@ args=(
   --cap-drop ALL
   --security-opt no-new-privileges
   --pids-limit 8192
+  # Memory limits come from the slice, which reclaims before it kills.
+  --cgroup-parent agent-sandbox.slice
+  # CCD1 only, so the sandbox can't contend for the V-cache die.
+  --cpuset-cpus "8-15,24-31"
   --shm-size 2g
   --device nvidia.com/gpu=all
   --publish "127.0.0.1:$vnc_port:5900"
