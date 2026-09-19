@@ -3,6 +3,8 @@
 You are running inside a Docker sandbox. You may read anything you can find in the container, including the directories mapped from the host:
 
 - `~/projects` and `~/nix`, read-write, at the same paths as on the host
+- `/tmp/screenshot`, read-only: the human's screenshots
+- `~/.cache/img2char3d`, read-write: model weights for `~/projects/img2char3d`
 - `/nix/store`, read-only, shared with the host
 
 The rest of the home directory belongs to the sandbox, not the host. The NVIDIA GPU is available (`nvidia-smi`).
@@ -24,4 +26,4 @@ If the display doesn't work, tell the user straight away instead of working arou
 
 ## Tools
 
-`br` (beads_rust, the issue tracker) is installed. Nix talks to the host daemon. Get a missing tool with `nix shell nixpkgs#<package>` or `nix run nixpkgs#<package>`.
+`br` (beads_rust, the issue tracker), Blender and a Python with torch (CUDA) and hy3dgen (Hunyuan3D) are installed; `~/projects/img2char3d` runs directly on them. Nix talks to the host daemon. Get a missing tool with `nix shell nixpkgs#<package>` or `nix run nixpkgs#<package>`.

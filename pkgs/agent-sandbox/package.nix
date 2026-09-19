@@ -1,6 +1,7 @@
 {
   bashInteractive,
   beads_rust,
+  blender,
   buildEnv,
   cacert,
   claude-code,
@@ -23,6 +24,7 @@
   gnutar,
   grim,
   gzip,
+  hy3dgen,
   jq,
   less,
   lib,
@@ -52,6 +54,7 @@ let
     paths = [
       bashInteractive
       beads_rust
+      blender
       claude-code
       coreutils
       curl
@@ -73,7 +76,7 @@ let
       nix
       nodejs
       procps
-      python3
+      (python3.withPackages (_: [ hy3dgen ]))
       ripgrep
       sway
       tmux
