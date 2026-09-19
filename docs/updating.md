@@ -84,10 +84,12 @@ Treat a bump as a hardware change and test it on the device.
 ## Pins outside `flake.lock`
 
 - **NVIDIA driver on `home`.**
-  [`hosts/home/nvidia.nix`](../hosts/home/nvidia.nix) builds a driver newer
-  than the release's default. The version and every `sha256` change together.
-  Copy them from the `production` entry of
-  `pkgs/os-specific/linux/nvidia-x11/default.nix` in nixos-unstable.
+  [`hosts/home/nvidia.nix`](../hosts/home/nvidia.nix) builds a driver from
+  NVIDIA's New Feature Branch, newer than the release's default. The version
+  and every `sha256` change together. Copy them from the `new_feature` entry of
+  `pkgs/os-specific/linux/nvidia-x11/default.nix` in nixos-unstable. Once
+  NVIDIA's production branch passes the pinned version, move back to the
+  `production` entry.
 - **htop.** [`pkgs/htop-vim-navigation/`](../pkgs/htop-vim-navigation) asserts
   the htop versions its patch was checked against. If a nixpkgs update trips
   it, re-check the patch next to it and add the new version.
