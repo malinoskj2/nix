@@ -17,7 +17,10 @@ in
     package = pkgs.unstable.claude-code;
     context = ./CLAUDE.md;
     plugins = [ inputs.caveman ];
-    skills.gauntlet = ./skills/gauntlet;
+    skills = {
+      gauntlet = ./skills/gauntlet;
+      laravel-review-jesse = ./skills/laravel-review-jesse;
+    };
 
     settings = {
       model = "claude-fable-5-1[1m]";
