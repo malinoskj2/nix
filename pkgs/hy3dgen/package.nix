@@ -2,13 +2,36 @@
   autoPatchelfHook,
   cudaPackages,
   fetchFromGitHub,
-  fetchPypi,
+  fetchurl,
   lib,
   python3Packages,
   stdenv,
 }:
 
 let
+  # torch-bin links libnvshmem, which nixpkgs builds from source for every CUDA arch plus tests and
+  # examples, nearly exhausting RAM; build it for the RTX 5090 only. torch and torchvision alias the
+  # wheels so accelerate, diffusers and the rest don't pull a second torch.
+  pythonPackages = python3Packages.overrideScope (
+    final: prev: {
+      torch = final.torch-bin;
+      torchvision = final.torchvision-bin;
+      torch-bin = prev.torch-bin.override {
+        cudaPackages = cudaPackages.overrideScope (
+          _: prevCuda: {
+            libnvshmem = prevCuda.libnvshmem.overrideAttrs (old: {
+              cmakeFlags = old.cmakeFlags ++ [
+                (lib.cmakeFeature "CMAKE_CUDA_ARCHITECTURES" "120")
+                (lib.cmakeBool "NVSHMEM_BUILD_TESTS" false)
+                (lib.cmakeBool "NVSHMEM_BUILD_EXAMPLES" false)
+              ];
+            });
+          }
+        );
+      };
+    }
+  );
+
   src = fetchFromGitHub {
     owner = "Tencent";
     repo = "Hunyuan3D-2";
@@ -17,22 +40,19 @@ let
   };
 
   # Upstream ships wheels only; the sdist needs the xatlas C++ tree as a submodule.
-  xatlas = python3Packages.buildPythonPackage rec {
+  xatlas = pythonPackages.buildPythonPackage rec {
     pname = "xatlas";
     version = "0.0.11";
     format = "wheel";
 
-    src = fetchPypi {
-      inherit pname version format;
-      python = "cp313";
-      abi = "cp313";
-      platform = "manylinux_2_17_x86_64.manylinux2014_x86_64";
+    src = fetchurl {
+      url = "https://files.pythonhosted.org/packages/85/84/df846c46097331af6a10d3675edefc2ab893cb784c02fc7ab1e8cc580457/xatlas-${version}-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl";
       hash = "sha256-HCulyl4m26XpoEqrmO5d4OWg6Mh6H+roPaEQUrg9ht0=";
     };
 
     nativeBuildInputs = [ autoPatchelfHook ];
     buildInputs = [ stdenv.cc.cc.lib ];
-    dependencies = [ python3Packages.numpy ];
+    dependencies = [ pythonPackages.numpy ];
 
     pythonImportsCheck = [ "xatlas" ];
   };
@@ -50,16 +70,20 @@ let
     inherit src;
     sourceRoot = "${src.name}/hy3dgen/texgen/custom_rasterizer";
 
-    build-system = [ python3Packages.setuptools ];
+    build-system = [ pythonPackages.setuptools ];
 
     nativeBuildInputs = [ (lib.getBin cudaPackages.cuda_nvcc) ];
     buildInputs = with cudaPackages; [
       cuda_cccl
       cuda_cudart
+      libcublas
+      libcusolver
+      libcusparse
     ];
 
-    dependencies = with python3Packages; [
+    dependencies = with pythonPackages; [
       numpy
+      opencv4
       pillow
       pygltflib
       scipy
@@ -67,7 +91,11 @@ let
     ];
 
     # RTX 5090 (Blackwell) only.
-    env.TORCH_CUDA_ARCH_LIST = "12.0";
+    env = {
+      TORCH_CUDA_ARCH_LIST = "12.0";
+      # torch's gcc bounds table stops at 13 for CUDA 12.9, though nvcc 12.9 supports gcc 14.
+      TORCH_DONT_CHECK_COMPILER_ABI = "1";
+    };
 
     preBuild = ''
       export MAX_JOBS="$NIX_BUILD_CORES"
@@ -76,16 +104,16 @@ let
     pythonImportsCheck = [ "custom_rasterizer" ];
   };
 in
-python3Packages.buildPythonPackage {
+pythonPackages.buildPythonPackage {
   pname = "hy3dgen";
   version = "2.0.2-unstable-2025-10-28";
   pyproject = true;
 
   inherit src;
 
-  build-system = [ python3Packages.setuptools ];
+  build-system = [ pythonPackages.setuptools ];
 
-  nativeBuildInputs = [ python3Packages.pybind11 ];
+  nativeBuildInputs = [ pythonPackages.pybind11 ];
 
   # gradio, fastapi and uvicorn only serve the demo; ninja and pybind11 only build the extensions.
   pythonRemoveDeps = [
@@ -95,10 +123,12 @@ python3Packages.buildPythonPackage {
     "ninja"
     "pybind11"
     "opencv-python"
+    # nixpkgs' pymeshlab installs no dist-info, so the metadata check can't find it; it's still a dependency below.
+    "pymeshlab"
   ];
 
   dependencies =
-    with python3Packages;
+    with pythonPackages;
     [
       accelerate
       diffusers
@@ -137,7 +167,7 @@ python3Packages.buildPythonPackage {
   postInstall = ''
     (cd hy3dgen/texgen/differentiable_renderer && python setup.py build_ext --inplace)
     cp hy3dgen/texgen/differentiable_renderer/mesh_processor*.so \
-      "$out/${python3Packages.python.sitePackages}/hy3dgen/texgen/differentiable_renderer/"
+      "$out/${pythonPackages.python.sitePackages}/hy3dgen/texgen/differentiable_renderer/"
   '';
 
   pythonImportsCheck = [

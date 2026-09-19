@@ -49,6 +49,7 @@ let
         repo = "JuliusBrussee/caveman";
       };
       env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
+      env.CLAUDE_CODE_ENABLE_TODO_TOOLS = "1";
       enabledPlugins."caveman@caveman" = true;
       skipDangerousModePermissionPrompt = true;
       theme = "dark";
