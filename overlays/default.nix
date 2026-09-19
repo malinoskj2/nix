@@ -9,7 +9,12 @@ let
     };
 in
 {
-  additions = final: _prev: import ../pkgs { pkgs = final; };
+  additions =
+    final: _prev:
+    import ../pkgs {
+      pkgs = final;
+      inherit (inputs) caveman;
+    };
 
   unstable = final: _prev: {
     unstable = importNixpkgs inputs.nixpkgs-unstable final;

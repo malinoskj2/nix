@@ -4,6 +4,7 @@
   blender,
   buildEnv,
   cacert,
+  caveman,
   claude-code,
   coreutils,
   curl,
@@ -43,6 +44,7 @@
   which,
   wlrctl,
   writeShellApplication,
+  writeShellScriptBin,
   writeText,
   wtype,
   xwayland,
@@ -50,13 +52,17 @@
 }:
 
 let
+  claude = writeShellScriptBin "claude" ''
+    exec ${lib.getExe claude-code} --plugin-dir ${caveman} "$@"
+  '';
+
   env = buildEnv {
     name = "agent-sandbox-env";
     paths = [
       bashInteractive
       beads_rust
       blender
-      claude-code
+      claude
       coreutils
       curl
       dbus
@@ -125,6 +131,7 @@ let
       Env = [
         "PATH=${env}/bin:/usr/bin"
         "LANG=C.UTF-8"
+        "CLAUDE_CODE_SANDBOXED=1"
         "LOCALE_ARCHIVE=${glibcLocales}/lib/locale/locale-archive"
         "SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
         "NIX_SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
