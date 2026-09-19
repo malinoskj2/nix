@@ -187,6 +187,15 @@ Order findings by severity: correctness and security first, then design, then ae
 
 This skill only proposes. Don't touch a file, run a formatter or fix anything "while you're there", even when a finding is trivial and even when the fix is obvious.
 
-After the report, ask the user what to apply with AskUserQuestion: group the findings and abstraction proposals into multi-select questions of up to four items each, in severity order, with each option naming the file and the change and its trade-off, and mark the ones worth taking with ★. For an abstraction with several options, ask which option to take as a single-select question, recommended one first.
+After the report, walk the user through the findings and abstraction proposals **one at a time**, in severity order, with a separate AskUserQuestion call per suggestion. Never batch several suggestions into one prompt, and never use multi-select.
 
-Apply only what the user picks, then stop. Anything unanswered stays unapplied.
+Each call asks one question about one suggestion:
+
+- `question` makes the whole case for that single change: what is wrong, the file and line, why it matters (the bug it causes or the rule it breaks), what the fix is, and what it costs. Several sentences belong here — this is what the user reads instead of scrolling back to the report.
+- `header` names the rule or concept in at most 12 characters (`Injection`, `N+1`, `Locking`, `Enum`).
+- `options` for a finding are `Apply` (marked ★ when worth taking) and `Skip`. For an abstraction they are the report's options, ★ recommended first, then `Skip`, with each option's PRO/CON as its description.
+- `preview` carries the code sketch, so options are compared by shape rather than by label.
+
+Prefix each question with its position (`3 of 11`) so the user can see how far there is to go, and take `stop`, `skip the rest` or `apply everything` as an instruction to stop prompting.
+
+Apply each accepted change before asking the next question, and report it in one line. Anything skipped or unanswered stays unapplied.
