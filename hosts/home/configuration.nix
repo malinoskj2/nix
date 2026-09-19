@@ -37,6 +37,16 @@
     }
   ];
 
+  nix.settings = {
+    max-jobs = 16;
+    cores = 16;
+  };
+
+  systemd.services.nix-daemon.serviceConfig = {
+    MemoryHigh = "20G";
+    MemoryMax = "24G";
+  };
+
   programs.nix-index-database.comma.enable = true;
 
   environment.systemPackages = with pkgs; [

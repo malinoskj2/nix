@@ -116,6 +116,7 @@
           "git-commitu"
           "git-open-branch"
           "htop-vim-navigation"
+          "hy3dgen"
           "pubip"
           "wallpaper-autopause"
           "wallpaper-randomize"

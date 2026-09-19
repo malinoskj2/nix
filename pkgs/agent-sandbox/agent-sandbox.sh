@@ -8,12 +8,14 @@ runtime=/run/user/$uid
 
 data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
 sandbox_home=$data/home
-shared=("$HOME/projects" "$HOME/nix")
+shared=("$HOME/projects" "$HOME/nix" "$HOME/.cache/img2char3d")
+screenshots=/tmp/screenshot
 
 mkdir -p "$sandbox_home/.claude" "$sandbox_home/.config/git"
 for dir in "${shared[@]}"; do
   mkdir -p "$dir" "$sandbox_home${dir#"$HOME"}"
 done
+mkdir -p "$screenshots"
 
 printf 'root:x:0:0::/root:/bin/sh\n%s:x:%s:%s::%s:/bin/bash\n' "$user" "$uid" "$gid" "$HOME" >"$data/passwd"
 printf 'root:x:0:\n%s:x:%s:%s\n' "$group" "$gid" "$user" >"$data/group"
@@ -68,6 +70,7 @@ args=(
 for dir in "${shared[@]}"; do
   args+=(--volume "$dir:$dir")
 done
+args+=(--volume "$screenshots:$screenshots:ro")
 
 if [[ -d $HOME/.config/git ]]; then
   args+=(--volume "$HOME/.config/git:$HOME/.config/git:ro")
