@@ -11,24 +11,25 @@
     "preempt=full"
   ];
 
-  # scx_bpfland favors interactive tasks and knows the CCD cache topology;
-  # if it exits, the kernel falls back to its default EEVDF scheduler.
+  # scx_lavd scores tasks by inferred latency-criticality, which suits the browser
+  # and games; if it exits, the kernel falls back to its default EEVDF scheduler.
   services.scx = {
     enable = true;
-    scheduler = "scx_bpfland";
+    scheduler = "scx_lavd";
 
-    # -m performance prefers the fastest cores; -S keeps high-wakeup tasks on their CPU
-    # for cache locality. Values follow their flags, so this list stays unsorted.
+    # Both dies report the same cpufreq maximum, so lavd can't rank them on its own
+    # and the preference has to be spelled out: CCD0 (V-Cache) ahead of CCD1, which
+    # the agent sandbox is confined to. Values follow their flags, so this list
+    # stays unsorted.
     extraArgs = [
-      "-m"
-      "performance"
-      "-S"
+      "--cpu-pref-order"
+      "0-7,16-23,8-15,24-31"
     ];
   };
 
-  # The "frequency" mode ranks the high-frequency CCD1 first for desktop work;
-  # the "cache" mode ranks the V-Cache die first instead, which suits games.
+  # The "cache" mode ranks the V-Cache die first, keeping the desktop and games off
+  # the die the agent sandbox runs on.
   services.udev.extraRules = ''
-    ACTION=="add", SUBSYSTEM=="platform", KERNEL=="AMDI0101:00", ATTR{amd_x3d_mode}="frequency"
+    ACTION=="add", SUBSYSTEM=="platform", KERNEL=="AMDI0101:00", ATTR{amd_x3d_mode}="cache"
   '';
 }

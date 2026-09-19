@@ -47,6 +47,14 @@
     MemoryMax = "24G";
   };
 
+  # agent-sandbox runs its container under this slice. MemoryHigh reclaims before
+  # MemoryMax kills, and MemorySwapMax keeps a runaway agent out of the swapfile.
+  systemd.slices.agent-sandbox.sliceConfig = {
+    MemoryHigh = "20G";
+    MemoryMax = "24G";
+    MemorySwapMax = "0";
+  };
+
   programs.nix-index-database.comma.enable = true;
 
   environment.systemPackages = with pkgs; [
