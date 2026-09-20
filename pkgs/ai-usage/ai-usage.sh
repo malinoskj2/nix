@@ -42,6 +42,25 @@ print_window() {
     "$label" "$used" "$remaining" "$reset_local" "$reset_in"
 }
 
+format_window_label() {
+  local window_seconds="$1"
+
+  case "$window_seconds" in
+    18000) printf '5-hour' ;;
+    86400) printf 'daily' ;;
+    604800) printf 'weekly' ;;
+    *)
+      if ((window_seconds % 86400 == 0)); then
+        printf '%d-day' "$((window_seconds / 86400))"
+      elif ((window_seconds % 3600 == 0)); then
+        printf '%d-hour' "$((window_seconds / 3600))"
+      else
+        printf '%ds' "$window_seconds"
+      fi
+      ;;
+  esac
+}
+
 show_claude_usage() {
   local access_token response five_hour_used five_hour_reset five_hour_reset_iso
   local seven_day_used seven_day_reset seven_day_reset_iso
@@ -85,8 +104,8 @@ show_claude_usage() {
 }
 
 show_codex_usage() {
-  local access_token account_id response five_hour_used five_hour_reset
-  local seven_day_used seven_day_reset
+  local access_token account_id response windows
+  local used reset window_seconds label
 
   printf 'Codex\n'
 
@@ -115,16 +134,39 @@ show_codex_usage() {
     return 1
   fi
 
-  if ! five_hour_used="$(jq -er '.rate_limit.primary_window.used_percent' <<<"$response")" ||
-    ! five_hour_reset="$(jq -er '.rate_limit.primary_window.reset_at' <<<"$response")" ||
-    ! seven_day_used="$(jq -er '.rate_limit.secondary_window.used_percent' <<<"$response")" ||
-    ! seven_day_reset="$(jq -er '.rate_limit.secondary_window.reset_at' <<<"$response")"; then
+  if ! windows="$(
+    jq -er '
+      [
+        {window: .rate_limit.primary_window, default_seconds: 18000},
+        {window: .rate_limit.secondary_window, default_seconds: 604800}
+      ]
+      | map(select(.window != null))
+      | if length == 0 or any(
+          .[];
+          (.window.used_percent | type) != "number"
+          or (.window.reset_at | type) != "number"
+          or ((.window.limit_window_seconds // .default_seconds) | type) != "number"
+        ) then
+          error("invalid rate-limit windows")
+        else
+          .[]
+          | [
+              .window.used_percent,
+              .window.reset_at,
+              (.window.limit_window_seconds // .default_seconds)
+            ]
+          | @tsv
+        end
+    ' <<<"$response"
+  )"; then
     printf '  unavailable: OpenAI returned an unexpected response\n'
     return 1
   fi
 
-  print_window '5-hour' "$five_hour_used" "$five_hour_reset"
-  print_window 'weekly' "$seven_day_used" "$seven_day_reset"
+  while IFS=$'\t' read -r used reset window_seconds; do
+    label="$(format_window_label "$window_seconds")"
+    print_window "$label" "$used" "$reset"
+  done <<<"$windows"
 }
 
 status=0
