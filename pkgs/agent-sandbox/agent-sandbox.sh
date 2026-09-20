@@ -6,12 +6,19 @@ user=$(id -un)
 group=$(id -gn)
 runtime=/run/user/$uid
 
+agent=claude
+if [[ ${1:-} == --codex ]]; then
+  agent=codex
+  shift
+fi
+
 data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
 sandbox_home=$data/home
 shared=("$HOME/projects" "$HOME/nix" "$HOME/.cache/img2char3d")
 screenshots=/tmp/screenshot
+image_ref="agent-sandbox:${AGENT_SANDBOX_TAG#hash-}"
 
-mkdir -p "$sandbox_home/.claude" "$sandbox_home/.config/git"
+mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.config/git"
 for dir in "${shared[@]}"; do
   mkdir -p "$dir" "$sandbox_home${dir#"$HOME"}"
 done
@@ -20,7 +27,7 @@ mkdir -p "$screenshots"
 printf 'root:x:0:0::/root:/bin/sh\n%s:x:%s:%s::%s:/bin/bash\n' "$user" "$uid" "$gid" "$HOME" >"$data/passwd"
 printf 'root:x:0:\n%s:x:%s:%s\n' "$group" "$gid" "$user" >"$data/group"
 
-if ! docker image inspect "$AGENT_SANDBOX_REF" >/dev/null 2>&1; then
+if ! docker image inspect "$image_ref" >/dev/null 2>&1; then
   "$AGENT_SANDBOX_IMAGE" | docker load >/dev/null
 fi
 
@@ -102,6 +109,27 @@ if [[ -d $HOME/.claude/plugins/data ]]; then
   args+=(--volume "$data/plugin-data:$HOME/.claude/plugins/data")
 fi
 
+if [[ $agent == codex ]]; then
+  # Keep mutable Codex state isolated, but seed authentication from the host. The
+  # newer copy wins so a token refreshed in either environment is not replaced by
+  # an older one on the next launch.
+  if [[ -f $HOME/.codex/auth.json && ( ! -f $sandbox_home/.codex/auth.json || $HOME/.codex/auth.json -nt $sandbox_home/.codex/auth.json ) ]]; then
+    cp "$HOME/.codex/auth.json" "$sandbox_home/.codex/auth.json"
+  fi
+
+  for name in config.toml rules skills plugins; do
+    src=$HOME/.codex/$name
+    if [[ -d $src ]]; then
+      mkdir -p "$sandbox_home/.codex/$name"
+    elif [[ -f $src ]]; then
+      touch "$sandbox_home/.codex/$name"
+    else
+      continue
+    fi
+    args+=(--volume "$src:$HOME/.codex/$name:ro")
+  done
+fi
+
 if [[ -t 0 && -t 1 ]]; then
   args+=(--interactive --tty)
 else
@@ -109,5 +137,8 @@ else
 fi
 
 echo "agent-sandbox: VNC on 127.0.0.1:$vnc_port" >&2
+if [[ $agent == codex ]]; then
+  set -- codex --dangerously-bypass-approvals-and-sandbox "$@"
+fi
 exec systemd-inhibit --what=idle --who=agent-sandbox --why="agent sandbox running" \
-  docker run "${args[@]}" "$AGENT_SANDBOX_REF" "$@"
+  docker run "${args[@]}" "$image_ref" "$@"
