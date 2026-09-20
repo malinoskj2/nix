@@ -1,11 +1,13 @@
 ---
 name: laravel-build-jesse
-description: Implement Laravel/PHP features, fixes and requested refactors using Jesse's curated architecture, abstraction and aesthetics preferences. Use when the user invokes /laravel-build-jesse or asks to build or change Laravel/PHP code. For review-only requests, use laravel-review-jesse instead.
+description: Implement Laravel/PHP features, fixes and requested refactors using Jesse's curated architecture, abstraction and aesthetics preferences. Use when the user invokes $laravel-build-jesse or /laravel-build-jesse, or asks to build or change Laravel/PHP code. For review-only requests, use laravel-review-jesse instead.
 ---
 
 # Laravel build
 
 Task: $ARGUMENTS
+
+If `$ARGUMENTS` is unresolved, use the task from the user's request or delegation.
 
 Build the requested behavior, including the routes, persistence, authorization,
 jobs and tests it needs. Apply changes and verify them. This is the implementation

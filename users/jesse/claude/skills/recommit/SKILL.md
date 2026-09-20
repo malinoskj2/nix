@@ -1,12 +1,13 @@
 ---
 name: recommit
-description: Rebuild the current branch's commits into a clean, reviewable sequence on a new branch, verifying each commit independently. Never pushes. Use when the user invokes /recommit, or asks to tidy up, re-split, squash or rewrite a feature branch's commit history before review.
-argument-hint: "[optional: how to split, e.g. 'one commit per module' or 'squash into one']"
+description: Rebuild the current branch's commits into a clean, reviewable sequence on a new branch, verifying each commit independently. Never pushes. Use when the user invokes $recommit or /recommit, or asks to tidy up, re-split, squash or rewrite a feature branch's commit history before review.
 ---
 
 # Recommit
 
 Split instructions: $ARGUMENTS
+
+If `$ARGUMENTS` is unresolved, use any split instructions in the user's request.
 
 Rebuild the commits on the current branch as a sequence a reviewer can read top
 to bottom. The work lands on a new branch; the original is never modified.

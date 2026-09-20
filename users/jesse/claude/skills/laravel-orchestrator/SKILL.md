@@ -1,14 +1,16 @@
 ---
 name: laravel-orchestrator
-description: Autonomously build, review and refine Laravel/PHP changes using laravel-builder and laravel-reviewer, with the supervising session choosing fixes and abstractions. Use when the user invokes /laravel-orchestrator or requests an unattended Laravel implementation and review cycle. Ordinary build or review requests use their respective skills.
+description: Autonomously build, review and refine Laravel/PHP changes using laravel-builder and laravel-reviewer, with the supervising session choosing fixes and abstractions. Use when the user invokes $laravel-orchestrator or /laravel-orchestrator, or requests an unattended Laravel implementation and review cycle. Ordinary build or review requests use their respective skills.
 ---
 
 # Laravel orchestrator
 
 Task: $ARGUMENTS
 
-The session executing this skill is the supervisor: either the main Claude
-session or the `laravel-orchestrator` coordinator agent. Coordinate `laravel-builder` and
+If `$ARGUMENTS` is unresolved, use the task from the user's request or delegation.
+
+The session executing this skill is the supervisor: either the main session or
+the `laravel-orchestrator` coordinator agent. Coordinate `laravel-builder` and
 `laravel-reviewer` through implementation, independent review and refinement.
 Invoking this workflow authorizes the supervisor to choose and apply fixes and
 abstraction options within the requested task, without per-change user approval.
@@ -27,8 +29,8 @@ abstraction options within the requested task, without per-change user approval.
 - Read [the build skill](../laravel-build-jesse/SKILL.md) and
   [the review skill](../laravel-review-jesse/SKILL.md) unless already preloaded.
   Their coding standards apply throughout. This workflow replaces the review
-  skill's section 8 approval loop with supervisor decisions; do not call
-  AskUserQuestion for review findings or abstraction options.
+  skill's section 8 approval loop with supervisor decisions; do not ask the user
+  about review findings or abstraction options.
 - Aim for expressive domain APIs, cohesive responsibilities and well-encapsulated
   rules. A meaningful abstraction can justify itself with one caller. Design and
   aesthetics are part of completion, alongside correctness and passing checks.
