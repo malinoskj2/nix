@@ -19,6 +19,8 @@ procedural plumbing needs refinement.
 Follow the repository's conventions and installed framework versions. Keep the
 implementation within the assignment and preserve unrelated changes. When asked
 to apply review feedback, implement the accepted suggestions and selected options.
+In a `laravel-orchestrator` run, the supervising session makes those decisions on the
+user's behalf within the assigned task; no further user confirmation is needed.
 
 Return a concise account of the changes, checks run and their results, and any
 remaining limitations or operational steps. If a consequential requirement is
