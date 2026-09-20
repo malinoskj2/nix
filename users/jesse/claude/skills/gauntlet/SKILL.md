@@ -1,16 +1,23 @@
 ---
 name: gauntlet
-description: Run a Gauntlet Loop (Matt Shumer's builder/critic pattern). Asks once for the goal, the reference bar, how the critic checks the work, and how many builders to run at once, then runs unattended - fans out builder sub-agents, grades each piece with a separate harsh blind critic against the reference, decides open questions itself, and finishes with one report. Use when the user invokes /gauntlet or asks for a gauntlet loop.
-argument-hint: "[goal] [optional: against REFERENCE] [optional: checked by METHOD] [optional: N builders]"
+description: Run a Gauntlet Loop (Matt Shumer's builder/critic pattern). Asks once for the goal, the reference bar, how the critic checks the work, and how many builders to run at once, then runs unattended - fans out builder sub-agents, grades each piece with a separate harsh blind critic against the reference, decides open questions itself, and finishes with one report. Use when the user invokes $gauntlet or /gauntlet, or asks for a gauntlet loop.
 ---
 
 # Gauntlet Loop
 
 Goal: $ARGUMENTS
 
+If `$ARGUMENTS` is unresolved, use the goal and options from the user's request.
+
 ## 1. Collect the components
 
-This is the only point where the user is consulted. Confirm all four with the AskUserQuestion tool, in a single call with four questions. Infer candidate answers from the arguments, the current directory and the conversation, and offer them as options (best guess first, marked "(Recommended)"). Every question except fan-out also gets a last option, "Help me build this", so the user can draft that component with you. The user can pick "Other" to type their own.
+This is the only point where the user is consulted. Confirm all four with the
+environment's structured question tool when available, using as few calls as its
+question limit permits; otherwise ask them together directly. Infer candidate
+answers from the arguments, the current directory and the conversation, and offer
+them as options (best guess first, marked "(Recommended)"). Every question except
+fan-out also gets a last option, "Help me build this", so the user can draft that
+component with you. The user can pick or supply a free-form answer.
 
 1. **Goal**: what to build or fix. Describe the destination, not the implementation.
 2. **Bar**: a concrete reference an agent can actually inspect and compare against side by side. Examples include a shipped product, screenshots, a real page, an exemplary passage, a benchmark or a test suite. Reject abstract bars like "make it amazing" and propose concrete ones instead.
@@ -21,7 +28,10 @@ If the user's answer for the bar is vague, ask once more for something concrete.
 
 ### Helping build a component
 
-For each component where the user picked "Help me build this", work through it with them in order (goal, then bar, then check, since each depends on the one before). Keep it short: at most a few rounds of AskUserQuestion per component, and stop as soon as the user accepts a draft.
+For each component where the user picked "Help me build this", work through it
+with them in order (goal, then bar, then check, since each depends on the one
+before). Keep it short: at most a few question rounds per component, and stop as
+soon as the user accepts a draft.
 
 - **Goal**: ask who it's for, what "done" looks like, and what is out of scope. Draft a one or two sentence goal that names the destination and nothing about the implementation, then ask the user to accept or adjust it.
 - **Bar**: propose two or three concrete candidates that fit the goal. Where you can, look at them first (search the web, fetch the page, read the file, run the existing tests) so each option is something a critic can actually open. Say in one line what each would push quality toward, and let the user pick or combine.
