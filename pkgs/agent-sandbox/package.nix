@@ -108,6 +108,11 @@ let
     text = builtins.readFile ./entrypoint.sh;
   };
 
+  clipboardSync = writeShellApplication {
+    name = "agent-sandbox-clipboard-sync";
+    text = builtins.readFile ./clipboard-sync.sh;
+  };
+
   nixConf = writeText "nix.conf" ''
     experimental-features = nix-command flakes
   '';
@@ -166,8 +171,10 @@ in
 writeShellApplication {
   name = "agent-sandbox";
   runtimeInputs = [
+    clipboardSync
     coreutils
     systemd
+    wl-clipboard
   ];
   runtimeEnv = {
     AGENT_SANDBOX_IMAGE = image;
