@@ -1,6 +1,6 @@
 ---
 name: laravel-review-jesse
-description: Review Laravel/PHP code for idiomatic design, abstraction, aesthetics and correctness against Jesse's curated rule set, and propose (never apply) better abstractions for new and adjacent code. Use when the user invokes /laravel-review-jesse, asks to review Laravel or PHP changes, or asks how to structure, abstract or clean up Laravel code (controllers, actions, Eloquent, jobs, artisan commands, tests).
+description: Review Laravel/PHP changes separately for requirement coverage and Jesse's correctness, design, abstraction and aesthetics standards, proposing improvements before applying accepted changes. Use when the user invokes /laravel-review-jesse, asks to review Laravel or PHP changes, or asks how to structure, abstract or clean up Laravel code.
 argument-hint: "[optional: path, branch, commit range or PR number]"
 ---
 
@@ -13,6 +13,30 @@ Target: $ARGUMENTS
 - No argument: review the working tree plus the current branch against its merge base with the default branch. Otherwise review the given path, range or PR.
 - Read every changed PHP file in full, plus the code it calls and is called by. Adjacent existing code is in scope for abstraction proposals (section 4), not for rule nitpicks.
 - Read `composer.json`/`composer.lock` for the Laravel and PHP versions and installed packages. Don't suggest APIs newer than the installed version.
+
+### Two review axes
+
+Keep Requirements and Standards assessments distinct. By default review both;
+when a coordinator assigns one axis, return only that assessment and identify
+its scope. An unassigned axis is not a pass.
+
+- **Requirements:** use the user's request, supplied acceptance criteria or the
+  originating spec/issue as the source of intended behavior. Preserve supplied
+  criterion IDs. For each criterion, cite its source, implementation locations,
+  and tests or other verification evidence. Mark it `met`, `gap` (missing, partial
+  or incorrect behavior), or `unverified` (insufficient evidence). Check for added
+  behavior outside the request. Inspect supporting code beyond the diff when
+  needed to trace a complete behavior. Keep assumptions visible; do not infer the
+  requirements from the implementation being reviewed.
+- **Standards:** assess correctness/security, Laravel idioms, design, abstraction
+  and aesthetics using the precedence below. Cite the applicable rule or repository
+  convention for each finding, and distinguish concrete defects from design
+  judgments. Passing requirements does not excuse poor design or unrelated defects.
+
+A spec file is optional when the request supplies clear acceptance criteria. If
+intended behavior cannot be established, mark Requirements `not assessed` with
+the missing source and continue Standards review. Never treat absent requirements
+or an unexplained passing test suite as evidence of requirement coverage.
 
 ## 2. Precedence
 
@@ -104,6 +128,8 @@ Each is a check on new or changed code. Pre-existing violations in untouched cod
 Look actively for abstractions in the new code **and the existing code next to it**. The goal is code the Laravel community would call spectacular: declarative, at exactly the right level of abstraction for the problem, and without imperative plumbing.
 
 - **Review from the call site.** The main flow should tell the business story in domain language. Look for callers that must understand query details, array transformations or state bookkeeping that belong inside a named operation or type. Propose improvements even when the code is correct and has no duplication.
+- **Measure the knowledge hidden.** Identify the invariants, ordering constraints, transaction/storage mechanics or error handling that callers no longer need to coordinate. The interface includes these obligations as well as method signatures. For example, a `ReserveStock` action is still shallow if every caller must remember to lock rows and protect the stock invariant itself. Propose an owner at the appropriate transaction boundary, with explicit remaining caller obligations.
+- **Check locality.** Would changing an encapsulated rule stay inside its owner? If removing the abstraction would spread meaningful rules or mechanics into callers, it earns its place, even with one caller. If removal only eliminates forwarding, reconsider the layer. Judge knowledge hidden rather than implementation size; each proposal should identify the caller knowledge removed and what remains exposed.
 - **Extract meaningful concepts on first use.** A scope for eligibility, a value object for a date range or an Action for reserving stock can earn its place with one caller. Naming a business operation, protecting an invariant and separating policy from mechanics are sufficient reasons; don't wait for a second use.
 - **Keep orchestration at one level.** Identify methods that mix business decisions with low-level mechanics. A proposed extraction must give the responsibility a meaningful name and make both sides easier to understand; moving an opaque block into `process()` or `handleData()` is not an improvement.
 - **Kill imperative code.** Loops with accumulators, index juggling, flag variables, nested `if` ladders and manual array building should become Collection pipelines (`map`, `filter`, `flatMap`, `groupBy`, `keyBy`, `partition`, `reduce`, `sum`, `pipe`), higher-order messages (`$users->each->notify()`), `match`, query-builder constraints or Eloquent relations. Keep a `foreach` only for an early `break`, heavy side effects or a measured hot path.
@@ -171,22 +197,46 @@ TODO: reference commands by Jesse go here once their location is known. Match th
 
 Terse. No praise, no restating the diff, no closing summary.
 
-```
-## Findings
-path/to/File.php:42  <rule broken>, <concrete fix in one line>
+````markdown
+## Requirements
+
+Assessment: met | gaps | unverified | not assessed
+R1  <criterion and source> — met | gap | unverified
+    Implementation: path/to/File.php:42
+    Verification: <test/check and observed result, or missing evidence>
+    Gap: <missing/incorrect behavior, if any>
+Scope additions: <unrequested behavior and location, or none>
 …
 
-## Abstractions
+## Standards
+
+Assessment: no findings | findings | not assessed
+
+### Findings
+
+path/to/File.php:42  <defect or judgment; rule/convention>, <concrete fix>
+…
+
+### Abstractions
+
 path/to/File.php:10-58  <what's imperative or missing>
+  Caller knowledge removed: <rules/mechanics owned by the abstraction>
+  Caller obligations retained: <what the caller still must know>
   ★ A. <option>. PRO … / CON …
     B. <option>. PRO … / CON …
     C. <option>. PRO … / CON …
   ```php
   // sketch of ★
   ```
-```
+````
 
-Order findings by severity: correctness and security first, then design, then aesthetics. If a section is empty, write "none".
+For an assigned single axis, omit the other axis. Under Requirements, account for
+every supplied criterion; an aggregate `met` requires all criteria to be met and
+no unresolved scope additions. Show gaps and missing verification even when both
+exist. Under Standards, order findings by severity: correctness/security, design,
+then aesthetics. If there are no findings or proposals, write "none" in the
+respective subsection. Keep both assessments visible; never collapse them into
+one verdict that masks a failure or missing evidence on the other axis.
 
 ## 8. Never edit on your own
 
