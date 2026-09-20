@@ -22,6 +22,30 @@ start_sway() {
   return 1
 }
 
+sync_screenshot_clipboard() {
+  local screenshot=
+  local candidate
+
+  # Seed the sandbox clipboard with the most recent host screenshot, then keep
+  # it current as Noctalia saves new screenshots into the mounted directory.
+  while IFS= read -r candidate; do
+    if [[ -z $screenshot || $candidate -nt $screenshot ]]; then
+      screenshot=$candidate
+    fi
+  done < <(find /tmp/screenshot -maxdepth 1 -type f -name '*.png' -print)
+
+  if [[ -n $screenshot ]]; then
+    wl-copy --type image/png <"$screenshot"
+  fi
+
+  inotifywait --monitor --quiet --event close_write,moved_to --format '%w%f' /tmp/screenshot |
+    while IFS= read -r screenshot; do
+      if [[ $screenshot == *.png && -f $screenshot ]]; then
+        wl-copy --type image/png <"$screenshot"
+      fi
+    done
+}
+
 renderer=
 for candidate in ${AGENT_SANDBOX_RENDERERS:-gles2 pixman}; do
   if start_sway "$candidate"; then
@@ -34,6 +58,7 @@ if [[ -z $renderer ]]; then
   echo "agent-sandbox: sway failed to start; see $log_dir" >&2
 else
   echo "$renderer" >"$XDG_RUNTIME_DIR/renderer"
+  sync_screenshot_clipboard >"$log_dir/clipboard.log" 2>&1 &
   wayvnc --log-level=warning 0.0.0.0 5900 >"$log_dir/wayvnc.log" 2>&1 &
 fi
 
