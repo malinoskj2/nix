@@ -1,11 +1,9 @@
 { pkgs, ... }:
 {
-  imports = [ ../htop.nix ];
-
-  programs.btop = {
-    enable = true;
-    settings.vim_keys = true;
-  };
+  imports = [
+    ../btop.nix
+    ../htop.nix
+  ];
 
   home.packages = with pkgs; [
     ata-devs
