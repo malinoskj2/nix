@@ -16,6 +16,9 @@ so the build workflow stands on its own.
 
 - Use the arguments and conversation to identify the requested behavior and its
   acceptance criteria. If neither gives a task, ask what to build before editing.
+- Keep a concise list of those criteria with their source in the request or spec.
+  Preserve criterion IDs supplied by the orchestrator. Distinguish assumptions
+  from requirements; implementation choices do not redefine the requested behavior.
 - Read the repository instructions, working-tree diff and relevant files in full,
   including callers, collaborators and nearby tests. Preserve unrelated work.
 - Read `composer.json` and `composer.lock` for the PHP/Laravel versions, packages
@@ -146,6 +149,18 @@ change.
   domain, then give its steps coherent implementations. A reader should understand
   the operation without mentally executing query details, array transformations
   or state bookkeeping.
+- **Hide meaningful complexity.** For each substantial abstraction, identify what
+  callers no longer need to know: invariants, ordering, transactions, storage
+  details or error handling. The interface includes these obligations as well as
+  method signatures; a short method name alone does not make it simple to use.
+  For example, `ReserveStock` should own the stock invariant and locking/transaction
+  coordination at the appropriate boundary, so callers cannot accidentally bypass
+  them by omitting a preparatory step.
+- **Keep knowledge local.** A change to an encapsulated rule should usually stay
+  inside its owner. Imagine removing an abstraction: if callers would have to
+  recover meaningful rules or mechanics, it earns its place, even with one caller.
+  If removing it only eliminates forwarding, reconsider the layer. Judge the
+  knowledge hidden, not implementation size or the number of extracted methods.
 - **Extract meaningful concepts early.** A named scope for eligibility, a value
   object for a date range or an Action for reserving stock can earn its place on
   first use. Don't wait for duplication when the concept already has a clear
@@ -241,6 +256,10 @@ change.
   when shared behavior or a failing check warrants it.
 - Inspect the final diff against the requested behavior and the rules above.
   Fix issues introduced by the implementation and rerun the relevant checks.
+- Account for every acceptance criterion with implementation locations and the
+  relevant tests or other verification results. Mark missing/partial behavior as
+  a gap and absent verification as unverified. Passing checks only prove the
+  behavior they actually exercise; report these gaps separately from code quality.
 - Finish with a terse account of what changed, verification results and any
   unresolved limitation. Identify checks that could not run. Mention required
   migrations or worker restarts without claiming they have been applied.
