@@ -19,6 +19,7 @@ in
     plugins = [ inputs.caveman ];
     skills = {
       gauntlet = ./skills/gauntlet;
+      laravel-build-jesse = ./skills/laravel-build-jesse;
       laravel-review-jesse = ./skills/laravel-review-jesse;
       recommit = ./skills/recommit;
     };

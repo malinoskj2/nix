@@ -103,10 +103,13 @@ Each is a check on new or changed code. Pre-existing violations in untouched cod
 
 Look actively for abstractions in the new code **and the existing code next to it**. The goal is code the Laravel community would call spectacular: declarative, at exactly the right level of abstraction for the problem, and without imperative plumbing.
 
+- **Review from the call site.** The main flow should tell the business story in domain language. Look for callers that must understand query details, array transformations or state bookkeeping that belong inside a named operation or type. Propose improvements even when the code is correct and has no duplication.
+- **Extract meaningful concepts on first use.** A scope for eligibility, a value object for a date range or an Action for reserving stock can earn its place with one caller. Naming a business operation, protecting an invariant and separating policy from mechanics are sufficient reasons; don't wait for a second use.
+- **Keep orchestration at one level.** Identify methods that mix business decisions with low-level mechanics. A proposed extraction must give the responsibility a meaningful name and make both sides easier to understand; moving an opaque block into `process()` or `handleData()` is not an improvement.
 - **Kill imperative code.** Loops with accumulators, index juggling, flag variables, nested `if` ladders and manual array building should become Collection pipelines (`map`, `filter`, `flatMap`, `groupBy`, `keyBy`, `partition`, `reduce`, `sum`, `pipe`), higher-order messages (`$users->each->notify()`), `match`, query-builder constraints or Eloquent relations. Keep a `foreach` only for an early `break`, heavy side effects or a measured hot path.
 - **Reach for a fluent API before writing plumbing** — see the fluency rules below.
-- **Right-size it.** Propose an abstraction only when it removes real duplication, names a real concept, or lets a caller read as intent. Don't add an interface with one implementation, a base class with one child, or a "Manager" or "Helper" grab bag.
-- **The Laravel toolbox, roughly from lightest to heaviest:**
+- **Make every layer earn its place.** Judge abstractions by expressive call sites, cohesive responsibilities and encapsulated rules. Avoid pass-through layers, speculative extension points and "Manager" or "Helper" grab bags. An interface or base class needs a concrete boundary or shared contract to express. Fewer classes or lines is not the objective.
+- **Choose from the Laravel toolbox by responsibility:**
   - query scope or custom Eloquent builder
   - accessor or custom cast
   - value object or enum with methods
@@ -119,7 +122,9 @@ Look actively for abstractions in the new code **and the existing code next to i
   - a dedicated service
   - a contract bound in a provider
 
-  Pick the lightest one that fits.
+  Choose the simplest implementation that fully expresses the concept. Scopes and builders name queries; casts, value objects and enums model domain values; Actions express business operations. Don't leave a substantial operation as inline plumbing merely because it has one caller.
+
+- **Review the resulting shape.** Each proposal should show how the caller becomes clearer and where the underlying responsibility belongs. Give substantial pipelines a domain name when useful. Code that works but remains procedural or awkward to use still deserves an abstraction proposal.
 
 ### Fluency
 
@@ -132,7 +137,7 @@ Laravel's fluent surfaces are the default way to express a transformation. Prefe
 - **Dates, numbers, files**: `Carbon`'s chain (`now()->startOfDay()->addWeekdays(3)`), `Number::` helpers, `Storage::disk()->…` rather than hand-rolled formatting or math.
 - **Side effects mid-chain** go in `tap()`; a chain that needs a temporary usually wants `pipe()`.
 - **Your own types**: when a caller configures an object step by step, give it a fluent builder — named `with*`/`for*`/verb methods returning `static`, a terminal method that executes (`send()`, `get()`, `dispatch()`), and `Conditionable`/`Macroable` where they fit. Model it on the framework's own builders: a static entry point (`Invoice::for($user)`), immutable or clone-on-write if the object is shared.
-- **Don't force it.** No fluent wrapper for a single call site or a single option, no chain so long the intent is lost, and no fluent setter on a DTO that should be `readonly` with a constructor.
+- **Make fluency meaningful.** A single caller is sufficient when fluent vocabulary makes a substantial operation clearer. Each method should express a meaningful choice or step. Avoid ceremonial wrappers, chains so long the intent is lost and fluent setters on DTOs that should be `readonly` with a constructor.
 
 
 **Every abstraction proposal gives 2–3 options the community would accept, with exactly one marked ★ recommended.** Each option gets one line on what it is, one PRO/CON line, and a short code sketch for the ★ option.
