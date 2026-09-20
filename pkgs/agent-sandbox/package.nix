@@ -6,6 +6,7 @@
   cacert,
   caveman,
   claude-code,
+  codex,
   coreutils,
   curl,
   dbus,
@@ -63,6 +64,7 @@ let
       beads_rust
       blender
       claude
+      codex
       coreutils
       curl
       dbus
@@ -165,11 +167,13 @@ writeShellApplication {
   ];
   runtimeEnv = {
     AGENT_SANDBOX_IMAGE = image;
-    AGENT_SANDBOX_REF = "${image.imageName}:${image.imageTag}";
+    # Prefix numeric-leading tags so ShellCheck does not mistake the generated
+    # environment assignment for arithmetic (SC2100).
+    AGENT_SANDBOX_TAG = "hash-${image.imageTag}";
   };
   text = builtins.readFile ./agent-sandbox.sh;
   meta = {
-    description = "Run Claude Code in a Docker sandbox with the GPU and a headless Wayland session";
+    description = "Run Claude Code or Codex in a Docker sandbox with the GPU and a headless Wayland session";
     platforms = lib.platforms.linux;
   };
 }
