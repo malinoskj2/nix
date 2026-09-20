@@ -17,6 +17,28 @@ sandbox_home=$data/home
 shared=("$HOME/projects" "$HOME/nix" "$HOME/.cache/img2char3d")
 screenshots=/tmp/screenshot
 image_ref="agent-sandbox:${AGENT_SANDBOX_TAG#hash-}"
+clipboard_dir=$(mktemp --directory "$runtime/agent-sandbox-clipboard.XXXXXX")
+
+cleanup() {
+  trap - EXIT
+  if [[ -n ${clipboard_watcher_pid:-} ]]; then
+    kill "$clipboard_watcher_pid" 2>/dev/null || true
+    wait "$clipboard_watcher_pid" 2>/dev/null || true
+  fi
+  rm -f -- "$clipboard_dir/image" "$clipboard_dir/.change" "$clipboard_dir/watcher.log"
+  rmdir -- "$clipboard_dir"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' HUP TERM
+
+# Mirror the host image clipboard through an isolated bind mount. A host-side
+# watcher is required because the sandbox has its own headless Wayland session.
+CLIPBOARD_STATE=data agent-sandbox-clipboard-sync "$clipboard_dir" \
+  < <(wl-paste --type image 2>/dev/null)
+wl-paste --type image --watch agent-sandbox-clipboard-sync "$clipboard_dir" \
+  >/dev/null 2>"$clipboard_dir/watcher.log" &
+clipboard_watcher_pid=$!
 
 mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.config/git"
 for dir in "${shared[@]}"; do
@@ -82,6 +104,7 @@ for dir in "${shared[@]}"; do
   args+=(--volume "$dir:$dir")
 done
 args+=(--volume "$screenshots:$screenshots:ro")
+args+=(--volume "$clipboard_dir:/run/host-clipboard:ro")
 
 if [[ -d $HOME/.config/git ]]; then
   args+=(--volume "$HOME/.config/git:$HOME/.config/git:ro")
@@ -140,5 +163,5 @@ echo "agent-sandbox: VNC on 127.0.0.1:$vnc_port" >&2
 if [[ $agent == codex ]]; then
   set -- codex --dangerously-bypass-approvals-and-sandbox "$@"
 fi
-exec systemd-inhibit --what=idle --who=agent-sandbox --why="agent sandbox running" \
+systemd-inhibit --what=idle --who=agent-sandbox --why="agent sandbox running" \
   docker run "${args[@]}" "$image_ref" "$@"
