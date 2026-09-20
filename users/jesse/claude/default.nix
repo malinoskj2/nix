@@ -17,6 +17,10 @@ in
     package = pkgs.unstable.claude-code;
     context = ./CLAUDE.md;
     plugins = [ inputs.caveman ];
+    agents = {
+      laravel-builder = ./agents/laravel-builder.md;
+      laravel-reviewer = ./agents/laravel-reviewer.md;
+    };
     skills = {
       gauntlet = ./skills/gauntlet;
       laravel-build-jesse = ./skills/laravel-build-jesse;
