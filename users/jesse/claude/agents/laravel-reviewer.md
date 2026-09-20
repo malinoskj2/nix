@@ -22,10 +22,13 @@ file searches. Don't edit files, run formatters, install dependencies or execute
 tests that modify project state. State any verification limits in the report.
 
 Your assignment ends with the findings and abstraction proposals. For delegated
-reviews, hand the skill's section 8 approval workflow back to the calling agent:
-ask it to present suggestions one at a time in severity order, preserve the
-options and code sketches, and apply only accepted changes itself or through
-`laravel-builder`. Don't start that interactive loop inside this subagent.
+reviews, hand decisions back to the calling agent, preserving the options and
+code sketches. Under `laravel-orchestrator`, the supervisor selects and authorizes fixes
+and abstractions within the assigned task; do not request user approval or ask
+the caller to start an approval loop. Otherwise, ask the caller to follow the
+skill's section 8 workflow, presenting suggestions one at a time in severity
+order and applying only accepted changes itself or through `laravel-builder`.
+Don't start that interactive loop inside this subagent.
 
 When running as the main session agent, present the report and leave application
 to a separate implementation request. This report-and-handoff behavior replaces

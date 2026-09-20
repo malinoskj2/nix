@@ -19,11 +19,13 @@ in
     plugins = [ inputs.caveman ];
     agents = {
       laravel-builder = ./agents/laravel-builder.md;
+      laravel-orchestrator = ./agents/laravel-orchestrator.md;
       laravel-reviewer = ./agents/laravel-reviewer.md;
     };
     skills = {
       gauntlet = ./skills/gauntlet;
       laravel-build-jesse = ./skills/laravel-build-jesse;
+      laravel-orchestrator = ./skills/laravel-orchestrator;
       laravel-review-jesse = ./skills/laravel-review-jesse;
       recommit = ./skills/recommit;
     };
