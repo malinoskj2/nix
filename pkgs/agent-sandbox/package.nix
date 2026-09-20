@@ -27,6 +27,7 @@
   grim,
   gzip,
   hy3dgen,
+  inotify-tools,
   jq,
   less,
   lib,
@@ -43,6 +44,7 @@
   unzip,
   wayvnc,
   which,
+  wl-clipboard,
   wlrctl,
   writeShellApplication,
   writeShellScriptBin,
@@ -80,6 +82,7 @@ let
       gnutar
       grim
       gzip
+      inotify-tools
       jq
       less
       nix
@@ -92,6 +95,7 @@ let
       unzip
       wayvnc
       which
+      wl-clipboard
       wlrctl
       wtype
       xwayland
