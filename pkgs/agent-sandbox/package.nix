@@ -4,7 +4,6 @@
   blender,
   buildEnv,
   cacert,
-  caveman,
   claude-code,
   codex,
   coreutils,
@@ -56,7 +55,7 @@
 
 let
   claude = writeShellScriptBin "claude" ''
-    exec ${lib.getExe claude-code} --plugin-dir ${caveman} "$@"
+    exec ${lib.getExe claude-code} "$@"
   '';
 
   env = buildEnv {

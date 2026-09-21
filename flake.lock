@@ -77,22 +77,6 @@
         "type": "github"
       }
     },
-    "caveman": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1789663592,
-        "narHash": "sha256-gMoBDg9YshDymtr872sbQFKy9qhjP/GRVal5DR7lDmU=",
-        "owner": "JuliusBrussee",
-        "repo": "caveman",
-        "rev": "542442bab314973709f95b85b1ac0b3f6f5b5dc6",
-        "type": "github"
-      },
-      "original": {
-        "owner": "JuliusBrussee",
-        "repo": "caveman",
-        "type": "github"
-      }
-    },
     "ci": {
       "inputs": {
         "blueprint": "blueprint",
@@ -293,7 +277,6 @@
       "inputs": {
         "apple-fonts": "apple-fonts",
         "catppuccin": "catppuccin",
-        "caveman": "caveman",
         "flake-parts": "flake-parts",
         "home-manager": "home-manager",
         "nix-index-database": "nix-index-database",

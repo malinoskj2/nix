@@ -1,5 +1,4 @@
 {
-  inputs,
   lib,
   pkgs,
   ...
@@ -16,7 +15,6 @@ in
     enable = true;
     package = pkgs.unstable.claude-code;
     context = ./CLAUDE.md;
-    plugins = [ inputs.caveman ];
     agents = {
       laravel-builder = ./agents/laravel-builder.md;
       laravel-orchestrator = ./agents/laravel-orchestrator.md;
@@ -56,11 +54,6 @@ in
           ];
         }
       ];
-      statusLine = {
-        type = "command";
-        command = "bash ${inputs.caveman}/src/hooks/caveman-statusline.sh";
-      };
-
       permissions = {
         allow = [
           "Bash(ls:*)"

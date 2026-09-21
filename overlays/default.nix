@@ -13,7 +13,6 @@ in
     final: _prev:
     import ../pkgs {
       pkgs = final;
-      inherit (inputs) caveman;
     };
 
   unstable = final: _prev: {
