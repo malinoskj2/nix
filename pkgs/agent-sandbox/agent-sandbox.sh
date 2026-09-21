@@ -140,7 +140,14 @@ if [[ $agent == codex ]]; then
     cp "$HOME/.codex/auth.json" "$sandbox_home/.codex/auth.json"
   fi
 
-  for name in config.toml rules skills plugins; do
+  # Seed a writable config once so Codex can persist project trust and settings.
+  # Older launches left an empty mount placeholder, which also needs seeding.
+  if [[ -f $HOME/.codex/config.toml && ! -s $sandbox_home/.codex/config.toml ]]; then
+    cp "$HOME/.codex/config.toml" "$sandbox_home/.codex/config.toml"
+    chmod u+w "$sandbox_home/.codex/config.toml"
+  fi
+
+  for name in rules skills plugins; do
     src=$HOME/.codex/$name
     if [[ -d $src ]]; then
       mkdir -p "$sandbox_home/.codex/$name"
