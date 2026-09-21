@@ -1,9 +1,8 @@
-{ pkgs, caveman }:
+{ pkgs }:
 let
   # The hosts install claude-code, codex and noctalia from pkgs.unstable; wrappers use those builds.
   callPackage = pkgs.newScope {
     inherit (pkgs.unstable) claude-code codex noctalia;
-    inherit caveman;
     # beads_rust needs rustc >= 1.96, newer than the release.
     inherit (pkgs.unstable) rustPlatform;
   };

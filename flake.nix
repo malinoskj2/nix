@@ -9,12 +9,6 @@
       rev = "3861e2249cb244bfbc7cfab2303c152cf5f9d9e9";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    caveman = {
-      type = "github";
-      owner = "JuliusBrussee";
-      repo = "caveman";
-      flake = false;
-    };
     catppuccin = {
       type = "github";
       owner = "catppuccin";
