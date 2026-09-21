@@ -1,6 +1,6 @@
 {
   bashInteractive,
-  beads_rust,
+  # beads_rust, # dropped in favor of native Claude tasks; use if native tasks not available
   blender,
   buildEnv,
   cacert,
@@ -62,7 +62,7 @@ let
     name = "agent-sandbox-env";
     paths = [
       bashInteractive
-      beads_rust
+      # beads_rust
       blender
       claude
       codex
