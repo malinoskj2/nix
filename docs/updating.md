@@ -90,6 +90,12 @@ Treat a bump as a hardware change and test it on the device.
   `pkgs/os-specific/linux/nvidia-x11/default.nix` in nixos-unstable. Once
   NVIDIA's production branch passes the pinned version, move back to the
   `production` entry.
+- **claude-code.** The `unstable` overlay in
+  [`overlays/default.nix`](../overlays/default.nix) builds claude-code from
+  [`overlays/claude-code/manifest.zst.json`](../overlays/claude-code/manifest.zst.json)
+  instead of the version in `nixpkgs-unstable`. To move it, replace that file
+  with `https://downloads.claude.ai/claude-code-releases/<version>/manifest.zst.json`.
+  Drop the override once `nixpkgs-unstable` catches up.
 - **htop.** [`pkgs/htop-vim-navigation/`](../pkgs/htop-vim-navigation) asserts
   the htop versions its patch was checked against. If a nixpkgs update trips
   it, re-check the patch next to it and add the new version.

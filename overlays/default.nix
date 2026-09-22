@@ -15,9 +15,19 @@ in
       pkgs = final;
     };
 
-  unstable = final: _prev: {
-    unstable = importNixpkgs inputs.nixpkgs-unstable final;
-  };
+  unstable =
+    final: _prev:
+    let
+      unstable = importNixpkgs inputs.nixpkgs-unstable final;
+    in
+    {
+      unstable = unstable // {
+        # TODO: drop this override and the manifest once nixpkgs-unstable reaches 2.1.280.
+        claude-code = unstable.claude-code.override {
+          manifest = final.lib.importJSON ./claude-code/manifest.zst.json;
+        };
+      };
+    };
 
   pins =
     final: _prev:
