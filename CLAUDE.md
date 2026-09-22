@@ -79,6 +79,11 @@ input's overlay adds `pkgs.sf-pro`, `sf-compact`, `sf-mono` and `ny`.
 Patches sit next to what applies them: a `pkgs/` package keeps its patch in its
 own directory, and overlay patches live in `overlays/patches/<package>/`.
 
+### Tasks
+
+"Create tasks" means create native Claude tasks only. Don't start work on them
+until told.
+
 ### Working here
 
 Format and lint with `nix fmt` (treefmt: deadnix, statix and nixfmt for Nix,
