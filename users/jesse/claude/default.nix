@@ -33,6 +33,7 @@ in
     settings = {
       model = "claude-opus-5-5[1m]";
       effortLevel = "high";
+      modelSettings.claude-opus-5-5.effortLevel = "high";
       theme = "dark";
       skipDangerousModePermissionPrompt = true;
       inputNeededNotifEnabled = true;
