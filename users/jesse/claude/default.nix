@@ -11,6 +11,8 @@ let
   };
 in
 {
+  home.file.".claude/keybindings.json".source = ./keybindings.json;
+
   programs.claude-code = {
     enable = true;
     package = pkgs.unstable.claude-code;

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://www.schemastore.org/claude-code-keybindings.json",
+  "$docs": "https://code.claude.com/docs/en/keybindings",
+  "bindings": [
+    {
+      "context": "ModelPicker",
+      "bindings": {
+        "h": "modelPicker:decreaseEffort",
+        "l": "modelPicker:increaseEffort"
+      }
+    },
+    {
+      "context": "Tabs",
+      "bindings": {
+        "h": "tabs:previous",
+        "l": "tabs:next"
+      }
+    },
+    {
+      "context": "DiffDialog",
+      "bindings": {
+        "h": "diff:previousSource",
+        "l": "diff:nextSource"
+      }
+    },
+    {
+      "context": "Footer",
+      "bindings": {
+        "h": "footer:previous",
+        "l": "footer:next"
+      }
+    },
+    {
+      "context": "Attachments",
+      "bindings": {
+        "h": "attachments:previous",
+        "l": "attachments:next"
+      }
+    }
+  ]
+}
