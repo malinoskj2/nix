@@ -48,14 +48,15 @@
   };
 
   # agent-sandbox runs its container under this slice. MemoryHigh reclaims before
-  # MemoryMax kills, and MemorySwapMax keeps a runaway agent out of the swapfile.
+  # MemoryMax kills. A little swap is needed so reclaim can page out tmpfs; with
+  # none, tmpfs over MemoryHigh stalls the whole slice instead of getting killed.
   systemd.slices.agent-sandbox.sliceConfig = {
     # The sandbox shares cores 4-7 with the desktop. If games or the browser
     # stutter on them, a low CPUWeight here hands those cores to the desktop on
     # contention without shrinking the cpuset.
     MemoryHigh = "20G";
     MemoryMax = "24G";
-    MemorySwapMax = "0";
+    MemorySwapMax = "4G";
   };
 
   programs.nix-index-database.comma.enable = true;
