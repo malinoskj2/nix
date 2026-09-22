@@ -31,7 +31,7 @@ in
     };
 
     settings = {
-      model = "claude-fable-5-1[1m]";
+      model = "claude-opus-5-5[1m]";
       effortLevel = "high";
       theme = "dark";
       skipDangerousModePermissionPrompt = true;
