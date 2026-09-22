@@ -9,6 +9,7 @@
     ai-usage
     git-commitu
     git-open-branch
+    markdown-to-pdf
     pubip
 
     bc

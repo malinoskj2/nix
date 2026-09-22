@@ -76,8 +76,9 @@ args=(
   --pids-limit 8192
   # Memory limits come from the slice, which reclaims before it kills.
   --cgroup-parent agent-sandbox.slice
-  # CCD1 only, so the sandbox can't contend for the V-cache die.
-  --cpuset-cpus "8-15,24-31"
+  # All of CCD1 plus half of CCD0, leaving cores 0-3 and their SMT siblings to
+  # the desktop alone.
+  --cpuset-cpus "4-15,20-31"
   --shm-size 2g
   --device nvidia.com/gpu=all
   --publish "127.0.0.1:$vnc_port:5900"
@@ -136,7 +137,7 @@ if [[ $agent == codex ]]; then
   # Keep mutable Codex state isolated, but seed authentication from the host. The
   # newer copy wins so a token refreshed in either environment is not replaced by
   # an older one on the next launch.
-  if [[ -f $HOME/.codex/auth.json && ( ! -f $sandbox_home/.codex/auth.json || $HOME/.codex/auth.json -nt $sandbox_home/.codex/auth.json ) ]]; then
+  if [[ -f $HOME/.codex/auth.json && (! -f $sandbox_home/.codex/auth.json || $HOME/.codex/auth.json -nt $sandbox_home/.codex/auth.json) ]]; then
     cp "$HOME/.codex/auth.json" "$sandbox_home/.codex/auth.json"
   fi
 
