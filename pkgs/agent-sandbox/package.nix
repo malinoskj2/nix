@@ -32,6 +32,7 @@
   lib,
   liberation_ttf,
   makeFontsConf,
+  mold,
   nix,
   nodejs,
   procps,
@@ -84,6 +85,7 @@ let
       inotify-tools
       jq
       less
+      mold
       nix
       nodejs
       procps
@@ -163,6 +165,9 @@ let
         "WAYLAND_DISPLAY=wayland-1"
         "MOZ_ENABLE_WAYLAND=1"
         "NIXOS_OZONE_WL=1"
+        "CARGO_PROFILE_DEV_DEBUG=line-tables-only"
+        "CARGO_PROFILE_TEST_DEBUG=line-tables-only"
+        "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS=-C link-arg=-fuse-ld=mold"
       ];
     };
   };
