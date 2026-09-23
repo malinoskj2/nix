@@ -28,6 +28,8 @@ If the display doesn't work, tell the user straight away instead of working arou
 
 Blender and a Python with torch (CUDA) and hy3dgen (Hunyuan3D) are installed; `~/projects/img2char3d` runs directly on them. Nix talks to the host daemon. Get a missing tool with `nix shell nixpkgs#<package>` or `nix run nixpkgs#<package>`.
 
+All sandboxes share a 20G memory limit; past it the kernel kills the largest process. Run one cargo build or test at a time, including across subagents and separate target dirs. Each one already uses every core, and several at once fill the limit with linkers.
+
 <!-- br (beads_rust, the issue tracker) was here; dropped in favor of native Claude tasks. `\`br\` (beads_rust, the issue tracker), ` used to prefix this line. -->
 <!-- use \`br\` if native tasks not available -->
 

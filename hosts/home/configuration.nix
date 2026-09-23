@@ -47,15 +47,15 @@
     MemoryMax = "24G";
   };
 
-  # agent-sandbox runs its container under this slice. MemoryHigh reclaims before
-  # MemoryMax kills. A little swap is needed so reclaim can page out tmpfs; with
-  # none, tmpfs over MemoryHigh stalls the whole slice instead of getting killed.
+  # agent-sandbox runs its containers under this slice. No MemoryHigh: once swap
+  # is full it can't reclaim anon memory and throttles every sandbox indefinitely
+  # instead of killing anything. MemoryMax reclaims too, then OOM-kills the
+  # largest process. A little swap lets reclaim page out tmpfs.
   systemd.slices.agent-sandbox.sliceConfig = {
     # The sandbox shares cores 4-7 with the desktop. If games or the browser
     # stutter on them, a low CPUWeight here hands those cores to the desktop on
     # contention without shrinking the cpuset.
-    MemoryHigh = "20G";
-    MemoryMax = "24G";
+    MemoryMax = "20G";
     MemorySwapMax = "4G";
   };
 
