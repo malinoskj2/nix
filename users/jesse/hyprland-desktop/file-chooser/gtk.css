@@ -1,0 +1,587 @@
+@import url("resource:///org/gtk/libgtk/theme/Adwaita/gtk-contained-dark.css");
+@import url("colors.css");
+
+/* Adwaita restyles an unfocused window through `:backdrop` rules that outrank the rules below, so
+   each surface the chooser shows also names its `:backdrop` state and looks the same unfocused. */
+
+window,
+dialog,
+popover,
+menu {
+  font-family: "SF Pro Text";
+  font-size: 10pt;
+  -gtk-icon-theme: "Couture";
+}
+
+/* Frame */
+
+decoration,
+.csd.tiled decoration {
+  border-radius: 20px;
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* GTK paints the window's background only below the header bar, so the header carries the same
+   glass and the two halves split the corners and the edge. Hyprland crops anything drawn outside
+   the window, so the edge is inset. */
+dialog.csd,
+dialog.csd.tiled {
+  border-radius: 0 0 20px 20px;
+  border: none;
+  background-color: @crust_chrome;
+  box-shadow:
+    inset 1px 0 0 alpha(@text, 0.18),
+    inset -1px 0 0 alpha(@text, 0.18),
+    inset 0 -1px 0 alpha(@text, 0.18);
+}
+
+/* The selvedge hem: the 14 accents as hard stops, 5px above the bottom edge. */
+dialog .dialog-vbox {
+  margin: 0 12px 5px;
+  padding-bottom: 9px;
+  background-image: linear-gradient(
+    to right,
+    alpha(@rosewater, 0.9) 7.14%,
+    alpha(@flamingo, 0.9) 7.14%,
+    alpha(@flamingo, 0.9) 14.29%,
+    alpha(@pink, 0.9) 14.29%,
+    alpha(@pink, 0.9) 21.43%,
+    alpha(@mauve, 0.9) 21.43%,
+    alpha(@mauve, 0.9) 28.57%,
+    alpha(@red, 0.9) 28.57%,
+    alpha(@red, 0.9) 35.71%,
+    alpha(@maroon, 0.9) 35.71%,
+    alpha(@maroon, 0.9) 42.86%,
+    alpha(@peach, 0.9) 42.86%,
+    alpha(@peach, 0.9) 50%,
+    alpha(@yellow, 0.9) 50%,
+    alpha(@yellow, 0.9) 57.14%,
+    alpha(@green, 0.9) 57.14%,
+    alpha(@green, 0.9) 64.29%,
+    alpha(@teal, 0.9) 64.29%,
+    alpha(@teal, 0.9) 71.43%,
+    alpha(@sky, 0.9) 71.43%,
+    alpha(@sky, 0.9) 78.57%,
+    alpha(@sapphire, 0.9) 78.57%,
+    alpha(@sapphire, 0.9) 85.71%,
+    alpha(@blue, 0.9) 85.71%,
+    alpha(@blue, 0.9) 92.86%,
+    alpha(@lavender, 0.9) 92.86%
+  );
+  background-size: 168px 3px;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+}
+
+/* Header bar */
+
+dialog headerbar.titlebar,
+dialog headerbar.titlebar:backdrop {
+  min-height: 54px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 20px 20px 0 0;
+  background: @crust_chrome;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 1px 0 alpha(@text, 0.18),
+    inset 1px 0 0 alpha(@text, 0.18),
+    inset -1px 0 0 alpha(@text, 0.18);
+}
+
+dialog headerbar .title {
+  font-size: 10.5pt;
+  font-weight: 600;
+  color: white;
+}
+
+dialog headerbar button,
+dialog headerbar button:backdrop {
+  min-height: 30px;
+  padding: 0 14px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  color: white;
+  font-weight: 500;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+}
+
+dialog headerbar button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+dialog headerbar button:active,
+dialog headerbar button:checked {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+dialog headerbar button.image-button,
+dialog headerbar button.image-button:backdrop {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: none;
+  background: @mantle;
+  box-shadow: inset 0 0 0 1px @surface0;
+  color: @overlay2;
+}
+
+dialog headerbar button.image-button:hover {
+  color: @text;
+}
+
+dialog headerbar button.image-button:checked {
+  box-shadow: inset 0 0 0 1px @mauve;
+  color: @mauve;
+}
+
+dialog headerbar button.suggested-action,
+dialog headerbar button.suggested-action:backdrop,
+dialog headerbar button.default,
+dialog headerbar button.default:backdrop {
+  padding: 0 18px;
+  border: none;
+  background: @mauve;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15),
+    0 4px 14px alpha(@mauve, 0.3);
+  color: @crust;
+  font-weight: 600;
+}
+
+dialog headerbar button.suggested-action:hover,
+dialog headerbar button.default:hover {
+  background: shade(@mauve, 1.06);
+}
+
+dialog headerbar button.suggested-action:focus,
+dialog headerbar button.default:focus {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15),
+    0 0 0 2px alpha(@base, 0.95),
+    0 0 0 4px alpha(@mauve, 0.75);
+}
+
+dialog headerbar button.suggested-action:disabled,
+dialog headerbar button.suggested-action:disabled:backdrop,
+dialog headerbar button.default:disabled,
+dialog headerbar button.default:disabled:backdrop {
+  background: alpha(@mauve, 0.35);
+  box-shadow: none;
+  color: alpha(@crust, 0.7);
+}
+
+dialog headerbar button:disabled label,
+dialog headerbar button:disabled:backdrop label {
+  color: inherit;
+}
+
+/* Panes */
+
+filechooser,
+filechooser > box,
+filechooser paned,
+filechooser stack.view,
+filechooser stack.view:backdrop {
+  background: none;
+  border: none;
+}
+
+filechooser paned > separator,
+filechooser paned > separator:backdrop {
+  min-width: 8px;
+  margin: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+}
+
+/* Sidebar */
+
+filechooser placessidebar.sidebar,
+filechooser placessidebar.sidebar:backdrop {
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+}
+
+/* GTK squares every corner of the places sidebar's own background, so the viewport inside it
+   carries the surface. */
+filechooser placessidebar viewport.frame {
+  padding: 10px 0;
+  border: none;
+  border-radius: 14px;
+  background-color: @mantle_layer;
+  /* Stitch ticks at both ends of the seam, the twill, and the sunset cloud. */
+  background-image:
+    linear-gradient(alpha(@mauve, 0.4), alpha(@mauve, 0.4)),
+    linear-gradient(alpha(@mauve, 0.4), alpha(@mauve, 0.4)),
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.018) 0,
+      rgba(255, 255, 255, 0.018) 1px,
+      transparent 1px,
+      transparent 4px
+    ),
+    -gtk-scaled(url("sunset-cloud.svg"), url("sunset-cloud-2x.svg"));
+  background-size: 9px 1px, 9px 1px, auto, 40px 20px;
+  background-position: 100% 0, 100% 100%, 0 0, 14px 100%;
+  background-origin: content-box, content-box, border-box, content-box;
+  background-repeat: no-repeat, no-repeat, repeat, no-repeat;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* Its right border is the seam, 4px in from the sidebar's edge. */
+filechooser placessidebar list {
+  margin-right: 4px;
+  padding: 2px 4px 48px 8px;
+  border: none;
+  border-right: 1px dashed alpha(@mauve, 0.22);
+  background: none;
+}
+
+filechooser placessidebar row,
+filechooser placessidebar row:backdrop {
+  min-height: 30px;
+  margin: 0;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: @subtext1;
+}
+
+filechooser placessidebar row image.sidebar-icon {
+  margin-right: 2px;
+  -gtk-icon-style: regular;
+}
+
+filechooser placessidebar row:hover {
+  background: alpha(@text, 0.04);
+}
+
+filechooser placessidebar row:selected,
+filechooser placessidebar row:selected:hover,
+filechooser placessidebar row.activatable:selected:backdrop {
+  background: alpha(@mauve, 0.14);
+  color: @mauve;
+}
+
+filechooser placessidebar row:selected label,
+filechooser placessidebar row:selected:backdrop label {
+  color: @mauve;
+}
+
+filechooser placessidebar list > separator {
+  min-height: 1px;
+  margin: 8px 10px 4px;
+  background: @surface0;
+}
+
+/* List pane */
+
+filechooser paned > box {
+  border-radius: 14px;
+  background-color: @base_solid;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+filechooser #pathbarbox {
+  min-height: 48px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 14px 14px 0 0;
+  background: none;
+}
+
+filechooser .path-bar {
+  padding: 3px;
+  border-radius: 9px;
+  background: @mantle;
+  box-shadow: inset 0 0 0 1px @surface0;
+}
+
+filechooser .path-bar button,
+filechooser .path-bar button:backdrop {
+  min-height: 20px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  box-shadow: none;
+  color: @subtext1;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+}
+
+filechooser .path-bar button:hover {
+  background: alpha(@text, 0.06);
+  color: @text;
+}
+
+filechooser .path-bar button:checked,
+filechooser .path-bar button:checked:backdrop {
+  padding-left: 20px;
+  background-color: @surface0;
+  background-image: linear-gradient(@blue, @blue);
+  background-size: 6px 6px;
+  background-position: 8px center;
+  background-repeat: no-repeat;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  color: white;
+  font-weight: 500;
+}
+
+filechooser #pathbarbox > stack > box > button,
+filechooser #pathbarbox > stack > box > menubutton > button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  background: @mantle;
+  box-shadow: inset 0 0 0 1px @surface0;
+  color: @overlay2;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+}
+
+filechooser #pathbarbox > stack > box > button:hover,
+filechooser #pathbarbox > stack > box > button:checked {
+  color: @mauve;
+}
+
+filechooser .path-bar button.slider-button {
+  padding: 0 4px;
+  color: @surface2;
+}
+
+filechooser entry,
+filechooser entry:backdrop,
+popover entry,
+popover entry:backdrop {
+  min-height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 9px;
+  background: @mantle;
+  box-shadow: inset 0 0 0 1px @surface0;
+  color: @text;
+  caret-color: @mauve;
+}
+
+filechooser entry:focus,
+popover entry:focus {
+  box-shadow:
+    inset 0 0 0 1px @mauve,
+    0 0 0 3px alpha(@mauve, 0.18);
+}
+
+filechooser entry selection,
+popover entry selection {
+  background: alpha(@mauve, 0.32);
+  color: @text;
+}
+
+filechooser entry image {
+  color: @overlay2;
+}
+
+/* File list */
+
+filechooser treeview.view,
+filechooser treeview.view:backdrop {
+  -GtkTreeView-horizontal-separator: 12px;
+  -GtkTreeView-vertical-separator: 14px;
+  border-radius: 6px;
+  background: none;
+  color: @text;
+}
+
+filechooser treeview.view:hover {
+  background: alpha(@mauve, 0.09);
+}
+
+filechooser treeview.view:selected,
+filechooser treeview.view:selected:focus,
+filechooser treeview.view:selected:backdrop {
+  background: alpha(@mauve, 0.18);
+  color: white;
+}
+
+filechooser treeview.view header button,
+filechooser treeview.view header button:hover,
+filechooser treeview.view header button:backdrop {
+  min-height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-bottom: 1px solid @surface0;
+  background: none;
+  box-shadow: none;
+  color: @overlay0;
+  font-size: 11.5px;
+  text-shadow: none;
+}
+
+filechooser treeview.view header button:hover label {
+  color: @subtext1;
+}
+
+filechooser treeview.view header button image {
+  color: @mauve;
+}
+
+filechooser scrolledwindow undershoot.top {
+  background: linear-gradient(to bottom, @base_solid, transparent);
+  background-size: 100% 12px;
+  background-repeat: no-repeat;
+}
+
+filechooser scrolledwindow undershoot.bottom {
+  background: linear-gradient(to top, @base_solid, transparent);
+  background-size: 100% 20px;
+  background-position: bottom;
+  background-repeat: no-repeat;
+}
+
+filechooser scrollbar,
+filechooser scrollbar:backdrop {
+  border: none;
+  background: none;
+}
+
+filechooser scrollbar slider,
+filechooser scrollbar.overlay-indicator slider {
+  min-width: 4px;
+  min-height: 4px;
+  border: none;
+  border-radius: 2px;
+  background: alpha(@text, 0.16);
+}
+
+filechooser scrollbar slider:hover {
+  background: alpha(@text, 0.28);
+}
+
+/* Bottom bar */
+
+filechooser actionbar {
+  margin-top: 8px;
+}
+
+filechooser actionbar > revealer > box {
+  min-height: 42px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 14px;
+  background: @mantle_solid;
+  box-shadow: inset 0 0 0 1px @surface0;
+  color: @subtext1;
+}
+
+filechooser combobox button.combo {
+  min-height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 7px;
+  background: @surface0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: @text;
+  text-shadow: none;
+}
+
+filechooser combobox button.combo arrow,
+filechooser combobox button.combo widget {
+  color: @overlay1;
+}
+
+filechooser checkbutton check {
+  border: 1px solid @surface1;
+  border-radius: 4px;
+  background: @surface0;
+  box-shadow: none;
+  -gtk-icon-shadow: none;
+}
+
+filechooser checkbutton check:checked {
+  border-color: @mauve;
+  background: @mauve;
+  color: @crust;
+}
+
+/* Popovers and menus */
+
+popover,
+popover.background,
+menu,
+.menu,
+.context-menu {
+  padding: 6px;
+  border: 1px solid @surface0;
+  border-radius: 9px;
+  background: @mantle;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  color: @text;
+}
+
+menu menuitem,
+popover modelbutton {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: @text;
+  text-shadow: none;
+}
+
+menu menuitem:hover,
+popover modelbutton:hover {
+  background: alpha(@mauve, 0.14);
+  color: @mauve;
+}
+
+popover button.suggested-action {
+  min-height: 30px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 9px;
+  background: @mauve;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  color: @crust;
+  font-weight: 600;
+  text-shadow: none;
+}
+
+popover button.suggested-action:disabled {
+  background: alpha(@mauve, 0.35);
+  color: alpha(@crust, 0.7);
+}
+
+popover label {
+  color: @subtext1;
+}
+
+popover modelbutton check,
+menu menuitem check {
+  border: 1px solid @surface1;
+  border-radius: 4px;
+  background: @surface0;
+  box-shadow: none;
+  -gtk-icon-shadow: none;
+}
+
+popover modelbutton check:checked,
+menu menuitem check:checked {
+  border-color: @mauve;
+  background: @mauve;
+  color: @crust;
+}
