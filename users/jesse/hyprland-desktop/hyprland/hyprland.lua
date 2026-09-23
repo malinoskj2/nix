@@ -26,6 +26,17 @@ local HYPRBARS_TEXT = "rgb(d7dae0)"
 local INACTIVE_BORDER = "rgba(595959aa)"
 local SHADOW = "rgba(00000059)"
 
+-- The file chooser takes this share of the window that opened it, but stays usable over small ones.
+local PICKER_PARENT_SHARE = 0.75
+local PICKER_MIN_SIZE = { x = 700, y = 450 }
+local PICKER_PARENT_TAG = "picker-parent"
+-- GTK draws the chooser's first frames at its default size before it redraws at the size the hook
+-- sets, so the chooser waits below the screen that long before sliding up.
+local PICKER_SLIDE_DELAY_MS = 80
+local PICKER_PARENT_RESTORING_TAG = "picker-parent-restoring"
+-- `fadeSwitch` runs 300ms; the restoring tag outlasts it.
+local PICKER_PARENT_RESTORE_MS = 350
+
 -- These Noctalia layer namespaces omit the `noctalia-` prefix, which `noctalia_layers` adds.
 local GLASS_LAYERS = { "bar-.+", "panel", "attached-panel" }
 local TRANSLUCENT_LAYERS = { "notification", "dock", "osd", "window-switcher" }
@@ -147,15 +158,23 @@ hl.layer_rule({
   ignore_alpha = 0.05,
 })
 
-hl.curve("overshoot", { type = "bezier", points = { { 0.05, 0.9 }, { 0.1, 1.05 } } })
-hl.animation({ leaf = "windows", enabled = true, speed = 7, bezier = "overshoot" })
-hl.animation({ leaf = "windowsOut", enabled = true, speed = 7, bezier = "default", style = "popin 80%" })
+-- Springs keep their velocity when retargeted mid-animation. Overshoot is 14% for `pop` and 8%
+-- for `snap`. `sway` is damped just short of critical, like a macOS Space switch: it eases in
+-- with no visible bounce. `glide` is critically damped so closing windows never bounce. Springs
+-- ignore `speed`.
+hl.curve("pop", { type = "spring", stiffness = 600, dampening = 26, mass = 1 })
+hl.curve("snap", { type = "spring", stiffness = 600, dampening = 31, mass = 1 })
+hl.curve("sway", { type = "spring", stiffness = 840, dampening = 55, mass = 1 })
+hl.curve("glide", { type = "spring", stiffness = 900, dampening = 60, mass = 1 })
+hl.animation({ leaf = "windows", enabled = true, speed = 7, spring = "snap" })
+hl.animation({ leaf = "windowsIn", enabled = true, speed = 7, spring = "pop" })
+hl.animation({ leaf = "windowsOut", enabled = true, speed = 7, spring = "glide", style = "popin 80%" })
 hl.animation({ leaf = "border", enabled = true, speed = 10, bezier = "default" })
 hl.animation({ leaf = "borderangle", enabled = true, speed = 8, bezier = "default" })
 -- `fadeOut` is off because the `windowsOut` popin already animates closing windows.
 hl.animation({ leaf = "fadeOut", enabled = false })
 hl.animation({ leaf = "fadeSwitch", enabled = true, speed = 3, bezier = "linear" })
-hl.animation({ leaf = "workspaces", enabled = true, speed = 6, bezier = "default" })
+hl.animation({ leaf = "workspaces", enabled = true, speed = 6, spring = "sway" })
 
 -- Most windows are borderless, so hyprfocus dips the focused one to make focus changes visible.
 hl.plugin.load(nix.hyprfocus)
@@ -278,4 +297,97 @@ hl.window_rule({ match = { class = "^(org\\.kde\\.dolphin)$" }, border_size = 0 
 
 -- Dialog-like windows float rather than disturb the tiled layout.
 hl.window_rule({ match = { class = "^(dev\\.noctalia\\.Noctalia)$" }, float = true, size = { 1080, 920 } })
-hl.window_rule({ match = { class = "^(xdg-desktop-portal-gtk)$" }, float = true })
+-- The file chooser's GTK theme draws its own frame and shadow; Hyprland caps rounding at 20.
+hl.window_rule({
+  match = { class = "^(xdg-desktop-portal-gtk)$" },
+  float = true,
+  animation = "slide bottom",
+  rounding = 20,
+  border_size = 0,
+  no_shadow = true,
+})
+
+-- While a chooser is open, the app that opened it fades out, and fades back in when it closes.
+-- Hyprland draws a translucent window's blur at full strength and drops it only at 0 opacity, so
+-- blur stays off until the fade back in finishes.
+hl.window_rule({
+  match = { tag = PICKER_PARENT_TAG },
+  opacity = "0.0 override 0.0 override",
+  no_blur = true,
+})
+hl.window_rule({ match = { tag = PICKER_PARENT_RESTORING_TAG }, no_blur = true })
+
+-- Maps each open chooser's address to the address of the app that opened it.
+local picker_parents = {}
+
+-- The bottom edge of a monitor, in the logical coordinates windows are placed in.
+local function monitor_bottom(monitor)
+  local height = monitor.transform % 2 == 1 and monitor.width or monitor.height
+  return monitor.y + math.floor(height / monitor.scale)
+end
+
+-- The chooser usually has focus by `window.open`, so the app that asked for it is the last focused
+-- window. The hook runs before the open animation is set up, so parking the chooser below the
+-- screen makes that animation a no-op, and the delayed move slides it up with the same spring.
+-- Without a parent it keeps the size pinned in GTK, and Hyprland centres it.
+hl.on("window.open", function(window)
+  if window.class ~= "xdg-desktop-portal-gtk" then
+    return
+  end
+
+  local parent = hl.get_active_window()
+  if parent ~= nil and parent.address == window.address then
+    parent = hl.get_last_window()
+  end
+  if
+    parent == nil
+    or parent.class == window.class
+    or parent.workspace == nil
+    or window.workspace == nil
+    or parent.workspace.id ~= window.workspace.id
+  then
+    return
+  end
+
+  local width = math.max(math.floor(parent.size.x * PICKER_PARENT_SHARE), PICKER_MIN_SIZE.x)
+  local height = math.max(math.floor(parent.size.y * PICKER_PARENT_SHARE), PICKER_MIN_SIZE.y)
+  local x = parent.at.x + math.floor((parent.size.x - width) / 2)
+  local y = parent.at.y + math.floor((parent.size.y - height) / 2)
+  hl.dispatch(hl.dsp.window.resize({ x = width, y = height, relative = false, window = window }))
+  hl.dispatch(hl.dsp.window.move({ x = x, y = monitor_bottom(parent.monitor), relative = false, window = window }))
+
+  local address = window.address
+  hl.timer(function()
+    local picker = hl.get_window("address:" .. address)
+    if picker ~= nil then
+      hl.dispatch(hl.dsp.window.move({ x = x, y = y, relative = false, window = picker }))
+      -- The chooser comes out of its wait below the screen unfocused.
+      hl.dispatch(hl.dsp.focus({ window = "address:" .. address }))
+    end
+  end, { timeout = PICKER_SLIDE_DELAY_MS, type = "oneshot" })
+
+  hl.dispatch(hl.dsp.window.tag({ tag = "+" .. PICKER_PARENT_TAG, window = parent }))
+  picker_parents[window.address] = parent.address
+end)
+
+hl.on("window.close", function(window)
+  local address = picker_parents[window.address]
+  if address == nil then
+    return
+  end
+
+  picker_parents[window.address] = nil
+  local parent = hl.get_window("address:" .. address)
+  if parent == nil then
+    return
+  end
+
+  hl.dispatch(hl.dsp.window.tag({ tag = "+" .. PICKER_PARENT_RESTORING_TAG, window = parent }))
+  hl.dispatch(hl.dsp.window.tag({ tag = "-" .. PICKER_PARENT_TAG, window = parent }))
+  hl.timer(function()
+    local restored = hl.get_window("address:" .. address)
+    if restored ~= nil then
+      hl.dispatch(hl.dsp.window.tag({ tag = "-" .. PICKER_PARENT_RESTORING_TAG, window = restored }))
+    end
+  end, { timeout = PICKER_PARENT_RESTORE_MS, type = "oneshot" })
+end)
