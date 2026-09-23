@@ -29,6 +29,7 @@ in
       laravel-review-jesse = ./skills/laravel-review-jesse;
       recommit = ./skills/recommit;
     };
+    rules.rust = ./rules/rust.md;
 
     settings = {
       model = "claude-opus-5-5[1m]";

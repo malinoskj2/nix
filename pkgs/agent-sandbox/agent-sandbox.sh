@@ -113,7 +113,7 @@ if [[ -d $HOME/.config/git ]]; then
   args+=(--volume "$HOME/.config/git:$HOME/.config/git:ro")
 fi
 
-for name in CLAUDE.md settings.json skills hooks agents commands output-styles plugins; do
+for name in CLAUDE.md settings.json skills hooks agents commands output-styles plugins rules; do
   src=$HOME/.claude/$name
   if [[ -d $src ]]; then
     mkdir -p "$sandbox_home/.claude/$name"

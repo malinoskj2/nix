@@ -30,6 +30,13 @@ Blender and a Python with torch (CUDA) and hy3dgen (Hunyuan3D) are installed; `~
 
 All sandboxes share a 20G memory limit; past it the kernel kills the largest process. Run one cargo build or test at a time, including across subagents and separate target dirs. Each one already uses every core, and several at once fill the limit with linkers.
 
+## Disk
+
+`~/projects` is on the host's disk, so anything you leave behind stays there.
+
+- When a task finishes, delete the target dirs, worktrees, venvs, databases and other scratch you created for it. Leave only what the human needs to keep working.
+- Before finishing, check what you added with `du -sh` and report anything over a few GB that you kept.
+
 <!-- br (beads_rust, the issue tracker) was here; dropped in favor of native Claude tasks. `\`br\` (beads_rust, the issue tracker), ` used to prefix this line. -->
 <!-- use \`br\` if native tasks not available -->
 
