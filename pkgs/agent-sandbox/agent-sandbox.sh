@@ -82,9 +82,8 @@ args=(
   --shm-size 2g
   --device nvidia.com/gpu=all
   --publish "127.0.0.1:$vnc_port:5900"
-  # tmpfs is charged to the slice as unreclaimable shmem. Uncapped, an agent
-  # filling it pushes the slice over MemoryHigh into a reclaim loop that can
-  # never make progress, freezing every sandbox and any new one starting.
+  # tmpfs is charged to the slice as shmem, and killing processes doesn't free
+  # it. Uncapped, an agent filling it starves every sandbox of the slice limit.
   --tmpfs "/tmp:exec,mode=1777,size=4g"
   --tmpfs "$runtime:mode=0700,uid=$uid,gid=$gid"
   --volume /nix/store:/nix/store:ro
