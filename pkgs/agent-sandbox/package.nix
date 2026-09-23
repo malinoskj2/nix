@@ -55,6 +55,12 @@
 }:
 
 let
+  # cudaSupport enables Cycles' CUDA and OptiX devices. Blender compiles CUDA kernels for every
+  # architecture by default; the RTX 5090 only needs sm_120.
+  blender' = (blender.override { cudaSupport = true; }).overrideAttrs (old: {
+    cmakeFlags = old.cmakeFlags ++ [ (lib.cmakeFeature "CYCLES_CUDA_BINARIES_ARCH" "sm_120") ];
+  });
+
   claude = writeShellScriptBin "claude" ''
     exec ${lib.getExe claude-code} "$@"
   '';
@@ -64,7 +70,7 @@ let
     paths = [
       bashInteractive
       # beads_rust
-      blender
+      blender'
       claude
       codex
       coreutils
