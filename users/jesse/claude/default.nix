@@ -23,6 +23,7 @@ in
       laravel-reviewer = ./agents/laravel-reviewer.md;
     };
     skills = {
+      codex-image = ./codex-image;
       gauntlet = ./skills/gauntlet;
       laravel-build-jesse = ./skills/laravel-build-jesse;
       laravel-orchestrator = ./skills/laravel-orchestrator;
