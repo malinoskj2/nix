@@ -112,6 +112,7 @@
           "ata-devs"
           "battery"
           "beads_rust"
+          "claude-desktop"
           "find-service"
           "git-commitu"
           "git-open-branch"

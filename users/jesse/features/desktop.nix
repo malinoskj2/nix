@@ -10,6 +10,7 @@
   home.packages = with pkgs; [
     blender
     chromium
+    claude-desktop
     ffmpeg
     glib
     google-chrome
