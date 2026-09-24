@@ -1,6 +1,7 @@
 { pkgs, ... }:
 {
   imports = [
+    ../claude-desktop
     ../dolphin
     ../firefox.nix
     ../mpv.nix
@@ -10,7 +11,6 @@
   home.packages = with pkgs; [
     blender
     chromium
-    claude-desktop
     ffmpeg
     glib
     google-chrome

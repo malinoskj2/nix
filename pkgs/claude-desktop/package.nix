@@ -39,11 +39,20 @@
   pango,
   pipewire,
   procps,
+  replaceVars,
   systemd,
+  # A directory holding claude.css, injected into the claude.ai pages the app loads, shell.css,
+  # injected into the window's own page beneath them, the title-bar-symbol color for the native
+  # window controls in dark mode, and code-theme-dark, the Shiki theme pinned as the dark code
+  # theme. The main window becomes transparent, so the CSS paints its title bar as glass.
+  theme ? null,
   wayland,
   xdg-utils,
 }:
 
+let
+  themeHook = replaceVars ./theme.js { inherit theme; };
+in
 stdenv.mkDerivation (finalAttrs: {
   pname = "claude-desktop";
   version = "2.7032.0";
@@ -125,20 +134,37 @@ stdenv.mkDerivation (finalAttrs: {
 
     # The app hardcodes FHS paths. Fail if an update moves one, so it isn't silently lost.
     asar extract $app/resources/app.asar asar
-    replace() {
+    replaceRaw() {
       local files
-      mapfile -t files < <(grep -rlF -- "\"$1\"" asar)
+      mapfile -t files < <(grep -rlF -- "$1" asar)
       if [ ''${#files[@]} -eq 0 ]; then
-        echo "app.asar no longer contains \"$1\"" >&2
+        echo "app.asar no longer contains $1" >&2
         exit 1
       fi
-      sed -i "s|\"$1\"|\"$2\"|g" "''${files[@]}"
+      sed -i "s|$1|$2|g" "''${files[@]}"
+    }
+    replace() {
+      replaceRaw "\"$1\"" "\"$2\""
     }
     replace /bin/bash ${lib.getExe bash}
     replace /bin/ps ${procps}/bin/ps
     replace /usr/bin/pgrep ${procps}/bin/pgrep
     replace /usr/bin/busctl ${systemd}/bin/busctl
     replace /usr/bin/secret-tool ${libsecret}/bin/secret-tool
+    ${lib.optionalString (theme != null) ''
+      replace '#151515' '#00000000'
+      replace '#c2c0b6' "$(< ${theme}/title-bar-symbol)"
+      replaceRaw 'titleBarStyle:"hidden",titleBarOverlay:!0,' 'titleBarStyle:"hidden",titleBarOverlay:!0,transparent:!0,'
+
+      # The hook goes after the directive so the minified main keeps strict mode.
+      main=asar/.vite/build/index.pre.js
+      if [ "$(head -c 13 $main)" != '"use strict";' ]; then
+        echo "$main no longer starts with \"use strict\";" >&2
+        exit 1
+      fi
+      { printf '"use strict";'; cat ${themeHook}; tail -c +14 $main; } > main.js
+      mv main.js $main
+    ''}
     rm -r $app/resources/app.asar $app/resources/app.asar.unpacked
     asar pack asar $app/resources/app.asar \
       --unpack '*.node' --unpack-dir resources/github-mcp
