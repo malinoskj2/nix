@@ -99,6 +99,12 @@ Treat a bump as a hardware change and test it on the device.
 - **htop.** [`pkgs/htop-vim-navigation/`](../pkgs/htop-vim-navigation) asserts
   the htop versions its patch was checked against. If a nixpkgs update trips
   it, re-check the patch next to it and add the new version.
+- **Claude Desktop.** [`pkgs/claude-desktop/`](../pkgs/claude-desktop) fetches
+  one `.deb` from Anthropic's APT repository. To move it, copy the newest
+  `Version` and `SHA256` from
+  `https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-amd64/Packages`.
+  The build patches hardcoded paths in `app.asar` and fails if one is gone;
+  find where the new release looks instead.
 
 ## Darwin
 
