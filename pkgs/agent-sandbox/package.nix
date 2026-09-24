@@ -4,6 +4,7 @@
   blender,
   buildEnv,
   cacert,
+  chromium,
   claude-code,
   codex,
   coreutils,
@@ -35,9 +36,13 @@
   mold,
   nix,
   nodejs,
+  playwright-driver,
+  playwright-mcp,
+  playwright-test,
   procps,
   python3,
   ripgrep,
+  runCommand,
   sway,
   systemd,
   tmux,
@@ -61,8 +66,30 @@ let
     cmakeFlags = old.cmakeFlags ++ [ (lib.cmakeFeature "CYCLES_CUDA_BINARIES_ARCH" "sm_120") ];
   });
 
+  # Chromium's setuid and user-namespace sandboxes can't start inside the container.
+  chromium' = chromium.override { commandLineArgs = "--no-sandbox --test-type"; };
+
+  plugin = runCommand "agent-sandbox-plugin" { } ''
+    install -Dm644 ${
+      writeText "plugin.json" (builtins.toJSON { name = "agent-sandbox"; })
+    } $out/.claude-plugin/plugin.json
+    install -Dm644 ${
+      writeText "mcp.json" (
+        builtins.toJSON {
+          mcpServers.playwright = {
+            command = lib.getExe playwright-mcp;
+            args = [
+              "--output-dir"
+              "/tmp/playwright-mcp"
+            ];
+          };
+        }
+      )
+    } $out/.mcp.json
+  '';
+
   claude = writeShellScriptBin "claude" ''
-    exec ${lib.getExe claude-code} "$@"
+    exec ${lib.getExe claude-code} --plugin-dir ${plugin} "$@"
   '';
 
   env = buildEnv {
@@ -71,6 +98,7 @@ let
       bashInteractive
       # beads_rust
       blender'
+      chromium'
       claude
       codex
       coreutils
@@ -94,6 +122,7 @@ let
       mold
       nix
       nodejs
+      playwright-test
       procps
       (python3.withPackages (_: [ hy3dgen ]))
       ripgrep
@@ -171,6 +200,8 @@ let
         "WAYLAND_DISPLAY=wayland-1"
         "MOZ_ENABLE_WAYLAND=1"
         "NIXOS_OZONE_WL=1"
+        "PLAYWRIGHT_BROWSERS_PATH=${playwright-driver.browsers}"
+        "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true"
         "CARGO_PROFILE_DEV_DEBUG=line-tables-only"
         "CARGO_PROFILE_TEST_DEBUG=line-tables-only"
         "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS=-C link-arg=-fuse-ld=mold"
