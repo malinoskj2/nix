@@ -290,6 +290,7 @@ hl.window_rule({
 
 -- These applications draw their own chrome, so borders only add noise; `immediate` allows tearing
 -- where input latency matters.
+hl.window_rule({ match = { class = "^(com\\.anthropic\\.Claude)$" }, border_size = 0 })
 hl.window_rule({ match = { class = "^(dev\\.zed\\.Zed)$" }, border_size = 0 })
 hl.window_rule({ match = { class = "^(firefox)$" }, immediate = true, border_size = 0 })
 hl.window_rule({ match = { class = "^(jetbrains-datagrip)$" }, immediate = true, border_size = 0 })
