@@ -1,0 +1,17 @@
+id          = "jesse/sound"
+name        = "Sound"
+version     = "1.0.0"
+plugin_api  = 24
+author      = "jesse"
+icon        = "volume"
+description = "Output volume and device menu in the style of the macOS menu bar Sound item, for the bar volume icon."
+
+[[panel]]
+id              = "sound"
+entry           = "sound.luau"
+width           = 308
+height          = 191
+padding         = 5
+placement       = "floating"
+position        = "auto"
+open_near_click = true

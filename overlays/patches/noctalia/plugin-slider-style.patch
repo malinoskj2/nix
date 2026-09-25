@@ -1,0 +1,157 @@
+diff --git a/src/ui/controls/slider.cpp b/src/ui/controls/slider.cpp
+index 752a9d9..0257338 100644
+--- a/src/ui/controls/slider.cpp
++++ b/src/ui/controls/slider.cpp
+@@ -210,7 +210,7 @@ void Slider::setTrackHeight(float height) {
+ }
+ 
+ void Slider::setThumbSize(float size) {
+-  m_thumbSizePx = std::max(1.0F, size);
++  m_thumbSizePx = std::max(0.0F, size);
+   updateGeometry();
+   markLayoutDirty();
+ }
+@@ -221,6 +221,22 @@ void Slider::setControlHeight(float height) {
+   markLayoutDirty();
+ }
+ 
++void Slider::setFillColor(std::optional<ColorSpec> color) {
++  m_fillColor = color;
++  applyVisualState();
++  markPaintDirty();
++}
++
++void Slider::setTrackColor(std::optional<ColorSpec> color) {
++  m_trackColor = color;
++  applyVisualState();
++  markPaintDirty();
++}
++
++float Slider::horizontalPadding() const noexcept {
++  return thumbVisible() ? Style::sliderHorizontalPadding : 0.0F;
++}
++
+ void Slider::setWheelAdjustEnabled(bool enabled) { m_wheelAdjustEnabled = enabled; }
+ 
+ void Slider::setOnValueChanged(std::function<void(double)> callback) { m_onValueChanged = std::move(callback); }
+@@ -246,8 +262,8 @@ void Slider::updateGeometry() {
+   setSize(widthPx, heightPx);
+ 
+   const float trackY = (heightPx - m_trackHeight) * 0.5F;
+-  const float trackX = Style::sliderHorizontalPadding;
+-  const float trackW = std::max(0.0F, widthPx - Style::sliderHorizontalPadding * 2.0F);
++  const float trackX = horizontalPadding();
++  const float trackW = std::max(0.0F, widthPx - trackX * 2.0F);
+   const float t = normalizedValue();
+   const float tVis = Style::rtl() ? 1.0F - t : t;
+   const float thumbX = trackX + tVis * trackW;
+@@ -272,8 +288,8 @@ void Slider::updateGeometry() {
+ 
+ void Slider::updateFromLocalX(float x) {
+   const float widthPx = width() > 0.0F ? width() : Style::sliderDefaultWidth;
+-  const float trackX = Style::sliderHorizontalPadding;
+-  const float trackW = std::max(0.0F, widthPx - Style::sliderHorizontalPadding * 2.0F);
++  const float trackX = horizontalPadding();
++  const float trackW = std::max(0.0F, widthPx - trackX * 2.0F);
+   if (trackW <= 0.0F) {
+     return;
+   }
+@@ -287,21 +303,20 @@ void Slider::applyVisualState() {
+   const bool pressing = m_inputArea != nullptr && m_inputArea->pressed();
+   const bool focused = m_inputArea != nullptr && m_inputArea->focused();
+ 
+-  Color trackColor = resolved(ColorRole::Outline);
+-  Color fillColor = resolved(ColorRole::Primary);
++  Color trackColor = m_trackColor ? resolveColorSpec(*m_trackColor) : resolved(ColorRole::Outline);
++  Color fillColor = m_fillColor ? resolveColorSpec(*m_fillColor) : resolved(ColorRole::Primary);
+   Color thumbColor = resolved(ColorRole::OnPrimary);
+   Color thumbBorder = resolved(ColorRole::Outline);
+ 
+-  m_thumb->setVisible(m_enabled);
++  m_thumb->setVisible(m_enabled && thumbVisible());
+ 
+   if (!m_enabled) {
+-    trackColor = resolved(ColorRole::Outline, Style::disabledOutlineAlpha);
+-    fillColor = resolved(ColorRole::Primary, 0.5F);
+-  } else if (pressing) {
+-    fillColor = resolved(ColorRole::Primary);
+-  } else if (focused) {
++    trackColor = m_trackColor ? resolveColorSpec(scaleAlpha(*m_trackColor, Style::disabledOutlineAlpha))
++                              : resolved(ColorRole::Outline, Style::disabledOutlineAlpha);
++    fillColor = m_fillColor ? resolveColorSpec(scaleAlpha(*m_fillColor, 0.5F)) : resolved(ColorRole::Primary, 0.5F);
++  } else if (!pressing && focused) {
+     thumbBorder = resolveColorSpec(focusRingColorSpec());
+-  } else if (hovering) {
++  } else if (!pressing && hovering) {
+     thumbBorder = resolved(ColorRole::Hover);
+   }
+ 
+diff --git a/src/ui/controls/slider.h b/src/ui/controls/slider.h
+index b8d5551..2a37aca 100644
+--- a/src/ui/controls/slider.h
++++ b/src/ui/controls/slider.h
+@@ -4,6 +4,7 @@
+ #include "ui/style.h"
+ 
+ #include <functional>
++#include <optional>
+ 
+ class InputArea;
+ class RectNode;
+@@ -19,6 +20,8 @@ public:
+   void setTrackHeight(float height);
+   void setThumbSize(float size);
+   void setControlHeight(float height);
++  void setFillColor(std::optional<ColorSpec> color);
++  void setTrackColor(std::optional<ColorSpec> color);
+   void setWheelAdjustEnabled(bool enabled);
+   void setOnValueChanged(std::function<void(double)> callback);
+   void setOnDragEnd(std::function<void()> callback);
+@@ -39,6 +42,8 @@ private:
+   void applyVisualState();
+   [[nodiscard]] float normalizedValue() const noexcept;
+   [[nodiscard]] double snapped(double value) const noexcept;
++  [[nodiscard]] bool thumbVisible() const noexcept { return m_thumbSizePx > 0.0F; }
++  [[nodiscard]] float horizontalPadding() const noexcept;
+ 
+   RectNode* m_track = nullptr;
+   RectNode* m_fill = nullptr;
+@@ -57,4 +62,6 @@ private:
+   float m_trackHeight = Style::sliderTrackHeight;
+   float m_thumbSizePx = Style::sliderThumbSize;
+   float m_controlHeightPx = Style::controlHeight;
++  std::optional<ColorSpec> m_fillColor;
++  std::optional<ColorSpec> m_trackColor;
+ };
+diff --git a/src/ui/ui_tree_reconciler.cpp b/src/ui/ui_tree_reconciler.cpp
+index 1707b0e..1ceb424 100644
+--- a/src/ui/ui_tree_reconciler.cpp
++++ b/src/ui/ui_tree_reconciler.cpp
+@@ -500,7 +500,8 @@ namespace ui {
+       static const std::unordered_set<std::string> kSlider = {"width",      "height",  "flexGrow", "opacity",
+                                                               "visible",    "min",     "max",      "step",
+                                                               "value",      "enabled", "onChange", "onDragEnd",
+-                                                              "controlSize"};
++                                                              "controlSize", "fill",   "track",    "trackHeight",
++                                                              "thumbSize"};
+       static const std::unordered_set<std::string> kToggle = {"width",   "height",  "flexGrow", "opacity",
+                                                               "visible", "checked", "enabled",  "onChange"};
+       static const std::unordered_set<std::string> kScroll = {
+@@ -1629,6 +1630,17 @@ namespace ui {
+       if (auto size = parseControlSize(desired)) {
+         slider->setControlHeight(scaled(*size));
+       }
++      if (height != nullptr) {
++        slider->setControlHeight(scaled(*height));
++      }
++      slider->setFillColor(parseColor(desired, "fill"));
++      slider->setTrackColor(parseColor(desired, "track"));
++      if (const double* trackHeight = numProp(desired, "trackHeight")) {
++        slider->setTrackHeight(scaled(*trackHeight));
++      }
++      if (const double* thumbSize = numProp(desired, "thumbSize")) {
++        slider->setThumbSize(scaled(*thumbSize));
++      }
+       return;
+     }
+ 

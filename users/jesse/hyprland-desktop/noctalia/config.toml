@@ -40,7 +40,13 @@ directory = "/home/jesse/.wallpapers"
 
 [plugins]
 auto_update = "none"
-enabled     = ["noctalia/mpvpaper", "jesse/calendar", "jesse/control-button", "jesse/hypr-workspaces"]
+enabled     = [
+    "noctalia/mpvpaper",
+    "jesse/calendar",
+    "jesse/control-button",
+    "jesse/hypr-workspaces",
+    "jesse/sound",
+]
 
 [plugin_settings."noctalia/mpvpaper"]
 video_directory = "/home/jesse/.wallpapers/video"
@@ -133,6 +139,9 @@ icon_color  = "secondary"
 [widget.volume]
 show_label = false
 color      = "#ffffffb3"
+
+    [widget.volume.actions]
+    left = "panel-toggle jesse/sound:sound"
 
 [widget.workspaces]
 focused_color  = "primary"

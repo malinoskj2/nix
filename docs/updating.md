@@ -114,12 +114,15 @@ Treat a bump as a hardware change and test it on the device.
   it, re-check the patch next to it and add the new version.
 - **Noctalia.** The `unstable` overlay in
   [`overlays/default.nix`](../overlays/default.nix) patches Noctalia so floating
-  panels skip its clip reveal and Hyprland scales them in instead, and so a bar
-  widget's panel centers under the widget. It asserts the version the patches
-  were checked against. When `nixpkgs-unstable` moves Noctalia, re-check
+  panels skip its clip reveal and Hyprland scales them in instead, so a bar
+  widget's panel centers under the widget, so a plugin panel can set its own
+  padding and resize to fit its content, and so plugin sliders can be styled.
+  It asserts the version the patches were checked against. When
+  `nixpkgs-unstable` moves Noctalia, re-check
   [`overlays/patches/noctalia/`](../overlays/patches/noctalia) against the new
-  source, then click the clock (the calendar should open centered under it)
-  and open the control center.
+  source, then click the clock (the calendar should open centered under it),
+  click the volume icon (the sound menu should open centered under it, with a
+  thin peach slider) and open the control center.
 - **Claude Desktop.** [`pkgs/claude-desktop/`](../pkgs/claude-desktop) fetches
   one `.deb` from Anthropic's APT repository. To move it, copy the newest
   `Version` and `SHA256` from

@@ -67,6 +67,24 @@ let
     calendar = {
       "calendar.luau" = withNix ./plugins/calendar/calendar.luau { inherit palette; };
     };
+    sound = {
+      "sound.luau" = withNix ./plugins/sound/sound.luau {
+        inherit palette;
+        settings = lib.getExe pkgs.pwvucontrol;
+        state = lib.getExe (
+          pkgs.writeShellApplication {
+            name = "noctalia-sound-state";
+            runtimeInputs = [
+              pkgs.jq
+              pkgs.pipewire
+              pkgs.wireplumber
+            ];
+            text = builtins.readFile ./plugins/sound/state.sh;
+          }
+        );
+        wpctl = lib.getExe' pkgs.wireplumber "wpctl";
+      };
+    };
     control-button = {
       "button.luau" = withNix ./plugins/control-button/button.luau (
         controlButton // { noctalia = lib.getExe noctalia; }

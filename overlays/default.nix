@@ -27,8 +27,10 @@ in
           manifest = final.lib.importJSON ./claude-code/manifest.zst.json;
         };
         # Hyprland scales floating panels in and out like windows, so Noctalia's own clip reveal
-        # would run on top of it, and a bar widget's panel centers under the widget like a macOS
-        # menu bar item.
+        # would run on top of it, a bar widget's panel centers under the widget like a macOS
+        # menu bar item, a plugin panel can set its own padding and resize to fit its content
+        # like a menu, and plugin sliders take their own colors and can drop the thumb for
+        # Apple's thin track.
         noctalia =
           assert final.lib.assertMsg (unstable.noctalia.version == "5.0.1") (
             "The Noctalia patches were written for 5.0.1, not ${unstable.noctalia.version}; "
@@ -38,6 +40,8 @@ in
             patches = (old.patches or [ ]) ++ [
               ./patches/noctalia/floating-panels-no-reveal.patch
               ./patches/noctalia/panel-anchor-widget-center.patch
+              ./patches/noctalia/plugin-panel-layout.patch
+              ./patches/noctalia/plugin-slider-style.patch
             ];
           });
       };
