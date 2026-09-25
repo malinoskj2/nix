@@ -289,6 +289,16 @@ widget_order   = [
         color       = "on_surface"
         shadow      = true
 
+# Banners in the style of macOS 27: the glass comes from hyprglass, so the fill matches a floating
+# panel's and there's no outline or app name. The offsets place them 16 px from the screen's right
+# edge and, below the 31 px the bar reserves, 46 px from its top.
+[notification]
+show_app_name      = false
+background_opacity = 0.55
+border             = false
+offset_x           = 16
+offset_y           = 15
+
 [idle]
 behavior_order = ["lock", "screen_off", "suspend"]
 

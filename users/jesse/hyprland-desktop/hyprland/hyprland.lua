@@ -39,7 +39,7 @@ local PICKER_PARENT_RESTORE_MS = 350
 
 -- These Noctalia layer namespaces omit the `noctalia-` prefix, which `noctalia_layers` adds.
 local GLASS_LAYERS = { "bar-.+" }
-local TRANSLUCENT_LAYERS = { "notification", "dock", "osd", "window-switcher" }
+local TRANSLUCENT_LAYERS = { "dock", "osd", "window-switcher" }
 
 -- ("rrggbb", "aa") -> "rgba(rrggbbaa)"
 local function rgba(color, alpha)
@@ -157,6 +157,9 @@ hl.layer_rule({ match = { namespace = noctalia_layers({ "bar-.+" }) }, xray = tr
 hl.layer_rule({ match = { namespace = noctalia_layers({ "panel" }) }, animation = "popin 80%" })
 hl.layer_rule({ match = { namespace = noctalia_layers({ "attached-panel" }) }, no_anim = true })
 
+-- One layer holds every notification banner, so each slides in and out through Noctalia instead.
+hl.layer_rule({ match = { namespace = noctalia_layers({ "notification" }) }, no_anim = true })
+
 hl.layer_rule({
   match = { namespace = "^noctalia-desktop-widget-" .. nix.control_button_id .. ":.+$" },
   blur = true,
@@ -271,6 +274,17 @@ glass.layer("noctalia-panel", {
   gleam_duration = 1.2,
   gleam_delay = 0.1,
   gleam_rest = 0.3,
+})
+
+-- Each notification banner is its own piece of the blur region, so each gets its own glass. Banners
+-- come and go too often for a gleam. `corner_radius` must match Noctalia's banner radius.
+glass.layer("noctalia-notification", {
+  preset = "panel",
+  mask_mode = "region",
+  corner_radius = 20,
+  rounding_power = 2.0,
+  rim_light = 2.6,
+  rim_shadow = 2.7,
 })
 
 -- Attached panels flare into the bar, so their glass follows the region alone, without a rim.

@@ -1,0 +1,616 @@
+diff --git a/src/shell/notification/notification_toast.cpp b/src/shell/notification/notification_toast.cpp
+index d94c8d3..81338cb 100644
+--- a/src/shell/notification/notification_toast.cpp
++++ b/src/shell/notification/notification_toast.cpp
+@@ -36,22 +36,35 @@ namespace {
+ 
+   constexpr Logger kLog("notification");
+ 
+-  constexpr int kCardWidth = 360;
++  // Banner geometry is measured from macOS 27's notification banners, in logical px.
++  constexpr int kCardWidth = 344;
++  constexpr float kCardRadius = 20.0F;
++  constexpr float kBannerPadLeft = 13.0F;
++  constexpr float kBannerPadRight = 14.0F;
++  constexpr float kBannerPadTop = 12.0F;
++  constexpr float kBannerPadBottom = 12.0F;
++  constexpr float kBannerIconSize = 32.0F;
++  constexpr float kBannerIconTextGap = 13.0F;
++  constexpr float kBannerFontSize = 13.0F;
++  // The title sits in a line of fixed height so its baseline lands where Apple's does at any scale,
++  // whatever height hinted font metrics give its label.
++  constexpr float kBannerTitleLineHeight = 16.0F;
++  constexpr float kBannerLineGap = 1.0F;
++  constexpr float kBannerCloseInset = 6.0F;
++  constexpr float kBannerCloseSize = 18.0F;
++  constexpr const char* kBannerFontFamily = "SF Pro Text";
++  constexpr int kSlideInMs = 500;
++  constexpr int kSlideOutMs = 300;
+   constexpr float kInlineReplyInputHeight = Style::controlHeightSm;
+   constexpr float kInlineReplyGap = Style::spaceSm;
+   constexpr float kInlineReplySendButtonSize = Style::controlHeightSm;
+ 
+   constexpr float kGap = Style::spaceSm;
+-  constexpr float kPaddingX = Style::spaceMd;
+   constexpr float kPaddingTop = 0.0F;
+   constexpr float kPaddingBottom = Style::spaceMd;
+   constexpr int kFallbackVisibleCards = 5;
+   constexpr float kQueuedY = -1.0F;
+-  constexpr float kCardInnerPad = Style::spaceMd;
+-  constexpr float kCloseButtonSize = 20.0F;
+   constexpr float kCloseGlyphSize = 12.0F;
+-  constexpr float kNotificationIconSize = 45.0F;
+-  constexpr float kNotificationIconSizeCompact = 38.0F;
+   constexpr float kNotificationIconGlyphSize = 24.0F;
+   constexpr float kNotificationIconGlyphSizeCompact = 20.0F;
+   constexpr float kNotificationIconReferenceSize = 36.0F;
+@@ -63,7 +76,6 @@ namespace {
+     return std::min(iconSize * 0.5F, Style::scaledRadius(baseRadius, localScale));
+   }
+   constexpr std::string_view kNoctaliaGlyphIconPrefix = "noctalia-glyph:";
+-  constexpr float kIconTextGap = Style::spaceSm;
+   constexpr float kActionGap = Style::spaceXs;
+   constexpr float kActionRowGap = Style::spaceSm;
+   std::string fallbackActionLabel() { return i18n::tr("notifications.actions.fallback"); }
+@@ -109,9 +121,7 @@ namespace {
+   constexpr int kProgressHeight = 3;
+   constexpr int kContentSlideOffset = 12; // subtle foreground slide during reveal/retract
+   constexpr float kMetaFontSize = Style::fontSizeMini;
+-  constexpr float kSummaryFontSize = Style::fontSizeTitle;
+-  constexpr float kBodyFontSize = Style::fontSizeBody;
+-  constexpr int kMaxSummaryLines = 2;
++  constexpr int kMaxSummaryLines = 1;
+   constexpr int kToastMaxBodyLines = 3;
+   constexpr int kMaxToastCardHeight = 320;
+ 
+@@ -128,23 +138,17 @@ namespace {
+ 
+   [[nodiscard]] float paddingTop(float scale) { return kPaddingTop * scale; }
+ 
+-  [[nodiscard]] float paddingX(float scale) { return kPaddingX * scale; }
+-
+   [[nodiscard]] float paddingBottom(float scale) { return kPaddingBottom * scale; }
+ 
+-  [[nodiscard]] float cardInnerPad(float scale) { return kCardInnerPad * scale; }
+-
+-  [[nodiscard]] float closeButtonSize(float scale) { return kCloseButtonSize * scale; }
++  [[nodiscard]] float closeButtonSize(float scale) { return kBannerCloseSize * scale; }
+ 
+-  [[nodiscard]] float notificationIconSize(float scale, bool showActions) {
+-    return (showActions ? kNotificationIconSize : kNotificationIconSizeCompact) * scale;
+-  }
++  [[nodiscard]] float notificationIconSize(float scale, bool /*showActions*/) { return kBannerIconSize * scale; }
+ 
+   [[nodiscard]] float notificationIconGlyphSize(float scale, bool showActions) {
+     return (showActions ? kNotificationIconGlyphSize : kNotificationIconGlyphSizeCompact) * scale;
+   }
+ 
+-  [[nodiscard]] float iconTextGap(float scale) { return kIconTextGap * scale; }
++  [[nodiscard]] float iconTextGap(float scale) { return kBannerIconTextGap * scale; }
+ 
+   [[nodiscard]] float actionGap(float scale) { return kActionGap * scale; }
+ 
+@@ -156,9 +160,9 @@ namespace {
+ 
+   [[nodiscard]] float metaFontSize(float scale) { return kMetaFontSize * scale; }
+ 
+-  [[nodiscard]] float summaryFontSize(float scale) { return kSummaryFontSize * scale; }
++  [[nodiscard]] float summaryFontSize(float scale) { return kBannerFontSize * scale; }
+ 
+-  [[nodiscard]] float bodyFontSize(float scale) { return kBodyFontSize * scale; }
++  [[nodiscard]] float bodyFontSize(float scale) { return kBannerFontSize * scale; }
+ 
+   [[nodiscard]] float maxToastCardHeight(float scale) { return static_cast<float>(kMaxToastCardHeight) * scale; }
+ 
+@@ -185,16 +189,28 @@ namespace {
+     return std::round(static_cast<float>(kContentSlideOffset) * scale * (1.0F - std::clamp(reveal, 0.0F, 1.0F)));
+   }
+ 
++  // Side banners slide whole across the screen edge instead of being clipped open, so their
++  // reveal is the share of the distance from off-screen to their resting place.
++  float slideTravel(float scale, float edgePadX) { return cardWidth(scale) + edgePadX; }
++
++  // A critically damped spring, scaled to land exactly on 1.
++  float bannerSlideInEase(float t) {
++    constexpr float k = 7.0F;
++    const float p = std::clamp(t, 0.0F, 1.0F);
++    return (1.0F - (1.0F + k * p) * std::exp(-k * p)) / (1.0F - (1.0F + k) * std::exp(-k));
++  }
++
+   float cardRevealFromNode(
+-      const Node* cardNode, NotificationToast::RevealDirection direction, float cardHeight, float scale
++      const Node* cardNode, NotificationToast::RevealDirection direction, float cardHeight, float scale, float edgePadX
+   ) {
+     if (cardNode == nullptr) {
+       return 0.0F;
+     }
+     switch (direction) {
+     case NotificationToast::RevealDirection::FromLeft:
++      return std::clamp(1.0F - (edgePadX - cardNode->x()) / slideTravel(scale, edgePadX), 0.0F, 1.0F);
+     case NotificationToast::RevealDirection::FromRight:
+-      return std::clamp(cardNode->width() / cardWidth(scale), 0.0F, 1.0F);
++      return std::clamp(1.0F - (cardNode->x() - edgePadX) / slideTravel(scale, edgePadX), 0.0F, 1.0F);
+     case NotificationToast::RevealDirection::FromTop:
+     case NotificationToast::RevealDirection::FromBottom:
+       return cardHeight > 0.0F ? std::clamp(cardNode->height() / cardHeight, 0.0F, 1.0F) : 0.0F;
+@@ -224,23 +240,15 @@ namespace {
+     const float contentSlide = contentOffsetForReveal(clampedReveal, scale);
+ 
+     switch (direction) {
+-    case NotificationToast::RevealDirection::FromLeft: {
+-      const float visibleWidth = std::round(cardWidth(scale) * clampedReveal);
+-      cardNode->setPosition(edgePadX, y);
+-      cardNode->setFrameSize(visibleWidth, cardHeight);
+-      cardContent->setPosition(0.0F, 0.0F);
+-      cardForeground->setOpacity(contentOpacityForReveal(clampedReveal));
+-      cardForeground->setPosition(-contentSlide, 0.0F);
+-      break;
+-    }
++    case NotificationToast::RevealDirection::FromLeft:
+     case NotificationToast::RevealDirection::FromRight: {
+-      const float visibleWidth = std::round(cardWidth(scale) * clampedReveal);
+-      const float hiddenWidth = cardWidth(scale) - visibleWidth;
+-      cardNode->setPosition(edgePadX + hiddenWidth, y);
+-      cardNode->setFrameSize(visibleWidth, cardHeight);
+-      cardContent->setPosition(-hiddenWidth, 0.0F);
+-      cardForeground->setOpacity(contentOpacityForReveal(clampedReveal));
+-      cardForeground->setPosition(contentSlide, 0.0F);
++      const float offset = slideTravel(scale, edgePadX) * (1.0F - clampedReveal);
++      const bool left = direction == NotificationToast::RevealDirection::FromLeft;
++      cardNode->setPosition(edgePadX + (left ? -offset : offset), y);
++      cardNode->setFrameSize(cardWidth(scale), cardHeight);
++      cardContent->setPosition(0.0F, 0.0F);
++      cardForeground->setOpacity(1.0F);
++      cardForeground->setPosition(0.0F, 0.0F);
+       break;
+     }
+     case NotificationToast::RevealDirection::FromTop: {
+@@ -270,7 +278,8 @@ namespace {
+   float notificationTextMaxWidth(float scale, bool showActions) {
+     return std::max(
+         0.0F,
+-        cardWidth(scale) - cardInnerPad(scale) * 2.0F - notificationIconSize(scale, showActions) - iconTextGap(scale)
++        cardWidth(scale) - (kBannerPadLeft + kBannerPadRight) * scale - notificationIconSize(scale, showActions)
++            - iconTextGap(scale)
+     );
+   }
+ 
+@@ -308,8 +317,12 @@ namespace {
+     }
+   }
+ 
+-  bool showToastProgressAccent(Urgency urgency, int displayDurationMs) {
+-    return displayDurationMs >= 0 || urgency == Urgency::Critical;
++  void setBannerPadding(Flex& row, float scale) {
++    row.setPadding(kBannerPadTop * scale, kBannerPadRight * scale, kBannerPadBottom * scale, kBannerPadLeft * scale);
++  }
++
++  ColorSpec bannerTitleColor(Urgency urgency) {
++    return colorSpecFromRole(urgency == Urgency::Low ? ColorRole::OnSurfaceVariant : ColorRole::OnSurface);
+   }
+ 
+   std::vector<std::unique_ptr<Button>>
+@@ -350,15 +363,14 @@ namespace {
+ 
+   float measureToastCardHeight(
+       Renderer& renderer, const ConfigService* config, std::string_view appName, std::string_view summary,
+-      std::string_view body, const std::vector<std::string>& actions, Urgency urgency, int displayDurationMs,
+-      int summaryLines, int bodyLines, float scale
++      std::string_view body, const std::vector<std::string>& actions, Urgency urgency, int summaryLines,
++      int bodyLines, float scale
+   ) {
+     const float cardW = cardWidth(scale);
+     const float maxCardHeight = maxToastCardHeight(scale);
+     const bool showActions = shouldShowNotificationActions(config);
+     const float iconSize = notificationIconSize(scale, showActions);
+     const float textMaxWidth = notificationTextMaxWidth(scale, showActions);
+-    const float topTextMaxWidth = std::max(0.0F, textMaxWidth - closeButtonSize(scale) - Style::spaceSm * scale);
+     const bool showAppName = shouldShowNotificationAppName(config, appName);
+ 
+     auto card = ui::column(
+@@ -370,18 +382,18 @@ namespace {
+             .orientation = ProgressBarOrientation::HorizontalCentered,
+             .width = std::max(0.0F, cardW - topProgressInset(scale) * 2.0F),
+             .height = progressHeight(scale),
+-            .visible = showToastProgressAccent(urgency, displayDurationMs),
+-            .participatesInLayout = showToastProgressAccent(urgency, displayDurationMs),
++            .visible = false,
++            .participatesInLayout = false,
+             .configure = [scale](ProgressBar& progress) { progress.setPosition(topProgressInset(scale), 0.0F); },
+         })
+     );
+ 
+     auto content = ui::row(
+         {
+-            .align = FlexAlign::Start,
++            .align = FlexAlign::Center,
+             .gap = iconTextGap(scale),
+-            .padding = cardInnerPad(scale),
+             .width = cardW,
++            .configure = [scale](Flex& row) { setBannerPadding(row, scale); },
+         },
+         ui::node({
+             .width = iconSize,
+@@ -392,16 +404,21 @@ namespace {
+     auto textColumn = ui::column(
+         {
+             .align = FlexAlign::Stretch,
++            .gap = kBannerLineGap * scale,
+             .width = textMaxWidth,
+         },
+-        ui::label({
+-            .text = StringUtils::trimLeadingBlankLines(summary),
+-            .fontSize = summaryFontSize(scale),
+-            .fontWeight = FontWeight::Bold,
+-            .color = colorSpecFromRole(ColorRole::OnSurface),
+-            .maxWidth = topTextMaxWidth,
+-            .maxLines = std::max(1, summaryLines),
+-        })
++        ui::row(
++            {.align = FlexAlign::Center, .height = kBannerTitleLineHeight * scale},
++            ui::label({
++                .text = StringUtils::trimLeadingBlankLines(summary),
++                .fontSize = summaryFontSize(scale),
++                .fontWeight = FontWeight::Bold,
++                .fontFamily = kBannerFontFamily,
++                .color = bannerTitleColor(urgency),
++                .maxWidth = textMaxWidth,
++                .maxLines = std::max(1, summaryLines),
++            })
++        )
+     );
+ 
+     if (bodyLines > 0 && !StringUtils::isBlank(body)) {
+@@ -409,7 +426,8 @@ namespace {
+           ui::label({
+               .text = StringUtils::trimLeadingBlankLines(body),
+               .fontSize = bodyFontSize(scale),
+-              .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
++              .fontFamily = kBannerFontFamily,
++              .color = colorSpecFromRole(ColorRole::OnSurface),
+               .maxWidth = textMaxWidth,
+               .maxLines = std::max(1, bodyLines),
+           })
+@@ -476,8 +494,8 @@ namespace {
+     std::int32_t left = 0;
+   };
+ 
+-  ToastSurfaceMargins toastSurfaceMargins(std::string_view position, int offsetX, int offsetY, float scale) {
+-    const auto sideMargin = shell::surface_edge_inset::resolve(offsetX, paddingX(scale)).layerMargin;
++  ToastSurfaceMargins toastSurfaceMargins(std::string_view position, int offsetX, int offsetY) {
++    const auto sideMargin = shell::surface_edge_inset::resolve(offsetX, static_cast<float>(offsetX)).layerMargin;
+     const auto verticalMargin = static_cast<std::int32_t>(offsetY);
+     ToastSurfaceMargins margins{
+         .top = verticalMargin,
+@@ -524,9 +542,9 @@ void NotificationToast::initialize(
+   });
+ }
+ 
+-float NotificationToast::horizontalInnerPad(float scale) const {
++float NotificationToast::horizontalInnerPad(float /*scale*/) const {
+   const int offX = m_config != nullptr ? std::max(0, m_config->config().notification.offsetX) : 0;
+-  return shell::surface_edge_inset::resolve(offX, paddingX(scale)).innerPadding;
++  return shell::surface_edge_inset::resolve(offX, static_cast<float>(offX)).innerPadding;
+ }
+ 
+ void NotificationToast::onConfigReload() {
+@@ -721,7 +739,7 @@ void NotificationToast::onNotificationEvent(const Notification& n, NotificationE
+             cs = {};
+             InputArea* rebuilt = buildCard(
+                 *inst, m_entries[i], &cs.cardContent, &cs.cardForeground, &cs.progressBar, &cs.actionsRowNode,
+-                &cs.inlineReplyRowNode, &cs.inlineReplyInput
++                &cs.inlineReplyRowNode, &cs.inlineReplyInput, &cs.closeButton
+             );
+             cs.cardNode = rebuilt;
+             cs.clipHeight = rebuilt->height();
+@@ -742,12 +760,13 @@ void NotificationToast::onNotificationEvent(const Notification& n, NotificationE
+               const float targetY = cardSurfaceY(*inst, i);
+               Instance* instPtr = inst.get();
+               cs.entryAnimId = inst->animations.animate(
+-                  preservedReveal, 1.0F, Style::animNormal, Easing::EaseOutCubic,
++                  0.0F, 1.0F, kSlideInMs, Easing::Linear,
+                   [this, viewport = cs.cardNode, content = cs.cardContent, foreground = cs.cardForeground, targetY,
+                    cardHeight = cs.clipHeight, scale = notificationUiScale(m_config),
+-                   edgePad = horizontalInnerPad(notificationUiScale(m_config))](float v) {
++                   edgePad = horizontalInnerPad(notificationUiScale(m_config)), from = preservedReveal](float t) {
+                     applyCardRevealNodes(
+-                        viewport, content, foreground, v, targetY, revealDirection(), cardHeight, scale, edgePad
++                        viewport, content, foreground, from + (1.0F - from) * bannerSlideInEase(t), targetY,
++                        revealDirection(), cardHeight, scale, edgePad
+                     );
+                   },
+                   [this, instPtr, id = n.id]() {
+@@ -937,7 +956,7 @@ void NotificationToast::dismissPopup(std::size_t index) {
+   }
+   entry.exiting = true;
+   entry.exitFallbackTimer.start(
+-      std::chrono::milliseconds(Style::animNormal) + kExitFallbackGrace,
++      std::chrono::milliseconds(kSlideOutMs) + kExitFallbackGrace,
+       [this, notificationId = entry.notificationId]() {
+         if (findEntry(notificationId) != nullptr) {
+           finishRemoval(notificationId);
+@@ -1013,7 +1032,7 @@ void NotificationToast::addCardToInstance(Instance& inst, std::size_t entryIndex
+   cs = {};
+   InputArea* card = buildCard(
+       inst, entry, &cs.cardContent, &cs.cardForeground, &cs.progressBar, &cs.actionsRowNode, &cs.inlineReplyRowNode,
+-      &cs.inlineReplyInput
++      &cs.inlineReplyInput, &cs.closeButton
+   );
+   cs.cardNode = card;
+   cs.clipHeight = card->height();
+@@ -1025,11 +1044,13 @@ void NotificationToast::addCardToInstance(Instance& inst, std::size_t entryIndex
+ 
+   // Entry animation
+   cs.entryAnimId = inst.animations.animate(
+-      0.0F, 1.0F, Style::animNormal, Easing::EaseOutCubic,
++      0.0F, 1.0F, kSlideInMs, Easing::Linear,
+       [this, viewport = cs.cardNode, content = cs.cardContent, foreground = cs.cardForeground, targetY,
+        cardHeight = cs.clipHeight, scale = notificationUiScale(m_config),
+-       edgePad = horizontalInnerPad(notificationUiScale(m_config))](float v) {
+-        applyCardRevealNodes(viewport, content, foreground, v, targetY, revealDirection(), cardHeight, scale, edgePad);
++       edgePad = horizontalInnerPad(notificationUiScale(m_config))](float t) {
++        applyCardRevealNodes(
++            viewport, content, foreground, bannerSlideInEase(t), targetY, revealDirection(), cardHeight, scale, edgePad
++        );
+       },
+       [this, &inst, id = entry.notificationId]() {
+         if (auto* state = findCardState(inst, id); state != nullptr) {
+@@ -1228,7 +1249,7 @@ void NotificationToast::dismissCardFromInstance(Instance& inst, std::size_t entr
+   const uint32_t removingId = (entryIndex < m_entries.size()) ? m_entries[entryIndex].notificationId : 0;
+ 
+   cs.exitAnimId = inst.animations.animate(
+-      startReveal, 0.0F, Style::animNormal, Easing::EaseInOutQuad,
++      startReveal, 0.0F, kSlideOutMs, Easing::EaseInQuad,
+       [this, card, content, foreground, targetY, cardHeight, scale = notificationUiScale(m_config),
+        edgePad = horizontalInnerPad(notificationUiScale(m_config))](float v) {
+         applyCardRevealNodes(card, content, foreground, v, targetY, revealDirection(), cardHeight, scale, edgePad);
+@@ -1278,6 +1299,7 @@ void NotificationToast::beginPopupHover(uint32_t notificationId, const ProgressB
+   popup->hoverOwners += 1;
+   if (popup->hoverOwners == 1 && !popup->hovered) {
+     popup->hovered = true;
++    showCloseButtons(notificationId, true);
+     pauseTimeout(notificationId, progressBar);
+   } else if (progressBar != nullptr) {
+     popup->remainingProgress = std::clamp(progressBar->progress(), 0.0F, 1.0F);
+@@ -1324,6 +1346,7 @@ void NotificationToast::resetPopupHover(uint32_t notificationId, int totalDurati
+   popup->hoverResetPending = false;
+   popup->hoverResetToken += 1;
+   popup->hovered = false;
++  showCloseButtons(notificationId, false);
+   if (resumeTimer) {
+     resumeTimeout(notificationId, totalDuration);
+   }
+@@ -1333,6 +1356,20 @@ void NotificationToast::resetPopupHover(uint32_t notificationId, int totalDurati
+   revealQueuedEntries();
+ }
+ 
++// Like macOS, a banner shows its close button only while the pointer is over it.
++void NotificationToast::showCloseButtons(uint32_t notificationId, bool visible) {
++  for (auto& inst : m_instances) {
++    auto* state = findCardState(*inst, notificationId);
++    if (state == nullptr || state->closeButton == nullptr) {
++      continue;
++    }
++    state->closeButton->setOpacity(visible ? 1.0F : 0.0F);
++    if (inst->surface != nullptr) {
++      inst->surface->requestRedraw();
++    }
++  }
++}
++
+ void NotificationToast::resetInstanceHover(Instance& inst, bool resumeTimers) {
+   for (std::size_t i = 0; i < inst.cards.size() && i < m_entries.size(); ++i) {
+     if (inst.cards[i].cardNode == nullptr) {
+@@ -1649,7 +1686,7 @@ void NotificationToast::refreshEntryGeometry(PopupEntry& entry) const {
+       maxToastCardHeight(scale),
+       measureToastCardHeight(
+           measureRenderer, m_config, entry.appName, entry.summary, entry.body, entry.actions, entry.urgency,
+-          entry.displayDurationMs, kMaxSummaryLines, entry.toastBodyLines, scale
++          kMaxSummaryLines, entry.toastBodyLines, scale
+       )
+   );
+ }
+@@ -1874,11 +1911,12 @@ void NotificationToast::collapseStack() {
+         Node* content = cs.cardContent;
+         Node* foreground = cs.cardForeground;
+         cs.entryAnimId = inst->animations.animate(
+-            currentReveal, 1.0F, Style::animNormal, Easing::EaseOutCubic,
+-            [this, viewport, content, foreground, newSurfY, cardHeight, scale,
+-             edgePad = horizontalInnerPad(scale)](float v) {
++            0.0F, 1.0F, kSlideInMs, Easing::Linear,
++            [this, viewport, content, foreground, newSurfY, cardHeight, scale, edgePad = horizontalInnerPad(scale),
++             from = currentReveal](float t) {
+               applyCardRevealNodes(
+-                  viewport, content, foreground, v, newSurfY, revealDirection(), cardHeight, scale, edgePad
++                  viewport, content, foreground, from + (1.0F - from) * bannerSlideInEase(t), newSurfY,
++                  revealDirection(), cardHeight, scale, edgePad
+               );
+             },
+             [this, instPtr, entryId]() {
+@@ -1996,7 +2034,7 @@ void NotificationToast::ensureSurfaces() {
+   const int offY = std::max(0, notifCfg.offsetY);
+   const auto surfaceWidth = ::surfaceWidth(scale, horizontalInnerPad(scale));
+   const std::uint32_t anchor = toastSurfaceAnchor(position);
+-  const ToastSurfaceMargins margins = toastSurfaceMargins(position, offX, offY, scale);
++  const ToastSurfaceMargins margins = toastSurfaceMargins(position, offX, offY);
+   if (!m_instances.empty()
+       && (position != m_lastPosition || layer != m_lastLayer || selectedMonitors != m_lastMonitorSelectors)) {
+     for (auto& inst : m_instances) {
+@@ -2241,7 +2279,7 @@ void NotificationToast::updateInputRegion(Instance& inst) const {
+     const int rw = std::max(1, static_cast<int>(std::ceil(card.cardNode->width())));
+     const int rh = std::max(1, static_cast<int>(std::ceil(card.cardNode->height())));
+     rects.push_back({rx, ry, rw, rh});
+-    auto strips = Surface::tessellateRoundedRect(rx, ry, rw, rh, Style::scaledRadiusXl(notificationUiScale(m_config)));
++    auto strips = Surface::tessellateRoundedRect(rx, ry, rw, rh, kCardRadius * notificationUiScale(m_config));
+     blurRects.insert(blurRects.end(), strips.begin(), strips.end());
+   }
+ 
+@@ -2254,7 +2292,8 @@ void NotificationToast::updateInputRegion(Instance& inst) const {
+ }
+ 
+ float NotificationToast::cardReveal(const Instance::CardState& cs, float cardHeight) const {
+-  return cardRevealFromNode(cs.cardNode, revealDirection(), cardHeight, notificationUiScale(m_config));
++  const float scale = notificationUiScale(m_config);
++  return cardRevealFromNode(cs.cardNode, revealDirection(), cardHeight, scale, horizontalInnerPad(scale));
+ }
+ 
+ void NotificationToast::applyCardReveal(Instance::CardState& cs, float reveal, float y, float cardHeight) const {
+@@ -2267,7 +2306,8 @@ void NotificationToast::applyCardReveal(Instance::CardState& cs, float reveal, f
+ 
+ InputArea* NotificationToast::buildCard(
+     Instance& outputInstance, const PopupEntry& entry, Node** outCardContent, Node** outCardForeground,
+-    ProgressBar** outProgress, Node** outActionsRow, Node** outInlineReplyRow, Input** outInlineReplyInput
++    ProgressBar** outProgress, Node** outActionsRow, Node** outInlineReplyRow, Input** outInlineReplyInput,
++    Button** outCloseButton
+ ) {
+   m_renderContext->makeCurrent(outputInstance.surface->renderTarget());
+   Renderer& renderer = outputInstance.surface->renderTarget().renderer();
+@@ -2279,7 +2319,6 @@ InputArea* NotificationToast::buildCard(
+   const float cardW = cardWidth(scale);
+   const float maxCardHeight = maxToastCardHeight(scale);
+   const float textMaxWidth = notificationTextMaxWidth(scale, showActions);
+-  const float topTextMaxWidth = std::max(0.0F, textMaxWidth - closeButtonSize(scale) - Style::spaceSm * scale);
+   const bool showAppName = shouldShowNotificationAppName(m_config, entry.appName);
+ 
+   auto viewport = ui::inputArea({});
+@@ -2313,8 +2352,8 @@ InputArea* NotificationToast::buildCard(
+ 
+   const float bgAlpha = m_config != nullptr ? m_config->config().notification.backgroundOpacity : 0.97F;
+   const bool hasBorder = m_config == nullptr || m_config->config().notification.border;
+-  const float borderWidth =
+-      hasBorder ? (entry.urgency == Urgency::Critical ? Style::emphasizedBorderWidth : Style::borderWidth) : 0.0F;
++  // Critical banners keep a red outline even when `border` is off, so urgency stays visible.
++  const float borderWidth = entry.urgency == Urgency::Critical || hasBorder ? Style::borderWidth : 0.0F;
+   foreground->addChild(
+       ui::progressBar({
+           .out = outProgress,
+@@ -2324,17 +2363,17 @@ InputArea* NotificationToast::buildCard(
+           .orientation = ProgressBarOrientation::HorizontalCentered,
+           .width = std::max(0.0F, cardW - topProgressInset(scale) * 2.0F),
+           .height = progressHeight(scale),
+-          .visible = showToastProgressAccent(entry.urgency, entry.displayDurationMs),
+-          .participatesInLayout = showToastProgressAccent(entry.urgency, entry.displayDurationMs),
++          .visible = false,
++          .participatesInLayout = false,
+           .configure = [scale](ProgressBar& progress) { progress.setPosition(topProgressInset(scale), 0.0F); },
+       })
+   );
+ 
+   auto contentRow = ui::row({
+-      .align = FlexAlign::Start,
++      .align = FlexAlign::Center,
+       .gap = iconTextGap(scale),
+-      .padding = cardInnerPad(scale),
+       .width = cardW,
++      .configure = [scale](Flex& row) { setBannerPadding(row, scale); },
+   });
+ 
+   auto iconSlot = ui::node({
+@@ -2450,16 +2489,21 @@ InputArea* NotificationToast::buildCard(
+   auto textColumn = ui::column(
+       {
+           .align = FlexAlign::Stretch,
++          .gap = kBannerLineGap * scale,
+           .width = textMaxWidth,
+       },
+-      ui::label({
+-          .text = displaySummary,
+-          .fontSize = summaryFontSize(scale),
+-          .fontWeight = FontWeight::Bold,
+-          .color = colorSpecFromRole(ColorRole::OnSurface),
+-          .maxWidth = topTextMaxWidth,
+-          .maxLines = kMaxSummaryLines,
+-      })
++      ui::row(
++          {.align = FlexAlign::Center, .height = kBannerTitleLineHeight * scale},
++          ui::label({
++              .text = displaySummary,
++              .fontSize = summaryFontSize(scale),
++              .fontWeight = FontWeight::Bold,
++              .fontFamily = kBannerFontFamily,
++              .color = bannerTitleColor(entry.urgency),
++              .maxWidth = textMaxWidth,
++              .maxLines = kMaxSummaryLines,
++          })
++      )
+   );
+   std::unique_ptr<Flex> actionsRow;
+   std::unique_ptr<Flex> inlineReplyRow;
+@@ -2604,7 +2648,8 @@ InputArea* NotificationToast::buildCard(
+   auto body = ui::label({
+       .text = displayBody,
+       .fontSize = bodyFontSize(scale),
+-      .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
++      .fontFamily = kBannerFontFamily,
++      .color = colorSpecFromRole(ColorRole::OnSurface),
+       .maxWidth = textMaxWidth,
+       .maxLines = std::max(1, entry.toastBodyLines),
+       .visible = entry.toastBodyLines > 0 && !StringUtils::isBlank(displayBody),
+@@ -2663,7 +2708,7 @@ InputArea* NotificationToast::buildCard(
+           .height = cardHeight,
+           .configure = [scale, bgAlpha, borderWidth, urgency = entry.urgency](Box& box) {
+             box.setCardStyle();
+-            box.setRadius(Style::scaledRadiusXl(scale));
++            box.setRadius(kCardRadius * scale);
+             box.setFill(colorSpecFromRole(ColorRole::Surface, bgAlpha));
+             box.setBorder(
+                 colorSpecFromRole(urgency == Urgency::Critical ? ColorRole::Error : ColorRole::Outline), borderWidth
+@@ -2675,6 +2720,7 @@ InputArea* NotificationToast::buildCard(
+   cardRoot->addChild(std::move(foreground));
+   cardRoot->addChild(
+       ui::button({
++          .out = outCloseButton,
+           .glyph = "close",
+           .glyphSize = kCloseGlyphSize * scale,
+           .variant = ButtonVariant::Ghost,
+@@ -2686,9 +2732,10 @@ InputArea* NotificationToast::buildCard(
+           .onLeave = [this, notificationId = entry.notificationId,
+                       totalDuration = entry.displayDurationMs]() { endPopupHover(notificationId, totalDuration); },
+           .configure =
+-              [cardW, scale](Button& button) {
++              [scale, hovered = entry.hovered](Button& button) {
+                 button.setCursorShape(WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_POINTER);
+-                button.setPosition(cardW - cardInnerPad(scale) - closeButtonSize(scale), cardInnerPad(scale));
++                button.setPosition(kBannerCloseInset * scale, kBannerCloseInset * scale);
++                button.setOpacity(hovered ? 1.0F : 0.0F);
+               },
+       })
+   );
+diff --git a/src/shell/notification/notification_toast.h b/src/shell/notification/notification_toast.h
+index 7c3f9a3..5763c5d 100644
+--- a/src/shell/notification/notification_toast.h
++++ b/src/shell/notification/notification_toast.h
+@@ -11,6 +11,7 @@
+ #include <unordered_set>
+ #include <vector>
+ 
++class Button;
+ class ConfigService;
+ class HttpClient;
+ class Input;
+@@ -104,6 +105,7 @@ private:
+       Node* actionsRowNode = nullptr;
+       Node* inlineReplyRowNode = nullptr;
+       Input* inlineReplyInput = nullptr;
++      Button* closeButton = nullptr;
+       // Real laid-out card height for this instance, measured at this surface's render
+       // scale in buildCard(). The reveal clip uses this, not the shared entry.height,
+       // which is measured once at whatever scale was current on arrival.
+@@ -143,7 +145,8 @@ private:
+   void buildScene(Instance& inst, uint32_t width, uint32_t height);
+   InputArea* buildCard(
+       Instance& outputInstance, const PopupEntry& entry, Node** outCardContent, Node** outCardForeground,
+-      ProgressBar** outProgress, Node** outActionsRow, Node** outInlineReplyRow, Input** outInlineReplyInput
++      ProgressBar** outProgress, Node** outActionsRow, Node** outInlineReplyRow, Input** outInlineReplyInput,
++      Button** outCloseButton
+   );
+   void applyCardReveal(Instance::CardState& cs, float reveal, float y, float cardHeight) const;
+   [[nodiscard]] float cardReveal(const Instance::CardState& cs, float cardHeight) const;
+@@ -158,6 +161,7 @@ private:
+   void endPopupHover(uint32_t notificationId, int totalDuration, const ProgressBar* progressBar = nullptr);
+   void resetPopupHover(uint32_t notificationId, int totalDuration, bool resumeTimer);
+   void resetInstanceHover(Instance& inst, bool resumeTimers);
++  void showCloseButtons(uint32_t notificationId, bool visible);
+   void pauseTimeout(uint32_t notificationId, const ProgressBar* progressBar = nullptr);
+   void resumeTimeout(uint32_t notificationId, int totalDuration);
+   void pauseCountdowns(uint32_t notificationId);

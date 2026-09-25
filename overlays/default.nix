@@ -30,7 +30,8 @@ in
         # would run on top of it, a bar widget's panel centers under the widget like a macOS
         # menu bar item, a plugin panel can set its own padding and resize to fit its content
         # like a menu, and plugin sliders take their own colors and can drop the thumb for
-        # Apple's thin track.
+        # Apple's thin track. Notification toasts take the layout of macOS 27's banners and
+        # slide in and out across the screen edge.
         noctalia =
           assert final.lib.assertMsg (unstable.noctalia.version == "5.0.1") (
             "The Noctalia patches were written for 5.0.1, not ${unstable.noctalia.version}; "
@@ -42,6 +43,7 @@ in
               ./patches/noctalia/panel-anchor-widget-center.patch
               ./patches/noctalia/plugin-panel-layout.patch
               ./patches/noctalia/plugin-slider-style.patch
+              ./patches/noctalia/notification-banners.patch
             ];
           });
       };
