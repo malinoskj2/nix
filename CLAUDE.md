@@ -95,6 +95,12 @@ building the affected host before applying it, and don't run a `switch` unless
 explicitly asked. Hosts are applied with `nh os switch`. No host needs
 `--impure`. Don't copy secrets into the repository.
 
+## Desktop design
+
+`docs/design.md` describes the `home` desktop's design language: color roles,
+type, glass, menu anatomy, motifs and motion. Follow it for any visual change
+to the desktop, and update it when the language changes.
+
 ## Updating inputs
 
 @docs/updating.md

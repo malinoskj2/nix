@@ -33,7 +33,7 @@ in
         # Apple's thin track. Notification toasts take the layout of macOS 27's banners and
         # slide in and out across the screen edge. A desktop widget's panel opens below the bar
         # with its left edge under the widget, like the Apple menu, and plugin rows, boxes and
-        # images take a right click.
+        # images take a right click. A bar widget can drop its hover tooltip.
         noctalia =
           assert final.lib.assertMsg (unstable.noctalia.version == "5.0.1") (
             "The Noctalia patches were written for 5.0.1, not ${unstable.noctalia.version}; "
@@ -47,6 +47,7 @@ in
               ./patches/noctalia/plugin-slider-style.patch
               ./patches/noctalia/notification-banners.patch
               ./patches/noctalia/desktop-widget-panel.patch
+              ./patches/noctalia/widget-show-tooltip.patch
             ];
           });
       };
