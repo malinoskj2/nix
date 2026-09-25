@@ -25,9 +25,10 @@ hyprlandPlugins.mkHyprlandPlugin {
     hash = "sha256-yUU0gKu1CXqpUQBtyb3IWNBYZ1bCAm99mfTUV7ceJyg=";
   };
 
-  # Shapes layer glass to the requested blur region, raises the region's rect limit, and adds
-  # per-layer corner_radius, rounding_power, rim_light, rim_shadow and the gleam_* options to
-  # hg.layer. The gleam sweeps the top rim once when a layer maps, damaging it only until then.
+  # Shapes layer glass to each separate piece of the requested blur region, raises the region's
+  # rect limit, and adds per-layer corner_radius, rounding_power, rim_light, rim_shadow and the
+  # gleam_* options to hg.layer. The gleam sweeps the top rim once when a layer maps, damaging it
+  # only until then.
   patches = [ ./layer-shape.patch ];
 
   buildPhase = ''

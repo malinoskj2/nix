@@ -56,7 +56,8 @@ To upgrade:
    hooks Hyprland's private `renderLayer`, so open a floating panel (the clock's
    calendar) and an attached one (the control center) and check their glass,
    not just the build. The floating panel's top rim should gleam once as it
-   opens; the attached one shouldn't.
+   opens; the attached one shouldn't. Then send two notifications: each banner
+   should have its own rounded glass, even while one slides in or out.
 4. Rebase
    [`aquamarine-nested.patch`](../pkgs/agent-sandbox/aquamarine-nested.patch)
    onto that commit's Aquamarine, then start a sandbox and check that
@@ -116,9 +117,10 @@ Treat a bump as a hardware change and test it on the device.
   [`overlays/default.nix`](../overlays/default.nix) patches Noctalia so floating
   panels skip its clip reveal and Hyprland scales them in instead, so a bar
   widget's panel centers under the widget, so a plugin panel can set its own
-  padding and resize to fit its content, and so plugin sliders can be styled.
-  It asserts the version the patches were checked against. When
-  `nixpkgs-unstable` moves Noctalia, re-check
+  padding and resize to fit its content, so plugin sliders can be styled, and
+  so notification toasts are laid out like macOS 27's banners and slide in and
+  out across the screen edge. It asserts the version the patches were checked
+  against. When `nixpkgs-unstable` moves Noctalia, re-check
   [`overlays/patches/noctalia/`](../overlays/patches/noctalia) against the new
   source, then:
   - click the clock (the calendar should open centered under it);
@@ -126,7 +128,10 @@ Treat a bump as a hardware change and test it on the device.
     a thin peach slider);
   - click the network icon (the Wi-Fi menu should scale in at its final size,
     then grow when Other Networks expands);
-  - open the control center.
+  - open the control center;
+  - send a few notifications with `notify-send` (each banner should slide in
+    from the right with its own rounded glass, and slide back out when it
+    expires).
 - **Claude Desktop.** [`pkgs/claude-desktop/`](../pkgs/claude-desktop) fetches
   one `.deb` from Anthropic's APT repository. To move it, copy the newest
   `Version` and `SHA256` from
