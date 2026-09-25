@@ -1,5 +1,6 @@
 {
   config,
+  inputs,
   lib,
   osConfig,
   pkgs,
@@ -90,6 +91,63 @@ let
         inherit palette;
         ip = lib.getExe' pkgs.iproute2 "ip";
         noctalia = lib.getExe noctalia;
+      };
+    };
+    about = {
+      "about.luau" = withNix ./plugins/about/about.luau {
+        inherit palette;
+        title = "NixOS Desktop";
+        hostname = osConfig.networking.hostName;
+        nixos = "${osConfig.system.nixos.codeName} ${osConfig.system.nixos.release}";
+        revision =
+          let
+            revision = osConfig.system.configurationRevision;
+          in
+          if revision == null then
+            "dirty"
+          else
+            lib.substring 0 7 revision + lib.optionalString (lib.hasSuffix "-dirty" revision) "-dirty";
+        built =
+          let
+            date = inputs.self.lastModifiedDate;
+            month = lib.elemAt [
+              "January"
+              "February"
+              "March"
+              "April"
+              "May"
+              "June"
+              "July"
+              "August"
+              "September"
+              "October"
+              "November"
+              "December"
+            ] (lib.toInt (lib.removePrefix "0" (lib.substring 4 2 date)) - 1);
+          in
+          "Built ${lib.removePrefix "0" (lib.substring 6 2 date)} ${month} ${lib.substring 0 4 date}";
+        repository = {
+          name = "github.com/malinoskj2/nix";
+          url = "https://github.com/malinoskj2/nix";
+        };
+        monitor = [
+          (lib.getExe config.programs.alacritty.package)
+          "--command"
+          (lib.getExe config.programs.btop.package)
+        ];
+        open = lib.getExe' pkgs.xdg-utils "xdg-open";
+        state = lib.getExe (
+          pkgs.writeShellApplication {
+            name = "noctalia-about-state";
+            runtimeInputs = [
+              pkgs.gawk
+              pkgs.jq
+              pkgs.pciutils
+              pkgs.util-linux
+            ];
+            text = builtins.readFile ./plugins/about/state.sh;
+          }
+        );
       };
     };
     control-button = {
