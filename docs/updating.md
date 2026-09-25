@@ -38,9 +38,12 @@ plugins always share one ABI. hyprbars comes from that plugin set as-is.
 hyprfocus comes from it too, patched by the `pins` overlay in
 [`overlays/default.nix`](../overlays/default.nix). hyprglass isn't in that
 set: [`pkgs/hyprglass/`](../pkgs/hyprglass) builds one hyprglass release
-against the pinned Hyprland and patches its layer glass. Three assertions check
-the Hyprland version: `supportedHyprlandVersions` in that overlay and in
-`pkgs/hyprglass/package.nix`, and `supportedHyprland` in
+against the pinned Hyprland and patches its layer glass.
+[`pkgs/hyprsheet/`](../pkgs/hyprsheet) is a local plugin built against the
+pinned Hyprland that draws a file chooser's parent scaled into the chooser.
+Four assertions check the Hyprland version: `supportedHyprlandVersions` in that
+overlay, in `pkgs/hyprglass/package.nix` and in `pkgs/hyprsheet/package.nix`,
+and `supportedHyprland` in
 [`users/jesse/hyprland-desktop/hyprland/default.nix`](../users/jesse/hyprland-desktop/hyprland/default.nix).
 
 To upgrade:
@@ -58,16 +61,23 @@ To upgrade:
    not just the build. The floating panel's top rim should gleam once as it
    opens; the attached one shouldn't. Then send two notifications: each banner
    should have its own rounded glass, even while one slides in or out.
-4. Rebase
+4. Read [`pkgs/hyprsheet/main.cpp`](../pkgs/hyprsheet/main.cpp) against the
+   new source. It uses Hyprland's private window transformers, xdg-foreign
+   parents, window fadeouts and layout moves, and hooks
+   `CWindowFadeout::create`, so a clean build isn't enough. Open a file chooser
+   from Firefox and check that Firefox shrinks into the chooser and fades out
+   as it opens, and grows back out of it as it closes, without Firefox
+   re-laying out its page.
+5. Rebase
    [`aquamarine-nested.patch`](../pkgs/agent-sandbox/aquamarine-nested.patch)
    onto that commit's Aquamarine, then start a sandbox and check that
    `hyprctl monitors` inside it lists `NESTED-1`.
-5. Confirm that commit's hyprbars still supports what
+6. Confirm that commit's hyprbars still supports what
    [`hyprland.lua`](../users/jesse/hyprland-desktop/hyprland/hyprland.lua)
    uses: `bar_part_of_window`, `bar_precedence_over_border`, `bar_text_align`,
    `on_double_click`, and the `hyprbars:no_bar` window rule.
-6. Update all three version assertions.
-7. Build `home`.
+7. Update all four version assertions.
+8. Build `home`.
 
 ### Firefox
 
@@ -119,16 +129,18 @@ Treat a bump as a hardware change and test it on the device.
   widget's panel centers under the widget, so a plugin panel can set its own
   padding and resize to fit its content, so plugin sliders can be styled, so
   notification toasts are laid out like macOS 27's banners and slide in and
-  out across the screen edge, and so a desktop widget's panel opens under the
-  widget and plugin rows take a right click. It asserts the version the patches
+  out across the screen edge, so a desktop widget's panel opens under the
+  widget and plugin rows take a right click, and so a bar widget can turn off
+  its hover tooltip. It asserts the version the patches
   were checked against. When `nixpkgs-unstable` moves Noctalia, re-check
   [`overlays/patches/noctalia/`](../overlays/patches/noctalia) against the new
   source, then:
   - click the clock (the calendar should open centered under it);
   - click the volume icon (the sound menu should open centered under it, with
     a thin peach slider);
-  - click the network icon (the Wi-Fi menu should scale in at its final size,
-    then grow when Other Networks expands);
+  - hover the network icon (no tooltip should appear), then click it (the
+    network menu should scale in at its final size, then grow when Other
+    Networks expands);
   - click the snowflake button (the system menu should open below the bar with
     its left edge under the button's), then right-click it (the control center
     should open);

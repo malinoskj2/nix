@@ -2,7 +2,9 @@
 -- layout with the Sound menu, and the slider from Control Center's Sound module. Values are
 -- logical px from the top-left of the content area, which the manifest insets 5 px so hover
 -- highlights can sit where Apple's do; the menu's own offsets are therefore these plus 5. Rows are
--- placed from their centers, since Noctalia snaps layout to whole px.
+-- placed from their centers, since Noctalia snaps layout to whole px. Like the network menu, the
+-- volume sits in the header's corner and the file chooser's hem ends the menu, 12 px below the last
+-- row and 6 px above the panel's edge.
 local WIDTH = 298
 local FONT_SIZE = 13
 local SYMBOL_SIZE = 15.5
@@ -17,15 +19,35 @@ local TOP_SEPARATOR = 55
 local SECTION_CENTER = 72
 local FIRST_OUTPUT_CENTER = 98.5
 local OUTPUT_PITCH = 32
-local OUTPUT_TO_SEPARATOR = 21.5
-local SEPARATOR_TO_SETTINGS = 16.5
-local SETTINGS_TO_BOTTOM = 12.5
+local HEM_GAP = 12
+local HEM_TO_BOTTOM = 2
 local ROW_HEIGHT = 22
 local CIRCLE_DIAMETER = 26
 local CIRCLE_INSET = 9
 local NAME_INSET = 42
 local HIGHLIGHT_RADIUS = 7
 local TRACK_HEIGHT = 4
+local LEVEL_WIDTH = 96
+local LEVEL_HEIGHT = 20
+local LEVEL_FONT_SIZE = 14.5
+local HEM_COLORS = {
+  "rosewater",
+  "flamingo",
+  "pink",
+  "mauve",
+  "red",
+  "maroon",
+  "peach",
+  "yellow",
+  "green",
+  "teal",
+  "sky",
+  "sapphire",
+  "blue",
+  "lavender",
+}
+local HEM_STOP_WIDTH = 12
+local HEM_HEIGHT = 3
 local POLL_MS = 1000
 -- A poll that lands mid-drag or just after would snap the slider back to a stale volume.
 local LOCAL_CHANGE_HOLD_MS = 1500
@@ -35,7 +57,10 @@ local function color(name, alpha)
 end
 
 local TEXT = color("text")
-local SECONDARY = color("overlay2")
+local TITLE = color("peach")
+-- The sky tint the calendar's weekends and the network menu's labels use.
+local KEY = color("sky", 0.65)
+local MUTED_DOT = color("overlay1")
 local SEPARATOR = color("text", 0.1)
 local TRACK = color("text", 0.18)
 local FILL = color("peach")
@@ -43,8 +68,6 @@ local CIRCLE = color("text", 0.14)
 local SELECTED_CIRCLE = color("peach")
 local SELECTED_GLYPH = color("crust")
 local HOVER = color("text", 0.1)
-local ACTION_HOVER = color("sky")
-local ACTION_HOVER_TEXT = color("crust")
 local CLEAR = "#00000000"
 
 -- SF Symbols glyphs in SF Pro's private use area, with the size that gives each Apple's ink size.
@@ -105,6 +128,59 @@ end
 
 local function textRow(text, props)
   return ui.row({ height = ROW_HEIGHT, paddingH = TEXT_INSET, align = "center" }, { label(text, props) })
+end
+
+-- Noctalia labels take one flat color, so the level is drawn as SVG text filled with the sunset
+-- cloud's stripes, like the network menu's link speed, with the dot as a glyph in the same run.
+local LEVEL_SVG = [[<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">
+<defs><linearGradient id="stripes" gradientUnits="userSpaceOnUse" x1="0" y1="4" x2="0" y2="16">%s</linearGradient></defs>
+<text x="%d" y="15" text-anchor="end" font-family="SF Pro Rounded" font-weight="600" font-size="%s"><tspan fill="%s" font-size="9" baseline-shift="1.5">●</tspan><tspan dx="5" fill="url(#stripes)">%s</tspan></text>
+</svg>]]
+local levelImages = {}
+
+local function levelImage(text, dot)
+  local key = text .. dot
+  if levelImages[key] == nil then
+    local stops = {}
+    for i = #HEM_COLORS, 1, -1 do
+      local index = #HEM_COLORS - i
+      local fill = color(HEM_COLORS[i])
+      table.insert(stops, string.format('<stop offset="%.4f" stop-color="%s"/>', index / #HEM_COLORS, fill))
+      table.insert(stops, string.format('<stop offset="%.4f" stop-color="%s"/>', (index + 1) / #HEM_COLORS, fill))
+    end
+    local svg = string.format(
+      LEVEL_SVG,
+      LEVEL_WIDTH,
+      LEVEL_HEIGHT,
+      LEVEL_WIDTH,
+      LEVEL_HEIGHT,
+      table.concat(stops),
+      LEVEL_WIDTH,
+      LEVEL_FONT_SIZE,
+      dot,
+      text
+    )
+    -- Noctalia caches images by path, so the name carries a hash of the content.
+    local digest = 5381
+    for i = 1, #svg do
+      digest = (digest * 33 + string.byte(svg, i)) % 4294967296
+    end
+    local dir = noctalia.pluginDataDir()
+    local path = dir and string.format("%s/level-%08x.svg", dir, digest) or nil
+    if path == nil or not noctalia.writeFile(path, svg) then
+      return nil
+    end
+    levelImages[key] = path
+  end
+  return levelImages[key]
+end
+
+local function hem()
+  local stops = {}
+  for _, name in ipairs(HEM_COLORS) do
+    table.insert(stops, ui.box({ width = HEM_STOP_WIDTH, height = HEM_HEIGHT, fill = color(name, 0.9) }))
+  end
+  return ui.row({ width = WIDTH, height = HEM_HEIGHT, justify = "center", gap = 0 }, stops)
 end
 
 local function refresh()
@@ -262,23 +338,24 @@ local function outputRow(output)
   })
 end
 
-local function settingsRow()
-  local active = hovered == "settings"
-  return ui.row({
-    key = "settings",
-    height = ROW_HEIGHT,
-    paddingH = TEXT_INSET,
-    radius = HIGHLIGHT_RADIUS,
-    fill = active and ACTION_HOVER or CLEAR,
-    align = "center",
-    onClick = openSettings,
-    onHover = hover("settings"),
-  }, { label("Sound Settings…", { color = active and ACTION_HOVER_TEXT or TEXT }) })
+local function headerRow()
+  local muted = state.muted
+  local text = muted and "Muted" or string.format("%d%%", math.floor(state.volume * 100 + 0.5))
+  local path = levelImage(text, muted and MUTED_DOT or FILL)
+  return ui.row({ height = ROW_HEIGHT, paddingH = TEXT_INSET, align = "center" }, {
+    label("Sound", { fontWeight = "bold", color = TITLE, flexGrow = 1 }),
+    path and ui.row({ key = "level", onClick = openSettings }, {
+      ui.image({ path = path, width = LEVEL_WIDTH, height = LEVEL_HEIGHT, fit = "contain" }),
+    }) or gap(0, true),
+  })
+end
+local function hemCenter(count)
+  local lastOutput = FIRST_OUTPUT_CENTER + (math.max(count, 1) - 1) * OUTPUT_PITCH
+  return lastOutput + OUTPUT_PITCH / 2 + HEM_GAP + HEM_HEIGHT / 2
 end
 
 local function contentHeight(count)
-  local separatorCenter = FIRST_OUTPUT_CENTER + (math.max(count, 1) - 1) * OUTPUT_PITCH + OUTPUT_TO_SEPARATOR
-  return separatorCenter + SEPARATOR_TO_SETTINGS + SETTINGS_TO_BOTTOM
+  return math.ceil(hemCenter(count) + HEM_HEIGHT / 2) + HEM_TO_BOTTOM
 end
 
 function render()
@@ -293,17 +370,15 @@ function render()
   end
 
   local rows = {
-    { HEADER_CENTER, ROW_HEIGHT, textRow("Sound", { fontWeight = "bold" }) },
+    { HEADER_CENTER, ROW_HEIGHT, headerRow() },
     { SLIDER_CENTER, ROW_HEIGHT, volumeRow() },
     { TOP_SEPARATOR, 1, separator() },
-    { SECTION_CENTER, ROW_HEIGHT, textRow("Output", { fontWeight = "bold", color = SECONDARY }) },
+    { SECTION_CENTER, ROW_HEIGHT, textRow("Output", { fontWeight = "bold", color = KEY }) },
   }
   for index, output in ipairs(state.outputs) do
     table.insert(rows, { FIRST_OUTPUT_CENTER + (index - 1) * OUTPUT_PITCH, OUTPUT_PITCH, outputRow(output) })
   end
-  local separatorCenter = height - SETTINGS_TO_BOTTOM - SEPARATOR_TO_SETTINGS
-  table.insert(rows, { separatorCenter, 1, separator() })
-  table.insert(rows, { separatorCenter + SEPARATOR_TO_SETTINGS, ROW_HEIGHT, settingsRow() })
+  table.insert(rows, { hemCenter(count), HEM_HEIGHT, hem() })
 
   panel.render(ui.column({ width = WIDTH, height = height, gap = 0 }, track(rows, false)))
 end

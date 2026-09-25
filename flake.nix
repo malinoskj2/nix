@@ -119,6 +119,7 @@
           "htop-vim-navigation"
           "hy3dgen"
           "hyprglass"
+          "hyprsheet"
           "markdown-to-pdf"
           "pubip"
           "wallpaper-autopause"

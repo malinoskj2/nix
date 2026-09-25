@@ -39,6 +39,7 @@ in
       hyprbars = "${pkgs.hyprlandPlugins.hyprbars}/lib/libhyprbars.so";
       hyprfocus = "${pkgs.hyprlandPlugins.hyprfocus}/lib/libhyprfocus.so";
       hyprglass = "${pkgs.hyprglass}/lib/libhyprglass.so";
+      hyprsheet = "${pkgs.hyprsheet}/lib/libhyprsheet.so";
       monitors = {
         main = "DP-2";
         side = "DP-1";

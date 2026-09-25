@@ -1,11 +1,15 @@
--- Geometry is measured from macOS 27's small Calendar widget in the Clear style, in logical px from
--- the top-left of the content area. The panel is the tile's size, and Noctalia insets plugin
--- content 14 px from its edge, so these are the tile's offsets less 14. Noctalia snaps layout to
--- whole logical px, so every row and column is placed from its own center instead of accumulating
--- fractional sizes.
+-- Geometry is measured from macOS 27's small Calendar widget in the Clear style, in logical px, as
+-- the tile's offsets less its 14 px inset. The panel pads its content by the network menu's 5 px, so
+-- the layout is inset by the rest itself. Noctalia snaps layout to whole logical px, so every row
+-- and column is placed from its own center instead of accumulating fractional sizes. The network
+-- menu's hem, scaled to the tile, sits below Apple's last week with the menu's spacing: 12 px above
+-- it, and 6 px between it and the panel's edge.
 local WIDTH = 137
-local HEIGHT = 136
+local HEIGHT = 151
+local INSET = 14 - 5
 local FONT_SIZE = 10.25
+-- The month takes the network menu's title style.
+local TITLE_FONT_SIZE = 13
 local HEADER_INSET = 5
 local HEADER_CENTER = 10
 local WEEKDAY_CENTER = 28
@@ -19,6 +23,25 @@ local LABEL_ROW_HEIGHT = 16
 local WEEK_ROW_HEIGHT = 18
 local CELL_WIDTH = 18
 local TODAY_DIAMETER = 18
+local HEM_CENTER = 147
+local HEM_HEIGHT = 3
+local HEM_STOP_WIDTH = 7
+local HEM_COLORS = {
+  "rosewater",
+  "flamingo",
+  "pink",
+  "mauve",
+  "red",
+  "maroon",
+  "peach",
+  "yellow",
+  "green",
+  "teal",
+  "sky",
+  "sapphire",
+  "blue",
+  "lavender",
+}
 
 local function color(name, alpha)
   return "#" .. nix.palette[name] .. (alpha and string.format("%02x", math.floor(alpha * 255 + 0.5)) or "")
@@ -42,8 +65,7 @@ local function label(text, textColor, props)
   local defaults = {
     text = text,
     fontSize = FONT_SIZE,
-    fontWeight = "bold",
-    fontFamily = "SF Pro Display",
+    fontFamily = "SF Pro Text",
     color = textColor,
     baseline = "text",
     textAlign = "center",
@@ -123,7 +145,8 @@ local function render(now)
 
   local initials = {}
   for column, name in ipairs(WEEKDAYS) do
-    initials[column] = cell(label(name, isWeekend(column) and WEEKEND or WEEKDAY, { baseline = "textFixedHeight" }))
+    initials[column] =
+      cell(label(name, isWeekend(column) and WEEKEND or WEEKDAY, { baseline = "textFixedHeight", fontWeight = "bold" }))
   end
 
   local rows = {
@@ -131,7 +154,11 @@ local function render(now)
       HEADER_CENTER,
       LABEL_ROW_HEIGHT,
       ui.row({ height = LABEL_ROW_HEIGHT, paddingH = HEADER_INSET, align = "center" }, {
-        label(string.upper(os.date("%B", first)), MONTH, { baseline = "textFixedHeight", fontFamily = "SF Pro Text" }),
+        label(
+          os.date("%B", first),
+          MONTH,
+          { baseline = "textFixedHeight", fontSize = TITLE_FONT_SIZE, fontWeight = "bold" }
+        ),
       }),
     },
     { WEEKDAY_CENTER, LABEL_ROW_HEIGHT, cells(initials, LABEL_ROW_HEIGHT) },
@@ -152,7 +179,22 @@ local function render(now)
     table.insert(rows, { FIRST_WEEK_CENTER + week * pitch, weekHeight, cells(days, weekHeight) })
   end
 
-  panel.render(ui.column({ width = WIDTH, height = HEIGHT, gap = 0 }, track(rows, false)))
+  local stops = {}
+  for _, name in ipairs(HEM_COLORS) do
+    table.insert(stops, ui.box({ width = HEM_STOP_WIDTH, height = HEM_HEIGHT, fill = color(name, 0.9) }))
+  end
+  table.insert(rows, {
+    HEM_CENTER,
+    HEM_HEIGHT,
+    ui.row({ width = WIDTH, height = HEM_HEIGHT, justify = "center", gap = 0 }, stops),
+  })
+
+  for _, row in ipairs(rows) do
+    row[1] += INSET
+  end
+  panel.render(ui.row({ paddingH = INSET }, {
+    ui.column({ width = WIDTH, height = INSET + HEIGHT, gap = 0 }, track(rows, false)),
+  }))
 end
 
 local function refresh(force)

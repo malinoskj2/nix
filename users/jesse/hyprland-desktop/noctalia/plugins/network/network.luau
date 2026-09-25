@@ -24,29 +24,48 @@ local PROMPT_HEIGHT = 36
 local SEPARATOR_GAP = 5.5
 local BOTTOM_GAP = 7
 
-local TOGGLE_WIDTH = 54
-local TOGGLE_HEIGHT = 24
-local KNOB_WIDTH = 32
-local KNOB_HEIGHT = 20
 local ICON_DIAMETER = 26
 local NAME_OFFSET = 34
 local HIGHLIGHT_RADIUS = 7
 local ERROR_WIDTH = CONTENT_WIDTH - 2 * INSET - NAME_OFFSET
+local SPEED_WIDTH = 96
+local SPEED_HEIGHT = 20
+local SPEED_FONT_SIZE = 14.5
+-- The file chooser's selvedge hem: the 14 accents as hard stops, each 12 px wide.
+local HEM_COLORS = {
+  "rosewater",
+  "flamingo",
+  "pink",
+  "mauve",
+  "red",
+  "maroon",
+  "peach",
+  "yellow",
+  "green",
+  "teal",
+  "sky",
+  "sapphire",
+  "blue",
+  "lavender",
+}
+local HEM_STOP_WIDTH = 12
+local HEM_HEIGHT = 3
+local HEM_GAP = 12
 
 local function color(name, alpha)
   return "#" .. nix.palette[name] .. (alpha and string.format("%02x", math.floor(alpha * 255 + 0.5)) or "")
 end
 
 local TEXT = color("text")
-local SECONDARY = color("subtext0")
+local SECONDARY = color("subtext1")
+-- Like the calendar's weekends: a sky tint for section headers and the names beside values.
+local KEY = color("sky", 0.65)
 local TERTIARY = color("overlay1")
 local ACCENT = color("peach")
 local ON_ACCENT = color("crust")
 local SEPARATOR = color("text", 0.12)
 local HIGHLIGHT = color("text", 0.1)
 local ICON_FILL = color("text", 0.16)
-local TOGGLE_OFF = color("text", 0.2)
-local KNOB = color("text")
 local FIELD = color("crust", 0.35)
 local ERROR = color("red")
 local CLEAR = "#00000000"
@@ -60,6 +79,7 @@ local state = {
   known = {},
   route = nil, -- { device, gateway }
   address = nil,
+  linkSpeed = nil, -- Mb/s the kernel reports for the route's device
   rates = nil, -- { rx, tx } in bytes per second
 }
 
@@ -200,7 +220,7 @@ local function refreshNetworks(rescan)
     return callback
   end or tracked
   nmcli(
-    { "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "device", "wifi", "list", "--rescan", rescan and "yes" or "no" },
+    { "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY,RATE", "device", "wifi", "list", "--rescan", rescan and "yes" or "no" },
     wrap(function(result)
       if result.exitCode ~= 0 then
         return
@@ -216,6 +236,7 @@ local function refreshNetworks(rescan)
             inUse = fields[1] == "*",
             signal = tonumber(fields[3]) or 0,
             secure = fields[4] ~= nil and fields[4] ~= "" and fields[4] ~= "--",
+            rate = tonumber(string.match(fields[5] or "", "%d+")),
           }
           local existing = bySsid[ssid]
           if existing == nil then
@@ -253,9 +274,16 @@ local function refreshAddress()
       state.route = best and { device = best.dev, gateway = best.gateway } or nil
       if state.route == nil then
         state.address = nil
+        state.linkSpeed = nil
         render()
         return
       end
+      -- The speed only fills the header's corner, so it doesn't hold the first render back.
+      noctalia.readFileAsync("/sys/class/net/" .. state.route.device .. "/speed", function(contents)
+        local speed = tonumber(noctalia.string.trim(contents or ""))
+        state.linkSpeed = speed ~= nil and speed > 0 and speed or nil
+        render()
+      end)
       run(
         { nix.ip, "-j", "-4", "address", "show", "dev", state.route.device },
         tracked(function(address)
@@ -372,18 +400,6 @@ local function submitPassword()
   end
 end
 
-local function setWifi(enabled)
-  state.wifiEnabled = enabled
-  if not enabled then
-    showOther = false
-    prompt = nil
-  end
-  render()
-  nmcli({ "radio", "wifi", enabled and "on" or "off" }, function()
-    refreshAll(enabled)
-  end)
-end
-
 local function openSettings()
   noctalia.runAsync({ nix.noctalia, "msg", "panel-open", "control-center", "network" })
 end
@@ -429,30 +445,13 @@ local function row(key, height, children, props)
     key = key,
     height = height,
     radius = HIGHLIGHT_RADIUS,
-    fill = active and (props.accent and ACCENT or HIGHLIGHT) or CLEAR,
+    fill = active and HIGHLIGHT or CLEAR,
     paddingH = INSET,
     gap = 0,
     align = "center",
     onClick = props.onClick,
     onHover = props.onClick and "onRowHover" or nil,
   }, children)
-end
-
-local function toggle(checked)
-  local knob = ui.box({ width = KNOB_WIDTH, height = KNOB_HEIGHT, radius = KNOB_HEIGHT / 2, fill = KNOB })
-  local slack = TOGGLE_WIDTH - KNOB_WIDTH - 4
-  return ui.row({
-    key = "toggle",
-    width = TOGGLE_WIDTH,
-    height = TOGGLE_HEIGHT,
-    radius = TOGGLE_HEIGHT / 2,
-    fill = checked and ACCENT or TOGGLE_OFF,
-    paddingH = 2,
-    align = "center",
-    onClick = function()
-      setWifi(not checked)
-    end,
-  }, checked and { gap(slack, true), knob } or { knob, gap(slack, true) })
 end
 
 -- Tabler's Wi-Fi glyphs drop the arcs a weak signal lacks, where Apple's keeps them dimmed, so the
@@ -480,6 +479,80 @@ local function wifiIcon(signal, fill)
     wifiIcons[key] = path
   end
   return wifiIcons[key]
+end
+
+-- Noctalia labels take one flat color, so the speed is drawn as SVG text filled with the sunset
+-- cloud's stripes, lavender at the top down to rosewater, with the status dot as a glyph in the
+-- same run so the pair stays right-aligned whatever the text's width.
+local SPEED_SVG = [[<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">
+<defs><linearGradient id="stripes" gradientUnits="userSpaceOnUse" x1="0" y1="4" x2="0" y2="16">%s</linearGradient></defs>
+<text x="%d" y="15" text-anchor="end" font-family="SF Pro Rounded" font-weight="600" font-size="%s"><tspan fill="%s" font-size="9" baseline-shift="1.5">●</tspan><tspan dx="5" fill="url(#stripes)">%s</tspan></text>
+</svg>]]
+local speedImages = {}
+
+local function formatSpeed(mbps)
+  if mbps >= 1000 then
+    return string.format("%g Gb/s", mbps / 1000)
+  end
+  return string.format("%d Mb/s", mbps)
+end
+
+local function speedImage(text)
+  if speedImages[text] == nil then
+    local stops = {}
+    for i = #HEM_COLORS, 1, -1 do
+      local index = #HEM_COLORS - i
+      local fill = color(HEM_COLORS[i])
+      table.insert(stops, string.format('<stop offset="%.4f" stop-color="%s"/>', index / #HEM_COLORS, fill))
+      table.insert(stops, string.format('<stop offset="%.4f" stop-color="%s"/>', (index + 1) / #HEM_COLORS, fill))
+    end
+    local svg = string.format(
+      SPEED_SVG,
+      SPEED_WIDTH,
+      SPEED_HEIGHT,
+      SPEED_WIDTH,
+      SPEED_HEIGHT,
+      table.concat(stops),
+      SPEED_WIDTH,
+      SPEED_FONT_SIZE,
+      ACCENT,
+      text
+    )
+    -- Noctalia caches images by path, so the name carries a hash of the content.
+    local digest = 5381
+    for i = 1, #svg do
+      digest = (digest * 33 + string.byte(svg, i)) % 4294967296
+    end
+    local dir = noctalia.pluginDataDir()
+    local path = dir and string.format("%s/speed-%08x.svg", dir, digest) or nil
+    if path == nil or not noctalia.writeFile(path, svg) then
+      return nil
+    end
+    speedImages[text] = path
+  end
+  return speedImages[text]
+end
+
+local function currentSpeed()
+  if state.route == nil then
+    return nil
+  elseif state.linkSpeed ~= nil then
+    return state.linkSpeed
+  end
+  for _, network in ipairs(state.networks) do
+    if network.inUse then
+      return network.rate
+    end
+  end
+  return nil
+end
+
+local function hem()
+  local stops = {}
+  for _, name in ipairs(HEM_COLORS) do
+    table.insert(stops, ui.box({ width = HEM_STOP_WIDTH, height = HEM_HEIGHT, flexGrow = 0, fill = color(name, 0.9) }))
+  end
+  return ui.row({ height = HEM_HEIGHT, justify = "center", gap = 0 }, stops)
 end
 
 local function networkRow(network)
@@ -553,7 +626,7 @@ end
 
 local function detailRow(name, value)
   return ui.row({ height = DETAIL_ROW_HEIGHT, paddingH = INSET, align = "center", justify = "space_between" }, {
-    label(name, { fontSize = DETAIL_FONT_SIZE, color = SECONDARY }),
+    label(name, { fontSize = DETAIL_FONT_SIZE, color = KEY }),
     label(value, { fontSize = DETAIL_FONT_SIZE, color = TEXT }),
   })
 end
@@ -607,7 +680,7 @@ end
 
 local function sectionHeader(text, props)
   return row("section:" .. text, ROW_HEIGHT, {
-    label(text, { color = SECONDARY, fontWeight = "bold", flexGrow = 1 }),
+    label(text, { color = KEY, fontWeight = "bold", flexGrow = 1 }),
     props and props.trailing or gap(0, true),
   }, props)
 end
@@ -619,20 +692,16 @@ function render()
   local layout = stack()
   local hasWifi = state.wifiDevice ~= nil
 
-  local title
-  if hasWifi then
-    title = "Wi-Fi"
-  elseif state.ethernet ~= nil or state.nm == true then
-    title = "Ethernet"
-  else
-    title = "Network"
-  end
+  local speed = currentSpeed()
+  local speedPath = speed and speedImage(formatSpeed(speed))
   layout.add(
     HEADER_CENTER,
     HEADER_HEIGHT,
     ui.row({ height = HEADER_HEIGHT, paddingH = INSET, align = "center" }, {
-      label(title, { fontWeight = "bold", flexGrow = 1 }),
-      hasWifi and toggle(state.wifiEnabled) or gap(0, true),
+      label("Network", { fontWeight = "bold", color = ACCENT, flexGrow = 1 }),
+      speedPath and ui.row({ key = "speed", onClick = openSettings }, {
+        ui.image({ path = speedPath, width = SPEED_WIDTH, height = SPEED_HEIGHT, fit = "contain" }),
+      }) or gap(0, true),
     })
   )
 
@@ -651,7 +720,7 @@ function render()
   if status ~= nil then
     local parts = { label(status.value, { color = SECONDARY, flexGrow = 1 }) }
     if status.key then
-      table.insert(parts, 1, label(status.key, { color = SECONDARY, fontWeight = "semibold" }))
+      table.insert(parts, 1, label(status.key, { color = KEY, fontWeight = "semibold" }))
     end
     layout.add(
       STATUS_CENTER,
@@ -739,14 +808,7 @@ function render()
     layout.next(DETAIL_ROW_HEIGHT, detailRow("Upload", formatRate(rates.tx)))
   end
 
-  layout.separator()
-  layout.next(
-    ROW_HEIGHT,
-    row("settings", ROW_HEIGHT, {
-      label("Network Settings…", { color = hovered == "settings" and ON_ACCENT or TEXT }),
-    }, { onClick = openSettings, accent = true }),
-    SEPARATOR_GAP
-  )
+  layout.next(HEM_HEIGHT, hem(), HEM_GAP)
 
   local tree, height = layout.build()
   panel.setSize(WIDTH, height)
