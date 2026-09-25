@@ -62,8 +62,8 @@ format_window_label() {
 }
 
 show_claude_usage() {
-  local access_token response five_hour_used five_hour_reset five_hour_reset_iso
-  local seven_day_used seven_day_reset seven_day_reset_iso
+  local access_token expires_at response error_message windows
+  local label used reset_iso
 
   printf 'Claude\n'
 
@@ -77,6 +77,14 @@ show_claude_usage() {
     return 1
   fi
 
+  # Claude Code only refreshes the token while it runs.
+  if expires_at="$(jq -er '.claudeAiOauth.expiresAt / 1000 | floor' "$claude_auth_file")" &&
+    ((expires_at <= $(date +%s))); then
+    printf "  unavailable: OAuth token expired %s; run 'claude' to refresh it\n" \
+      "$(date -d "@$expires_at" '+%Y-%m-%d %I:%M %p %Z')"
+    return 1
+  fi
+
   if ! response="$(
     curl -q -L --silent --show-error --fail-with-body \
       --connect-timeout 10 --max-time 30 \
@@ -85,22 +93,35 @@ show_claude_usage() {
       -H 'Accept: application/json' \
       --config <(printf 'header = "Authorization: Bearer %s"\n' "$access_token")
   )"; then
-    printf '  unavailable: usage request failed; open Claude Code to refresh login\n'
+    error_message="$(jq -r '.error.message // empty' <<<"$response" 2>/dev/null)"
+    printf "  unavailable: usage request failed%s; run 'claude' to refresh login\n" \
+      "${error_message:+ ($error_message)}"
     return 1
   fi
 
-  if ! five_hour_used="$(jq -er '.five_hour.utilization' <<<"$response")" ||
-    ! five_hour_reset_iso="$(jq -er '.five_hour.resets_at' <<<"$response")" ||
-    ! five_hour_reset="$(date -d "$five_hour_reset_iso" +%s)" ||
-    ! seven_day_used="$(jq -er '.seven_day.utilization' <<<"$response")" ||
-    ! seven_day_reset_iso="$(jq -er '.seven_day.resets_at' <<<"$response")" ||
-    ! seven_day_reset="$(date -d "$seven_day_reset_iso" +%s)"; then
+  # resets_at is null for a window with no usage yet.
+  if ! windows="$(
+    jq -er '
+      [["5-hour", .five_hour], ["weekly", .seven_day]]
+      | if any(.[]; (.[1].utilization | type) != "number") then
+          error("invalid usage windows")
+        else
+          .[] | [.[0], .[1].utilization, (.[1].resets_at // "")] | @tsv
+        end
+    ' <<<"$response"
+  )"; then
     printf '  unavailable: Anthropic returned an unexpected response\n'
     return 1
   fi
 
-  print_window '5-hour' "$five_hour_used" "$five_hour_reset"
-  print_window 'weekly' "$seven_day_used" "$seven_day_reset"
+  while IFS=$'\t' read -r label used reset_iso; do
+    if [[ -z "$reset_iso" ]]; then
+      printf '  %-8s %5g%% used  %5g%% left  not started\n' \
+        "$label" "$used" "$(jq -n --argjson used "$used" '100 - $used')"
+    else
+      print_window "$label" "$used" "$(date -d "$reset_iso" +%s)"
+    fi
+  done <<<"$windows"
 }
 
 show_codex_usage() {
