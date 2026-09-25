@@ -47,6 +47,7 @@ enabled     = [
     "jesse/hypr-workspaces",
     "jesse/sound",
     "jesse/network",
+    "jesse/apple-menu",
     "jesse/about",
 ]
 

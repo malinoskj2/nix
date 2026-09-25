@@ -117,10 +117,11 @@ Treat a bump as a hardware change and test it on the device.
   [`overlays/default.nix`](../overlays/default.nix) patches Noctalia so floating
   panels skip its clip reveal and Hyprland scales them in instead, so a bar
   widget's panel centers under the widget, so a plugin panel can set its own
-  padding and resize to fit its content, so plugin sliders can be styled, and
-  so notification toasts are laid out like macOS 27's banners and slide in and
-  out across the screen edge. It asserts the version the patches were checked
-  against. When `nixpkgs-unstable` moves Noctalia, re-check
+  padding and resize to fit its content, so plugin sliders can be styled, so
+  notification toasts are laid out like macOS 27's banners and slide in and
+  out across the screen edge, and so a desktop widget's panel opens under the
+  widget and plugin rows take a right click. It asserts the version the patches
+  were checked against. When `nixpkgs-unstable` moves Noctalia, re-check
   [`overlays/patches/noctalia/`](../overlays/patches/noctalia) against the new
   source, then:
   - click the clock (the calendar should open centered under it);
@@ -128,6 +129,9 @@ Treat a bump as a hardware change and test it on the device.
     a thin peach slider);
   - click the network icon (the Wi-Fi menu should scale in at its final size,
     then grow when Other Networks expands);
+  - click the snowflake button (the system menu should open below the bar with
+    its left edge under the button's), then right-click it (the control center
+    should open);
   - open the control center;
   - send a few notifications with `notify-send` (each banner should slide in
     from the right with its own rounded glass, and slide back out when it

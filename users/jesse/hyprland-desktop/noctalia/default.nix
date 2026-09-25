@@ -93,6 +93,13 @@ let
         noctalia = lib.getExe noctalia;
       };
     };
+    apple-menu = {
+      "menu.luau" = withNix ./plugins/apple-menu/menu.luau {
+        inherit hyprctl palette;
+        noctalia = lib.getExe noctalia;
+        user = config.home.username;
+      };
+    };
     about = {
       "about.luau" = withNix ./plugins/about/about.luau {
         inherit palette;
@@ -152,7 +159,11 @@ let
     };
     control-button = {
       "button.luau" = withNix ./plugins/control-button/button.luau (
-        controlButton // { noctalia = lib.getExe noctalia; }
+        controlButton
+        // {
+          menu = "jesse/apple-menu:menu";
+          noctalia = lib.getExe noctalia;
+        }
       );
       frames = controlButtonFrames;
     };

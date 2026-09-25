@@ -1,0 +1,17 @@
+id          = "jesse/apple-menu"
+name        = "System Menu"
+version     = "1.0.0"
+plugin_api  = 24
+author      = "jesse"
+icon        = "snowflake"
+description = "System menu in the style of the macOS 27 Apple menu, for the control button."
+
+[[panel]]
+id              = "menu"
+entry           = "menu.luau"
+width           = 284
+height          = 270
+padding         = 5
+placement       = "floating"
+position        = "auto"
+open_near_click = true
