@@ -85,6 +85,13 @@ let
         wpctl = lib.getExe' pkgs.wireplumber "wpctl";
       };
     };
+    network = {
+      "network.luau" = withNix ./plugins/network/network.luau {
+        inherit palette;
+        ip = lib.getExe' pkgs.iproute2 "ip";
+        noctalia = lib.getExe noctalia;
+      };
+    };
     control-button = {
       "button.luau" = withNix ./plugins/control-button/button.luau (
         controlButton // { noctalia = lib.getExe noctalia; }
