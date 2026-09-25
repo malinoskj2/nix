@@ -4,7 +4,7 @@ version     = "1.0.0"
 plugin_api  = 24
 author      = "jesse"
 icon        = "adjustments-horizontal"
-description = "Floating glass button that toggles the control center."
+description = "Floating glass button that opens the system menu, or the control center on right click."
 
 [[desktop_widget]]
 id    = "button"

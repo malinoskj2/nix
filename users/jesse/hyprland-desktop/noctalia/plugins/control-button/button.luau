@@ -26,7 +26,11 @@ local function render()
   desktopWidget.render(ui.row({
     width = nix.width,
     height = nix.height,
+    -- Through the host rather than IPC, so the menu opens under the button.
     onClick = function()
+      noctalia.togglePanel(nix.menu)
+    end,
+    onRightClick = function()
       noctalia.runAsync({ nix.noctalia, "msg", "panel-toggle", "control-center" })
     end,
     onHover = function(state)
