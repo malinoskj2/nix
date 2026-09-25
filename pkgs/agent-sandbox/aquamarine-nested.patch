@@ -1,0 +1,37 @@
+diff --git a/src/allocator/GBM.cpp b/src/allocator/GBM.cpp
+index 6f596b7..22e7420 100644
+--- a/src/allocator/GBM.cpp
++++ b/src/allocator/GBM.cpp
+@@ -162,6 +162,9 @@ Aquamarine::CGBMBuffer::CGBMBuffer(const SAllocatorBufferParams& params, Hypruti
+         explicitModifiers = {DRM_FORMAT_MOD_LINEAR};
+     }
+ 
++    // NVIDIA can't allocate linear render targets, so leave the driver to pick its own layout.
++    std::erase(explicitModifiers, DRM_FORMAT_MOD_LINEAR);
++
+     uint32_t flags = GBM_BO_USE_RENDERING;
+     if (params.scanout && !MULTIGPU)
+         flags |= GBM_BO_USE_SCANOUT;
+@@ -223,7 +226,8 @@ Aquamarine::CGBMBuffer::CGBMBuffer(const SAllocatorBufferParams& params, Hypruti
+     }
+ 
+     attrs.planes   = gbm_bo_get_plane_count(bo);
+-    attrs.modifier = modifier;
++    // An implicit modifier can't be imported back through EGL on NVIDIA; record the real one.
++    attrs.modifier = modifier == DRM_FORMAT_MOD_INVALID ? gbm_bo_get_modifier(bo) : modifier;
+ 
+     for (size_t i = 0; i < (size_t)attrs.planes; ++i) {
+         attrs.strides.at(i) = gbm_bo_get_stride_for_plane(bo, i);
+diff --git a/src/backend/Wayland.cpp b/src/backend/Wayland.cpp
+index 8905adc..46134f6 100644
+--- a/src/backend/Wayland.cpp
++++ b/src/backend/Wayland.cpp
+@@ -122,7 +122,7 @@ bool Aquamarine::CWaylandBackend::start() {
+             initSeat();
+         } else if (NAME == "xdg_wm_base") {
+             TRACE(backend->log(AQ_LOG_TRACE, std::format("  > binding to global: {} (version {}) with id {}", name, 6, id)));
+-            waylandState.xdg = makeShared<CCXdgWmBase>((wl_proxy*)wl_registry_bind((wl_registry*)waylandState.registry->resource(), id, &xdg_wm_base_interface, 6));
++            waylandState.xdg = makeShared<CCXdgWmBase>((wl_proxy*)wl_registry_bind((wl_registry*)waylandState.registry->resource(), id, &xdg_wm_base_interface, 5));
+             initShell();
+         } else if (NAME == "wl_compositor") {
+             TRACE(backend->log(AQ_LOG_TRACE, std::format("  > binding to global: {} (version {}) with id {}", name, 6, id)));

@@ -24,6 +24,17 @@ If the display doesn't work, tell the user straight away instead of working arou
 - Scroll: `wlrctl pointer scroll DY DX`
 - Type text: `wtype 'text'`; keys: `wtype -k Return`, chords: `wtype -M ctrl -k l -m ctrl`
 
+### Nested Hyprland
+
+A second headless sway, kept off `$WAYLAND_DISPLAY` and `$SWAYSOCK`, hosts a persistent Hyprland: the host desktop's pinned version, restarted whenever it exits. It draws to its own 1280x800 output, `NESTED-1`, and the human can watch and drive it over a second VNC port. Use it to try Hyprland configs, plugins and Noctalia before they reach the host.
+
+- Clients: set `WAYLAND_DISPLAY=hyprland-1`, e.g. `WAYLAND_DISPLAY=hyprland-1 foot &`
+- Screenshot: `WAYLAND_DISPLAY=hyprland-1 grim -o NESTED-1 /tmp/hypr.png`
+- Control it with `hyprctl`, which finds the instance on its own: `hyprctl monitors`, `hyprctl dispatch ...`, `hyprctl plugin load <path>`, `hyprctl reload`
+- Its logs are `hyprland.log`, `nested-sway.log` and `wayvnc-hyprland.log` in `$XDG_RUNTIME_DIR/logs`. If it keeps crashing, `hyprland-restarts.log` there grows.
+
+Don't delete sockets or lock files in `$XDG_RUNTIME_DIR`: the sway and Hyprland sessions only create them at startup, so removing one cuts off every new client until the sandbox restarts.
+
 ## Tools
 
 Blender (Cycles with CUDA and OptiX) and a Python with torch (CUDA) and hy3dgen (Hunyuan3D) are installed; `~/projects/img2char3d` runs directly on them. Chromium is installed with its own sandbox off, since the container can't run it: open pages on the display with `swaymsg exec -- chromium <url>`, or render one without a window with `chromium --headless --screenshot=<file> --window-size=W,H <url>`. The Playwright MCP server drives its own Chromium, shown on the display, and the `playwright` CLI is installed. Nix talks to the host daemon. Get a missing tool with `nix shell nixpkgs#<package>` or `nix run nixpkgs#<package>`.

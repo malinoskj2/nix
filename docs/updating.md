@@ -57,12 +57,16 @@ To upgrade:
    calendar) and an attached one (the control center) and check their glass,
    not just the build. The floating panel's top rim should gleam once as it
    opens; the attached one shouldn't.
-4. Confirm that commit's hyprbars still supports what
+4. Rebase
+   [`aquamarine-nested.patch`](../pkgs/agent-sandbox/aquamarine-nested.patch)
+   onto that commit's Aquamarine, then start a sandbox and check that
+   `hyprctl monitors` inside it lists `NESTED-1`.
+5. Confirm that commit's hyprbars still supports what
    [`hyprland.lua`](../users/jesse/hyprland-desktop/hyprland/hyprland.lua)
    uses: `bar_part_of_window`, `bar_precedence_over_border`, `bar_text_align`,
    `on_double_click`, and the `hyprbars:no_bar` window rule.
-5. Update all three version assertions.
-6. Build `home`.
+6. Update all three version assertions.
+7. Build `home`.
 
 ### Firefox
 
