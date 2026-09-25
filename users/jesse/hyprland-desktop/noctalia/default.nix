@@ -64,6 +64,9 @@ let
           --lambdas ${lib.escapeShellArg (builtins.toJSON lambdaColors)}
       '';
   plugins = {
+    calendar = {
+      "calendar.luau" = withNix ./plugins/calendar/calendar.luau { inherit palette; };
+    };
     control-button = {
       "button.luau" = withNix ./plugins/control-button/button.luau (
         controlButton // { noctalia = lib.getExe noctalia; }

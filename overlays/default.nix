@@ -26,6 +26,20 @@ in
         claude-code = unstable.claude-code.override {
           manifest = final.lib.importJSON ./claude-code/manifest.zst.json;
         };
+        # Hyprland scales floating panels in and out like windows, so Noctalia's own clip reveal
+        # would run on top of it, and a bar widget's panel centers under the widget like a macOS
+        # menu bar item.
+        noctalia =
+          assert final.lib.assertMsg (unstable.noctalia.version == "5.0.1") (
+            "The Noctalia patches were written for 5.0.1, not ${unstable.noctalia.version}; "
+            + "re-check them against the new source and update this assertion."
+          );
+          unstable.noctalia.overrideAttrs (old: {
+            patches = (old.patches or [ ]) ++ [
+              ./patches/noctalia/floating-panels-no-reveal.patch
+              ./patches/noctalia/panel-anchor-widget-center.patch
+            ];
+          });
       };
     };
 

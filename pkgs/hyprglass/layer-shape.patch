@@ -1,0 +1,622 @@
+diff --git a/src/GlassLayerSurface.cpp b/src/GlassLayerSurface.cpp
+index 014464a..956ce71 100644
+--- a/src/GlassLayerSurface.cpp
++++ b/src/GlassLayerSurface.cpp
+@@ -12,6 +12,21 @@
+ #include <hyprland/src/render/Renderer.hpp>
+ #include <hyprutils/math/Misc.hpp>
+ 
++// Blur regions are in the surface's own coordinates, while an animating layer (e.g. popin) is drawn
++// at its current, scaled size, so regions are mapped through the ratio of the two.
++static Vector2D surfaceSize(PHLLS layerSurface) {
++    return layerSurface->size(Desktop::View::IGeometric::GEOMETRIC_GOAL);
++}
++
++static Vector2D regionScale(PHLLS layerSurface, PHLMONITOR monitor) {
++    const auto goal    = surfaceSize(layerSurface);
++    const auto current = layerSurface->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
++    const auto scale   = static_cast<double>(monitor->m_scale);
++    if (goal.x <= 0.0 || goal.y <= 0.0)
++        return {scale, scale};
++    return {scale * current.x / goal.x, scale * current.y / goal.y};
++}
++
+ static CBox transformedLayerBox(CBox pixelBox, PHLMONITOR monitor) {
+     const auto transform = Math::wlTransformToHyprutils(Math::invertTransform(monitor->m_transform));
+     pixelBox.transform(transform, monitor->m_transformedSize.x, monitor->m_transformedSize.y).noNegativeSize().round();
+@@ -104,6 +119,36 @@ CGlassLayerSurface::EMaskSource CGlassLayerSurface::resolveMaskSource() const {
+     }
+ }
+ 
++// A requested blur region shapes the glass, so a surface larger than its glass, such as a panel
++// with a shadow margin, gets its corners, bevel and rim around the region instead of the surface.
++CBox CGlassLayerSurface::glassBox(PHLMONITOR monitor, const CBox& layerBox) const {
++    const auto layerSurface = m_layerSurface.lock();
++    const auto wlSurface    = layerSurface ? layerSurface->wlSurface() : nullptr;
++    if (!wlSurface || resolveMaskSource() != EMaskSource::PROTOCOL_REGION)
++        return layerBox;
++
++    CRegion region = wlSurface->m_blurRegion.copy();
++    region.intersect(0, 0, surfaceSize(layerSurface).x, surfaceSize(layerSurface).y);
++    region.scale(regionScale(layerSurface, monitor));
++    region.translate(layerBox.pos());
++    region.intersect(layerBox.x, layerBox.y, layerBox.w, layerBox.h);
++    if (region.empty())
++        return layerBox;
++
++    CBox box = region.getExtents();
++    box.round().noNegativeSize();
++    return box.w > 0.0 && box.h > 0.0 ? box : layerBox;
++}
++
++const GlassRenderer::SGleam* CGlassLayerSurface::resolveGleam() const {
++    const auto layerSurface = m_layerSurface.lock();
++    if (!layerSurface)
++        return nullptr;
++    const auto& gleams = g_pGlobalState->layerNamespaceGleams;
++    const auto  it     = gleams.find(layerSurface->m_namespace);
++    return it != gleams.end() && it->second.strength > 0.0f ? &it->second : nullptr;
++}
++
+ bool CGlassLayerSurface::liveResampleEnabled() const {
+     if (const auto layerSurface = m_layerSurface.lock()) {
+         const auto& overrides = g_pGlobalState->layerNamespaceLiveResample;
+@@ -139,6 +184,14 @@ void CGlassLayerSurface::damageIfMoved() {
+     const bool moved = currentPosition != m_lastPosition || currentSize != m_lastSize;
+ 
+     if (moved || isAnimating) {
++        // A shrinking or moving layer leaves the glass it drew last frame outside its new box.
++        if (moved && m_lastSize.x > 0.0 && m_lastSize.y > 0.0) {
++            const auto monitor = layerSurface->m_monitor.lock();
++            auto       last    = CBox{m_lastPosition, m_lastSize};
++            last.expand(GlassRenderer::SAMPLE_PADDING_PX / (monitor ? monitor->m_scale : 1.0f)).noNegativeSize();
++            g_pHyprRenderer->damageBox(last);
++        }
++
+         m_lastPosition  = currentPosition;
+         m_lastSize      = currentSize;
+ 
+@@ -147,8 +200,8 @@ void CGlassLayerSurface::damageIfMoved() {
+         if (const auto monitor = layerSurface->m_monitor.lock())
+             g_pGlobalState->bumpSceneGeneration(monitor);
+     } else if (const auto& config = g_pGlobalState->config;
+-               config.layersForceLiveResample && **config.layersForceLiveResample) {
+-        // keep frames flowing so the forced per-frame resample actually runs
++               (config.layersForceLiveResample && **config.layersForceLiveResample) || (!m_gleamSettled && resolveGleam())) {
++        // keep frames flowing so the forced per-frame resample or the gleam's sweep actually runs
+         damageSampleRegion();
+     }
+ }
+@@ -318,6 +371,10 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
+ 
+     float cornerRadius  = 0.0f;
+     float roundingPower = 2.0f;
++    if (auto it = g_pGlobalState->layerNamespaceCornerRadii.find(layerSurface->m_namespace); it != g_pGlobalState->layerNamespaceCornerRadii.end())
++        cornerRadius = it->second * static_cast<float>(monitor->m_scale);
++    if (auto it = g_pGlobalState->layerNamespaceRoundingPowers.find(layerSurface->m_namespace); it != g_pGlobalState->layerNamespaceRoundingPowers.end())
++        roundingPower = it->second;
+ 
+     // Use the temp FBO's rendered alpha as a mask: glass only where the surface
+     // has visible content (alpha > 0). The temp FBO is in monitor coordinates,
+@@ -353,13 +410,12 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
+             const auto wlSurface = layerSurface->wlSurface();
+             if (!wlSurface)
+                 break;
+-            const auto logicalSize = layerSurface->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
+ 
+             // surface-local logical region -> box-local pixels, same
+             // scale/translate/transform sequence as transformedLayerBox()
+             CRegion region = wlSurface->m_blurRegion.copy();
+-            region.intersect(0, 0, logicalSize.x, logicalSize.y); // spec: clipped to surface size
+-            region.scale(static_cast<float>(monitor->m_scale));
++            region.intersect(0, 0, surfaceSize(layerSurface).x, surfaceSize(layerSurface).y); // spec: clipped to surface size
++            region.scale(regionScale(layerSurface, monitor));
+             region.translate(rawBox.pos());
+             region.intersect(rawBox.x, rawBox.y, rawBox.w, rawBox.h); // defensive
+             region.transform(Math::wlTransformToHyprutils(Math::invertTransform(monitor->m_transform)),
+@@ -388,6 +444,28 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
+             break;
+     }
+ 
++    if (maskSource == EMaskSource::PROTOCOL_REGION) {
++        const CBox shape       = transformedLayerBox(glassBox(monitor, rawBox), monitor);
++        maskInfo.shapeOffset   = {shape.x - transformBox.x, shape.y - transformBox.y};
++        maskInfo.shapeSize     = {shape.w, shape.h};
++    }
++
++    if (auto it = g_pGlobalState->layerNamespaceRimLights.find(layerSurface->m_namespace); it != g_pGlobalState->layerNamespaceRimLights.end())
++        maskInfo.rimLight = it->second;
++    if (auto it = g_pGlobalState->layerNamespaceRimShadows.find(layerSurface->m_namespace); it != g_pGlobalState->layerNamespaceRimShadows.end())
++        maskInfo.rimShadow = it->second;
++
++    if (const auto* gleam = resolveGleam()) {
++        const auto now = std::chrono::steady_clock::now();
++        if (!m_gleamStart)
++            m_gleamStart = now;
++        const float elapsed = std::chrono::duration<float>(now - *m_gleamStart).count() - gleam->delay;
++        maskInfo.gleam         = *gleam;
++        maskInfo.gleam.width   = gleam->width * static_cast<float>(monitor->m_scale);
++        maskInfo.gleamProgress = gleam->duration > 0.0f ? std::clamp(elapsed / gleam->duration, 0.0f, 1.0f) : 1.0f;
++        m_gleamSettled         = maskInfo.gleamProgress >= 1.0f;
++    }
++
+     // The glass shader composites both the glass effect and the surface content
+     // in a single pass: glass behind, surface on top, using the temp FBO alpha.
+     GlassRenderer::applyGlassEffect(m_sampleFramebuffer, target,
+diff --git a/src/GlassLayerSurface.hpp b/src/GlassLayerSurface.hpp
+index 565c7d4..b65c975 100644
+--- a/src/GlassLayerSurface.hpp
++++ b/src/GlassLayerSurface.hpp
+@@ -4,6 +4,7 @@
+ #include "PluginConfig.hpp"
+ 
+ #include <chrono>
++#include <optional>
+ #include <hyprland/src/desktop/view/LayerSurface.hpp>
+ #include <hyprland/src/render/Framebuffer.hpp>
+ 
+@@ -31,6 +32,7 @@ class CGlassLayerSurface {
+     // Decides ALPHA_THRESHOLD vs PROTOCOL_REGION vs NONE for this layer, based on
+     // mask_mode and the root surface's ext-background-effect-v1 state.
+     [[nodiscard]] EMaskSource resolveMaskSource() const;
++    [[nodiscard]] CBox glassBox(PHLMONITOR monitor, const CBox& layerBox) const;
+ 
+     [[nodiscard]] PHLLS getLayerSurface() const;
+ 
+@@ -43,6 +45,11 @@ class CGlassLayerSurface {
+     bool         m_backgroundDirty = false;
+     std::chrono::steady_clock::time_point m_lastDirtyMark{};
+ 
++    // The gleam's clock starts at the first glass frame; once a frame shows the sweep finished,
++    // the layer stops damaging itself for it.
++    std::optional<std::chrono::steady_clock::time_point> m_gleamStart;
++    bool         m_gleamSettled = false;
++
+     void damageSampleRegion();
+ 
+     // Track last position/size to detect movement and expand damage
+@@ -59,4 +66,5 @@ class CGlassLayerSurface {
+     [[nodiscard]] bool           resolveThemeIsDark() const;
+     [[nodiscard]] std::string    resolvePresetName() const;
+     [[nodiscard]] ELayerMaskMode resolveMaskMode() const;
++    [[nodiscard]] const GlassRenderer::SGleam* resolveGleam() const;
+ };
+diff --git a/src/GlassRenderer.cpp b/src/GlassRenderer.cpp
+index b3b875a..d8b763e 100644
+--- a/src/GlassRenderer.cpp
++++ b/src/GlassRenderer.cpp
+@@ -234,11 +234,30 @@ void applyGlassEffect(SP<Render::IFramebuffer> sampleFramebuffer, SP<Render::IFr
+         if (mask->regionRectCount > 0)
+             glUniform4fv(uniforms.regionRects, mask->regionRectCount,
+                          reinterpret_cast<const float*>(mask->regionRects.data()));
++        glUniform1f(uniforms.rimLight, mask->rimLight);
++        glUniform1f(uniforms.rimShadow, mask->rimShadow);
++        glUniform2f(uniforms.shapeOffset, static_cast<float>(mask->shapeOffset.x), static_cast<float>(mask->shapeOffset.y));
++        glUniform2f(uniforms.shapeSize, static_cast<float>(mask->shapeSize.x), static_cast<float>(mask->shapeSize.y));
++        const auto& gleam = mask->gleam;
++        if (gleam.colorCount > 0)
++            glUniform3fv(uniforms.gleamColors, gleam.colorCount, gleam.colors[0].data());
++        glUniform1i(uniforms.gleamColorCount, gleam.colorCount);
++        glUniform1f(uniforms.gleamStrength, gleam.strength * alpha);
++        glUniform1f(uniforms.gleamWidth, gleam.width);
++        glUniform1f(uniforms.gleamLength, gleam.length);
++        glUniform1f(uniforms.gleamProgress, mask->gleamProgress);
++        glUniform1f(uniforms.gleamRest, gleam.rest);
+     } else {
+         glUniform1i(uniforms.useMask, 0);
+         glUniform1f(uniforms.maskAlphaThreshold, 0.001f);
+         glUniform1i(uniforms.maskMode, 0);
+         glUniform1i(uniforms.regionRectCount, 0);
++        glUniform1f(uniforms.rimLight, 0.0f);
++        glUniform1f(uniforms.rimShadow, 0.0f);
++        glUniform2f(uniforms.shapeOffset, 0.0f, 0.0f);
++        glUniform2f(uniforms.shapeSize, 0.0f, 0.0f);
++        glUniform1i(uniforms.gleamColorCount, 0);
++        glUniform1f(uniforms.gleamStrength, 0.0f);
+     }
+ 
+     shader->setUniformFloat(SHADER_RADIUS, cornerRadius);
+diff --git a/src/GlassRenderer.hpp b/src/GlassRenderer.hpp
+index 582fc63..eb36d20 100644
+--- a/src/GlassRenderer.hpp
++++ b/src/GlassRenderer.hpp
+@@ -20,8 +20,24 @@ inline constexpr int SAMPLE_PADDING_PX = 60;
+ inline constexpr int   BLUR_DOWNSCALE_MAX       = 2;
+ inline constexpr float BLUR_DOWNSCALE_THRESHOLD = 0.35f; // min blur_strength for downscale
+ 
+-// Must match the `regionRects[16]` array size declared in Shaders.hpp.
+-inline constexpr int MAX_REGION_RECTS = 16;
++// Must match the `regionRects[64]` array size declared in Shaders.hpp. Toolkits tessellate
++// rounded regions into one rect per strip of each curve, so a single panel can need dozens.
++inline constexpr int MAX_REGION_RECTS = 64;
++
++// Must match the `gleamColors[8]` array size declared in Shaders.hpp.
++inline constexpr int MAX_GLEAM_COLORS = 8;
++
++// A highlight that sweeps a layer's top rim once when it maps, then rests as a faint tint.
++struct SGleam {
++    std::array<std::array<float, 3>, MAX_GLEAM_COLORS> colors{};
++    int                                                colorCount = 0;
++    float                                              strength   = 0.0f;
++    float                                              width      = 1.5f; // logical px
++    float                                              length     = 0.6f; // share of the edge lit at once
++    float                                              duration   = 1.2f; // seconds
++    float                                              delay      = 0.1f; // seconds after the first frame
++    float                                              rest       = 0.0f; // share of strength left behind
++};
+ 
+ // Box-local pixel rect uploaded to the shader's regionRects uniform array.
+ struct SRegionRect {
+@@ -43,6 +59,13 @@ struct SMaskInfo {
+     int                                        maskMode        = 0;
+     std::array<SRegionRect, MAX_REGION_RECTS>  regionRects{};
+     int                                        regionRectCount = 0;
++    float                                      rimLight        = 0.0f;
++    float                                      rimShadow       = 0.0f;
++    // Box-local pixels the glass is shaped to; zero size means the whole box
++    Vector2D                                   shapeOffset;
++    Vector2D                                   shapeSize;
++    SGleam                                     gleam;
++    float                                      gleamProgress   = 0.0f; // 0..1, linear in time
+ };
+ 
+ void sampleBackground(SP<Render::IFramebuffer>& sampleFramebuffer, SP<Render::IFramebuffer> sourceFramebuffer,
+diff --git a/src/Globals.hpp b/src/Globals.hpp
+index b88cbbd..25a3699 100644
+--- a/src/Globals.hpp
++++ b/src/Globals.hpp
+@@ -49,6 +49,12 @@ struct SGlobalState {
+     std::unordered_map<std::string, bool> layerNamespaceLiveResample;
+     // Per-namespace mask mode override (namespace → mode)
+     std::unordered_map<std::string, ELayerMaskMode> layerNamespaceMaskModes;
++    // Per-namespace glass shape: corner radius in logical px and superellipse power
++    std::unordered_map<std::string, float> layerNamespaceCornerRadii;
++    std::unordered_map<std::string, float> layerNamespaceRoundingPowers;
++    std::unordered_map<std::string, float> layerNamespaceRimLights;
++    std::unordered_map<std::string, float> layerNamespaceRimShadows;
++    std::unordered_map<std::string, GlassRenderer::SGleam> layerNamespaceGleams;
+ 
+     // Per-monitor generation counter, incremented when the scene behind layers
+     // changes on that monitor. Layer surfaces compare to their cached value to
+diff --git a/src/PluginConfig.cpp b/src/PluginConfig.cpp
+index 02bc058..974ae57 100644
+--- a/src/PluginConfig.cpp
++++ b/src/PluginConfig.cpp
+@@ -585,8 +585,65 @@ struct SPendingLayer {
+     bool                          exclude       = false;
+     int                           liveResample  = -1; // -1 = not set
+     std::optional<ELayerMaskMode> maskMode;
++    float                         cornerRadius  = -1.0f;
++    float                         roundingPower = -1.0f;
++    float                         rimLight      = -1.0f;
++    float                         rimShadow     = -1.0f;
++    std::optional<GlassRenderer::SGleam> gleam;
+ };
+ 
++// "rrggbb", "#rrggbb" or 0xRRGGBB
++static std::optional<std::array<float, 3>> parseGleamColor(lua_State* L, int index) {
++    uint32_t rgb = 0;
++    if (lua_type(L, index) == LUA_TNUMBER) {
++        rgb = static_cast<uint32_t>(lua_tointeger(L, index));
++    } else if (lua_type(L, index) == LUA_TSTRING) {
++        std::string_view hex = lua_tostring(L, index);
++        if (hex.starts_with('#'))
++            hex.remove_prefix(1);
++        if (hex.size() != 6 || std::from_chars(hex.data(), hex.data() + hex.size(), rgb, 16).ptr != hex.data() + hex.size())
++            return std::nullopt;
++    } else {
++        return std::nullopt;
++    }
++    return std::array<float, 3>{((rgb >> 16) & 0xFF) / 255.0f, ((rgb >> 8) & 0xFF) / 255.0f, (rgb & 0xFF) / 255.0f};
++}
++
++static void readGleamNumber(lua_State* L, const char* key, float& out, float min = 0.0f) {
++    lua_getfield(L, 2, key);
++    if (lua_isnumber(L, -1))
++        out = std::max(static_cast<float>(lua_tonumber(L, -1)), min);
++    lua_pop(L, 1);
++}
++
++static std::optional<GlassRenderer::SGleam> parseGleam(lua_State* L) {
++    GlassRenderer::SGleam gleam;
++
++    lua_getfield(L, 2, "gleam_colors");
++    if (lua_istable(L, -1)) {
++        const int count = static_cast<int>(lua_rawlen(L, -1));
++        for (int i = 1; i <= count && gleam.colorCount < GlassRenderer::MAX_GLEAM_COLORS; i++) {
++            lua_rawgeti(L, -1, i);
++            if (auto color = parseGleamColor(L, -1))
++                gleam.colors[gleam.colorCount++] = *color;
++            lua_pop(L, 1);
++        }
++    }
++    lua_pop(L, 1);
++
++    if (gleam.colorCount == 0)
++        return std::nullopt;
++
++    gleam.strength = 1.0f;
++    readGleamNumber(L, "gleam_strength", gleam.strength);
++    readGleamNumber(L, "gleam_width", gleam.width, 0.1f);
++    readGleamNumber(L, "gleam_length", gleam.length, 0.01f);
++    readGleamNumber(L, "gleam_duration", gleam.duration);
++    readGleamNumber(L, "gleam_delay", gleam.delay);
++    readGleamNumber(L, "gleam_rest", gleam.rest);
++    return gleam;
++}
++
+ static std::vector<SPendingLayer> s_pendingLayers;
+ 
+ static int handleLuaLayer(lua_State* L) {
+@@ -621,6 +678,28 @@ static int handleLuaLayer(lua_State* L) {
+         if (lua_isstring(L, -1))
+             entry.maskMode = parseLayerMaskMode(lua_tostring(L, -1));
+         lua_pop(L, 1);
++
++        lua_getfield(L, 2, "corner_radius");
++        if (lua_isnumber(L, -1))
++            entry.cornerRadius = static_cast<float>(lua_tonumber(L, -1));
++        lua_pop(L, 1);
++
++        lua_getfield(L, 2, "rounding_power");
++        if (lua_isnumber(L, -1))
++            entry.roundingPower = static_cast<float>(lua_tonumber(L, -1));
++        lua_pop(L, 1);
++
++        lua_getfield(L, 2, "rim_light");
++        if (lua_isnumber(L, -1))
++            entry.rimLight = static_cast<float>(lua_tonumber(L, -1));
++        lua_pop(L, 1);
++
++        lua_getfield(L, 2, "rim_shadow");
++        if (lua_isnumber(L, -1))
++            entry.rimShadow = static_cast<float>(lua_tonumber(L, -1));
++        lua_pop(L, 1);
++
++        entry.gleam = parseGleam(L);
+     }
+ 
+     s_pendingLayers.push_back(std::move(entry));
+@@ -646,6 +725,16 @@ void commitPendingLayers() {
+                 g_pGlobalState->layerNamespaceLiveResample[entry.ns] = entry.liveResample != 0;
+             if (entry.maskMode)
+                 g_pGlobalState->layerNamespaceMaskModes[entry.ns] = *entry.maskMode;
++            if (entry.cornerRadius >= 0.0f)
++                g_pGlobalState->layerNamespaceCornerRadii[entry.ns] = entry.cornerRadius;
++            if (entry.roundingPower > 0.0f)
++                g_pGlobalState->layerNamespaceRoundingPowers[entry.ns] = entry.roundingPower;
++            if (entry.rimLight >= 0.0f)
++                g_pGlobalState->layerNamespaceRimLights[entry.ns] = entry.rimLight;
++            if (entry.rimShadow >= 0.0f)
++                g_pGlobalState->layerNamespaceRimShadows[entry.ns] = entry.rimShadow;
++            if (entry.gleam)
++                g_pGlobalState->layerNamespaceGleams[entry.ns] = *entry.gleam;
+         }
+     }
+     s_pendingLayers.clear();
+diff --git a/src/ShaderManager.cpp b/src/ShaderManager.cpp
+index 9d426e3..0685d53 100644
+--- a/src/ShaderManager.cpp
++++ b/src/ShaderManager.cpp
+@@ -52,6 +52,17 @@ bool CShaderManager::compileGlassShader() {
+     glassUniforms.maskMode            = glGetUniformLocation(program, "maskMode");
+     glassUniforms.regionRectCount     = glGetUniformLocation(program, "regionRectCount");
+     glassUniforms.regionRects         = glGetUniformLocation(program, "regionRects[0]");
++    glassUniforms.rimLight            = glGetUniformLocation(program, "rimLight");
++    glassUniforms.rimShadow           = glGetUniformLocation(program, "rimShadow");
++    glassUniforms.shapeOffset         = glGetUniformLocation(program, "shapeOffset");
++    glassUniforms.shapeSize           = glGetUniformLocation(program, "shapeSize");
++    glassUniforms.gleamColors         = glGetUniformLocation(program, "gleamColors[0]");
++    glassUniforms.gleamColorCount     = glGetUniformLocation(program, "gleamColorCount");
++    glassUniforms.gleamStrength       = glGetUniformLocation(program, "gleamStrength");
++    glassUniforms.gleamWidth          = glGetUniformLocation(program, "gleamWidth");
++    glassUniforms.gleamLength         = glGetUniformLocation(program, "gleamLength");
++    glassUniforms.gleamProgress       = glGetUniformLocation(program, "gleamProgress");
++    glassUniforms.gleamRest           = glGetUniformLocation(program, "gleamRest");
+     if (glassUniforms.regionRects == -1)
+         glassUniforms.regionRects = glGetUniformLocation(program, "regionRects");
+ 
+diff --git a/src/ShaderManager.hpp b/src/ShaderManager.hpp
+index 9b46928..6ae8724 100644
+--- a/src/ShaderManager.hpp
++++ b/src/ShaderManager.hpp
+@@ -29,6 +29,17 @@ struct SGlassUniforms {
+     GLint maskMode = -1;
+     GLint regionRectCount = -1;
+     GLint regionRects = -1;
++    GLint rimLight = -1;
++    GLint rimShadow = -1;
++    GLint shapeOffset = -1;
++    GLint shapeSize = -1;
++    GLint gleamColors = -1;
++    GLint gleamColorCount = -1;
++    GLint gleamStrength = -1;
++    GLint gleamWidth = -1;
++    GLint gleamLength = -1;
++    GLint gleamProgress = -1;
++    GLint gleamRest = -1;
+ };
+ 
+ struct SBlurUniforms {
+diff --git a/src/Shaders.hpp b/src/Shaders.hpp
+index 9739177..d2b72a0 100644
+--- a/src/Shaders.hpp
++++ b/src/Shaders.hpp
+@@ -57,8 +57,19 @@ uniform vec2 maskUVOffset;
+ uniform vec2 maskUVScale;
+ uniform float maskAlphaThreshold;
+ uniform int maskMode;          // 0 = alpha threshold, 1 = protocol region
+-uniform int regionRectCount;   // 0..16
+-uniform vec4 regionRects[16];  // box-local pixels: xy = offset from box top-left, zw = size
++uniform int regionRectCount;   // 0..64
++uniform vec4 regionRects[64];  // box-local pixels: xy = offset from box top-left, zw = size
++uniform float rimLight;
++uniform float rimShadow;
++uniform vec2 shapeOffset;      // box-local pixels the glass is shaped to; zero size = whole box
++uniform vec2 shapeSize;
++uniform vec3 gleamColors[8];
++uniform int gleamColorCount;   // 0 = no gleam
++uniform float gleamStrength;
++uniform float gleamWidth;      // pixels
++uniform float gleamLength;     // share of the top edge lit at once
++uniform float gleamProgress;   // 0..1, linear in time
++uniform float gleamRest;
+ 
+ in vec2 v_texcoord;
+ layout(location = 0) out vec4 fragColor;
+@@ -84,9 +95,17 @@ float lpNorm(vec2 v, float p) {
+     return pow(pow(abs(v.x), p) + pow(abs(v.y), p), 1.0 / p);
+ }
+ 
++vec2 shapeDims() {
++    return shapeSize.x > 0.0 ? shapeSize : fullSize;
++}
++
++vec2 shapeUV(vec2 uv) {
++    return shapeSize.x > 0.0 ? (uv * fullSize - shapeOffset) / shapeSize : uv;
++}
++
+ float getRoundedBoxSDF(vec2 uv, float r) {
+-    vec2 p = (uv - 0.5) * fullSize;
+-    vec2 halfSize = fullSize * 0.5;
++    vec2 p = (shapeUV(uv) - 0.5) * shapeDims();
++    vec2 halfSize = shapeDims() * 0.5;
+     float clampedR = min(r, min(halfSize.x, halfSize.y));
+     vec2 q = abs(p) - halfSize + clampedR;
+     return min(max(q.x, q.y), 0.0) + lpNorm(max(q, 0.0), roundingPower) - clampedR;
+@@ -105,11 +124,50 @@ float getCornerSDF(vec2 uv) {
+ // ============================================================================
+ 
+ vec2 refractionDir(vec2 uv) {
+-    vec2 toCenterPx = (vec2(0.5) - uv) * fullSize;
++    vec2 toCenterPx = (vec2(0.5) - shapeUV(uv)) * shapeDims();
+     float len = length(toCenterPx);
+     return len > 0.1 ? toCenterPx / len : vec2(0.0);
+ }
+ 
++// ============================================================================
++// GLEAM — a highlight that slides once along the top rim, leaving a faint tint
++// ============================================================================
++
++vec3 gleamColor(float t) {
++    float x = clamp(t, 0.0, 1.0) * float(gleamColorCount - 1);
++    int i = int(x);
++    return mix(gleamColors[i], gleamColors[min(i + 1, gleamColorCount - 1)], x - float(i));
++}
++
++// Critically damped spring from rest, scaled to land exactly on 1
++float gleamEase(float p) {
++    const float k = 6.0;
++    return (1.0 - (1.0 + k * p) * exp(-k * p)) / (1.0 - (1.0 + k) * exp(-k));
++}
++
++vec4 gleam(vec2 uv, float cornerSdf) {
++    if (gleamColorCount == 0 || gleamStrength < 0.001 || cornerSdf < -8.0 * gleamWidth)
++        return vec4(0.0);
++
++    vec2 px = 1.0 / fullSize;
++    vec2 n = vec2(getCornerSDF(uv + vec2(px.x, 0.0)) - getCornerSDF(uv - vec2(px.x, 0.0)),
++                  getCornerSDF(uv + vec2(0.0, px.y)) - getCornerSDF(uv - vec2(0.0, px.y)));
++    float nl = length(n);
++    float top = nl > 0.0001 ? smoothstep(0.35, 0.95, -n.y / nl) : 0.0;
++    // The glow fades out before the early-out above cuts it, which would leave a seam
++    float glow = 0.2 * exp(cornerSdf / (4.0 * gleamWidth)) * smoothstep(-8.0 * gleamWidth, -5.0 * gleamWidth, cornerSdf);
++    float line = exp(cornerSdf / gleamWidth) + glow;
++
++    float t = shapeUV(uv).x;
++    float reach = 0.5 * gleamLength;
++    float head = mix(-reach, 1.0 + reach, gleamEase(gleamProgress));
++    float s = (t - head) / reach;
++    float band = pow(max(1.0 - s * s, 0.0), 2.0);
++    float trail = gleamRest * (1.0 - smoothstep(-1.0, 0.0, s)) * smoothstep(0.0, 0.25, t) * (1.0 - smoothstep(0.75, 1.0, t));
++
++    return vec4(gleamColor(t), clamp(gleamStrength * top * line * max(band, trail), 0.0, 1.0));
++}
++
+ // ============================================================================
+ // MAIN — Thick-glass refraction model
+ // ============================================================================
+@@ -146,13 +204,14 @@ void main() {
+     float cornerSdf = getCornerSDF(uv);
+ 
+     if (cornerSdf > 0.0) {
++        if (hasMask) { fragColor = surfacePixel; return; }
+         discard;
+     }
+ 
+     float cornerAlpha = 1.0 - smoothstep(-1.5, 0.5, cornerSdf);
+     if (cornerAlpha < 0.001) discard;
+ 
+-    float minDim = min(fullSize.x, fullSize.y);
++    float minDim = min(shapeDims().x, shapeDims().y);
+     float bezelWidthPx = edgeThickness * minDim;
+ 
+     // ========================================
+@@ -189,7 +248,7 @@ void main() {
+     // ========================================
+     vec2 domeUV = vec2(0.0);
+     if (lensDistortion > 0.001) {
+-        vec2 c = (uv - 0.5) * 2.0;
++        vec2 c = (shapeUV(uv) - 0.5) * 2.0;
+         vec2 dGrad = vec2(
+             -4.0 * c.x * (1.0 - c.y * c.y),
+             -4.0 * c.y * (1.0 - c.x * c.x)
+@@ -261,7 +320,7 @@ void main() {
+     // SPECULAR — subtle top highlight (edge zone)
+     // ========================================
+     if (specularStrength > 0.001) {
+-        float topBias = pow(max(1.0 - uv.y, 0.0), 2.0);
++        float topBias = pow(max(1.0 - shapeUV(uv).y, 0.0), 2.0);
+         float spec = topBias * edgeProximity * edgeProximity * specularStrength * 0.08;
+         color += vec3(1.0, 0.99, 0.97) * spec;
+     }
+@@ -270,11 +329,21 @@ void main() {
+     // INNER SHADOW (bottom rim)
+     // ========================================
+     {
+-        float bottomBias = pow(uv.y, 2.0);
++        float bottomBias = pow(shapeUV(uv).y, 2.0);
+         float shadow = bottomBias * edgeProximity * edgeProximity * 0.06;
+         color *= 1.0 - shadow;
+     }
+ 
++    // Directional rim: horizontal edges catch light, vertical edges fall into shadow
++    if (rimLight > 0.001 || rimShadow > 0.001) {
++        vec2 px = 1.0 / fullSize;
++        vec2 n = vec2(getCornerSDF(uv + vec2(px.x, 0.0)) - getCornerSDF(uv - vec2(px.x, 0.0)),
++                      getCornerSDF(uv + vec2(0.0, px.y)) - getCornerSDF(uv - vec2(0.0, px.y)));
++        float nl = length(n);
++        n = nl > 0.0001 ? n / nl : vec2(0.0);
++        color *= 1.0 + rimLight * n.y * n.y * exp(cornerSdf / 0.8) - rimShadow * n.x * n.x * exp(cornerSdf / 0.5);
++    }
++
+     // float framebuffers (FP16 under wide-gamut cm) store unbounded values and
+     // the glass re-samples its own output: unclamped color diverges over frames
+     color = clamp(color, 0.0, 1.0);
+@@ -292,6 +361,10 @@ void main() {
+             ? (surfRGB * surfA + color * glassA * (1.0 - surfA)) / compA
+             : vec3(0.0);
+ 
++        // Over the surface too: the panel's own fill would otherwise mute it
++        vec4 g = gleam(uv, cornerSdf);
++        compRGB = clamp(mix(compRGB, g.rgb, g.a) + g.rgb * g.a * 0.3, 0.0, 1.0);
++
+         // Hyprland's compositor expects premultiplied alpha (blend GL_ONE, GL_ONE_MINUS_SRC_ALPHA).
+         fragColor = vec4(compRGB * compA, compA);
+     } else {
+diff --git a/src/main.cpp b/src/main.cpp
+index 43fbf3a..7f3f3b5 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -228,6 +228,11 @@ static void parseLayerNamespaceFilters() {
+     });
+ 
+     g_pGlobalState->layerNamespaceMaskModes.clear();
++    g_pGlobalState->layerNamespaceCornerRadii.clear();
++    g_pGlobalState->layerNamespaceRoundingPowers.clear();
++    g_pGlobalState->layerNamespaceRimLights.clear();
++    g_pGlobalState->layerNamespaceRimShadows.clear();
++    g_pGlobalState->layerNamespaceGleams.clear();
+     parseKeyValuePairs(config.layersNamespaceMaskModes, '=', [&](const std::string& ns, const std::string& val) {
+         if (auto mode = parseLayerMaskMode(val))
+             g_pGlobalState->layerNamespaceMaskModes[ns] = *mode;
