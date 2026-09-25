@@ -22,6 +22,27 @@ start_sway() {
   return 1
 }
 
+# A second sway hosts a persistent Hyprland; it never takes $WAYLAND_DISPLAY or $SWAYSOCK.
+start_nested_hyprland() {
+  local renderer=$1
+  local socket=$XDG_RUNTIME_DIR/nested-sway.sock
+  env -u WAYLAND_DISPLAY SWAYSOCK="$socket" WLR_RENDERER="$renderer" \
+    sway --config /etc/sway/nested >"$log_dir/nested-sway.log" 2>&1 &
+  local pid=$!
+  for _ in $(seq 100); do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      return 1
+    fi
+    if swaymsg --socket "$socket" -t get_version >/dev/null 2>&1; then
+      swaymsg --socket "$socket" exec agent-sandbox-nested-hyprland >/dev/null
+      return 0
+    fi
+    sleep 0.1
+  done
+  kill "$pid" 2>/dev/null
+  return 1
+}
+
 sync_host_clipboard() {
   local clipboard_dir=/run/host-clipboard
   local image=$clipboard_dir/image
@@ -59,6 +80,7 @@ else
   echo "$renderer" >"$XDG_RUNTIME_DIR/renderer"
   sync_host_clipboard >"$log_dir/clipboard.log" 2>&1 &
   wayvnc --log-level=warning 0.0.0.0 5900 >"$log_dir/wayvnc.log" 2>&1 &
+  start_nested_hyprland "$renderer" || echo "agent-sandbox: nested sway failed to start; see $log_dir" >&2
 fi
 
 exec "$@"

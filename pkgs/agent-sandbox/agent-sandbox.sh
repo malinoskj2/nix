@@ -60,10 +60,16 @@ for dir in "${shared[@]}"; do
   fi
 done
 
-vnc_port=5900
-while (: <"/dev/tcp/127.0.0.1/$vnc_port") 2>/dev/null; do
-  vnc_port=$((vnc_port + 1))
-done
+free_port() {
+  local port=$1
+  while (: <"/dev/tcp/127.0.0.1/$port") 2>/dev/null; do
+    port=$((port + 1))
+  done
+  echo "$port"
+}
+
+vnc_port=$(free_port 5900)
+hyprland_vnc_port=$(free_port $((vnc_port + 1)))
 
 args=(
   --rm
@@ -82,6 +88,7 @@ args=(
   --shm-size 2g
   --device nvidia.com/gpu=all
   --publish "127.0.0.1:$vnc_port:5900"
+  --publish "127.0.0.1:$hyprland_vnc_port:5901"
   # tmpfs is charged to the slice as shmem, and killing processes doesn't free
   # it. Uncapped, an agent filling it starves every sandbox of the slice limit.
   --tmpfs "/tmp:exec,mode=1777,size=4g"
@@ -169,7 +176,7 @@ else
   args+=(--interactive)
 fi
 
-echo "agent-sandbox: VNC on 127.0.0.1:$vnc_port" >&2
+echo "agent-sandbox: VNC on 127.0.0.1:$vnc_port, nested Hyprland on 127.0.0.1:$hyprland_vnc_port" >&2
 if [[ $agent == codex ]]; then
   set -- codex --dangerously-bypass-approvals-and-sandbox "$@"
 fi

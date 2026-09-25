@@ -27,6 +27,7 @@
   grim,
   gzip,
   hy3dgen,
+  hyprland,
   inotify-tools,
   jq,
   less,
@@ -92,6 +93,39 @@ let
     exec ${lib.getExe claude-code} --plugin-dir ${plugin} "$@"
   '';
 
+  # The desktop's pinned Hyprland, able to nest in the headless sway on the NVIDIA GPU: sway offers
+  # xdg_wm_base 5, not the 6 Aquamarine asks for, and NVIDIA's GBM can neither allocate the linear
+  # buffers Aquamarine requests for a nested output nor import the implicit-modifier ones it falls
+  # back to.
+  hyprland' = hyprland.override (old: {
+    aquamarine = old.aquamarine.overrideAttrs (aquamarine: {
+      patches = (aquamarine.patches or [ ]) ++ [ ./aquamarine-nested.patch ];
+    });
+  });
+
+  nestedHyprland = writeShellApplication {
+    name = "agent-sandbox-nested-hyprland";
+    runtimeInputs = [
+      coreutils
+      hyprland'
+      jq
+      wayvnc
+    ];
+    runtimeEnv.NESTED_HYPRLAND_CONFIG = ./hyprland.lua;
+    text = builtins.readFile ./nested-hyprland.sh;
+  };
+
+  # hyprctl needs an instance signature, which an agent's shell never has; there is only one.
+  hyprctl = lib.hiPrio (
+    writeShellScriptBin "hyprctl" ''
+      if [[ -z ''${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+        HYPRLAND_INSTANCE_SIGNATURE=$(${lib.getExe' hyprland' "hyprctl"} instances -j | ${lib.getExe jq} -r '.[0].instance // empty')
+        export HYPRLAND_INSTANCE_SIGNATURE
+      fi
+      exec ${lib.getExe' hyprland' "hyprctl"} "$@"
+    ''
+  );
+
   env = buildEnv {
     name = "agent-sandbox-env";
     paths = [
@@ -116,10 +150,13 @@ let
       gnutar
       grim
       gzip
+      hyprctl
+      hyprland'
       inotify-tools
       jq
       less
       mold
+      nestedHyprland
       nix
       nodejs
       playwright-test
@@ -166,6 +203,7 @@ let
       ln -s ${nixConf} etc/nix/nix.conf
       ln -s ${fontconfig.out}/etc/fonts/conf.d etc/fonts/conf.d
       ln -s ${./sway.conf} etc/sway/config
+      ln -s ${./nested-sway.conf} etc/sway/nested
       ln -s ${./CLAUDE.md} etc/claude-code/CLAUDE.md
       echo 'hosts: files dns' > etc/nsswitch.conf
     '';
