@@ -46,6 +46,7 @@ enabled     = [
     "jesse/control-button",
     "jesse/hypr-workspaces",
     "jesse/sound",
+    "jesse/network",
 ]
 
 [plugin_settings."noctalia/mpvpaper"]
@@ -115,6 +116,9 @@ capsule_radius     = 6
 [widget.network]
 show_label = false
 color      = "#ffffffb3"
+
+    [widget.network.actions]
+    left = "panel-toggle jesse/network:network"
 
 [widget.network_date_separator]
 type        = "text"

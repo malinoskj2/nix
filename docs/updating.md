@@ -120,9 +120,13 @@ Treat a bump as a hardware change and test it on the device.
   It asserts the version the patches were checked against. When
   `nixpkgs-unstable` moves Noctalia, re-check
   [`overlays/patches/noctalia/`](../overlays/patches/noctalia) against the new
-  source, then click the clock (the calendar should open centered under it),
-  click the volume icon (the sound menu should open centered under it, with a
-  thin peach slider) and open the control center.
+  source, then:
+  - click the clock (the calendar should open centered under it);
+  - click the volume icon (the sound menu should open centered under it, with
+    a thin peach slider);
+  - click the network icon (the Wi-Fi menu should scale in at its final size,
+    then grow when Other Networks expands);
+  - open the control center.
 - **Claude Desktop.** [`pkgs/claude-desktop/`](../pkgs/claude-desktop) fetches
   one `.deb` from Anthropic's APT repository. To move it, copy the newest
   `Version` and `SHA256` from
