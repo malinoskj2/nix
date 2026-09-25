@@ -38,7 +38,7 @@ local PICKER_PARENT_RESTORING_TAG = "picker-parent-restoring"
 local PICKER_PARENT_RESTORE_MS = 350
 
 -- These Noctalia layer namespaces omit the `noctalia-` prefix, which `noctalia_layers` adds.
-local GLASS_LAYERS = { "bar-.+", "panel", "attached-panel" }
+local GLASS_LAYERS = { "bar-.+" }
 local TRANSLUCENT_LAYERS = { "notification", "dock", "osd", "window-switcher" }
 
 -- ("rrggbb", "aa") -> "rgba(rrggbbaa)"
@@ -152,6 +152,11 @@ hl.layer_rule({ match = { namespace = noctalia_layers(TRANSLUCENT_LAYERS) }, ign
 hl.layer_rule({ match = { namespace = noctalia_layers(GLASS_LAYERS) }, ignore_alpha = 0.02 })
 hl.layer_rule({ match = { namespace = noctalia_layers({ "bar-.+" }) }, xray = true })
 
+-- Floating panels scale in and out like windows; attached panels grow out of the bar through
+-- Noctalia's own reveal instead.
+hl.layer_rule({ match = { namespace = noctalia_layers({ "panel" }) }, animation = "popin 80%" })
+hl.layer_rule({ match = { namespace = noctalia_layers({ "attached-panel" }) }, no_anim = true })
+
 hl.layer_rule({
   match = { namespace = "^noctalia-desktop-widget-" .. nix.control_button_id .. ":.+$" },
   blur = true,
@@ -169,6 +174,8 @@ hl.curve("glide", { type = "spring", stiffness = 900, dampening = 60, mass = 1 }
 hl.animation({ leaf = "windows", enabled = true, speed = 7, spring = "snap" })
 hl.animation({ leaf = "windowsIn", enabled = true, speed = 7, spring = "pop" })
 hl.animation({ leaf = "windowsOut", enabled = true, speed = 7, spring = "glide", style = "popin 80%" })
+hl.animation({ leaf = "layersIn", enabled = true, speed = 7, spring = "pop" })
+hl.animation({ leaf = "layersOut", enabled = true, speed = 7, spring = "glide" })
 hl.animation({ leaf = "border", enabled = true, speed = 10, bezier = "default" })
 hl.animation({ leaf = "borderangle", enabled = true, speed = 8, bezier = "default" })
 -- `fadeOut` is off because the `windowsOut` popin already animates closing windows.
@@ -215,6 +222,59 @@ hl.config({
     },
   },
 })
+
+-- hyprglass draws Noctalia's panels as refractive glass in the compositor, the only place that can
+-- see what lies behind a layer. Windows stay as they are.
+hl.plugin.load(nix.hyprglass)
+
+local glass = hl.plugin.hyprglass
+glass.config({ enabled = false, default_theme = "dark", layers = { enabled = true } })
+
+-- Fitted to macOS 27's Clear widget glass: it darkens and saturates what's behind it and refracts
+-- almost nothing, so the panels' own Catppuccin fill still sets the tone.
+glass.preset("panel", {
+  adaptive_boost = 0.0,
+  adaptive_dim = 0.0,
+  brightness = 0.91,
+  chromatic_aberration = 0.0,
+  contrast = 1.0,
+  edge_thickness = 0.01,
+  fresnel_strength = 0.0,
+  lens_distortion = 0.0,
+  refraction_strength = 0.05,
+  saturation = 1.33,
+  specular_strength = 0.0,
+  tint_color = 0x00000000,
+  vibrancy = 0.0,
+})
+
+-- Every floating panel shares this namespace, so these settings apply to all of them; the blur
+-- region Noctalia sends marks where each one is. `corner_radius` must match Noctalia's panel radius.
+glass.layer("noctalia-panel", {
+  preset = "panel",
+  mask_mode = "region",
+  corner_radius = 12,
+  rounding_power = 2.0,
+  rim_light = 2.6,
+  rim_shadow = 2.7,
+  gleam_colors = {
+    nix.palette.peach,
+    nix.palette.yellow,
+    nix.palette.teal,
+    nix.palette.lavender,
+    nix.palette.mauve,
+    nix.palette.pink,
+  },
+  gleam_strength = 1.0,
+  gleam_width = 1.2,
+  gleam_length = 0.6,
+  gleam_duration = 1.2,
+  gleam_delay = 0.1,
+  gleam_rest = 0.3,
+})
+
+-- Attached panels flare into the bar, so their glass follows the region alone, without a rim.
+glass.layer("noctalia-attached-panel", { preset = "panel", mask_mode = "region" })
 
 -- Noctalia reads its mpvpaper wallpaper assignments only at startup, so they're randomized first.
 hl.on("hyprland.start", function()

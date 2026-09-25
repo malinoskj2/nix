@@ -40,7 +40,7 @@ directory = "/home/jesse/.wallpapers"
 
 [plugins]
 auto_update = "none"
-enabled     = ["noctalia/mpvpaper", "jesse/control-button", "jesse/hypr-workspaces"]
+enabled     = ["noctalia/mpvpaper", "jesse/calendar", "jesse/control-button", "jesse/hypr-workspaces"]
 
 [plugin_settings."noctalia/mpvpaper"]
 video_directory = "/home/jesse/.wallpapers/video"
@@ -84,6 +84,9 @@ font_weight = 600
 [widget.clock]
 font_weight = 600
 format      = "{:%a %d %b  %I:%M %p}"
+
+    [widget.clock.actions]
+    left = "panel-toggle jesse/calendar:calendar"
 
 [widget.control-center]
 color                 = "primary"

@@ -71,10 +71,11 @@ claude-code, codex and noctalia from `pkgs.unstable`. Install local packages by
 name. Linux-only packages set `meta.platforms`. `git-open-branch` installs the
 `git-open` command.
 
-`overlays/default.nix` holds `additions`, `unstable` (`pkgs.unstable`) and
-`pins`. `pins` takes Firefox, Hyprland, the Hyprland plugins and the Hyprland
-portal from exact nixpkgs revisions, and patches hyprfocus. The `apple-fonts`
-input's overlay adds `pkgs.sf-pro`, `sf-compact`, `sf-mono` and `ny`.
+`overlays/default.nix` holds `additions`, `unstable` (`pkgs.unstable`, with
+Noctalia patched) and `pins`. `pins` takes Firefox, Hyprland, the Hyprland
+plugins and the Hyprland portal from exact nixpkgs revisions, and patches
+hyprfocus. The `apple-fonts` input's overlay adds `pkgs.sf-pro`, `sf-compact`,
+`sf-mono` and `ny`.
 
 Patches sit next to what applies them: a `pkgs/` package keeps its patch in its
 own directory, and overlay patches live in `overlays/patches/<package>/`.

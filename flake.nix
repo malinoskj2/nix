@@ -118,6 +118,7 @@
           "git-open-branch"
           "htop-vim-navigation"
           "hy3dgen"
+          "hyprglass"
           "markdown-to-pdf"
           "pubip"
           "wallpaper-autopause"

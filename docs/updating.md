@@ -36,9 +36,11 @@ the few packages that need something newer.
 `xdg-desktop-portal-hyprland` all come from it, so the compositor and its
 plugins always share one ABI. hyprbars comes from that plugin set as-is.
 hyprfocus comes from it too, patched by the `pins` overlay in
-[`overlays/default.nix`](../overlays/default.nix). Two assertions check the
-Hyprland version: `supportedHyprlandVersions` in that overlay and
-`supportedHyprland` in
+[`overlays/default.nix`](../overlays/default.nix). hyprglass isn't in that
+set: [`pkgs/hyprglass/`](../pkgs/hyprglass) builds one hyprglass release
+against the pinned Hyprland and patches its layer glass. Three assertions check
+the Hyprland version: `supportedHyprlandVersions` in that overlay and in
+`pkgs/hyprglass/package.nix`, and `supportedHyprland` in
 [`users/jesse/hyprland-desktop/hyprland/default.nix`](../users/jesse/hyprland-desktop/hyprland/default.nix).
 
 To upgrade:
@@ -48,12 +50,19 @@ To upgrade:
    [`overlays/patches/hyprfocus/`](../overlays/patches/hyprfocus). They hook
    Hyprland internals, so a clean apply isn't enough. Read them against the new
    source.
-3. Confirm that commit's hyprbars still supports what
+3. Move hyprglass to the release that its `hyprpm.toml` pairs with the new
+   Hyprland, and rebase
+   [`layer-shape.patch`](../pkgs/hyprglass/layer-shape.patch) onto it. hyprglass
+   hooks Hyprland's private `renderLayer`, so open a floating panel (the clock's
+   calendar) and an attached one (the control center) and check their glass,
+   not just the build. The floating panel's top rim should gleam once as it
+   opens; the attached one shouldn't.
+4. Confirm that commit's hyprbars still supports what
    [`hyprland.lua`](../users/jesse/hyprland-desktop/hyprland/hyprland.lua)
    uses: `bar_part_of_window`, `bar_precedence_over_border`, `bar_text_align`,
    `on_double_click`, and the `hyprbars:no_bar` window rule.
-4. Update both version assertions.
-5. Build `home`.
+5. Update all three version assertions.
+6. Build `home`.
 
 ### Firefox
 
@@ -99,6 +108,14 @@ Treat a bump as a hardware change and test it on the device.
 - **htop.** [`pkgs/htop-vim-navigation/`](../pkgs/htop-vim-navigation) asserts
   the htop versions its patch was checked against. If a nixpkgs update trips
   it, re-check the patch next to it and add the new version.
+- **Noctalia.** The `unstable` overlay in
+  [`overlays/default.nix`](../overlays/default.nix) patches Noctalia so floating
+  panels skip its clip reveal and Hyprland scales them in instead, and so a bar
+  widget's panel centers under the widget. It asserts the version the patches
+  were checked against. When `nixpkgs-unstable` moves Noctalia, re-check
+  [`overlays/patches/noctalia/`](../overlays/patches/noctalia) against the new
+  source, then click the clock (the calendar should open centered under it)
+  and open the control center.
 - **Claude Desktop.** [`pkgs/claude-desktop/`](../pkgs/claude-desktop) fetches
   one `.deb` from Anthropic's APT repository. To move it, copy the newest
   `Version` and `SHA256` from

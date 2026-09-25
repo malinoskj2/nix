@@ -38,6 +38,7 @@ in
       # store paths; the module's `plugins` option runs `hyprctl plugin load` only once at startup.
       hyprbars = "${pkgs.hyprlandPlugins.hyprbars}/lib/libhyprbars.so";
       hyprfocus = "${pkgs.hyprlandPlugins.hyprfocus}/lib/libhyprfocus.so";
+      hyprglass = "${pkgs.hyprglass}/lib/libhyprglass.so";
       monitors = {
         main = "DP-2";
         side = "DP-1";
