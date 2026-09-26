@@ -14,8 +14,6 @@
     homeDirectory = "/Users/jmalinosky";
   };
 
-  programs.home-manager.enable = true;
-
   home.packages = with pkgs; [
     # This profile stays conservative, so programs with shared modules install as plain packages.
     fira-code
