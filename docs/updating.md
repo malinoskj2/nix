@@ -59,7 +59,8 @@ To upgrade:
    hooks Hyprland's private `renderLayer`, so open a floating panel (the clock's
    calendar) and an attached one (the control center) and check their glass,
    not just the build. The floating panel's top rim should gleam once as it
-   opens; the attached one shouldn't. Then send two notifications: each banner
+   opens, and its edges shouldn't flicker dark while it scales in; the
+   attached one shouldn't gleam. Then send two notifications: each banner
    should have its own rounded glass, even while one slides in or out.
 4. Read [`pkgs/hyprsheet/main.cpp`](../pkgs/hyprsheet/main.cpp) against the
    new source. It uses Hyprland's private window transformers, xdg-foreign
