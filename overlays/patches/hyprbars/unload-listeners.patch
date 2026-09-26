@@ -1,0 +1,45 @@
+--- a/main.cpp
++++ b/main.cpp
+@@ -32,6 +32,11 @@
+     return HYPRLAND_API_VERSION;
+ }
+ 
++// Held globally and dropped in PLUGIN_EXIT: dlclose can't actually unload this .so (it has
++// STB_GNU_UNIQUE symbols), so function-local static listeners would outlive an unload and keep
++// adding bars whose config values Hyprland has already dropped.
++static std::vector<Hyprutils::Signal::CHyprSignalListener> g_listeners;
++
+ static void onNewWindow(PHLWINDOW window) {
+     if (!window->m_X11DoesntWantBorders) {
+         if (std::ranges::any_of(window->m_windowDecorations, [](const auto& d) { return d->getDisplayName() == "Hyprbar"; }))
+@@ -208,8 +213,8 @@
+     g_pGlobalState->barColorRuleIdx   = Desktop::Rule::windowEffects()->registerEffect("hyprbars:bar_color");
+     g_pGlobalState->titleColorRuleIdx = Desktop::Rule::windowEffects()->registerEffect("hyprbars:title_color");
+ 
+-    static auto P  = Event::bus()->m_events.window.open.listen([&](PHLWINDOW w) { onNewWindow(w); });
+-    static auto P3 = Event::bus()->m_events.window.updateRules.listen([&](PHLWINDOW w) { onUpdateWindowRules(w); });
++    g_listeners.push_back(Event::bus()->m_events.window.open.listen([&](PHLWINDOW w) { onNewWindow(w); }));
++    g_listeners.push_back(Event::bus()->m_events.window.updateRules.listen([&](PHLWINDOW w) { onUpdateWindowRules(w); }));
+ 
+     g_pGlobalState->config.barColor            = makeShared<Config::Values::CColorValue>("plugin:hyprbars:bar_color", "Change the bar color", 0x88333333);
+     g_pGlobalState->config.textColor           = makeShared<Config::Values::CColorValue>("plugin:hyprbars:col.text", "Change the text color", 0xffffffff);
+@@ -256,8 +261,8 @@
+         HyprlandAPI::addConfigKeyword(PHANDLE, "plugin:hyprbars:hyprbars-button", onNewButton, Hyprlang::SHandlerOptions{});
+     else
+         HyprlandAPI::addLuaFunction(PHANDLE, "hyprbars", "add_button", ::newLuaButton);
+-    static auto P4 = Event::bus()->m_events.config.preReload.listen([&] { onPreConfigReload(); });
+-    static auto P5 = Event::bus()->m_events.config.reloaded.listen([&] { onConfigReloaded(); });
++    g_listeners.push_back(Event::bus()->m_events.config.preReload.listen([&] { onPreConfigReload(); }));
++    g_listeners.push_back(Event::bus()->m_events.config.reloaded.listen([&] { onConfigReloaded(); }));
+ 
+     // add deco to existing windows
+     for (auto& w : Desktop::windowState()->windows()) {
+@@ -273,6 +278,8 @@
+ }
+ 
+ APICALL EXPORT void PLUGIN_EXIT() {
++    g_listeners.clear();
++
+     for (auto& m : State::monitorState()->monitors())
+         m->m_scheduledRecalc = true;
+ 

@@ -36,8 +36,8 @@ the few packages that need something newer.
 
 `nixpkgs-hyprland` is an exact nixpkgs commit. Hyprland, `hyprlandPlugins` and
 `xdg-desktop-portal-hyprland` all come from it, so the compositor and its
-plugins always share one ABI. hyprbars comes from that plugin set as-is.
-hyprfocus comes from it too, patched by the `pins` overlay in
+plugins always share one ABI. hyprbars and hyprfocus come from that plugin
+set, patched by the `pins` overlay in
 [`overlays/default.nix`](../overlays/default.nix). hyprglass isn't in that
 set: [`pkgs/hyprglass/`](../pkgs/hyprglass) builds one hyprglass release
 against the pinned Hyprland and patches its layer glass.
@@ -52,9 +52,11 @@ To upgrade:
 
 1. Point `nixpkgs-hyprland` at a nixpkgs commit with the new Hyprland.
 2. Rebase each patch in
+   [`overlays/patches/hyprbars/`](../overlays/patches/hyprbars) and
    [`overlays/patches/hyprfocus/`](../overlays/patches/hyprfocus). They hook
    Hyprland internals, so a clean apply isn't enough. Read them against the new
-   source.
+   source. The hyprbars patch drops the plugin's event listeners when it
+   unloads, so check that upstream hasn't added a listener it misses.
 3. Move hyprglass to the release that its `hyprpm.toml` pairs with the new
    Hyprland, and rebase
    [`layer-shape.patch`](../pkgs/hyprglass/layer-shape.patch) onto it. hyprglass
