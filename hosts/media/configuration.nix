@@ -34,7 +34,15 @@
   };
 
   nix = {
-    settings.auto-optimise-store = true;
+    settings = {
+      auto-optimise-store = true;
+      # Deploys are built elsewhere and copied in unsigned. jesse can already
+      # reach root through the docker group, so this grants nothing new.
+      trusted-users = [
+        "root"
+        "jesse"
+      ];
+    };
     gc = {
       automatic = true;
       dates = "weekly";
