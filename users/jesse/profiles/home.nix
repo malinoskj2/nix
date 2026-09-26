@@ -9,7 +9,6 @@
     ../features/native.nix
     ../features/rust
     ../features/rust/mold.nix
-    ../features/rust/std-sources.nix
 
     ../agent-sandbox.nix
     ../datagrip

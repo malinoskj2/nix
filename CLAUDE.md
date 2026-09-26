@@ -55,7 +55,7 @@ The Home Manager hosts (`home`, `katana`, `macbook`) each have a profile at
 and imports `users/jesse/global/` (palette, session and the core program
 modules) plus opt-in `users/jesse/features/`: `admin`, `cli`, `desktop`, `dev`,
 `native` and `rust`. Only the `home` profile adds `features/rust/mold.nix`
-(mold linker) and `features/rust/std-sources.nix` (`RUST_SRC_PATH`). Single
+(mold linker). Single
 programs are flat modules at `users/jesse/<program>.nix` or
 `users/jesse/<program>/`, imported by `global/`, a feature or a profile.
 On NixOS, identity comes from the OS account; the `macbook` profile sets
