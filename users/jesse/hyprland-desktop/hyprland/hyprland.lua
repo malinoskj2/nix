@@ -127,6 +127,7 @@ hl.config({
     force_default_wallpaper = 0,
   },
   render = {
+    direct_scanout = 2,
     expand_undersized_textures = false,
   },
 })
