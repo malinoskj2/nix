@@ -113,7 +113,8 @@ Treat a bump as a hardware change and test it on the device.
   and every `sha256` change together. Copy them from the `new_feature` entry of
   `pkgs/os-specific/linux/nvidia-x11/default.nix` in nixos-unstable. Once
   NVIDIA's production branch passes the pinned version, move back to the
-  `production` entry.
+  `production` entry. 615 hitches the desktop when the memory clock changes;
+  check a new driver against [nvidia-memory-clock.md](nvidia-memory-clock.md).
 - **claude-code.** The `unstable` overlay in
   [`overlays/default.nix`](../overlays/default.nix) builds claude-code from
   [`overlays/claude-code/manifest.zst.json`](../overlays/claude-code/manifest.zst.json)
