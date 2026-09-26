@@ -22,7 +22,6 @@ local CHROME_WEBGPU = table.concat({
 }, " ")
 
 -- These grays stay outside the palette because Catppuccin's neutrals carry a blue tint.
-local HYPRBARS_TEXT = "rgb(d7dae0)"
 local INACTIVE_BORDER = "rgba(595959aa)"
 local SHADOW = "rgba(00000059)"
 
@@ -142,7 +141,7 @@ hl.layer_rule({
 
 hl.layer_rule({ match = { namespace = noctalia_layers(TRANSLUCENT_LAYERS) }, ignore_alpha = 0.5 })
 hl.layer_rule({ match = { namespace = noctalia_layers(GLASS_LAYERS) }, ignore_alpha = 0.02 })
-hl.layer_rule({ match = { namespace = noctalia_layers({ "bar-.+" }) }, xray = true })
+hl.layer_rule({ match = { namespace = noctalia_layers(GLASS_LAYERS) }, xray = true })
 
 -- Floating panels scale in and out like windows; attached panels grow out of the bar through
 -- Noctalia's own reveal instead.
@@ -208,12 +207,7 @@ hl.config({
       bar_height = 12,
       bar_part_of_window = true,
       bar_precedence_over_border = true,
-      bar_text_align = "center",
-      bar_text_font = "SF Pro Display",
-      bar_text_size = 15,
-      bar_text_weight = 600,
       bar_title_enabled = false,
-      col = { text = HYPRBARS_TEXT },
       -- Under a Lua config, `hyprctl dispatch` takes an `hl.dsp` expression.
       on_double_click = nix.hyprctl .. [[ dispatch 'hl.dsp.window.fullscreen({ mode = "maximized" })']],
     },
@@ -338,9 +332,9 @@ hl.bind(MAIN_MOD .. " + SHIFT + H", hl.dsp.window.swap({ direction = "left" }))
 hl.bind(MAIN_MOD .. " + SHIFT + L", hl.dsp.window.swap({ direction = "right" }))
 hl.bind(MAIN_MOD .. " + SHIFT + K", hl.dsp.window.swap({ direction = "up" }))
 hl.bind(MAIN_MOD .. " + SHIFT + J", hl.dsp.window.swap({ direction = "down" }))
-hl.bind(MAIN_MOD .. " + ALT + H", hl.dsp.window.resize({ x = 10, y = 0, relative = true }))
+hl.bind(MAIN_MOD .. " + ALT + H", hl.dsp.window.resize({ x = -10, y = 0, relative = true }))
 hl.bind(MAIN_MOD .. " + ALT + L", hl.dsp.window.resize({ x = 10, y = 0, relative = true }))
-hl.bind(MAIN_MOD .. " + ALT + K", hl.dsp.window.resize({ x = 0, y = 10, relative = true }))
+hl.bind(MAIN_MOD .. " + ALT + K", hl.dsp.window.resize({ x = 0, y = -10, relative = true }))
 hl.bind(MAIN_MOD .. " + ALT + J", hl.dsp.window.resize({ x = 0, y = 10, relative = true }))
 
 -- Y and O cycle back and forth through the main monitor's numbered workspaces; see actions.lua.

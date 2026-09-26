@@ -75,7 +75,7 @@ To upgrade:
    `hyprctl monitors` inside it lists `NESTED-1`.
 6. Confirm that commit's hyprbars still supports what
    [`hyprland.lua`](../users/jesse/hyprland-desktop/hyprland/hyprland.lua)
-   uses: `bar_part_of_window`, `bar_precedence_over_border`, `bar_text_align`,
+   uses: `bar_part_of_window`, `bar_precedence_over_border`, `bar_title_enabled`,
    `on_double_click`, and the `hyprbars:no_bar` window rule.
 7. Update all four version assertions.
 8. Build `home`.
