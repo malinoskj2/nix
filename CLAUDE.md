@@ -75,7 +75,7 @@ name. Linux-only packages set `meta.platforms`. `git-open-branch` installs the
 `pkgs.unstable`, with claude-code built from the manifest in
 `overlays/claude-code/` and Noctalia patched. `pins` takes Firefox, Hyprland,
 the Hyprland plugins and the Hyprland portal from exact nixpkgs revisions, and
-patches hyprfocus. The `apple-fonts` input's overlay adds `pkgs.sf-pro`,
+patches hyprbars and hyprfocus. The `apple-fonts` input's overlay adds `pkgs.sf-pro`,
 `sf-compact`, `sf-mono` and `ny`.
 
 Patches sit next to what applies them: a `pkgs/` package keeps its patch in its
