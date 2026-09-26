@@ -155,6 +155,23 @@ Treat a bump as a hardware change and test it on the device.
   `https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-amd64/Packages`.
   The build patches hardcoded paths in `app.asar` and fails if one is gone;
   find where the new release looks instead.
+- **Orca.** [`pkgs/orca-ade/`](../pkgs/orca-ade) builds one stablyai/orca
+  release tag from source against `pkgs.unstable`'s Electron 43 and pnpm 11.
+  To move it, change `version`, then refresh the source hash and both pnpm
+  dependency hashes (the root and `mobile/` lockfiles). Rebase
+  [`claude-hooks.patch`](../pkgs/orca-ade/claude-hooks.patch): it keeps Orca out
+  of the read-only `~/.claude/settings.json` by writing its hooks to
+  `~/.orca/agent-hooks/claude-settings.json` and passing that file with
+  `--settings`. Upstream Claude launches move often, so check every one still
+  gets the flag, not just the build. Then, in Orca:
+  - check that a `claude` typed into an Orca terminal and one Orca launches
+    both show working and done in the sidebar, with the running tool;
+  - open a Claude chat tab (Settings → Experimental) and check that its
+    `claude` process has `--settings`;
+  - run `orca-ide agent hooks status --json` and check that Claude reports
+    `installed`;
+  - check that `~/.claude/settings.json` is unchanged and that a plain
+    `claude` outside Orca has no Orca hooks.
 
 ## Darwin
 

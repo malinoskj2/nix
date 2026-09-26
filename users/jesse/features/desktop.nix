@@ -17,6 +17,7 @@
     imagemagick
     ktx-tools
     mediainfo
+    orca-ade
     pwvucontrol
     vulkan-tools
     wl-clipboard
