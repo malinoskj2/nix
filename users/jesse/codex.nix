@@ -1,7 +1,7 @@
 { lib, pkgs, ... }:
 let
   codexAgentFormat = pkgs.formats.toml { };
-  claudeAgents = ../claude/agents;
+  claudeAgents = ./claude/agents;
   agents = {
     laravel-builder = {
       description = "Implements Laravel/PHP features, fixes and requested refactors using Jesse's architecture, abstraction and aesthetics standards.";
@@ -45,7 +45,7 @@ in
   programs.codex = {
     enable = true;
     package = null;
-    skills = ../claude/skills;
+    skills = ./claude/skills;
   };
 
   home.file = lib.mapAttrs' mkAgent agents;
