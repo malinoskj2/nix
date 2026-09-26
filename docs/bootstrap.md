@@ -44,6 +44,20 @@ top of [`hosts/home/boot.nix`](../hosts/home/boot.nix). Its switch step is the
 `nixos-rebuild switch` above, and until that switch installs sbctl, run it
 through `nix-shell -p sbctl`.
 
+### `home`: SSH into agent sandboxes
+
+`~/.ssh/config` is hand-written, and Home Manager puts the `sandbox-*` host
+entry for [`agent-sandbox`](../users/jesse/agent-sandbox.nix) in
+`~/.ssh/config.d/`. Add this line to the top of `~/.ssh/config`, above any
+`Host` block, so that the entry applies to every host:
+
+```
+Include config.d/*
+```
+
+Then `ssh sandbox-<name>` starts the `agent-sandbox@sandbox-<name>` user unit
+and connects to its container.
+
 ## macbook (Home Manager)
 
 The Mac has no system configuration, only a standalone Home Manager profile.
