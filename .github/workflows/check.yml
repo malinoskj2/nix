@@ -73,4 +73,5 @@ jobs:
           name: ${{ vars.CACHIX_NAME }}
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - run: nix flake check --print-build-logs --keep-going
+      # CI can't read the private media-stack input, so media builds without its stack.
+      - run: nix flake check --override-input media-stack "path:$PWD/.github/media-stack" --print-build-logs --keep-going

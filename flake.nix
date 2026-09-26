@@ -29,6 +29,12 @@
       ref = "release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Private, so CI swaps in the stub in .github/media-stack.
+    media-stack = {
+      type = "git";
+      url = "ssh://git@github.com/malinoskj2/media-stack";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     nix-index-database = {
       type = "github";
       owner = "nix-community";

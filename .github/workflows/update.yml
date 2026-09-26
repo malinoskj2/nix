@@ -25,7 +25,9 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          nix flake update 2>&1 | tee update.log
+          # Every input but the private media-stack, which CI can't fetch.
+          mapfile -t inputs < <(jq -r '.nodes.root.inputs | keys[] | select(. != "media-stack")' flake.lock)
+          nix flake update "${inputs[@]}" 2>&1 | tee update.log
           if git diff --quiet flake.lock; then
             echo changed=false >> "$GITHUB_OUTPUT"
           else

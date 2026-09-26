@@ -1,6 +1,8 @@
-{ pkgs, ... }:
+{ inputs, pkgs, ... }:
 {
   imports = [
+    inputs.media-stack.nixosModules.default
+
     ../common/global.nix
     ../common/optional/docker.nix
     ../common/optional/fail2ban.nix
@@ -12,10 +14,17 @@
     ../common/users/jesse
 
     ./hardware-configuration.nix
-    ./media-stack.nix
     ./nvidia.nix
     ./storage.nix
   ];
+
+  services.media-stack = {
+    enable = true;
+    configDir = "/home/jesse/docker_cfg2";
+    dataDir = "/media/data";
+    legacyDir = "/media/storage/media";
+    anime4Dir = "/mnt/media4/anime";
+  };
 
   networking = {
     hostName = "media";
@@ -23,26 +32,11 @@
       "1.1.1.1"
       "9.9.9.9"
     ];
-    firewall = {
-      allowPing = false;
-      allowedTCPPorts = [
-        80
-        443
-        32400
-      ];
-    };
+    firewall.allowPing = false;
   };
 
   nix = {
-    settings = {
-      auto-optimise-store = true;
-      # Deploys are built elsewhere and copied in unsigned. jesse can already
-      # reach root through the docker group, so this grants nothing new.
-      trusted-users = [
-        "root"
-        "jesse"
-      ];
-    };
+    settings.auto-optimise-store = true;
     gc = {
       automatic = true;
       dates = "weekly";
@@ -60,7 +54,14 @@
     users.jesse.hashedPasswordFile = "/secret/jesse.passwd";
   };
 
-  security.sudo.execWheelOnly = true;
+  security = {
+    sudo.execWheelOnly = true;
+
+    # Docker confines every container with its docker-default profile once
+    # AppArmor is on, and loads that profile with apparmor_parser.
+    apparmor.enable = true;
+  };
+  systemd.services.docker.path = [ pkgs.apparmor-parser ];
 
   services.openssh = {
     ports = [ 2222 ];

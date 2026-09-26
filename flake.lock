@@ -140,6 +140,27 @@
         "type": "github"
       }
     },
+    "media-stack": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "sops-nix": "sops-nix"
+      },
+      "locked": {
+        "lastModified": 1790455078,
+        "narHash": "sha256-85+PYdmvQPqq+NF+DdL+g0ucKC1ivXLadki/wCz0z88=",
+        "ref": "refs/heads/main",
+        "rev": "dc29d96c44f6c36f76955273903ac817d410a9da",
+        "revCount": 8,
+        "type": "git",
+        "url": "ssh://git@github.com/malinoskj2/media-stack"
+      },
+      "original": {
+        "type": "git",
+        "url": "ssh://git@github.com/malinoskj2/media-stack"
+      }
+    },
     "nix-index-database": {
       "inputs": {
         "nixpkgs": [
@@ -279,6 +300,7 @@
         "catppuccin": "catppuccin",
         "flake-parts": "flake-parts",
         "home-manager": "home-manager",
+        "media-stack": "media-stack",
         "nix-index-database": "nix-index-database",
         "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs",
@@ -372,6 +394,27 @@
       "original": {
         "type": "file",
         "url": "https://devimages-cdn.apple.com/design/resources/download/SF-Pro.dmg"
+      }
+    },
+    "sops-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "media-stack",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1790247521,
+        "narHash": "sha256-TNfgoHsqsYYvaJImlWctfRkh4PseTagzegU1Dgdbehw=",
+        "owner": "Mic92",
+        "repo": "sops-nix",
+        "rev": "2bd00bd9bb35fe6d114888c8f1c2e946c541dd8f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Mic92",
+        "repo": "sops-nix",
+        "type": "github"
       }
     },
     "treefmt-nix": {

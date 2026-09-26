@@ -48,6 +48,11 @@ plus host facts. Shared modules are imported explicitly by relative path from
 
 Host-only policy, such as media's sudo and `mutableUsers`, stays in the host.
 
+`media`'s container stack comes from the private `media-stack` input
+(`nixosModules.default`), and `hosts/media` only enables it and passes it the
+host's paths. CI can't read that input, so it builds `media` against the stub
+in `.github/media-stack`, which leaves the stack out.
+
 ### Home Manager
 
 The Home Manager hosts (`home`, `katana`, `macbook`) each have a profile at
