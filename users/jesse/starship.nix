@@ -4,40 +4,12 @@
     enable = true;
     settings = {
       add_newline = false;
-      format = lib.concatMapStrings (module: "$" + module) (
-        [
-          "username"
-          "git_branch"
-          "git_status"
-        ]
-        ++ [
-          "bun"
-          "c"
-          "daml"
-          "fortran"
-          "gleam"
-          "gradle"
-          "haskell"
-          "haxe"
-          "maven"
-          "mojo"
-          "odin"
-          "opa"
-          "quarto"
-          "raku"
-          "solidity"
-          "typst"
-          "xmake"
-          "buf"
-          "guix_shell"
-          "pixi"
-          "meson"
-          "spack"
-          "container"
-          "netns"
-        ]
-        ++ [ "character" ]
-      );
+      format = lib.concatMapStrings (module: "$" + module) [
+        "username"
+        "git_branch"
+        "git_status"
+        "character"
+      ];
 
       username = {
         format = "[$user ]($style)";
