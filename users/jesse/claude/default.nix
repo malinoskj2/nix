@@ -40,6 +40,7 @@ in
       skipDangerousModePermissionPrompt = true;
       inputNeededNotifEnabled = true;
       agentPushNotifEnabled = true;
+      worktree.baseRef = "head";
       attribution = {
         commit = "";
         pr = "";
