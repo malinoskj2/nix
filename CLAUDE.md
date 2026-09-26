@@ -48,6 +48,11 @@ plus host facts. Shared modules are imported explicitly by relative path from
 
 Host-only policy, such as media's sudo and `mutableUsers`, stays in the host.
 
+`media`'s containers aren't in this repository. The private media-stack
+repository deploys them as a Docker Compose project over Docker's SSH
+transport. `hosts/media/containers.nix` only gives them the Docker settings,
+the `media` user they run as and the open ports.
+
 ### Home Manager
 
 The Home Manager hosts (`home`, `katana`, `macbook`) each have a profile at
@@ -93,7 +98,8 @@ shellcheck and shfmt for shell, ruff for Python, StyLua for Lua and Luau).
 `nix flake check` also builds every host whose system matches, the local
 packages those hosts install directly, and the devshell. Prefer evaluating or
 building the affected host before applying it, and don't run a `switch` unless
-explicitly asked. Hosts are applied with `nh os switch`. No host needs
+explicitly asked. Hosts are applied with `nh os switch`, and `media` only from
+another host, with `--target-host` (`docs/bootstrap.md`). No host needs
 `--impure`. Don't copy secrets into the repository.
 
 ## Desktop design

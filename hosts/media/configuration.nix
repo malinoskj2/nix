@@ -1,8 +1,6 @@
-{ inputs, pkgs, ... }:
+{ pkgs, ... }:
 {
   imports = [
-    inputs.media-stack.nixosModules.default
-
     ../common/global.nix
     ../common/optional/docker.nix
     ../common/optional/fail2ban.nix
@@ -12,18 +10,11 @@
     ../common/optional/systemd-boot.nix
     ../common/users/jesse
 
+    ./containers.nix
     ./hardware-configuration.nix
     ./nvidia.nix
     ./storage.nix
   ];
-
-  services.media-stack = {
-    enable = true;
-    configDir = "/home/jesse/docker_cfg2";
-    dataDir = "/media/data";
-    legacyDir = "/media/storage/media";
-    anime4Dir = "/mnt/media4/anime";
-  };
 
   networking = {
     hostName = "media";
