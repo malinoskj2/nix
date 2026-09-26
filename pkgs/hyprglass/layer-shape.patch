@@ -1,30 +1,36 @@
 diff --git a/src/GlassLayerSurface.cpp b/src/GlassLayerSurface.cpp
-index 014464a..437d40b 100644
+index 014464a..cd6ba74 100644
 --- a/src/GlassLayerSurface.cpp
 +++ b/src/GlassLayerSurface.cpp
-@@ -12,6 +12,21 @@
+@@ -12,9 +12,25 @@
  #include <hyprland/src/render/Renderer.hpp>
  #include <hyprutils/math/Misc.hpp>
  
+-static CBox transformedLayerBox(CBox pixelBox, PHLMONITOR monitor) {
 +// Blur regions are in the surface's own coordinates, while an animating layer (e.g. popin) is drawn
-+// at its current, scaled size, so regions are mapped through the ratio of the two.
++// stretched into its current layer box, so regions are mapped through the ratio of the two.
 +static Vector2D surfaceSize(PHLLS layerSurface) {
 +    return layerSurface->size(Desktop::View::IGeometric::GEOMETRIC_GOAL);
 +}
 +
-+static Vector2D regionScale(PHLLS layerSurface, PHLMONITOR monitor) {
-+    const auto goal    = surfaceSize(layerSurface);
-+    const auto current = layerSurface->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
-+    const auto scale   = static_cast<double>(monitor->m_scale);
++static Vector2D regionScale(PHLLS layerSurface, PHLMONITOR monitor, const CBox& layerBox) {
++    const auto goal  = surfaceSize(layerSurface);
++    const auto scale = static_cast<double>(monitor->m_scale);
 +    if (goal.x <= 0.0 || goal.y <= 0.0)
 +        return {scale, scale};
-+    return {scale * current.x / goal.x, scale * current.y / goal.y};
++    return {layerBox.w / goal.x, layerBox.h / goal.y};
 +}
 +
- static CBox transformedLayerBox(CBox pixelBox, PHLMONITOR monitor) {
++static CBox transformedLayerBox(CBox pixelBox, PHLMONITOR monitor, bool round = true) {
      const auto transform = Math::wlTransformToHyprutils(Math::invertTransform(monitor->m_transform));
-     pixelBox.transform(transform, monitor->m_transformedSize.x, monitor->m_transformedSize.y).noNegativeSize().round();
-@@ -104,6 +119,56 @@ CGlassLayerSurface::EMaskSource CGlassLayerSurface::resolveMaskSource() const {
+-    pixelBox.transform(transform, monitor->m_transformedSize.x, monitor->m_transformedSize.y).noNegativeSize().round();
++    pixelBox.transform(transform, monitor->m_transformedSize.x, monitor->m_transformedSize.y).noNegativeSize();
++    if (round)
++        pixelBox.round();
+     return pixelBox;
+ }
+ 
+@@ -104,6 +120,60 @@ CGlassLayerSurface::EMaskSource CGlassLayerSurface::resolveMaskSource() const {
      }
  }
  
@@ -33,6 +39,9 @@ index 014464a..437d40b 100644
 +// Each separate piece of the region is its own glass shape, so one surface can hold several cards,
 +// like a stack of notifications. The shapes aren't clipped to the surface: a card sliding across
 +// the edge of the surface keeps its rounded corners on the far side, out of sight.
++// The pieces are found in surface coordinates and only then scaled, without rounding: a layer
++// scaling in draws its content's edges between pixels, and glass rounded out to whole pixels would
++// put its dark side rim just outside the content, where it flickers as the fraction changes.
 +std::vector<CBox> CGlassLayerSurface::glassBoxes(PHLMONITOR monitor, const CBox& layerBox) const {
 +    const auto layerSurface = m_layerSurface.lock();
 +    const auto wlSurface    = layerSurface ? layerSurface->wlSurface() : nullptr;
@@ -40,8 +49,6 @@ index 014464a..437d40b 100644
 +        return {layerBox};
 +
 +    CRegion region = wlSurface->m_blurRegion.copy();
-+    region.scale(regionScale(layerSurface, monitor));
-+    region.translate(layerBox.pos());
 +    if (region.empty())
 +        return {layerBox};
 +
@@ -63,8 +70,11 @@ index 014464a..437d40b 100644
 +
 +    if (boxes.size() > static_cast<size_t>(GlassRenderer::MAX_GLASS_SHAPES))
 +        boxes = {region.getExtents()};
-+    for (auto& box : boxes)
-+        box.round().noNegativeSize();
++    const auto scale = regionScale(layerSurface, monitor, layerBox);
++    for (auto& box : boxes) {
++        box = {layerBox.x + box.x * scale.x, layerBox.y + box.y * scale.y, box.w * scale.x, box.h * scale.y};
++        box.noNegativeSize();
++    }
 +    std::erase_if(boxes, [](const CBox& box) { return box.w <= 0.0 || box.h <= 0.0; });
 +    return boxes.empty() ? std::vector<CBox>{layerBox} : boxes;
 +}
@@ -81,7 +91,7 @@ index 014464a..437d40b 100644
  bool CGlassLayerSurface::liveResampleEnabled() const {
      if (const auto layerSurface = m_layerSurface.lock()) {
          const auto& overrides = g_pGlobalState->layerNamespaceLiveResample;
-@@ -139,6 +204,14 @@ void CGlassLayerSurface::damageIfMoved() {
+@@ -139,6 +209,14 @@ void CGlassLayerSurface::damageIfMoved() {
      const bool moved = currentPosition != m_lastPosition || currentSize != m_lastSize;
  
      if (moved || isAnimating) {
@@ -96,7 +106,7 @@ index 014464a..437d40b 100644
          m_lastPosition  = currentPosition;
          m_lastSize      = currentSize;
  
-@@ -147,8 +220,8 @@ void CGlassLayerSurface::damageIfMoved() {
+@@ -147,8 +225,8 @@ void CGlassLayerSurface::damageIfMoved() {
          if (const auto monitor = layerSurface->m_monitor.lock())
              g_pGlobalState->bumpSceneGeneration(monitor);
      } else if (const auto& config = g_pGlobalState->config;
@@ -107,7 +117,7 @@ index 014464a..437d40b 100644
          damageSampleRegion();
      }
  }
-@@ -318,6 +391,10 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
+@@ -318,6 +396,10 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
  
      float cornerRadius  = 0.0f;
      float roundingPower = 2.0f;
@@ -118,7 +128,7 @@ index 014464a..437d40b 100644
  
      // Use the temp FBO's rendered alpha as a mask: glass only where the surface
      // has visible content (alpha > 0). The temp FBO is in monitor coordinates,
-@@ -353,13 +430,12 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
+@@ -353,13 +435,12 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
              const auto wlSurface = layerSurface->wlSurface();
              if (!wlSurface)
                  break;
@@ -130,17 +140,17 @@ index 014464a..437d40b 100644
 -            region.intersect(0, 0, logicalSize.x, logicalSize.y); // spec: clipped to surface size
 -            region.scale(static_cast<float>(monitor->m_scale));
 +            region.intersect(0, 0, surfaceSize(layerSurface).x, surfaceSize(layerSurface).y); // spec: clipped to surface size
-+            region.scale(regionScale(layerSurface, monitor));
++            region.scale(regionScale(layerSurface, monitor, rawBox));
              region.translate(rawBox.pos());
              region.intersect(rawBox.x, rawBox.y, rawBox.w, rawBox.h); // defensive
              region.transform(Math::wlTransformToHyprutils(Math::invertTransform(monitor->m_transform)),
-@@ -388,6 +464,30 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
+@@ -388,6 +469,30 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
              break;
      }
  
 +    if (maskSource == EMaskSource::PROTOCOL_REGION) {
 +        for (const auto& box : glassBoxes(monitor, rawBox)) {
-+            const CBox shape = transformedLayerBox(box, monitor);
++            const CBox shape = transformedLayerBox(box, monitor, false);
 +            maskInfo.shapes[maskInfo.shapeCount++] = {static_cast<float>(shape.x - transformBox.x), static_cast<float>(shape.y - transformBox.y),
 +                                                      static_cast<float>(shape.w), static_cast<float>(shape.h)};
 +        }
