@@ -25,7 +25,9 @@ opens a pull request only when every check passes.
 
 `nixpkgs`, `home-manager`, `catppuccin` and `nixpkgs-darwin` all follow
 branches for the same NixOS release. To change release, move all four to the new
-release's branches in one commit.
+release's branches in one commit. A new release can also break the hy3dgen and
+Eisvogel pins in [Pins outside `flake.lock`](#pins-outside-flakelock), which
+depend on its Python and TeX Live.
 
 `nixpkgs-unstable` doesn't follow the release. It supplies `pkgs.unstable` for
 the few packages that need something newer.
@@ -157,9 +159,13 @@ Treat a bump as a hardware change and test it on the device.
   The build patches hardcoded paths in `app.asar` and fails if one is gone;
   find where the new release looks instead.
 - **Orca.** [`pkgs/orca-ade/`](../pkgs/orca-ade) builds one stablyai/orca
-  release tag from source against `pkgs.unstable`'s Electron 43 and pnpm 11.
-  To move it, change `version`, then refresh the source hash and both pnpm
-  dependency hashes (the root and `mobile/` lockfiles). Rebase
+  release tag from source against `pkgs.unstable`'s Electron 43, Node 24 and
+  pnpm 11. To move it, change `version`, then refresh the source hash and both
+  pnpm dependency hashes (the root and `mobile/` lockfiles). Keep `electron_43`
+  and `nodejs_24` on the majors the release's `package.json` names in
+  `electron` and `engines.node`. Its `packageManager` is pnpm 12, which
+  `nixpkgs-unstable` doesn't have yet, so `pnpm_11` builds it until `pnpm_12`
+  lands. Rebase
   [`claude-hooks.patch`](../pkgs/orca-ade/claude-hooks.patch): it keeps Orca out
   of the read-only `~/.claude/settings.json` by writing its hooks to
   `~/.orca/agent-hooks/claude-settings.json` and passing that file with
@@ -173,6 +179,23 @@ Treat a bump as a hardware change and test it on the device.
     `installed`;
   - check that `~/.claude/settings.json` is unchanged and that a plain
     `claude` outside Orca has no Orca hooks.
+- **Eisvogel.** [`pkgs/markdown-to-pdf/`](../pkgs/markdown-to-pdf) typesets
+  with the Eisvogel LaTeX template at `v3.4.0`. Eisvogel 3.5.0 moved from the
+  `sourcesanspro` TeX Live package to `sourcesans`, which nixpkgs doesn't
+  package yet. Once the release's `texlive` has `sourcesans`, move `rev` to the
+  newest Eisvogel tag and refresh its hash. Then run `markdown-to-pdf` on a file
+  with a code block, a table and a Mermaid diagram, and check the PDF's fonts
+  and layout.
+- **hy3dgen.** [`pkgs/hy3dgen/`](../pkgs/hy3dgen) builds one Hunyuan3D-2 commit
+  for the agent sandbox. Its xatlas dependency is a prebuilt wheel, because the
+  sdist needs a git submodule, and the wheel is `cp313`: it only loads while
+  the release's `python3` is 3.13. When a release moves `python3`, replace the
+  wheel's URL and hash with the matching `cp3xx` manylinux x86_64 wheel from
+  `https://pypi.org/pypi/xatlas/json`, taking a newer xatlas if 0.0.11 has none.
+  To move Hunyuan3D-2, change `rev`, refresh its hash and check that the
+  `postPatch` that lets diffusers load its local pipeline still applies. Either
+  way, build `hy3dgen`: its import checks load xatlas and the compiled
+  extensions.
 
 ## Darwin
 

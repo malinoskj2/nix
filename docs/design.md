@@ -50,9 +50,9 @@ Noctalia plugins take the palette through `nix.palette` and a
 
 Bar icons are white at 70% (`#ffffffb3`).
 
-The GTK file chooser and Firefox use **mauve** as their accent. That is the one
-known split from the peach used by the shell; keep new shell components on
-peach.
+The GTK file chooser, Dolphin and Firefox use **mauve** as their accent. That
+is the one known split from the peach used by the shell; keep new shell
+components on peach.
 
 ## Type
 
@@ -172,17 +172,23 @@ Hyprland springs, defined in `hyprland.lua`:
 
 ## Bar and windows
 
-- The bar is on DP-2 only, 32 px. Left to right: the control button (a
-  snowflake glass pill), the workspace pills, the active window title in the
-  center, then media, volume and network (10 px apart), a `✦` separator and
-  the clock.
+- The bar is on DP-2 only, 32 px. Left to right: the workspace pills, the
+  active window title in the center, then media, volume and network (10 px
+  apart), a `✦` separator and the clock.
+- The control button, a snowflake glass pill, isn't a bar widget. It's the
+  `jesse/control-button` Noctalia desktop widget, placed over the bar's left
+  end, and the bar's glass matches it.
 - Bar icons have no tooltips when their menu shows the same information
   (`show_tooltip = false`, from a Noctalia patch).
 - Windows have radius 10 and a 2 px peach-to-sky border. Apps that draw their
-  own chrome (Firefox, Zed, Claude, Alacritty, DataGrip, Dolphin) have no
+  own chrome (Firefox, Zed, Claude, DataGrip, Dolphin) and Alacritty have no
   border. Hyprbars is only a thin drag strip on Alacritty.
-- Icons are the Couture theme (Catppuccin Papirus folders with one accent per
-  place). The cursor is OpenZone White Slim at 24.
+- Icons are Catppuccin Mocha Papirus, built two ways. The GTK file chooser
+  uses Couture: blue folders, with one accent per place and a gray trash in
+  its list and sidebar. Dolphin uses Papirus-Dark-Catppuccin: peach folders,
+  with mimetype icons recolored to the palette by
+  `users/jesse/dolphin/papirus-catppuccin.py`.
+- The cursor is OpenZone White Slim at 24.
 
 ## New components
 
