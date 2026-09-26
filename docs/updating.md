@@ -138,8 +138,8 @@ Treat a bump as a hardware change and test it on the device.
   [`overlays/patches/noctalia/`](../overlays/patches/noctalia) against the new
   source, then:
   - click the clock (the calendar should open centered under it);
-  - click the volume icon (the sound menu should open centered under it, with
-    a thin peach slider);
+  - hover the volume icon (no tooltip should appear), then click it (the sound
+    menu should open centered under it, with a thin peach slider);
   - hover the network icon (no tooltip should appear), then click it (the
     network menu should scale in at its final size, then grow when Other
     Networks expands);

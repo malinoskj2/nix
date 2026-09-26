@@ -143,9 +143,11 @@ font_scale  = 1.42
 color       = "secondary"
 icon_color  = "secondary"
 
+# The sound menu shows what the tooltip would.
 [widget.volume]
-show_label = false
-color      = "#ffffffb3"
+show_label   = false
+show_tooltip = false
+color        = "#ffffffb3"
 
     [widget.volume.actions]
     left = "panel-toggle jesse/sound:sound"
