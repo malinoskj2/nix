@@ -46,6 +46,19 @@ for dir in "${shared[@]}"; do
 done
 mkdir -p "$screenshots"
 
+# Keys for serving SSH sessions from the container (agent-sandbox-ssh). Only the
+# host key and the client's public key go into the container.
+ssh_dir=$data/ssh
+mkdir -p "$ssh_dir"
+chmod 700 "$ssh_dir"
+for key in host client; do
+  if [[ ! -f $ssh_dir/${key}_ed25519 ]]; then
+    ssh-keygen -q -t ed25519 -N '' -C "agent-sandbox-$key" -f "$ssh_dir/${key}_ed25519"
+  fi
+done
+cp "$ssh_dir/client_ed25519.pub" "$ssh_dir/authorized_keys"
+printf 'agent-sandbox %s\n' "$(<"$ssh_dir/host_ed25519.pub")" >"$ssh_dir/known_hosts"
+
 printf 'root:x:0:0::/root:/bin/sh\n%s:x:%s:%s::%s:/bin/bash\n' "$user" "$uid" "$gid" "$HOME" >"$data/passwd"
 printf 'root:x:0:\n%s:x:%s:%s\n' "$group" "$gid" "$user" >"$data/group"
 
@@ -74,7 +87,7 @@ hyprland_vnc_port=$(free_port $((vnc_port + 1)))
 args=(
   --rm
   --init
-  --name "agent-sandbox-$(basename "$workdir")-$$"
+  --name "${AGENT_SANDBOX_NAME:-agent-sandbox-$(basename "$workdir")-$$}"
   --hostname agent-sandbox
   --user "$uid:$gid"
   --cap-drop ALL
@@ -115,6 +128,8 @@ for dir in "${shared[@]}"; do
 done
 args+=(--volume "$screenshots:$screenshots:ro")
 args+=(--volume "$clipboard_dir:/run/host-clipboard:ro")
+args+=(--volume "$ssh_dir/host_ed25519:/run/agent-sandbox-ssh/host_ed25519:ro")
+args+=(--volume "$ssh_dir/authorized_keys:/run/agent-sandbox-ssh/authorized_keys:ro")
 
 if [[ -d $HOME/.config/git ]]; then
   args+=(--volume "$HOME/.config/git:$HOME/.config/git:ro")
@@ -132,7 +147,7 @@ for name in CLAUDE.md settings.json skills hooks agents commands output-styles p
   args+=(--volume "$src:$HOME/.claude/$name:ro")
 done
 
-for name in tasks tasks-archive; do
+for name in tasks tasks-archive projects; do
   mkdir -p "$HOME/.claude/$name" "$sandbox_home/.claude/$name"
   args+=(--volume "$HOME/.claude/$name:$HOME/.claude/$name")
 done
@@ -180,5 +195,11 @@ echo "agent-sandbox: VNC on 127.0.0.1:$vnc_port, nested Hyprland on 127.0.0.1:$h
 if [[ $agent == codex ]]; then
   set -- codex --dangerously-bypass-approvals-and-sandbox "$@"
 fi
-systemd-inhibit --what=idle --who=agent-sandbox --why="agent sandbox running" \
+# A named sandbox is the long-lived SSH host that agent-sandbox@.service runs;
+# inhibiting idle for its lifetime would keep the machine awake indefinitely.
+if [[ -n ${AGENT_SANDBOX_NAME:-} ]]; then
   docker run "${args[@]}" "$image_ref" "$@"
+else
+  systemd-inhibit --what=idle --who=agent-sandbox --why="agent sandbox running" \
+    docker run "${args[@]}" "$image_ref" "$@"
+fi

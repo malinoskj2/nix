@@ -3,6 +3,35 @@
 log_dir=$XDG_RUNTIME_DIR/logs
 mkdir -p "$log_dir"
 
+# sshd starts sessions with a bare environment, so hand them this one. sshd
+# honours only the first SetEnv line, so every variable goes on one.
+write_sshd_config() {
+  local config=$XDG_RUNTIME_DIR/sshd_config
+  local entry name value setenv=SetEnv
+  while IFS= read -r -d '' entry; do
+    name=${entry%%=*}
+    case $name in
+      HOME | USER | LOGNAME | SHELL | TERM | COLORTERM | PWD | OLDPWD | SHLVL | HOSTNAME | _) continue ;;
+    esac
+    value=${entry#*=}
+    value=${value//\\/\\\\}
+    value=${value//\"/\\\"}
+    setenv+=" \"$name=$value\""
+  done < <(env -0)
+  cat >"$config.tmp" <<EOF
+HostKey /run/agent-sandbox-ssh/host_ed25519
+AuthorizedKeysFile /run/agent-sandbox-ssh/authorized_keys
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+UsePAM no
+PidFile none
+LogLevel ERROR
+Subsystem sftp internal-sftp
+$setenv
+EOF
+  mv "$config.tmp" "$config"
+}
+
 dbus-daemon --config-file="$DBUS_SESSION_BUS_CONFIG" --address="$DBUS_SESSION_BUS_ADDRESS" --fork --nopidfile
 
 start_sway() {
@@ -82,5 +111,8 @@ else
   wayvnc --log-level=warning 0.0.0.0 5900 >"$log_dir/wayvnc.log" 2>&1 &
   start_nested_hyprland "$renderer" || echo "agent-sandbox: nested sway failed to start; see $log_dir" >&2
 fi
+
+# Written last so that SSH sessions, which wait for it, find the display up.
+write_sshd_config
 
 exec "$@"
