@@ -148,11 +148,11 @@
         "sops-nix": "sops-nix"
       },
       "locked": {
-        "lastModified": 1790455078,
-        "narHash": "sha256-85+PYdmvQPqq+NF+DdL+g0ucKC1ivXLadki/wCz0z88=",
+        "lastModified": 1790455885,
+        "narHash": "sha256-uFzcTgVs58TDZMy143YQ+Pf0Pi9zsvAGqn5R6arM5uQ=",
         "ref": "refs/heads/main",
-        "rev": "dc29d96c44f6c36f76955273903ac817d410a9da",
-        "revCount": 8,
+        "rev": "f6d94d5ded88343d9af95e799a4f1e2fb6f25fa9",
+        "revCount": 11,
         "type": "git",
         "url": "ssh://git@github.com/malinoskj2/media-stack"
       },
