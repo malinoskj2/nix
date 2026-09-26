@@ -48,7 +48,3 @@ All sandboxes share a 20G memory limit; past it the kernel kills the largest pro
 
 - When a task finishes, delete the target dirs, worktrees, venvs, databases and other scratch you created for it. Leave only what the human needs to keep working.
 - Before finishing, check what you added with `du -sh` and report anything over a few GB that you kept.
-
-<!-- br (beads_rust, the issue tracker) was here; dropped in favor of native Claude tasks. `\`br\` (beads_rust, the issue tracker), ` used to prefix this line. -->
-<!-- use \`br\` if native tasks not available -->
-
