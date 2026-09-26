@@ -121,6 +121,7 @@
           "hyprglass"
           "hyprsheet"
           "markdown-to-pdf"
+          "orca-ade"
           "pubip"
           "wallpaper-autopause"
           "wallpaper-randomize"
