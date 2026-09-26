@@ -301,6 +301,7 @@ background_opacity = 0.55
 border             = false
 offset_x           = 16
 offset_y           = 15
+monitors           = ["DP-2"]
 
 [idle]
 behavior_order = ["lock", "screen_off", "suspend"]
