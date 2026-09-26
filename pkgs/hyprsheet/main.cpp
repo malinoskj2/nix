@@ -63,7 +63,8 @@ struct SPendingChooser {
 
 // An open chooser and the window drawn scaled into it. `progress` runs from 0, the parent in its own
 // box, to 1, the parent inside `into`, the chooser's box. While it opens and closes, both windows are
-// drawn in the same box between the two, the parent fading out as the chooser fades in.
+// drawn in the same box between the two, the parent fading out as the chooser fades in. In between,
+// the parent is hidden.
 struct SSheet {
     PHLWINDOWREF        chooser;
     PHLWINDOWREF        parent;
@@ -72,6 +73,7 @@ struct SSheet {
     CSheetTransformer*  parentTransformer  = nullptr;
     CSheetTransformer*  chooserTransformer = nullptr;
     bool                closing            = false;
+    bool                parentHidden       = false;
     std::optional<bool> savedNoBlur;
 };
 
@@ -145,11 +147,16 @@ class CSheetTransformer : public Render::IWindowTransformer {
         const auto TO        = lerpBox(currentBox(PARENT), m_sheet->into, PROGRESS).translate(OFFSET).scale(MONITOR->m_scale);
         const auto SCALE     = Vector2D{TO.w / FROM.w, TO.h / FROM.h};
 
+        // Hyprland renders the window into `in` only within its full bounding box, so nothing outside
+        // that box's scaled copy needs drawing. `out` is a reused buffer, so all of it is cleared.
+        const auto BOUNDS = WINDOW->getFullWindowBoundingBox().translate(OFFSET).scale(MONITOR->m_scale).round().expand(2);
+        const auto DRAWN  = CBox{TO.x + (BOUNDS.x - FROM.x) * SCALE.x, TO.y + (BOUNDS.y - FROM.y) * SCALE.y, BOUNDS.w * SCALE.x, BOUNDS.h * SCALE.y}.expand(2).round();
+
         CTexPassElement::SRenderData data;
         data.tex = in->getTexture();
         data.box = {TO.x - FROM.x * SCALE.x, TO.y - FROM.y * SCALE.y, MONITOR->m_transformedSize.x * SCALE.x, MONITOR->m_transformedSize.y * SCALE.y};
         data.a   = ALPHA;
-        g_pHyprRenderer->draw(data, FULL);
+        g_pHyprRenderer->draw(data, CRegion{DRAWN}.intersect(FULL));
 
         return OUT;
     }
@@ -172,6 +179,29 @@ static void detach(const PHLWINDOWREF& w, CSheetTransformer*& slot) {
     slot = nullptr;
 }
 
+// Hyprland skips a window at alpha 0 entirely: it isn't drawn, and its surfaces get no frame callbacks,
+// so a busy parent stops drawing too. Of the alphas always part of the drawn one, only the
+// move-from-workspace alpha is left alone while the window stays mapped on one workspace; groups and
+// monocle layouts set the layout alpha themselves.
+static void hideParent(SSheet* sheet) {
+    const auto PARENT = sheet->parent.lock();
+    if (!PARENT || sheet->parentHidden)
+        return;
+
+    detach(sheet->parent, sheet->parentTransformer);
+    PARENT->alpha(Desktop::View::WINDOW_ALPHA_MOVE_FROM_WORKSPACE)->setValueAndWarp(0.F);
+    sheet->parentHidden = true;
+}
+
+static void showParent(SSheet* sheet) {
+    if (!sheet->parentHidden)
+        return;
+
+    sheet->parentHidden = false;
+    if (const auto PARENT = sheet->parent.lock())
+        PARENT->alpha(Desktop::View::WINDOW_ALPHA_MOVE_FROM_WORKSPACE)->setValueAndWarp(1.F);
+}
+
 static void damageSheet(SSheet* sheet) {
     if (const auto PARENT = sheet->parent.lock())
         g_pHyprRenderer->damageWindow(PARENT, true);
@@ -183,6 +213,7 @@ static void removeSheet(SSheet* sheet) {
     damageSheet(sheet);
     detach(sheet->chooser, sheet->chooserTransformer);
     detach(sheet->parent, sheet->parentTransformer);
+    showParent(sheet);
 
     if (const auto PARENT = sheet->parent.lock()) {
         auto& noBlur = PARENT->m_ruleApplicator->noBlur();
@@ -195,8 +226,9 @@ static void removeSheet(SSheet* sheet) {
     std::erase_if(sheets, [sheet](const auto& s) { return s.get() == sheet; });
 }
 
-// Once the chooser has opened it draws itself again; once it has closed the sheet is done. Animation
-// callbacks can't free the variable that runs them, so this waits for the event loop.
+// Once the chooser has opened it draws itself again and the parent is hidden; once it has closed the
+// sheet is done. Animation callbacks can't free the variable that runs them, so this waits for the
+// event loop.
 static void onProgressEnd(SSheet* sheet) {
     g_pEventLoopManager->doLater([sheet] {
         if (!alive(sheet))
@@ -207,6 +239,7 @@ static void onProgressEnd(SSheet* sheet) {
         else {
             damageSheet(sheet);
             detach(sheet->chooser, sheet->chooserTransformer);
+            hideParent(sheet);
         }
     });
 }
@@ -349,8 +382,8 @@ static void onWindowOpenLate(PHLWINDOW w) {
 
 static void onWindowClose(PHLWINDOW w) {
     if (auto* sheet = sheetFor(w, true)) {
-        // Hyprland snapshots the parent after this, still through its transformer, so a hidden parent
-        // also closes hidden.
+        // Hyprland snapshots the parent after this, still hidden or through its transformer, so a
+        // hidden parent also closes hidden.
         sheet->closing = true;
         onProgressEnd(sheet);
         return;
@@ -361,6 +394,12 @@ static void onWindowClose(PHLWINDOW w) {
         return;
 
     detach(sheet->chooser, sheet->chooserTransformer);
+    if (sheet->parentHidden) {
+        if (const auto PARENT = sheet->parent.lock())
+            attach(sheet, PARENT, sheet->parentTransformer, true);
+        showParent(sheet);
+    }
+
     sheet->closing = true;
     sheet->into    = currentBox(w);
     sheet->progress->setConfig(Config::animationTree()->getAnimationPropertyConfig("hyprsheetOut"));
@@ -398,16 +437,27 @@ static SP<Desktop::CWindowFadeout> hkFadeoutCreate(PHLWINDOW window, SP<Render::
     return fadeout;
 }
 
+// A chooser that is gone without closing would leave its parent hidden.
 static void onWindowDestroy() {
     std::erase_if(pendingChoosers, [](const auto& p) { return !p->chooser; });
 
     std::vector<SSheet*> orphaned;
     for (const auto& s : sheets) {
-        if (!s->parent)
+        if (!s->parent || (!s->chooser && !s->closing))
             orphaned.emplace_back(s.get());
     }
 
     for (auto* sheet : orphaned)
+        removeSheet(sheet);
+}
+
+// Either window leaving the workspace the two share ends the sheet at once.
+static void onWindowMoveToWorkspace(PHLWINDOW w) {
+    auto* sheet = sheetFor(w, true);
+    if (!sheet)
+        sheet = sheetFor(w, false);
+
+    if (sheet)
         removeSheet(sheet);
 }
 
@@ -454,6 +504,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     listeners.emplace_back(Event::bus()->m_events.window.openLate.listen([](PHLWINDOW w) { onWindowOpenLate(w); }));
     listeners.emplace_back(Event::bus()->m_events.window.close.listen([](PHLWINDOW w) { onWindowClose(w); }));
     listeners.emplace_back(Event::bus()->m_events.window.destroy.listen([](PHLWINDOWREF) { onWindowDestroy(); }));
+    listeners.emplace_back(Event::bus()->m_events.window.moveToWorkspace.listen([](PHLWINDOW w, PHLWORKSPACE) { onWindowMoveToWorkspace(w); }));
 
     return {"hyprsheet", "Draws a file chooser's parent scaled into it", "jesse", "1.0"};
 }
