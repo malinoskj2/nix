@@ -51,7 +51,10 @@ Host-only policy, such as media's sudo and `mutableUsers`, stays in the host.
 `media`'s container stack comes from the private `media-stack` input
 (`nixosModules.default`), and `hosts/media` only enables it and passes it the
 host's paths. CI can't read that input, so it builds `media` against the stub
-in `.github/media-stack`, which leaves the stack out.
+in `.github/media-stack`, which leaves the stack out. `media` has no checkout
+of this repository and no `nh`: it's deployed from another host with
+`./deploy` in the media-stack checkout, which evaluates there and builds on
+`media`.
 
 ### Home Manager
 

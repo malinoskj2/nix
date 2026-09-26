@@ -6,7 +6,6 @@
     ../common/global.nix
     ../common/optional/docker.nix
     ../common/optional/fail2ban.nix
-    ../common/optional/nh.nix
     ../common/optional/openssh-hardening.nix
     ../common/optional/server-tools.nix
     ../common/optional/sysctl-hardening.nix
@@ -67,9 +66,6 @@
     ports = [ 2222 ];
     settings.AllowUsers = [ "jesse" ];
   };
-
-  # nix.gc cleans the store on this host instead.
-  programs.nh.clean.enable = false;
 
   environment.systemPackages = with pkgs; [
     curl
