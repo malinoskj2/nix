@@ -1,0 +1,11 @@
+--- a/barDeco.cpp
++++ b/barDeco.cpp
+@@ -445,7 +445,7 @@
+         return;
+ 
+     auto data = CBarPassElement::SBarData{this, a};
+-    g_pHyprRenderer->m_renderPass.add(makeUnique<CBarPassElement>(data));
++    g_pHyprRenderer->addPassElement(makeUnique<CBarPassElement>(data));
+ }
+ 
+ void CHyprBar::renderPass(PHLMONITOR pMonitor, const float& a) {

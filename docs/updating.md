@@ -55,8 +55,10 @@ To upgrade:
    [`overlays/patches/hyprbars/`](../overlays/patches/hyprbars) and
    [`overlays/patches/hyprfocus/`](../overlays/patches/hyprfocus). They hook
    Hyprland internals, so a clean apply isn't enough. Read them against the new
-   source. The hyprbars patch drops the plugin's event listeners when it
-   unloads, so check that upstream hasn't added a listener it misses.
+   source. One hyprbars patch drops the plugin's event listeners when it
+   unloads, so check that upstream hasn't added a listener it misses. The
+   other adds the bar through the renderer's current pass, so a window
+   transformer scales and fades it with its window.
 3. Move hyprglass to the release that its `hyprpm.toml` pairs with the new
    Hyprland, and rebase
    [`layer-shape.patch`](../pkgs/hyprglass/layer-shape.patch) onto it. hyprglass
@@ -69,13 +71,19 @@ To upgrade:
 4. Read [`pkgs/hyprsheet/main.cpp`](../pkgs/hyprsheet/main.cpp) against the
    new source. It uses Hyprland's private window transformers, xdg-foreign
    parents, window fadeouts and layout moves, hooks `CWindowFadeout::create`,
-   and hides the parent through its move-from-workspace alpha, so a clean
-   build isn't enough. Check that Hyprland still skips drawing a window at
-   alpha 0 and sends it no frame callbacks, and still sets that alpha only when
-   a window maps, unmaps or changes workspace. Open a file chooser from
-   Firefox and check that Firefox shrinks into the chooser and fades out as it
-   opens, and grows back out of it as it closes, without Firefox re-laying out
-   its page.
+   hides the parent through its move-from-workspace alpha, and relies on
+   Hyprland passing a transformed window's blur matte through its
+   transformers, so a clean build isn't enough. Check that Hyprland still
+   skips drawing a window at alpha 0 and sends it no frame callbacks, and still
+   sets that alpha only when a window maps, unmaps or changes workspace. Open a
+   file chooser from Firefox and check that Firefox shrinks into the chooser
+   and fades out as it opens, and grows back out of it as it closes, without
+   Firefox re-laying out its page. Its translucent toolbar should keep its blur
+   as it fades, not lose it on the first frame, the wallpaper shouldn't flash
+   through either way, and the snowflake widget in the top-left corner should
+   stay whole. Once the chooser has come to rest its text and glass shouldn't
+   change or shimmer. Do the same from Alacritty: its title bar should shrink
+   with it, not stay behind until the chooser has opened.
 5. Rebase
    [`aquamarine-nested.patch`](../pkgs/agent-sandbox/aquamarine-nested.patch)
    onto that commit's Aquamarine, then start a sandbox and check that

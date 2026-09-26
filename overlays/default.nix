@@ -84,7 +84,10 @@ in
     {
       inherit firefox hyprland xdg-desktop-portal-hyprland;
       hyprlandPlugins = hyprlandPlugins // {
-        hyprbars = patchPlugin "hyprbars" [ ./patches/hyprbars/unload-listeners.patch ];
+        hyprbars = patchPlugin "hyprbars" [
+          ./patches/hyprbars/transformed-pass.patch
+          ./patches/hyprbars/unload-listeners.patch
+        ];
         hyprfocus = patchPlugin "hyprfocus" [
           ./patches/hyprfocus/class-filter.patch
           ./patches/hyprfocus/combined-modes.patch

@@ -7,6 +7,7 @@
 #include <regex>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <hyprland/src/includes.hpp>
@@ -30,8 +31,8 @@
 #include <hyprland/src/output/Monitor.hpp>
 #include <hyprland/src/output/MonitorResources.hpp>
 #include <hyprland/src/protocols/XDGShell.hpp>
+#include <hyprland/src/render/OpenGL.hpp>
 #include <hyprland/src/render/Renderer.hpp>
-#include <hyprland/src/render/pass/ClearPassElement.hpp>
 #include <hyprland/src/render/pass/TexPassElement.hpp>
 #include <hyprland/src/render/transformer/Transformer.hpp>
 #undef protected
@@ -63,18 +64,22 @@ struct SPendingChooser {
 
 // An open chooser and the window drawn scaled into it. `progress` runs from 0, the parent in its own
 // box, to 1, the parent inside `into`, the chooser's box. While it opens and closes, both windows are
-// drawn in the same box between the two, the parent fading out as the chooser fades in. In between,
-// the parent is hidden.
+// drawn in the same box between the two, crossfading. In between, the parent is hidden and the
+// chooser is still drawn through its transformer, at its own size: Hyprland blurs a transformed
+// window differently, so handing the chooser back would change its glass the moment it came to rest.
 struct SSheet {
-    PHLWINDOWREF        chooser;
-    PHLWINDOWREF        parent;
-    CBox                into;
-    PHLANIMVAR<float>   progress;
-    CSheetTransformer*  parentTransformer  = nullptr;
-    CSheetTransformer*  chooserTransformer = nullptr;
-    bool                closing            = false;
-    bool                parentHidden       = false;
-    std::optional<bool> savedNoBlur;
+    PHLWINDOWREF                chooser;
+    PHLWINDOWREF                parent;
+    CBox                        into;
+    PHLANIMVAR<float>           progress;
+    CSheetTransformer*          parentTransformer  = nullptr;
+    CSheetTransformer*          chooserTransformer = nullptr;
+    WP<Desktop::CWindowFadeout> chooserFadeout;
+    bool                        closing      = false;
+    bool                        parentHidden = false;
+    bool                        settling     = false;
+    bool                        opened       = false;
+    float                       lastProgress = 0.F;
 };
 
 static std::vector<UP<SPendingChooser>> pendingChoosers;
@@ -106,8 +111,28 @@ static CBox lerpBox(const CBox& a, const CBox& b, float t) {
     return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.w + (b.w - a.w) * t, a.h + (b.h - a.h) * t};
 }
 
+// The window a sheet is heading for fades in over the first stretch of the way, and the one it's
+// leaving fades out under it over the next, so what's behind them never shows through both at once
+// and the fading is done well before the spring settles.
+constexpr float FADE_SPAN = 0.35F;
+
+static float incomingAlpha(float travelled) {
+    return std::clamp(travelled / FADE_SPAN, 0.F, 1.F);
+}
+
+static float outgoingAlpha(float travelled) {
+    return std::clamp(2.F - travelled / FADE_SPAN, 0.F, 1.F);
+}
+
 static CBox currentBox(const PHLWINDOW& w) {
     return {w->position(IGeometric::GEOMETRIC_CURRENT), w->size(IGeometric::GEOMETRIC_CURRENT)};
+}
+
+// Where the parent is drawn once the sheet has opened: the chooser as it is now, in case it has
+// moved or resized since it mapped, or where it was when it closed.
+static CBox targetBox(const SSheet* sheet) {
+    const auto CHOOSER = sheet->chooser.lock();
+    return CHOOSER && !sheet->closing ? currentBox(CHOOSER) : sheet->into;
 }
 
 // Draws a window's already rendered frame again, scaled from its own box into the sheet's current box
@@ -134,18 +159,30 @@ class CSheetTransformer : public Render::IWindowTransformer {
 
         const auto    GUARD = g_pHyprRenderer->bindTempFB(OUT);
         const CRegion FULL  = CBox{Vector2D{}, MONITOR->m_transformedSize};
-        g_pHyprRenderer->draw(CClearPassElement::SClearData{CHyprColor(0, 0, 0, 0)}, FULL);
+        // The renderer's clear element doesn't reliably clear this buffer, and using it here cuts part
+        // of a blurred bottom layer, such as a desktop widget, out of the frame.
+        Render::GL::g_pHyprOpenGL->setCapStatus(GL_SCISSOR_TEST, false);
+        glClearColor(0.F, 0.F, 0.F, 0.F);
+        glClear(GL_COLOR_BUFFER_BIT);
 
-        const float PROGRESS = m_sheet->progress->value();
-        const float ALPHA    = std::clamp(m_isParent ? 1.F - PROGRESS : PROGRESS, 0.F, 1.F);
+        const float PROGRESS  = m_sheet->progress->value();
+        const float TRAVELLED = m_sheet->closing ? 1.F - PROGRESS : PROGRESS;
+        const float ALPHA     = m_isParent == m_sheet->closing ? incomingAlpha(TRAVELLED) : outgoingAlpha(TRAVELLED);
         if (ALPHA <= 0.F)
             return OUT;
 
         const auto WORKSPACE = WINDOW->m_workspace;
         const auto OFFSET    = (WINDOW->m_pinned || !WORKSPACE ? Vector2D{} : WORKSPACE->m_renderOffset->value()) + WINDOW->m_floatingOffset - MONITOR->m_position;
         const auto FROM      = OWN.copy().translate(OFFSET).scale(MONITOR->m_scale);
-        const auto TO        = lerpBox(currentBox(PARENT), m_sheet->into, PROGRESS).translate(OFFSET).scale(MONITOR->m_scale);
-        const auto SCALE     = Vector2D{TO.w / FROM.w, TO.h / FROM.h};
+        auto       to        = m_sheet->opened && !m_sheet->closing ? FROM : lerpBox(currentBox(PARENT), targetBox(m_sheet), PROGRESS).translate(OFFSET).scale(MONITOR->m_scale);
+
+        // Within two pixels of the window's own size it's drawn at that size on whole pixels, so it isn't
+        // resampled as it comes to rest and looks the same once the sheet ends.
+        if (std::abs(to.w - FROM.w) < 2.0 && std::abs(to.h - FROM.h) < 2.0)
+            to = {FROM.x + std::round(to.x - FROM.x), FROM.y + std::round(to.y - FROM.y), FROM.w, FROM.h};
+
+        const auto TO    = to;
+        const auto SCALE = Vector2D{TO.w / FROM.w, TO.h / FROM.h};
 
         // Hyprland renders the window into `in` only within its full bounding box, so nothing outside
         // that box's scaled copy needs drawing. `out` is a reused buffer, so all of it is cleared.
@@ -209,26 +246,70 @@ static void damageSheet(SSheet* sheet) {
     g_pHyprRenderer->damageBox(sheet->into.copy().expand(4));
 }
 
+// A spring spends its last stretch moving the scaled windows by fractions of a pixel, which only
+// makes their text and the blur's grain shimmer. Once the box is within half a pixel of where it's
+// going and moving less than that a frame, the sheet ends there and the windows draw themselves.
+static void settleIfStill(SSheet* sheet, float progress) {
+    const auto  PARENT  = sheet->parent.lock();
+    const auto  MONITOR = PARENT ? PARENT->m_monitor.lock() : nullptr;
+    const float LAST    = std::exchange(sheet->lastProgress, progress);
+    if (!MONITOR || sheet->settling)
+        return;
+
+    const auto   FROM   = currentBox(PARENT);
+    const auto&  TO     = sheet->into;
+    const double TRAVEL = MONITOR->m_scale *
+        std::max({std::abs(TO.x - FROM.x), std::abs(TO.y - FROM.y), std::abs(TO.x + TO.w - FROM.x - FROM.w), std::abs(TO.y + TO.h - FROM.y - FROM.h)});
+    const float  GOAL   = sheet->closing ? 0.F : 1.F;
+    if (std::abs(GOAL - progress) * TRAVEL >= 0.5 || std::abs(progress - LAST) * TRAVEL >= 0.5)
+        return;
+
+    // Warping a variable from inside its own update callback isn't safe, so this waits for the event loop.
+    sheet->settling = true;
+    g_pEventLoopManager->doLater([sheet] {
+        if (!alive(sheet))
+            return;
+
+        sheet->settling = false;
+        if (sheet->progress->isBeingAnimated())
+            sheet->progress->warp();
+    });
+}
+
+// The closing chooser's snapshot follows the sheet's progress rather than its own fade, so it stays
+// opaque until the parent has faded back in under it.
+static void onProgressUpdate(SSheet* sheet) {
+    const float PROGRESS = sheet->progress->value();
+    if (const auto FADEOUT = sheet->chooserFadeout.lock())
+        FADEOUT->m_alpha->setValueAndWarp(outgoingAlpha(1.F - PROGRESS));
+
+    damageSheet(sheet);
+    settleIfStill(sheet, PROGRESS);
+
+    // Once the parent has faded out it's hidden straight away, while the chooser is still moving, so
+    // the chooser doesn't change under it after it has come to rest.
+    if (!sheet->closing && !sheet->parentHidden && outgoingAlpha(PROGRESS) <= 0.F)
+        g_pEventLoopManager->doLater([sheet] {
+            if (alive(sheet) && !sheet->closing)
+                hideParent(sheet);
+        });
+}
+
 static void removeSheet(SSheet* sheet) {
+    // A snapshot left at rest above 0 would never finish.
+    if (const auto FADEOUT = sheet->chooserFadeout.lock())
+        *FADEOUT->m_alpha = 0.F;
+
     damageSheet(sheet);
     detach(sheet->chooser, sheet->chooserTransformer);
     detach(sheet->parent, sheet->parentTransformer);
     showParent(sheet);
 
-    if (const auto PARENT = sheet->parent.lock()) {
-        auto& noBlur = PARENT->m_ruleApplicator->noBlur();
-        if (sheet->savedNoBlur)
-            noBlur.set(*sheet->savedNoBlur, Desktop::Types::PRIORITY_SET_PROP);
-        else
-            noBlur.unset(Desktop::Types::PRIORITY_SET_PROP);
-    }
-
     std::erase_if(sheets, [sheet](const auto& s) { return s.get() == sheet; });
 }
 
-// Once the chooser has opened it draws itself again and the parent is hidden; once it has closed the
-// sheet is done. Animation callbacks can't free the variable that runs them, so this waits for the
-// event loop.
+// Once the chooser has opened the parent is hidden; once it has closed the sheet is done. Animation
+// callbacks can't free the variable that runs them, so this waits for the event loop.
 static void onProgressEnd(SSheet* sheet) {
     g_pEventLoopManager->doLater([sheet] {
         if (!alive(sheet))
@@ -237,8 +318,8 @@ static void onProgressEnd(SSheet* sheet) {
         if (sheet->closing)
             removeSheet(sheet);
         else {
+            sheet->opened = true;
             damageSheet(sheet);
-            detach(sheet->chooser, sheet->chooserTransformer);
             hideParent(sheet);
         }
     });
@@ -359,13 +440,7 @@ static void onWindowOpenLate(PHLWINDOW w) {
     sheet->into    = {w->position(IGeometric::GEOMETRIC_GOAL), w->size(IGeometric::GEOMETRIC_GOAL)};
 
     Animation::mgr()->createAnimation(0.F, sheet->progress, Config::animationTree()->getAnimationPropertyConfig("hyprsheetIn"), AVARDAMAGE_NONE);
-    sheet->progress->setUpdateCallback([raw](auto) { damageSheet(raw); });
-
-    // Hyprland draws a translucent window's blur at full strength whatever its alpha, so the fading
-    // parent's blur would stay behind it.
-    auto& noBlur       = PARENT->m_ruleApplicator->noBlur();
-    sheet->savedNoBlur = noBlur.m_values[Desktop::Types::PRIORITY_SET_PROP];
-    noBlur.set(true, Desktop::Types::PRIORITY_SET_PROP);
+    sheet->progress->setUpdateCallback([raw](auto) { onProgressUpdate(raw); });
 
     attach(raw, PARENT, sheet->parentTransformer, true);
     attach(raw, w, sheet->chooserTransformer, false);
@@ -400,8 +475,9 @@ static void onWindowClose(PHLWINDOW w) {
         showParent(sheet);
     }
 
-    sheet->closing = true;
-    sheet->into    = currentBox(w);
+    sheet->closing      = true;
+    sheet->lastProgress = sheet->progress->value();
+    sheet->into         = currentBox(w);
     sheet->progress->setConfig(Config::animationTree()->getAnimationPropertyConfig("hyprsheetOut"));
     *sheet->progress = 0.F;
 }
@@ -409,11 +485,11 @@ static void onWindowClose(PHLWINDOW w) {
 typedef SP<Desktop::CWindowFadeout> (*origFadeoutCreate)(PHLWINDOW, SP<Render::IFramebuffer>, float);
 
 // The closing chooser's snapshot grows back out into the parent's box on the curve the parent grows
-// back on, and fades out as the parent fades in.
+// back on.
 static SP<Desktop::CWindowFadeout> hkFadeoutCreate(PHLWINDOW window, SP<Render::IFramebuffer> snapshot, float sourceAlpha) {
     auto fadeout = ((origFadeoutCreate)fadeoutCreateHook->m_original)(window, snapshot, sourceAlpha);
 
-    const auto* SHEET = window ? sheetFor(window, false) : nullptr;
+    auto* SHEET = window ? sheetFor(window, false) : nullptr;
     if (!fadeout || !SHEET || !SHEET->closing)
         return fadeout;
 
@@ -432,7 +508,8 @@ static SP<Desktop::CWindowFadeout> hkFadeoutCreate(PHLWINDOW window, SP<Render::
 
     retarget(fadeout->m_realPosition, TO.pos());
     retarget(fadeout->m_realSize, TO.size());
-    retarget(fadeout->m_alpha, 0.F);
+    fadeout->m_alpha->setValueAndWarp(outgoingAlpha(1.F - SHEET->progress->value()));
+    SHEET->chooserFadeout = fadeout;
 
     return fadeout;
 }
