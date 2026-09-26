@@ -35,14 +35,15 @@ Noctalia plugins take the palette through `nix.palette` and a
 
 | Role | Color | Where |
 |---|---|---|
-| Accent | peach | Panel titles, the calendar month, today, the status dot, slider fill, the selected output circle |
+| Accent | peach | Panel titles, the calendar month, today, the status dot, slider fill, the selected output circle, primary buttons (85% hovered) |
 | On accent | crust | Text and glyphs on peach |
 | Text | text | Values, names, dates |
 | Secondary | subtext1 | Status lines, calendar weekday dates |
 | Key | sky at 65% | Section headers ("Details", "Output"), the names beside values, calendar weekends |
-| Tertiary | overlay1 | Empty states, muted dot |
+| Tertiary | overlay1 | Empty states, muted dot, shortcuts, footers |
 | Separator | text at 10–12% | 1px rules |
-| Hover | text at 10% | Row highlights |
+| Hover | text at 10% | Row highlights, which keep their ink |
+| Button | text at 14% (22% hovered) | Secondary buttons, such as Cancel and More Info… |
 | Icon circle | text at 14–16% | Unselected device and network circles |
 | Field | crust at 35% | Text inputs |
 | Error | red | Failures |
@@ -59,8 +60,8 @@ The San Francisco family only.
 
 | Font | Use |
 |---|---|
-| SF Pro Text | Menu text: 13 px rows, 11 px detail rows, 10.25 px in the calendar |
-| SF Pro Display | The bar (weight 600 for the clock and window title), the system menu (14.5 px), large titles |
+| SF Pro Text | Menu text: 13 px rows and buttons, 11 px detail rows, 10.25 px in the calendar |
+| SF Pro Display | The bar (weight 600 for the clock and window title), large titles (About This Computer's, 22 px) |
 | SF Pro Rounded, semibold | Striped status text (14.5 px) |
 | SF Symbols | Glyphs from SF Pro's private use area, each sized to Apple's ink |
 
@@ -85,24 +86,42 @@ imitate (the calendar's month is "September", bold, like "Network").
 ## Menus
 
 Bar widgets open floating panels in the style of a macOS menu bar item,
-centered under the widget. Network and Sound share one anatomy, and new menus
-should follow it:
+centered under the widget; the snowflake's system menu opens with its left edge
+under the button, like the Apple menu. Network, Sound and the system menu share
+one anatomy, and new menus should follow it:
 
 1. **Header.** The panel's name on the left, bold, in the accent. On the right,
    the widget's live value as striped text after a status dot, such as
-   "● 1 Gb/s" or "● 62%". Clicking the value opens the matching settings.
+   "● 1 Gb/s" or "● 62%". Clicking the value opens the matching settings. The
+   system menu's header is "NixOS" with the uptime, which opens the system
+   monitor, since its settings already have a row.
 2. **Status line** (optional). A key and a value, such as "Ethernet: Wired
    connection 1".
 3. **Sections.** A 1px separator, a bold header in the key color, then rows.
+   The system menu's groups have no header, like the Apple menu's.
 4. **Hem.** The last element: the hem 12 px below the last row and 6 px from
    the panel's edge. It replaces a "Settings…" row.
 
-Geometry:
+Rows are regular text; hovering one fills it with the hover color and leaves
+its text, symbols and shortcuts as they are. An action that needs confirming
+(Restart…, Shut Down…, Log Out…) turns its row into a 36 px prompt, like the
+network menu's password row: the question on the left, then a Cancel button and
+the action in the accent, both 26 px tall with radius 7.
+
+Geometry comes from each menu's own macOS surface. Network and Sound take the
+Wi-Fi menu's:
 
 - Width 308, with 5 px panel padding (Apple's row-highlight inset). Text sits
   14 px from the panel's edge.
 - Rows are 22 px; rows with an icon circle are 32 px, with a 26 px circle.
+
+The system menu takes the Apple menu's: width 284, 24 px rows, text 17 px in
+(42 px after a symbol, which centers 24 px in), separators 16 px in, and
+shortcuts ending 18 px from the edge. Its header and hem sit where the network
+menu's do. In both:
+
 - Hover highlights have radius 7.
+- A separator is a 1 px line 5.5 px from the rows on either side.
 - Noctalia snaps layout to whole px, so rows are placed from their centers
   (each plugin's `stack` or `track`), never by accumulating heights.
 - A panel that changes height calls `panel.setSize`, so it maps at its final
@@ -110,6 +129,11 @@ Geometry:
 
 The calendar is a widget tile, not a menu, but takes the same type, colors and
 hem (scaled to 7 px stops) and the same 5 px padding and hem spacing.
+
+About This Computer, opened from the system menu, keeps About This Mac's layout
+but is a panel, not a window: it has no traffic lights and closes like the
+other panels. Its title is in the accent, its labels in the key color and its
+values in text, and it ends with the hem, 12 px below the footer.
 
 ## Motifs
 

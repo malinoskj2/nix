@@ -1,18 +1,16 @@
 -- Geometry is measured from macOS 27's About This Mac at 1x, in logical px from the window's
 -- top-left. Text is placed by the center of its cap height, since Noctalia snaps layout to whole px.
--- There's no picture, so the title sits just under the traffic lights and everything under it
--- moves up with it. There are also two more rows than Apple's five and one footer line fewer, so
--- everything below the rows moves down by the extra rows' pitch.
+-- It's a panel rather than a window, so it closes like the others and has no traffic lights, and
+-- there's no picture, so the title sits at the top and everything under it moves up with it. There
+-- are also two more rows than Apple's five and one footer line fewer, so everything below the rows
+-- moves down by the extra rows' pitch. The menus' hem ends it, 12 px below the footer.
 local WIDTH = 280
 local FONT = "SF Pro Text"
 local FONT_SIZE = 11
-local BUTTON_FONT_SIZE = 12
+local BUTTON_FONT_SIZE = 13
 local TITLE_FONT_SIZE = 22
 
-local LIGHT_CENTER = 16
-local LIGHT_DIAMETER = 14
-local LIGHT_GAP = 9
-local TITLE_TOP = 50
+local TITLE_TOP = 24
 local TITLE_CAP_TOP = 236.5
 local RAISE = TITLE_CAP_TOP - TITLE_TOP
 local TITLE_CENTER = 245
@@ -24,11 +22,30 @@ local COLUMN_GAP = 11
 local BUTTON_CENTER = 388
 local BUTTON_WIDTH = 92
 local BUTTON_HEIGHT = 24
-local BUTTON_RADIUS = 6
+local BUTTON_RADIUS = 7
 local FOOTER_CENTER = 420.5
 local FOOTER_PITCH = 14.5
 local FOOTER_HEIGHT = 15
-local BOTTOM_MARGIN = 30
+local HEM_COLORS = {
+  "rosewater",
+  "flamingo",
+  "pink",
+  "mauve",
+  "red",
+  "maroon",
+  "peach",
+  "yellow",
+  "green",
+  "teal",
+  "sky",
+  "sapphire",
+  "blue",
+  "lavender",
+}
+local HEM_STOP_WIDTH = 12
+local HEM_HEIGHT = 3
+local HEM_GAP = 12
+local BOTTOM_GAP = 6
 -- Apple's underline runs 1 px below the baseline, through the descenders, so the link's label is
 -- cut short to put its underline there.
 local LINK_HEIGHT = 12
@@ -38,12 +55,13 @@ local function color(name, alpha)
 end
 
 local TEXT = color("text")
-local SECONDARY = color("subtext0")
+local TITLE = color("peach")
+local SECONDARY = color("subtext1")
+-- The sky tint the menus use for the names beside values.
+local KEY = color("sky", 0.65)
 local TERTIARY = color("overlay1")
-local BUTTON = color("text", 0.1)
-local BUTTON_HOVER = color("text", 0.16)
-local CLOSE = color("red")
-local CLOSE_GLYPH = color("crust", 0.7)
+local BUTTON = color("text", 0.14)
+local BUTTON_HOVER = color("text", 0.22)
 local CLEAR = "#00000000"
 
 local state = nil
@@ -117,54 +135,13 @@ local function rows()
   return present
 end
 
-local function light(name)
-  if name == "close" then
-    local active = hovered == "close"
-    return ui.row({
-      key = "close",
-      width = LIGHT_DIAMETER,
-      height = LIGHT_DIAMETER,
-      radius = LIGHT_DIAMETER / 2,
-      fill = CLOSE,
-      align = "center",
-      justify = "center",
-      onClick = function()
-        panel.close()
-      end,
-      onHover = hover("close"),
-    }, {
-      label(active and "×" or "", { fontSize = 12, fontWeight = "bold", color = CLOSE_GLYPH }),
-    })
-  end
-  -- Apple draws the buttons a window can't use as empty rings.
-  return ui.box({
-    width = LIGHT_DIAMETER,
-    height = LIGHT_DIAMETER,
-    radius = LIGHT_DIAMETER / 2,
-    fill = color(name, 0.12),
-    border = color(name, 0.45),
-    borderWidth = 1,
-  })
-end
-
-local function lights()
-  return ui.row({ height = LIGHT_DIAMETER, align = "center" }, {
-    gap(LIGHT_CENTER - LIGHT_DIAMETER / 2, true),
-    light("close"),
-    gap(LIGHT_GAP, true),
-    light("yellow"),
-    gap(LIGHT_GAP, true),
-    light("green"),
-  })
-end
-
 -- Right-aligned labels and left-aligned values, the pair of columns centered as a block.
 local function specs(list)
   local labels = {}
   local values = {}
   for _, row in list do
-    table.insert(labels, ui.row({ height = ROW_PITCH, align = "center" }, { label(row[1]) }))
-    table.insert(values, ui.row({ height = ROW_PITCH, align = "center" }, { label(row[2], { color = SECONDARY }) }))
+    table.insert(labels, ui.row({ height = ROW_PITCH, align = "center" }, { label(row[1], { color = KEY }) }))
+    table.insert(values, ui.row({ height = ROW_PITCH, align = "center" }, { label(row[2]) }))
   end
   return ui.row({ height = #list * ROW_PITCH, justify = "center" }, {
     ui.column({ align = "end", gap = 0 }, labels),
@@ -212,6 +189,14 @@ local function repository()
   })
 end
 
+local function hem()
+  local stops = {}
+  for _, name in ipairs(HEM_COLORS) do
+    table.insert(stops, ui.box({ width = HEM_STOP_WIDTH, height = HEM_HEIGHT, fill = color(name, 0.9) }))
+  end
+  return ui.row({ width = WIDTH, height = HEM_HEIGHT, justify = "center", gap = 0 }, stops)
+end
+
 function render()
   if state == nil then
     return
@@ -219,25 +204,29 @@ function render()
   local list = rows()
   local shift = (#list - APPLE_ROWS) * ROW_PITCH - RAISE
   local footer = FOOTER_CENTER + shift
-  local height = math.floor(footer + FOOTER_PITCH + FOOTER_HEIGHT / 2 + BOTTOM_MARGIN + 0.5)
+  local hemCenter = footer + FOOTER_PITCH + FOOTER_HEIGHT / 2 + HEM_GAP + HEM_HEIGHT / 2
+  local height = math.floor(hemCenter + HEM_HEIGHT / 2 + BOTTOM_GAP + 0.5)
   if #list ~= shownRows then
     shownRows = #list
     panel.setSize(0, height)
   end
 
   local items = {
-    { LIGHT_CENTER, LIGHT_DIAMETER, lights() },
     {
       TITLE_CENTER - RAISE,
       TITLE_HEIGHT,
       centered(TITLE_HEIGHT, {
-        label(nix.title, { fontSize = TITLE_FONT_SIZE, fontFamily = "SF Pro Display", fontWeight = "bold" }),
+        label(
+          nix.title,
+          { fontSize = TITLE_FONT_SIZE, fontFamily = "SF Pro Display", fontWeight = "bold", color = TITLE }
+        ),
       }),
     },
     { FIRST_ROW_CENTER - RAISE + (#list - 1) * ROW_PITCH / 2, #list * ROW_PITCH, specs(list) },
     { BUTTON_CENTER + shift, BUTTON_HEIGHT, moreInfo() },
     { footer, FOOTER_HEIGHT, repository() },
     { footer + FOOTER_PITCH, FOOTER_HEIGHT, centered(FOOTER_HEIGHT, { label(nix.built, { color = TERTIARY }) }) },
+    { hemCenter, HEM_HEIGHT, hem() },
   }
   panel.render(ui.column({ width = WIDTH, height = height, gap = 0 }, track(items, false)))
 end
