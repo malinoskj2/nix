@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ lib, pkgs, ... }:
 {
   imports = [
     ../claude-desktop
@@ -22,6 +22,27 @@
     vulkan-tools
     wl-clipboard
   ];
+
+  home.file = lib.mergeAttrsList (
+    lib.mapCartesianProduct
+      (
+        { agent, skill }:
+        {
+          ".${agent}/skills/${skill}".source = "${pkgs.orca-ade}/share/orca-ade/skills/${skill}";
+        }
+      )
+      {
+        agent = [
+          "claude"
+          "codex"
+        ];
+        skill = [
+          "computer-use"
+          "orca-cli"
+          "orchestration"
+        ];
+      }
+  );
 
   home.sessionVariables = {
     BROWSER = "firefox";

@@ -195,7 +195,11 @@ Treat a bump as a hardware change and test it on the device.
   - run `orca-ide agent hooks status --json` and check that Claude reports
     `installed`;
   - check that `~/.claude/settings.json` is unchanged and that a plain
-    `claude` outside Orca has no Orca hooks.
+    `claude` outside Orca has no Orca hooks;
+  - check that Getting started shows Enable Orca CLI as done. It only looks
+    for the `orca-cli`, `computer-use` and `orchestration` skills, which
+    [`features/desktop.nix`](../users/jesse/features/desktop.nix) links from
+    the release's `skills/`, so a renamed or added skill leaves it undone.
 - **Eisvogel.** [`pkgs/markdown-to-pdf/`](../pkgs/markdown-to-pdf) typesets
   with the Eisvogel LaTeX template at `v3.4.0`. Eisvogel 3.5.0 moved from the
   `sourcesanspro` TeX Live package to `sourcesans`, which nixpkgs doesn't

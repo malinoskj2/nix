@@ -121,11 +121,15 @@ stdenv.mkDerivation (finalAttrs: {
     find $out/libexec/orca-ade/resources -path '*/agent-browser/bin/agent-browser-*' \
       ! -name 'agent-browser-linux-${stdenv.hostPlatform.node.arch}' -delete
     install -Dm444 resources/icon.png $out/share/icons/hicolor/512x512/apps/orca-ade.png
+    mkdir -p $out/share/orca-ade
+    cp -r skills $out/share/orca-ade/skills
 
     wrapProgram $out/libexec/orca-ade/orca-ide \
       --prefix XDG_DATA_DIRS : ${glib.getSchemaDataDirPath gsettings-desktop-schemas}:${glib.getSchemaDataDirPath gtk3} \
       --set CHROME_DEVEL_SANDBOX ${electron}/libexec/electron/chrome-sandbox
     ln -s $out/libexec/orca-ade/resources/bin/orca-ide $out/bin/orca-ide
+    # The skills call bare `orca`, which upstream reserves on Linux for the GNOME screen reader.
+    ln -s $out/libexec/orca-ade/resources/bin/orca-ide $out/bin/orca
     ln -s $out/libexec/orca-ade/orca-ide $out/bin/orca-ade
 
     runHook postInstall
