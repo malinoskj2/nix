@@ -48,14 +48,6 @@ plus host facts. Shared modules are imported explicitly by relative path from
 
 Host-only policy, such as media's sudo and `mutableUsers`, stays in the host.
 
-`media`'s container stack comes from the private `media-stack` input
-(`nixosModules.default`), and `hosts/media` only enables it and passes it the
-host's paths. CI can't read that input, so it builds `media` against the stub
-in `.github/media-stack`, which leaves the stack out. `media` has no checkout
-of this repository and no `nh`: it's deployed from another host with
-`./deploy.sh` in the media-stack checkout, which evaluates there and builds on
-`media`.
-
 ### Home Manager
 
 The Home Manager hosts (`home`, `katana`, `macbook`) each have a profile at
@@ -101,8 +93,7 @@ shellcheck and shfmt for shell, ruff for Python, StyLua for Lua and Luau).
 `nix flake check` also builds every host whose system matches, the local
 packages those hosts install directly, and the devshell. Prefer evaluating or
 building the affected host before applying it, and don't run a `switch` unless
-explicitly asked. Hosts are applied with `nh os switch`, except `media` (see
-Hosts above). No host needs
+explicitly asked. Hosts are applied with `nh os switch`. No host needs
 `--impure`. Don't copy secrets into the repository.
 
 ## Desktop design
