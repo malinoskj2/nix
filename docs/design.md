@@ -9,8 +9,8 @@ it when the language changes, and check new work against it.
 
 - **Apple's geometry, our colors.** Layout, type sizes and spacing are measured
   from the matching macOS 27 surface at 1x (the Wi-Fi menu, the small Calendar
-  widget in the Clear style, the Apple menu, About This Mac) and say so in the
-  file's opening comment. Color comes from Catppuccin, never from Apple.
+  widget in the Clear style, the Apple menu, About This Mac). Color comes from
+  Catppuccin, never from Apple.
 - **Glass shows through.** Surfaces are translucent and blurred; their own fill
   sets the tone, and the glass refracts almost nothing.
 - **Color has roles.** A color means the same thing on every surface (see
@@ -188,7 +188,6 @@ Hyprland springs, defined in `hyprland.lua`:
 
 Before calling a new surface done, check that it:
 
-- names the macOS 27 surface its geometry comes from, in its opening comment;
 - uses the color roles above, peach as the accent, with no new colors;
 - uses SF Pro Text in the menu style;
 - ends a menu with the hem and keeps settings behind the header's value;
