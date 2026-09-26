@@ -157,33 +157,32 @@ if [[ -d $HOME/.claude/plugins/data ]]; then
   args+=(--volume "$data/plugin-data:$HOME/.claude/plugins/data")
 fi
 
-if [[ $agent == codex ]]; then
-  # Keep mutable Codex state isolated, but seed authentication from the host. The
-  # newer copy wins so a token refreshed in either environment is not replaced by
-  # an older one on the next launch.
-  if [[ -f $HOME/.codex/auth.json && (! -f $sandbox_home/.codex/auth.json || $HOME/.codex/auth.json -nt $sandbox_home/.codex/auth.json) ]]; then
-    cp "$HOME/.codex/auth.json" "$sandbox_home/.codex/auth.json"
-  fi
-
-  # Seed a writable config once so Codex can persist project trust and settings.
-  # Older launches left an empty mount placeholder, which also needs seeding.
-  if [[ -f $HOME/.codex/config.toml && ! -s $sandbox_home/.codex/config.toml ]]; then
-    cp "$HOME/.codex/config.toml" "$sandbox_home/.codex/config.toml"
-    chmod u+w "$sandbox_home/.codex/config.toml"
-  fi
-
-  for name in rules skills plugins; do
-    src=$HOME/.codex/$name
-    if [[ -d $src ]]; then
-      mkdir -p "$sandbox_home/.codex/$name"
-    elif [[ -f $src ]]; then
-      touch "$sandbox_home/.codex/$name"
-    else
-      continue
-    fi
-    args+=(--volume "$src:$HOME/.codex/$name:ro")
-  done
+# Every sandbox can run Codex, including the SSH hosts Orca launches it in.
+# Keep mutable Codex state isolated, but seed authentication from the host. The
+# newer copy wins so a token refreshed in either environment is not replaced by
+# an older one on the next launch.
+if [[ -f $HOME/.codex/auth.json && (! -f $sandbox_home/.codex/auth.json || $HOME/.codex/auth.json -nt $sandbox_home/.codex/auth.json) ]]; then
+  cp "$HOME/.codex/auth.json" "$sandbox_home/.codex/auth.json"
 fi
+
+# Seed a writable config once so Codex can persist project trust and settings.
+# Older launches left an empty mount placeholder, which also needs seeding.
+if [[ -f $HOME/.codex/config.toml && ! -s $sandbox_home/.codex/config.toml ]]; then
+  cp "$HOME/.codex/config.toml" "$sandbox_home/.codex/config.toml"
+  chmod u+w "$sandbox_home/.codex/config.toml"
+fi
+
+for name in rules skills plugins; do
+  src=$HOME/.codex/$name
+  if [[ -d $src ]]; then
+    mkdir -p "$sandbox_home/.codex/$name"
+  elif [[ -f $src ]]; then
+    touch "$sandbox_home/.codex/$name"
+  else
+    continue
+  fi
+  args+=(--volume "$src:$HOME/.codex/$name:ro")
+done
 
 if [[ -t 0 && -t 1 ]]; then
   args+=(--interactive --tty)

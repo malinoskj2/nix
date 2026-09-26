@@ -42,6 +42,8 @@ stdenv.mkDerivation (finalAttrs: {
     substituteInPlace config/electron-builder.config.cjs \
       --replace-fail "const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')" \
         "const verifyLinuxGlibcFloor = () => {}"
+    substituteInPlace src/shared/default-global-settings.ts \
+      --replace-fail "keepComputerAwakeWhileAgentsRun: false," "keepComputerAwakeWhileAgentsRun: true,"
   '';
 
   pnpmDeps = fetchPnpmDeps {
