@@ -35,9 +35,16 @@ in
 
       # systemd gives root units no HOME, and Compose reads registry auth from ~/.docker.
       environment.HOME = "/root";
+
+      # One image that fails to pull mustn't hold back the rest, but it still
+      # fails the unit so it shows up in systemctl --failed.
       script = ''
-        docker-compose pull
+        failed=0
+        for service in $(docker-compose config --services); do
+          docker-compose pull "$service" || failed=1
+        done
         docker-compose up -d
+        exit "$failed"
       '';
       serviceConfig = {
         Type = "oneshot";
