@@ -31,8 +31,14 @@ in
     };
   };
 
+  # Docker confines every container with its docker-default profile once
+  # AppArmor is on, and loads that profile with apparmor_parser.
+  security.apparmor.enable = true;
+
   systemd = {
     tmpfiles.rules = [ "d /srv/media 0750 jesse docker - -" ];
+
+    services.docker.path = [ pkgs.apparmor-parser ];
 
     services.docker-media-update = {
       description = "Update media docker stack (compose pull + up -d)";
