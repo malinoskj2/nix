@@ -25,6 +25,8 @@
     p7zip
     pandoc
     ripgrep
+    sops
+    ssh-to-age
     tokei
     tree
     unrar
