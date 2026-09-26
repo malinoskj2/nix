@@ -4,8 +4,7 @@
     defaultProfiles = [ "high-quality" ];
     config = {
       hdr-compute-peak = true;
-      hwdec = "nvdec";
-      hwdec-codecs = "all";
+      hwdec = "auto-safe";
       interpolation = true;
       loop-playlist = true;
       osd-font = "Fira Mono";
