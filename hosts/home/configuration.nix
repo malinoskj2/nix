@@ -23,7 +23,6 @@
 
   networking = {
     hostName = "home";
-    firewall.enable = false;
 
     # Noctalia's network integration talks to NetworkManager over D-Bus, so
     # NetworkManager owns the interfaces and creates the wired DHCP profile.

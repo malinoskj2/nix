@@ -8,7 +8,6 @@
 
   users.users.jesse.extraGroups = [
     "audio"
-    "disk"
     "systemd-journal"
     "video"
   ];
