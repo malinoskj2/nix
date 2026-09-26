@@ -11,6 +11,7 @@
     ../features/rust/mold.nix
     ../features/rust/std-sources.nix
 
+    ../agent-sandbox.nix
     ../datagrip
     ../git.nix
     ../hyprland-desktop

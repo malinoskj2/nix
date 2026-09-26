@@ -5,6 +5,7 @@ You are running inside a Docker sandbox. You may read anything you can find in t
 - `~/projects` and `~/nix`, read-write, at the same paths as on the host
 - `/tmp/screenshot`, read-only: the human's screenshots
 - `~/.cache/img2char3d`, read-write: model weights for `~/projects/img2char3d`
+- `~/.claude/projects`, read-write: auto-memory and session transcripts, shared with the human's sessions outside the sandbox
 - `/nix/store`, read-only, shared with the host
 
 The rest of the home directory belongs to the sandbox, not the host. The NVIDIA GPU is available (`nvidia-smi`).

@@ -20,6 +20,7 @@
   foot,
   gawk,
   git,
+  glibc,
   glibcLocales,
   gnugrep,
   gnused,
@@ -37,6 +38,7 @@
   mold,
   nix,
   nodejs,
+  openssh,
   playwright-driver,
   playwright-mcp,
   playwright-test,
@@ -45,6 +47,7 @@
   ripgrep,
   runCommand,
   sway,
+  symlinkJoin,
   systemd,
   tmux,
   unzip,
@@ -196,10 +199,12 @@ let
     name = "agent-sandbox";
     includeStorePaths = false;
     extraCommands = ''
-      mkdir -p bin usr/bin etc/nix etc/claude-code etc/sway etc/fonts tmp
+      mkdir -p bin usr/bin lib64 etc/nix etc/claude-code etc/sway etc/fonts tmp
       ln -s ${bashInteractive}/bin/bash bin/sh
       ln -s ${bashInteractive}/bin/bash bin/bash
       ln -s ${coreutils}/bin/env usr/bin/env
+      # For prebuilt binaries such as the Claude CLI that Claude Desktop installs over SSH.
+      ln -s ${glibc}/lib/ld-linux-x86-64.so.2 lib64/ld-linux-x86-64.so.2
       ln -s ${nixConf} etc/nix/nix.conf
       ln -s ${fontconfig.out}/etc/fonts/conf.d etc/fonts/conf.d
       ln -s ${./sway.conf} etc/sway/config
@@ -246,24 +251,44 @@ let
       ];
     };
   };
-in
-writeShellApplication {
-  name = "agent-sandbox";
-  runtimeInputs = [
-    clipboardSync
-    coreutils
-    systemd
-    wl-clipboard
-  ];
-  runtimeEnv = {
-    AGENT_SANDBOX_IMAGE = image;
-    # Prefix numeric-leading tags so ShellCheck does not mistake the generated
-    # environment assignment for arithmetic (SC2100).
-    AGENT_SANDBOX_TAG = "hash-${image.imageTag}";
+
+  launcher = writeShellApplication {
+    name = "agent-sandbox";
+    runtimeInputs = [
+      clipboardSync
+      coreutils
+      openssh
+      systemd
+      wl-clipboard
+    ];
+    runtimeEnv = {
+      AGENT_SANDBOX_IMAGE = image;
+      # Prefix numeric-leading tags so ShellCheck does not mistake the generated
+      # environment assignment for arithmetic (SC2100).
+      AGENT_SANDBOX_TAG = "hash-${image.imageTag}";
+    };
+    text = builtins.readFile ./agent-sandbox.sh;
   };
-  text = builtins.readFile ./agent-sandbox.sh;
+
+  ssh = writeShellApplication {
+    name = "agent-sandbox-ssh";
+    runtimeInputs = [
+      coreutils
+      systemd
+    ];
+    runtimeEnv.AGENT_SANDBOX_SSHD = lib.getExe' openssh "sshd";
+    text = builtins.readFile ./agent-sandbox-ssh.sh;
+  };
+in
+symlinkJoin {
+  name = "agent-sandbox";
+  paths = [
+    launcher
+    ssh
+  ];
   meta = {
     description = "Run Claude Code or Codex in a Docker sandbox with the GPU and a headless Wayland session";
+    mainProgram = "agent-sandbox";
     platforms = lib.platforms.linux;
   };
 }
