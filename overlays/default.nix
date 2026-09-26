@@ -64,29 +64,32 @@ in
         xdg-desktop-portal-hyprland
         ;
       supportedHyprlandVersions = [ "0.56.2" ];
+      # The patches hook Hyprland internals, so a clean apply to a new version proves nothing.
+      patchPlugin =
+        name: patches:
+        assert lib.assertMsg (lib.elem hyprland.version supportedHyprlandVersions) (
+          "${name} patches were written for Hyprland "
+          + "${lib.concatStringsSep ", " supportedHyprlandVersions}, not ${hyprland.version}; "
+          + "re-check them and update this assertion."
+        );
+        hyprlandPlugins.${name}.overrideAttrs (old: {
+          version = "${old.version}-patched";
+          __intentionallyOverridingVersion = true;
+          patches = (old.patches or [ ]) ++ patches;
+          meta = old.meta // {
+            description = "${old.meta.description}, with local patches";
+          };
+        });
     in
     {
       inherit firefox hyprland xdg-desktop-portal-hyprland;
       hyprlandPlugins = hyprlandPlugins // {
-        # The patches hook Hyprland internals, so a clean apply to a new version proves nothing.
-        hyprfocus =
-          assert lib.assertMsg (lib.elem hyprland.version supportedHyprlandVersions) (
-            "hyprfocus patches were written for Hyprland "
-            + "${lib.concatStringsSep ", " supportedHyprlandVersions}, not ${hyprland.version}; "
-            + "re-check them and update this assertion."
-          );
-          hyprlandPlugins.hyprfocus.overrideAttrs (old: {
-            version = "${old.version}-patched";
-            __intentionallyOverridingVersion = true;
-            patches = (old.patches or [ ]) ++ [
-              ./patches/hyprfocus/class-filter.patch
-              ./patches/hyprfocus/combined-modes.patch
-              ./patches/hyprfocus/render-shrink.patch
-            ];
-            meta = old.meta // {
-              description = "${old.meta.description}, with local patches";
-            };
-          });
+        hyprbars = patchPlugin "hyprbars" [ ./patches/hyprbars/unload-listeners.patch ];
+        hyprfocus = patchPlugin "hyprfocus" [
+          ./patches/hyprfocus/class-filter.patch
+          ./patches/hyprfocus/combined-modes.patch
+          ./patches/hyprfocus/render-shrink.patch
+        ];
       };
     };
 }
