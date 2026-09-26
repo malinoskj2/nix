@@ -75,7 +75,8 @@ To upgrade:
 4. Read [`pkgs/hyprsheet/main.cpp`](../pkgs/hyprsheet/main.cpp) against the
    new source. It uses Hyprland's private window transformers, xdg-foreign
    parents, window fadeouts and layout moves, hooks `CWindowFadeout::create`,
-   hides the parent through its move-from-workspace alpha, and relies on
+   hides the parent through its move-from-workspace alpha and its no-focus
+   rule, and relies on
    Hyprland passing a transformed window's blur matte through its
    transformers, so a clean build isn't enough. Check that Hyprland still
    skips drawing a window at alpha 0 and sends it no frame callbacks, and still
@@ -86,7 +87,10 @@ To upgrade:
    as it fades, not lose it on the first frame, the wallpaper shouldn't flash
    through either way, and the snowflake widget in the top-left corner should
    stay whole. Once the chooser has come to rest its text and glass shouldn't
-   change or shimmer. Do the same from Alacritty: its title bar should shrink
+   change or shimmer. Focus another window, then focus the chooser again by
+   keyboard: it should dip like any window, with hyprfocus's animations,
+   without its buttons changing size. Moving the pointer onto it shouldn't
+   dip it. Do the same from Alacritty: its title bar should shrink
    with it, not stay behind until the chooser has opened.
 5. Rebase
    [`aquamarine-nested.patch`](../pkgs/agent-sandbox/aquamarine-nested.patch)

@@ -159,15 +159,17 @@ Hyprland springs, defined in `hyprland.lua`:
 | Curve | Use |
 |---|---|
 | `pop` (slight overshoot) | Windows and layers opening |
-| `snap` | Window moves, the file chooser sheet opening |
+| `snap` | Window moves |
 | `sway` (no visible bounce) | Workspace switches, like a macOS Space switch |
 | `glide` (critically damped) | Anything closing, which never bounces |
+| `land` (just under critical, stopped on arrival) | The file chooser sheet opening and closing |
 
 - Floating panels scale in with "popin 80%", with Noctalia's own reveal off.
 - Notification banners slide in and out across the screen edge.
 - The file chooser grows its parent window into itself and back (hyprsheet),
   without resizing either window.
-- hyprfocus shrinks a window to 99% on focus.
+- hyprfocus shrinks a window to 99% on focus. An open file chooser dips the same
+  way through hyprsheet, which scales its frame rather than resizing it.
 - Shimmer and gleam effects play on hover or on open, never continuously.
 
 ## Bar and windows
