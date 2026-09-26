@@ -16,7 +16,7 @@ it when the language changes, and check new work against it.
 - **Color has roles.** A color means the same thing on every surface (see
   [Color](#color)). Don't pick a color for a single element.
 - **Off-palette values need a reason** in a comment next to them (for example,
-  Hyprbars' neutral text, because Catppuccin's neutrals are tinted blue).
+  the inactive border's gray, because Catppuccin's neutrals are tinted blue).
 
 ## Color
 
