@@ -36,6 +36,28 @@ For a new machine:
    `networking.hostName`, so the file name must match it.
 6. `git add` the new files.
 
+### `media`
+
+`media` has no checkout of this repository. It's deployed from another host,
+which pushes the configuration to it:
+
+```sh
+nh os switch ~/nix -H media --target-host media --build-host media
+```
+
+`media` is the `~/.ssh/config` alias (jesse, port 2222). nh asks for jesse's
+sudo password on `media`. Its containers aren't part of this configuration:
+the private media-stack repository deploys them.
+
+For a new install, install NixOS with SSH and jesse's key, then, before the
+first deploy, create jesse's password hash. Accounts come only from the
+config, so without this file jesse's password is locked and sudo stops
+working:
+
+```sh
+sudo sh -c 'umask 077; mkpasswd -m yescrypt > /secret/jesse.passwd'
+```
+
 ### `home`: Secure Boot
 
 `home` boots through Limine with Secure Boot, and the Limine installer stops if
