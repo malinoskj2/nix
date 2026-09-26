@@ -101,7 +101,8 @@ shellcheck and shfmt for shell, ruff for Python, StyLua for Lua and Luau).
 `nix flake check` also builds every host whose system matches, the local
 packages those hosts install directly, and the devshell. Prefer evaluating or
 building the affected host before applying it, and don't run a `switch` unless
-explicitly asked. Hosts are applied with `nh os switch`. No host needs
+explicitly asked. Hosts are applied with `nh os switch`, except `media` (see
+Hosts above). No host needs
 `--impure`. Don't copy secrets into the repository.
 
 ## Desktop design
