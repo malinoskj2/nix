@@ -1,8 +1,8 @@
 diff --git a/src/GlassLayerSurface.cpp b/src/GlassLayerSurface.cpp
-index 014464a..cd6ba74 100644
+index 014464a..a248dab 100644
 --- a/src/GlassLayerSurface.cpp
 +++ b/src/GlassLayerSurface.cpp
-@@ -12,9 +12,25 @@
+@@ -12,12 +12,43 @@
  #include <hyprland/src/render/Renderer.hpp>
  #include <hyprutils/math/Misc.hpp>
  
@@ -30,7 +30,25 @@ index 014464a..cd6ba74 100644
      return pixelBox;
  }
  
-@@ -104,6 +120,60 @@ CGlassLayerSurface::EMaskSource CGlassLayerSurface::resolveMaskSource() const {
++// The gleam lights only fragments within 8 widths inside an upward-facing edge, which lie no
++// deeper than the corner radius plus 8 widths below each shape's top. The shader's top is the
++// framebuffer's, which is the screen's only on an unrotated monitor.
++static std::vector<CBox> gleamDamage(const std::vector<CBox>& shapes, PHLMONITOR monitor, float cornerRadius, float width) {
++    if (monitor->m_transform != WL_OUTPUT_TRANSFORM_NORMAL)
++        return {};
++    std::vector<CBox> boxes;
++    for (const auto& shape : shapes) {
++        CBox box = {shape.x, shape.y, shape.w, std::min(shape.h, static_cast<double>(cornerRadius + 8.0f * width))};
++        box.expand(2.0).scale(1.0 / monitor->m_scale).translate(monitor->m_position);
++        boxes.push_back(box);
++    }
++    return boxes;
++}
++
+ CGlassLayerSurface::CGlassLayerSurface(PHLLS layerSurface)
+     : m_layerSurface(layerSurface) {
+ }
+@@ -104,6 +135,60 @@ CGlassLayerSurface::EMaskSource CGlassLayerSurface::resolveMaskSource() const {
      }
  }
  
@@ -91,7 +109,7 @@ index 014464a..cd6ba74 100644
  bool CGlassLayerSurface::liveResampleEnabled() const {
      if (const auto layerSurface = m_layerSurface.lock()) {
          const auto& overrides = g_pGlobalState->layerNamespaceLiveResample;
-@@ -139,6 +209,14 @@ void CGlassLayerSurface::damageIfMoved() {
+@@ -139,6 +224,14 @@ void CGlassLayerSurface::damageIfMoved() {
      const bool moved = currentPosition != m_lastPosition || currentSize != m_lastSize;
  
      if (moved || isAnimating) {
@@ -106,18 +124,60 @@ index 014464a..cd6ba74 100644
          m_lastPosition  = currentPosition;
          m_lastSize      = currentSize;
  
-@@ -147,8 +225,8 @@ void CGlassLayerSurface::damageIfMoved() {
+@@ -146,10 +239,15 @@ void CGlassLayerSurface::damageIfMoved() {
+ 
          if (const auto monitor = layerSurface->m_monitor.lock())
              g_pGlobalState->bumpSceneGeneration(monitor);
-     } else if (const auto& config = g_pGlobalState->config;
+-    } else if (const auto& config = g_pGlobalState->config;
 -               config.layersForceLiveResample && **config.layersForceLiveResample) {
--        // keep frames flowing so the forced per-frame resample actually runs
-+               (config.layersForceLiveResample && **config.layersForceLiveResample) || (!m_gleamSettled && resolveGleam())) {
-+        // keep frames flowing so the forced per-frame resample or the gleam's sweep actually runs
++    } else if (const auto& config = g_pGlobalState->config; config.layersForceLiveResample && **config.layersForceLiveResample) {
+         // keep frames flowing so the forced per-frame resample actually runs
          damageSampleRegion();
++    } else if (!m_gleamSettled && resolveGleam()) {
++        // The sweep reuses the cached sample and changes only the rim, so only the rim is redrawn.
++        if (m_gleamDamage.empty())
++            damageSampleRegion();
++        for (const auto& box : m_gleamDamage)
++            g_pHyprRenderer->damageBox(box);
      }
  }
-@@ -318,6 +396,10 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
+ 
+@@ -218,9 +316,23 @@ void CGlassLayerSurface::sampleAndRedirect(PHLMONITOR monitor, float alpha) {
+                              (activeWs && activeWs->m_renderOffset->isBeingAnimated());
+     const auto& config = g_pGlobalState->config;
+     const bool forceLive = config.layersForceLiveResample && **config.layersForceLiveResample;
+-    const bool backgroundChanged = !m_hasCachedSample ||
+-                                   currentGeneration != m_lastSceneGeneration ||
+-                                   isAnimating || m_backgroundDirty || forceLive;
++    bool backgroundChanged = !m_hasCachedSample ||
++                             currentGeneration != m_lastSceneGeneration ||
++                             isAnimating || m_backgroundDirty || forceLive;
++
++    // Outside this frame's damage the framebuffer still holds the glass drawn last frame, which must
++    // not be resampled. A resample in a frame that didn't redraw the whole sample region, such as a
++    // gleam frame when the scene generation moves, waits a frame for all of it to be redrawn.
++    if (backgroundChanged && m_hasCachedSample && !isAnimating && !m_resampleDeferred && layerSurface->m_mapped) {
++        CBox sampleBox = *layerBox;
++        sampleBox.expand(GlassRenderer::SAMPLE_PADDING_PX - 1);
++        sampleBox = sampleBox.intersection(CBox{{}, monitor->m_transformedSize});
++        if (!CRegion{sampleBox}.subtract(g_pHyprRenderer->m_renderData.damage).empty()) {
++            m_resampleDeferred = true;
++            backgroundChanged  = false;
++            damageSampleRegion();
++        }
++    }
+ 
+     if (!layerSurface->m_mapped) {
+         // During fade-out, re-sampling captures stale pixels. Reuse cached sample.
+@@ -243,6 +355,7 @@ void CGlassLayerSurface::sampleAndRedirect(PHLMONITOR monitor, float alpha) {
+         m_hasCachedSample      = true;
+         m_lastSceneGeneration  = currentGeneration;
+         m_backgroundDirty      = false;
++        m_resampleDeferred     = false;
+     }
+     // else: background unchanged, reuse cached blur — skip 7 GPU operations
+ 
+@@ -318,6 +431,10 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
  
      float cornerRadius  = 0.0f;
      float roundingPower = 2.0f;
@@ -128,7 +188,7 @@ index 014464a..cd6ba74 100644
  
      // Use the temp FBO's rendered alpha as a mask: glass only where the surface
      // has visible content (alpha > 0). The temp FBO is in monitor coordinates,
-@@ -353,13 +435,12 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
+@@ -353,13 +470,12 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
              const auto wlSurface = layerSurface->wlSurface();
              if (!wlSurface)
                  break;
@@ -144,12 +204,13 @@ index 014464a..cd6ba74 100644
              region.translate(rawBox.pos());
              region.intersect(rawBox.x, rawBox.y, rawBox.w, rawBox.h); // defensive
              region.transform(Math::wlTransformToHyprutils(Math::invertTransform(monitor->m_transform)),
-@@ -388,6 +469,30 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
+@@ -388,6 +504,32 @@ void CGlassLayerSurface::compositeAndRestore(PHLMONITOR monitor, float alpha, EM
              break;
      }
  
++    const auto boxes = maskSource == EMaskSource::PROTOCOL_REGION ? glassBoxes(monitor, rawBox) : std::vector<CBox>{rawBox};
 +    if (maskSource == EMaskSource::PROTOCOL_REGION) {
-+        for (const auto& box : glassBoxes(monitor, rawBox)) {
++        for (const auto& box : boxes) {
 +            const CBox shape = transformedLayerBox(box, monitor, false);
 +            maskInfo.shapes[maskInfo.shapeCount++] = {static_cast<float>(shape.x - transformBox.x), static_cast<float>(shape.y - transformBox.y),
 +                                                      static_cast<float>(shape.w), static_cast<float>(shape.h)};
@@ -170,13 +231,14 @@ index 014464a..cd6ba74 100644
 +        maskInfo.gleam.width   = gleam->width * static_cast<float>(monitor->m_scale);
 +        maskInfo.gleamProgress = gleam->duration > 0.0f ? std::clamp(elapsed / gleam->duration, 0.0f, 1.0f) : 1.0f;
 +        m_gleamSettled         = maskInfo.gleamProgress >= 1.0f;
++        m_gleamDamage          = gleamDamage(boxes, monitor, cornerRadius, maskInfo.gleam.width);
 +    }
 +
      // The glass shader composites both the glass effect and the surface content
      // in a single pass: glass behind, surface on top, using the temp FBO alpha.
      GlassRenderer::applyGlassEffect(m_sampleFramebuffer, target,
 diff --git a/src/GlassLayerSurface.hpp b/src/GlassLayerSurface.hpp
-index 565c7d4..62e09a6 100644
+index 565c7d4..7f29190 100644
 --- a/src/GlassLayerSurface.hpp
 +++ b/src/GlassLayerSurface.hpp
 @@ -4,6 +4,8 @@
@@ -196,7 +258,7 @@ index 565c7d4..62e09a6 100644
  
      [[nodiscard]] PHLLS getLayerSurface() const;
  
-@@ -43,6 +46,11 @@ class CGlassLayerSurface {
+@@ -43,6 +46,14 @@ class CGlassLayerSurface {
      bool         m_backgroundDirty = false;
      std::chrono::steady_clock::time_point m_lastDirtyMark{};
  
@@ -204,21 +266,24 @@ index 565c7d4..62e09a6 100644
 +    // the layer stops damaging itself for it.
 +    std::optional<std::chrono::steady_clock::time_point> m_gleamStart;
 +    bool         m_gleamSettled = false;
++    // Logical boxes the gleam can light, from the last glass frame
++    std::vector<CBox> m_gleamDamage;
++    bool         m_resampleDeferred = false;
 +
      void damageSampleRegion();
  
      // Track last position/size to detect movement and expand damage
-@@ -59,4 +67,5 @@ class CGlassLayerSurface {
+@@ -59,4 +70,5 @@ class CGlassLayerSurface {
      [[nodiscard]] bool           resolveThemeIsDark() const;
      [[nodiscard]] std::string    resolvePresetName() const;
      [[nodiscard]] ELayerMaskMode resolveMaskMode() const;
 +    [[nodiscard]] const GlassRenderer::SGleam* resolveGleam() const;
  };
 diff --git a/src/GlassRenderer.cpp b/src/GlassRenderer.cpp
-index b3b875a..408e6ea 100644
+index b3b875a..c064be7 100644
 --- a/src/GlassRenderer.cpp
 +++ b/src/GlassRenderer.cpp
-@@ -234,11 +234,30 @@ void applyGlassEffect(SP<Render::IFramebuffer> sampleFramebuffer, SP<Render::IFr
+@@ -234,19 +234,47 @@ void applyGlassEffect(SP<Render::IFramebuffer> sampleFramebuffer, SP<Render::IFr
          if (mask->regionRectCount > 0)
              glUniform4fv(uniforms.regionRects, mask->regionRectCount,
                           reinterpret_cast<const float*>(mask->regionRects.data()));
@@ -249,6 +314,25 @@ index b3b875a..408e6ea 100644
      }
  
      shader->setUniformFloat(SHADER_RADIUS, cornerRadius);
+     shader->setUniformFloat(SHADER_ROUNDING_POWER, roundingPower);
+ 
+     glBindVertexArray(shader->getUniformLocation(SHADER_SHADER_VAO));
+-    g_pHyprOpenGL->scissor(rawBox);
+-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
++    if (mask) {
++        // A layer's surface was drawn only inside the frame's damage, and outside it the framebuffer
++        // already holds the glass from the frame before, so a gleam frame redraws just the rim.
++        g_pHyprRenderer->m_renderData.damage.copy().intersect(rawBox).forEachRect([](const auto& rect) {
++            g_pHyprOpenGL->scissor(&rect);
++            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
++        });
++    } else {
++        g_pHyprOpenGL->scissor(rawBox);
++        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
++    }
+     g_pHyprOpenGL->scissor(nullptr);
+ }
+ 
 diff --git a/src/GlassRenderer.hpp b/src/GlassRenderer.hpp
 index 582fc63..641bc61 100644
 --- a/src/GlassRenderer.hpp
