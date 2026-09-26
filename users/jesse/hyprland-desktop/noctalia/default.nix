@@ -35,6 +35,11 @@ let
       noctalia plugins lint $out
     '';
   hyprctl = lib.getExe' osConfig.programs.hyprland.package "hyprctl";
+  monitor = [
+    (lib.getExe config.programs.alacritty.package)
+    "--command"
+    (lib.getExe config.programs.btop.package)
+  ];
   palette = config.palette.mocha;
 
   # The snowflake's lambdas in workspace order: workspace 1 takes the first color.
@@ -95,14 +100,14 @@ let
     };
     apple-menu = {
       "menu.luau" = withNix ./plugins/apple-menu/menu.luau {
-        inherit hyprctl palette;
+        inherit hyprctl monitor palette;
         noctalia = lib.getExe noctalia;
         user = config.home.username;
       };
     };
     about = {
       "about.luau" = withNix ./plugins/about/about.luau {
-        inherit palette;
+        inherit monitor palette;
         title = "NixOS Desktop";
         hostname = osConfig.networking.hostName;
         nixos = "${osConfig.system.nixos.codeName} ${osConfig.system.nixos.release}";
@@ -137,11 +142,6 @@ let
           name = "github.com/malinoskj2/nix";
           url = "https://github.com/malinoskj2/nix";
         };
-        monitor = [
-          (lib.getExe config.programs.alacritty.package)
-          "--command"
-          (lib.getExe config.programs.btop.package)
-        ];
         open = lib.getExe' pkgs.xdg-utils "xdg-open";
         state = lib.getExe (
           pkgs.writeShellApplication {
