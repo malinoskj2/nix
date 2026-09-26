@@ -171,8 +171,10 @@ hl.animation({ leaf = "windowsIn", enabled = true, speed = 7, spring = "pop" })
 hl.animation({ leaf = "windowsOut", enabled = true, speed = 7, spring = "glide", style = "popin 80%" })
 hl.animation({ leaf = "layersIn", enabled = true, speed = 7, spring = "pop" })
 hl.animation({ leaf = "layersOut", enabled = true, speed = 7, spring = "glide" })
-hl.animation({ leaf = "border", enabled = true, speed = 10, bezier = "default" })
-hl.animation({ leaf = "borderangle", enabled = true, speed = 8, bezier = "default" })
+-- A border color fade redraws the window for a second after every focus change, which wakes the GPU
+-- for no visible gain on mostly borderless windows.
+hl.animation({ leaf = "border", enabled = false })
+hl.animation({ leaf = "borderangle", enabled = false })
 -- `fadeOut` is off because the `windowsOut` popin already animates closing windows.
 hl.animation({ leaf = "fadeOut", enabled = false })
 hl.animation({ leaf = "fadeSwitch", enabled = true, speed = 3, bezier = "linear" })
