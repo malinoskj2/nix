@@ -1,6 +1,4 @@
-"""Mirror a Papirus icon theme with its mimetype icons recolored to the Catppuccin palette.
-
-Single-hue icons get their accent moved to the nearest Catppuccin accent (keeping each shade's
+"""Single-hue icons get their accent moved to the nearest Catppuccin accent (keeping each shade's
 relative lightness) and their grays mapped onto the Mocha neutrals. Glyphs drawn on the light paper
 sheet use Latte accents, which are made for light backgrounds; on a colored sheet, where Mocha's
 pastels are too light for white glyphs, the glyphs turn dark. Icons with several hues are logos,
@@ -228,7 +226,9 @@ def mirror_theme(source: Path, destination: Path, scheme: Scheme) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(
+        description="Mirror a Papirus icon theme with its mimetype icons recolored to the Catppuccin palette."
+    )
     parser.add_argument("source", type=Path, help="Papirus theme directory")
     parser.add_argument("destination", type=Path, help="existing, empty output theme directory")
     parser.add_argument("name", help="name written to the copy's index.theme")

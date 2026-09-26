@@ -1,5 +1,5 @@
--- `nix` is prepended by users/jesse/hyprland-desktop/noctalia/default.nix.
--- The frames are prerendered because Noctalia's UI can't draw gradients; see render.py.
+-- `nix` is prepended at build time. The frames are prerendered because Noctalia's UI can't draw
+-- gradients.
 
 -- Hover and clicks are event-driven, so the host's default 1s update tick is pure overhead.
 local UPDATE_INTERVAL_MS = 60 * 60 * 1000

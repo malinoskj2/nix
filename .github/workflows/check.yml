@@ -31,8 +31,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # One native runner per system in flake.nix. flake/checks.nix builds each
-        # host on the system it runs on, so this builds every host with no emulation.
+        # One native runner per flake system. Each host's check builds on the system
+        # it runs on, so this builds every host with no emulation.
         include:
           - system: x86_64-linux
             runner: ubuntu-24.04

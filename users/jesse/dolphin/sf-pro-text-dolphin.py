@@ -1,8 +1,3 @@
-"""Copy SF Pro Text under a new family name, with its real average glyph width.
-
-Requires fontTools.
-"""
-
 import argparse
 from pathlib import Path
 
@@ -32,7 +27,9 @@ def write_font(source: Path, destination_dir: Path, family: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(
+        description="Copy SF Pro Text under a new family name, with its real average glyph width."
+    )
     parser.add_argument("source_dir", type=Path, help="directory holding SF-Pro-Text-*.otf")
     parser.add_argument("destination_dir", type=Path, help="existing directory the copies are written to")
     parser.add_argument("family", help="family name that replaces SF Pro Text")

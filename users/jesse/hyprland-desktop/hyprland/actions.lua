@@ -1,6 +1,3 @@
--- `nix` is passed in by users/jesse/hyprland-desktop/hyprland/hyprland.lua, which binds these.
--- Each action returns a dispatcher to bind, as `hl.dsp.*` does.
-
 -- A window toggled to floating takes this share of its monitor's logical size.
 local FLOATING_WIDTH_SHARE = 0.70
 local FLOATING_HEIGHT_SHARE = 0.65

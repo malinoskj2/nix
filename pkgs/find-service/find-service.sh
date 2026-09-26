@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Print each host on the home LAN with the given service's port open.
-# Usage: find-service <plex|qbittorrent>
 
 readonly network=192.168.1.0/24
 

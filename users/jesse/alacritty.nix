@@ -6,7 +6,7 @@ let
   esc = builtins.fromJSON ''"\u001B"'';
 
   # Pre-v1 Catppuccin terminal colors. Mocha would visibly change the terminal,
-  # so these stay independent of users/jesse/global/palette.nix.
+  # so these stay independent of the shared palette.
   legacyColors = rec {
     background = "0x1E1E28";
     foreground = "0xD7DAE0";

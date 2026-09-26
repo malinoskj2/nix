@@ -1,5 +1,5 @@
--- `nix` is prepended by users/jesse/hyprland-desktop/noctalia/default.nix.
--- `nix.colors` holds the snowflake's lambda colors, which workspace ids cycle through.
+-- `nix` is prepended at build time. `nix.colors` holds the snowflake's lambda colors, which
+-- workspace ids cycle through.
 
 -- Odd pill widths center the 7px-wide digits on whole pixels; an even height keeps outlines crisp.
 local PILL_WIDTH = 17

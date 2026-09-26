@@ -84,7 +84,6 @@ margin_edge        = -1
     thickness = 32
     start     = ["text_2", "jesse/hypr-workspaces:workspaces"]
     center    = ["active_window"]
-    # "tray" temporarily removed from the front of end.
     end       = ["media", "group:status", "network_date_separator", "clock"]
 
 [widget.active_window]

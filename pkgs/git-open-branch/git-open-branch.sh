@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Open the origin remote's web page for the current branch.
-#
 # SSH remotes are rewritten to HTTPS on the same host and path. A detached HEAD opens the
 # repository root. The page opens with $BROWSER when set, otherwise open or xdg-open.
 
