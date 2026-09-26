@@ -30,8 +30,8 @@ the exported package list, and imports the single-concern modules in `flake/`:
 
 ### Hosts
 
-Each NixOS host's entry is `hosts/<name>/configuration.nix`: an import list plus host
-facts. Shared modules are imported explicitly by relative path from
+Each NixOS host's entry is `hosts/<name>/configuration.nix`: an import list
+plus host facts. Shared modules are imported explicitly by relative path from
 `hosts/common/`:
 
 - `global.nix`: what every NixOS host shares: flakes, git, vim, and a default
@@ -71,11 +71,12 @@ claude-code, codex and noctalia from `pkgs.unstable`. Install local packages by
 name. Linux-only packages set `meta.platforms`. `git-open-branch` installs the
 `git-open` command.
 
-`overlays/default.nix` holds `additions`, `unstable` (`pkgs.unstable`, with
-Noctalia patched) and `pins`. `pins` takes Firefox, Hyprland, the Hyprland
-plugins and the Hyprland portal from exact nixpkgs revisions, and patches
-hyprfocus. The `apple-fonts` input's overlay adds `pkgs.sf-pro`, `sf-compact`,
-`sf-mono` and `ny`.
+`overlays/default.nix` holds `additions`, `unstable` and `pins`. `unstable` is
+`pkgs.unstable`, with claude-code built from the manifest in
+`overlays/claude-code/` and Noctalia patched. `pins` takes Firefox, Hyprland,
+the Hyprland plugins and the Hyprland portal from exact nixpkgs revisions, and
+patches hyprfocus. The `apple-fonts` input's overlay adds `pkgs.sf-pro`,
+`sf-compact`, `sf-mono` and `ny`.
 
 Patches sit next to what applies them: a `pkgs/` package keeps its patch in its
 own directory, and overlay patches live in `overlays/patches/<package>/`.
