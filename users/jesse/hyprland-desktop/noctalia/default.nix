@@ -180,6 +180,9 @@ let
 in
 {
   home.packages = [
+    # Without an index.theme in the profile's hicolor, Noctalia only searches a few sizes there,
+    # and misses apps like Zed and Orca that ship a single 512x512 icon.
+    pkgs.hicolor-icon-theme
     # Noctalia's upstream mpvpaper plugin runs it from PATH.
     pkgs.mpvpaper
     noctalia

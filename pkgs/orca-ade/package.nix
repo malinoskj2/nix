@@ -126,6 +126,7 @@ stdenv.mkDerivation (finalAttrs: {
       --prefix XDG_DATA_DIRS : ${glib.getSchemaDataDirPath gsettings-desktop-schemas}:${glib.getSchemaDataDirPath gtk3} \
       --set CHROME_DEVEL_SANDBOX ${electron}/libexec/electron/chrome-sandbox
     ln -s $out/libexec/orca-ade/resources/bin/orca-ide $out/bin/orca-ide
+    ln -s $out/libexec/orca-ade/orca-ide $out/bin/orca-ade
 
     runHook postInstall
   '';
@@ -139,7 +140,7 @@ stdenv.mkDerivation (finalAttrs: {
       name = "orca-ade";
       desktopName = "Orca";
       comment = finalAttrs.meta.description;
-      exec = "${placeholder "out"}/libexec/orca-ade/orca-ide %U";
+      exec = "orca-ade %U";
       icon = "orca-ade";
       startupWMClass = "orca";
       mimeTypes = [ "x-scheme-handler/orca" ];
