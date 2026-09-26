@@ -3,7 +3,12 @@
   const fs = require("node:fs");
   const css = fs.readFileSync("@theme@/claude.css", "utf8");
   const shellCss = fs.readFileSync("@theme@/shell.css", "utf8");
-  const codeThemeDark = fs.readFileSync("@theme@/code-theme-dark", "utf8");
+  const script = fs.existsSync("@theme@/claude.js")
+    ? fs.readFileSync("@theme@/claude.js", "utf8")
+    : null;
+  const codeThemeDark = fs.existsSync("@theme@/code-theme-dark")
+    ? fs.readFileSync("@theme@/code-theme-dark", "utf8")
+    : null;
   // The app reads its editor preferences once at load, so a changed one needs a reload.
   const pinCodeTheme = `(() => {
     const key = "epitaxy-editor-prefs";
@@ -26,6 +31,8 @@
       if (contents.getURL().endsWith("/main_window/index.html")) contents.insertCSS(shellCss);
       if (!contents.getURL().startsWith("https://claude.ai/")) return;
       contents.insertCSS(css);
+      if (script !== null) contents.executeJavaScript(script);
+      if (codeThemeDark === null) return;
       contents.executeJavaScript(pinCodeTheme).then((changed) => {
         if (changed && !reloaded) {
           reloaded = true;

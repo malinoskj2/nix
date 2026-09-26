@@ -54,6 +54,9 @@ in
         # WaveFox 0.6.x targets the Nova UI.
         "browser.nova.enabled" = true;
 
+        # Pages get prefers-color-scheme: light while the chrome stays dark.
+        "layout.css.prefers-color-scheme.content-override" = 1;
+
         # Not an allowlisted prefix, so the Preferences policy would reject it.
         "image.mem.decode_bytes_at_a_time" = 32768;
 
