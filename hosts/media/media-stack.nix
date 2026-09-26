@@ -4,6 +4,17 @@ let
   composeDir = "/home/jesse/pi-media-stack";
 in
 {
+  # The containers run as this user instead of jesse. It isn't in the docker
+  # group, so a container escape as it can't drive the daemon.
+  users = {
+    users.media = {
+      isSystemUser = true;
+      uid = 2000;
+      group = "media";
+    };
+    groups.media.gid = 2000;
+  };
+
   virtualisation.docker = {
     autoPrune = {
       enable = true;
