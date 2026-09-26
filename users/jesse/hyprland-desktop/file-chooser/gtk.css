@@ -107,6 +107,20 @@ dialog headerbar button:backdrop {
   -gtk-icon-shadow: none;
 }
 
+/* Adwaita pads a text button by class, which outranks the rule above while the window is
+   focused, so the padding is named by class too, or a button would change width with focus. */
+dialog headerbar button.text-button,
+dialog headerbar button.text-button:backdrop {
+  padding: 0 14px;
+}
+
+dialog headerbar button.text-button.suggested-action,
+dialog headerbar button.text-button.suggested-action:backdrop,
+dialog headerbar button.text-button.default,
+dialog headerbar button.text-button.default:backdrop {
+  padding: 0 18px;
+}
+
 dialog headerbar button:hover {
   background: rgba(255, 255, 255, 0.15);
 }
