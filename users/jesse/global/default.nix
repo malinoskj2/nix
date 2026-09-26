@@ -2,7 +2,7 @@
   imports = [
     ../alacritty.nix
     ../claude
-    ../codex
+    ../codex.nix
     ../fastfetch
     ../starship.nix
     ../zed.nix
