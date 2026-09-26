@@ -15,7 +15,6 @@
         settingsSha256 = "sha256-LK1LU8mDkM/XVRKPBtuOZh9nIP/lGFLAJnmasEX8jhg=";
         persistencedSha256 = "sha256-qPRb+3d88+2RcpUkoBTbjIaImnQ+jX+/6p1vXcJ5geE=";
       };
-      modesetting.enable = true;
       nvidiaSettings = false;
       open = true;
       powerManagement.enable = true;
