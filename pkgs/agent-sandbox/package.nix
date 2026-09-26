@@ -18,10 +18,12 @@
   findutils,
   foot,
   gawk,
+  gcc,
   git,
   glibc,
   glibcLocales,
   gnugrep,
+  gnumake,
   gnused,
   gnutar,
   grim,
@@ -145,8 +147,10 @@ let
       findutils
       foot
       gawk
+      gcc
       git
       gnugrep
+      gnumake
       gnused
       gnutar
       grim
