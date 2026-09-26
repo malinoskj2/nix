@@ -42,9 +42,10 @@
   replaceVars,
   systemd,
   # A directory holding claude.css, injected into the claude.ai pages the app loads, shell.css,
-  # injected into the window's own page beneath them, the title-bar-symbol color for the native
-  # window controls in dark mode, and code-theme-dark, the Shiki theme pinned as the dark code
-  # theme. The main window becomes transparent, so the CSS paints its title bar as glass.
+  # injected into the window's own page beneath them, and optionally claude.js, run in those
+  # pages, title-bar-symbol and title-bar-symbol-light, the colors for the native window
+  # controls in dark and light mode, and code-theme-dark, the Shiki theme pinned as the dark
+  # code theme. The main window becomes transparent, so the CSS paints its title bar.
   theme ? null,
   wayland,
   xdg-utils,
@@ -153,7 +154,13 @@ stdenv.mkDerivation (finalAttrs: {
     replace /usr/bin/secret-tool ${libsecret}/bin/secret-tool
     ${lib.optionalString (theme != null) ''
       replace '#151515' '#00000000'
-      replace '#c2c0b6' "$(< ${theme}/title-bar-symbol)"
+      replace '#fcfcfb' '#00000000'
+      if [ -e ${theme}/title-bar-symbol ]; then
+        replace '#c2c0b6' "$(< ${theme}/title-bar-symbol)"
+      fi
+      if [ -e ${theme}/title-bar-symbol-light ]; then
+        replace '#3d3d3a' "$(< ${theme}/title-bar-symbol-light)"
+      fi
       replaceRaw 'titleBarStyle:"hidden",titleBarOverlay:!0,' 'titleBarStyle:"hidden",titleBarOverlay:!0,transparent:!0,'
 
       # The hook goes after the directive so the minified main keeps strict mode.
