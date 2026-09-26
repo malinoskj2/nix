@@ -36,28 +36,6 @@ For a new machine:
    `networking.hostName`, so the file name must match it.
 6. `git add` the new files.
 
-### `media`
-
-Skip the clone above. `media`'s container stack comes from the private
-[media-stack](https://github.com/malinoskj2/media-stack) flake, which `media`
-can't fetch, so it's deployed from another host with `./deploy.sh` in a
-checkout of that repository. That evaluates there and builds and activates on
-`media`. Install NixOS with SSH and jesse's key, and give `~/.ssh/config` on
-the deploying host a `media` entry for it.
-
-Before the first deploy:
-
-1. Create jesse's password hash. Accounts come only from the config, so
-   without this file jesse's password is locked and sudo stops working:
-   `sudo sh -c 'umask 077; mkpasswd -m yescrypt > /secret/jesse.passwd'`.
-2. A new install has a new SSH host key, so the stack's secrets can't be
-   decrypted until it's a recipient. In the media-stack checkout, convert the
-   key with `ssh media cat /etc/ssh/ssh_host_ed25519_key.pub | nix run
-   nixpkgs#ssh-to-age`, put the result in `.sops.yaml` as the `media` key, and
-   run `nix run nixpkgs#sops -- updatekeys secrets.yaml`.
-3. Restore the apps' state to the paths `hosts/media` gives the stack, owned
-   by uid and gid 2000.
-
 ### `home`: Secure Boot
 
 `home` boots through Limine with Secure Boot, and the Limine installer stops if

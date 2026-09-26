@@ -19,11 +19,6 @@ The [update workflow](../.github/workflows/update.yml) runs `nix flake update`
 every week, runs `nix flake check` against the new lock on each system, and
 opens a pull request only when every check passes.
 
-The workflow updates every input except `media-stack`, which is private. CI
-builds `media` without its stack. `./deploy.sh` in the media-stack checkout
-updates that input to what it pushes, then builds and deploys `media`, so an
-update to `media` goes through it rather than `nh os switch`.
-
 ## Inputs that move as a unit
 
 ### The release
