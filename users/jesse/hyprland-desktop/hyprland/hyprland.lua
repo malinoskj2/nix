@@ -293,7 +293,7 @@ hl.config({
   },
 })
 
-hl.animation({ leaf = "hyprsheetIn", enabled = true, speed = 7, spring = "snap" })
+hl.animation({ leaf = "hyprsheetIn", enabled = true, speed = 7, spring = "glide" })
 hl.animation({ leaf = "hyprsheetOut", enabled = true, speed = 7, spring = "glide" })
 
 -- Noctalia reads its mpvpaper wallpaper assignments only at startup, so they're randomized first.
