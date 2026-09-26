@@ -21,6 +21,7 @@
 #include <hyprland/src/config/values/types/StringValue.hpp>
 #include <hyprland/src/config/values/types/Vec2Value.hpp>
 #include <hyprland/src/desktop/Workspace.hpp>
+#include <hyprland/src/desktop/rule/windowRule/WindowRuleApplicator.hpp>
 #include <hyprland/src/desktop/state/FocusState.hpp>
 #include <hyprland/src/desktop/state/WindowFadeout.hpp>
 #include <hyprland/src/desktop/view/Window.hpp>
@@ -48,6 +49,7 @@ static struct {
     SP<Config::Values::CStringValue> windowClass;
     SP<Config::Values::CFloatValue>  parentShare;
     SP<Config::Values::CVec2Value>   minSize;
+    SP<Config::Values::CFloatValue>  dip;
 } configValues;
 
 class CSheetTransformer;
@@ -65,13 +67,15 @@ struct SPendingChooser {
 // An open chooser and the window drawn scaled into it. `progress` runs from 0, the parent in its own
 // box, to 1, the parent inside `into`, the chooser's box. While it opens and closes, both windows are
 // drawn in the same box between the two, crossfading. In between, the parent is hidden and the
-// chooser is still drawn through its transformer, at its own size: Hyprland blurs a transformed
-// window differently, so handing the chooser back would change its glass the moment it came to rest.
+// chooser is still drawn through its transformer, at its own size scaled by `dip`, its focus
+// animation: Hyprland blurs a transformed window differently, so handing the chooser back would
+// change its glass the moment it came to rest.
 struct SSheet {
     PHLWINDOWREF                chooser;
     PHLWINDOWREF                parent;
     CBox                        into;
     PHLANIMVAR<float>           progress;
+    PHLANIMVAR<float>           dip;
     CSheetTransformer*          parentTransformer  = nullptr;
     CSheetTransformer*          chooserTransformer = nullptr;
     WP<Desktop::CWindowFadeout> chooserFadeout;
@@ -165,7 +169,7 @@ class CSheetTransformer : public Render::IWindowTransformer {
         glClearColor(0.F, 0.F, 0.F, 0.F);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        const float PROGRESS  = m_sheet->progress->value();
+        const float PROGRESS  = std::clamp(m_sheet->progress->value(), 0.F, 1.F);
         const float TRAVELLED = m_sheet->closing ? 1.F - PROGRESS : PROGRESS;
         const float ALPHA     = m_isParent == m_sheet->closing ? incomingAlpha(TRAVELLED) : outgoingAlpha(TRAVELLED);
         if (ALPHA <= 0.F)
@@ -174,7 +178,8 @@ class CSheetTransformer : public Render::IWindowTransformer {
         const auto WORKSPACE = WINDOW->m_workspace;
         const auto OFFSET    = (WINDOW->m_pinned || !WORKSPACE ? Vector2D{} : WORKSPACE->m_renderOffset->value()) + WINDOW->m_floatingOffset - MONITOR->m_position;
         const auto FROM      = OWN.copy().translate(OFFSET).scale(MONITOR->m_scale);
-        auto       to        = m_sheet->opened && !m_sheet->closing ? FROM : lerpBox(currentBox(PARENT), targetBox(m_sheet), PROGRESS).translate(OFFSET).scale(MONITOR->m_scale);
+        auto       to        = m_sheet->opened && !m_sheet->closing ? FROM.copy().scaleFromCenter(m_sheet->dip->value()) :
+                                                                       lerpBox(currentBox(PARENT), targetBox(m_sheet), PROGRESS).translate(OFFSET).scale(MONITOR->m_scale);
 
         // Within two pixels of the window's own size it's drawn at that size on whole pixels, so it isn't
         // resampled as it comes to rest and looks the same once the sheet ends.
@@ -219,7 +224,8 @@ static void detach(const PHLWINDOWREF& w, CSheetTransformer*& slot) {
 // Hyprland skips a window at alpha 0 entirely: it isn't drawn, and its surfaces get no frame callbacks,
 // so a busy parent stops drawing too. Of the alphas always part of the drawn one, only the
 // move-from-workspace alpha is left alone while the window stays mapped on one workspace; groups and
-// monocle layouts set the layout alpha themselves.
+// monocle layouts set the layout alpha themselves. A hidden parent also can't take focus: the pointer
+// passing over it would otherwise focus it, unseen, and restyle the chooser as unfocused.
 static void hideParent(SSheet* sheet) {
     const auto PARENT = sheet->parent.lock();
     if (!PARENT || sheet->parentHidden)
@@ -227,6 +233,7 @@ static void hideParent(SSheet* sheet) {
 
     detach(sheet->parent, sheet->parentTransformer);
     PARENT->alpha(Desktop::View::WINDOW_ALPHA_MOVE_FROM_WORKSPACE)->setValueAndWarp(0.F);
+    PARENT->m_ruleApplicator->noFocus().set(true, Desktop::Types::PRIORITY_SET_PROP);
     sheet->parentHidden = true;
 }
 
@@ -235,8 +242,15 @@ static void showParent(SSheet* sheet) {
         return;
 
     sheet->parentHidden = false;
-    if (const auto PARENT = sheet->parent.lock())
+    if (const auto PARENT = sheet->parent.lock()) {
         PARENT->alpha(Desktop::View::WINDOW_ALPHA_MOVE_FROM_WORKSPACE)->setValueAndWarp(1.F);
+        PARENT->m_ruleApplicator->noFocus().unset(Desktop::Types::PRIORITY_SET_PROP);
+    }
+}
+
+static void damageChooser(SSheet* sheet) {
+    if (const auto CHOOSER = sheet->chooser.lock())
+        g_pHyprRenderer->damageWindow(CHOOSER, true);
 }
 
 static void damageSheet(SSheet* sheet) {
@@ -247,8 +261,9 @@ static void damageSheet(SSheet* sheet) {
 }
 
 // A spring spends its last stretch moving the scaled windows by fractions of a pixel, which only
-// makes their text and the blur's grain shimmer. Once the box is within half a pixel of where it's
-// going and moving less than that a frame, the sheet ends there and the windows draw themselves.
+// makes their text and the blur's grain shimmer. The sheet ends as soon as the box reaches where
+// it's going, or is within half a pixel of it and moving less than that a frame, and the windows
+// draw themselves from there.
 static void settleIfStill(SSheet* sheet, float progress) {
     const auto  PARENT  = sheet->parent.lock();
     const auto  MONITOR = PARENT ? PARENT->m_monitor.lock() : nullptr;
@@ -261,7 +276,8 @@ static void settleIfStill(SSheet* sheet, float progress) {
     const double TRAVEL = MONITOR->m_scale *
         std::max({std::abs(TO.x - FROM.x), std::abs(TO.y - FROM.y), std::abs(TO.x + TO.w - FROM.x - FROM.w), std::abs(TO.y + TO.h - FROM.y - FROM.h)});
     const float  GOAL   = sheet->closing ? 0.F : 1.F;
-    if (std::abs(GOAL - progress) * TRAVEL >= 0.5 || std::abs(progress - LAST) * TRAVEL >= 0.5)
+    const bool   ARRIVED = sheet->closing ? progress <= GOAL : progress >= GOAL;
+    if (!ARRIVED && (std::abs(GOAL - progress) * TRAVEL >= 0.5 || std::abs(progress - LAST) * TRAVEL >= 0.5))
         return;
 
     // Warping a variable from inside its own update callback isn't safe, so this waits for the event loop.
@@ -441,6 +457,8 @@ static void onWindowOpenLate(PHLWINDOW w) {
 
     Animation::mgr()->createAnimation(0.F, sheet->progress, Config::animationTree()->getAnimationPropertyConfig("hyprsheetIn"), AVARDAMAGE_NONE);
     sheet->progress->setUpdateCallback([raw](auto) { onProgressUpdate(raw); });
+    Animation::mgr()->createAnimation(1.F, sheet->dip, Config::animationTree()->getAnimationPropertyConfig("hyprsheetIn"), AVARDAMAGE_NONE);
+    sheet->dip->setUpdateCallback([raw](auto) { damageChooser(raw); });
 
     attach(raw, PARENT, sheet->parentTransformer, true);
     attach(raw, w, sheet->chooserTransformer, false);
@@ -515,6 +533,39 @@ static SP<Desktop::CWindowFadeout> hkFadeoutCreate(PHLWINDOW window, SP<Render::
 }
 
 // A chooser that is gone without closing would leave its parent hidden.
+// hyprfocus dips a focused window by resizing it and back, which has a chooser lay itself out again
+// at each size, so its buttons visibly change size. The chooser is kept out of hyprfocus, and once
+// its sheet has opened it dips here instead, with hyprfocus's animations, by scaling its finished
+// frame like the sheet does. Focus the pointer brings by passing over the chooser doesn't dip: it's
+// the one window on its monitor while it's open, so a dip on every hover would only distract.
+static void onWindowActive(PHLWINDOW w, Desktop::eFocusReason reason) {
+    static PHLWINDOWREF lastActive;
+    if (!w)
+        return;
+
+    const auto LAST = std::exchange(lastActive, PHLWINDOWREF{w});
+    if (LAST.lock() == w || reason == Desktop::FOCUS_REASON_NEW_WINDOW || reason == Desktop::FOCUS_REASON_FFM)
+        return;
+
+    auto* sheet = sheetFor(w, false);
+    if (!sheet || !sheet->opened || sheet->closing || sheet->dip->isBeingAnimated())
+        return;
+
+    const auto& TREE = Config::animationTree();
+    if (!TREE->nodeExists("hyprfocusIn") || !TREE->nodeExists("hyprfocusOut"))
+        return;
+
+    sheet->dip->setConfig(TREE->getAnimationPropertyConfig("hyprfocusIn"));
+    *sheet->dip = configValues.dip->value();
+    sheet->dip->setCallbackOnEnd([sheet](auto) {
+        if (!alive(sheet))
+            return;
+
+        sheet->dip->setConfig(Config::animationTree()->getAnimationPropertyConfig("hyprfocusOut"));
+        *sheet->dip = 1.F;
+    });
+}
+
 static void onWindowDestroy() {
     std::erase_if(pendingChoosers, [](const auto& p) { return !p->chooser; });
 
@@ -567,10 +618,13 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     configValues.parentShare =
         makeShared<Config::Values::CFloatValue>("plugin:hyprsheet:parent_share", "share of the parent's size a chooser takes", 0.75F, Config::Values::SFloatValueOptions{.min = 0.1F, .max = 1.F});
     configValues.minSize = makeShared<Config::Values::CVec2Value>("plugin:hyprsheet:min_size", "smallest size a chooser takes", Config::VEC2{700, 450});
+    configValues.dip     = makeShared<Config::Values::CFloatValue>("plugin:hyprsheet:dip", "scale an open chooser dips to when focused, with hyprfocus's animations", 0.99F,
+                                                                   Config::Values::SFloatValueOptions{.min = 0.F, .max = 1.F});
 
     HyprlandAPI::addConfigValueV2(PHANDLE, configValues.windowClass);
     HyprlandAPI::addConfigValueV2(PHANDLE, configValues.parentShare);
     HyprlandAPI::addConfigValueV2(PHANDLE, configValues.minSize);
+    HyprlandAPI::addConfigValueV2(PHANDLE, configValues.dip);
 
     // Like hyprfocus's, these nodes outlive an unload, and a reload just recreates them.
     Config::animationTree()->m_animationTree.createNode("hyprsheetIn", "windowsIn");
@@ -582,6 +636,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     listeners.emplace_back(Event::bus()->m_events.window.close.listen([](PHLWINDOW w) { onWindowClose(w); }));
     listeners.emplace_back(Event::bus()->m_events.window.destroy.listen([](PHLWINDOWREF) { onWindowDestroy(); }));
     listeners.emplace_back(Event::bus()->m_events.window.moveToWorkspace.listen([](PHLWINDOW w, PHLWORKSPACE) { onWindowMoveToWorkspace(w); }));
+    listeners.emplace_back(Event::bus()->m_events.window.active.listen([](PHLWINDOW w, Desktop::eFocusReason r) { onWindowActive(w, r); }));
 
     return {"hyprsheet", "Draws a file chooser's parent scaled into it", "jesse", "1.0"};
 }

@@ -188,6 +188,9 @@ hl.config({
       keyboard_focus_animation = "shrink",
       mouse_focus_animation = "shrink",
       shrink_percentage = 0.99,
+      -- The file chooser dips through hyprsheet instead, which scales its frame rather than
+      -- resizing it, so its buttons don't lay out again at each size.
+      class = "^(?!xdg-desktop-portal-gtk$).*$",
     },
   },
 })
@@ -289,12 +292,19 @@ hl.config({
       -- The chooser takes this share of the app that opened it, but stays usable over small ones.
       parent_share = 0.75,
       min_size = { 700, 450 },
+      -- hyprfocus's shrink_percentage.
+      dip = 0.99,
     },
   },
 })
 
-hl.animation({ leaf = "hyprsheetIn", enabled = true, speed = 7, spring = "glide" })
-hl.animation({ leaf = "hyprsheetOut", enabled = true, speed = 7, spring = "glide" })
+-- A critically damped spring spends its last stretch creeping through the final pixels, and the
+-- chooser's text shimmers while it's resampled at nearly its own size. `land` is damped just under
+-- critical, so it reaches the chooser's size at a small speed, and hyprsheet stops it the moment it
+-- gets there.
+hl.curve("land", { type = "spring", stiffness = 625, dampening = 42.5, mass = 1 })
+hl.animation({ leaf = "hyprsheetIn", enabled = true, speed = 7, spring = "land" })
+hl.animation({ leaf = "hyprsheetOut", enabled = true, speed = 7, spring = "land" })
 
 -- Noctalia reads its mpvpaper wallpaper assignments only at startup, so they're randomized first.
 hl.on("hyprland.start", function()
