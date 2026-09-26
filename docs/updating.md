@@ -68,11 +68,14 @@ To upgrade:
    should have its own rounded glass, even while one slides in or out.
 4. Read [`pkgs/hyprsheet/main.cpp`](../pkgs/hyprsheet/main.cpp) against the
    new source. It uses Hyprland's private window transformers, xdg-foreign
-   parents, window fadeouts and layout moves, and hooks
-   `CWindowFadeout::create`, so a clean build isn't enough. Open a file chooser
-   from Firefox and check that Firefox shrinks into the chooser and fades out
-   as it opens, and grows back out of it as it closes, without Firefox
-   re-laying out its page.
+   parents, window fadeouts and layout moves, hooks `CWindowFadeout::create`,
+   and hides the parent through its move-from-workspace alpha, so a clean
+   build isn't enough. Check that Hyprland still skips drawing a window at
+   alpha 0 and sends it no frame callbacks, and still sets that alpha only when
+   a window maps, unmaps or changes workspace. Open a file chooser from
+   Firefox and check that Firefox shrinks into the chooser and fades out as it
+   opens, and grows back out of it as it closes, without Firefox re-laying out
+   its page.
 5. Rebase
    [`aquamarine-nested.patch`](../pkgs/agent-sandbox/aquamarine-nested.patch)
    onto that commit's Aquamarine, then start a sandbox and check that
