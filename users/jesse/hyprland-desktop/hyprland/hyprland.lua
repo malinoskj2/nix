@@ -1,4 +1,4 @@
--- `nix` is prepended by users/jesse/hyprland-desktop/hyprland/default.nix.
+-- `nix` is prepended at build time.
 local actions = require("actions")(nix)
 
 local MAIN_MOD = "SUPER"
@@ -337,7 +337,7 @@ hl.bind(MAIN_MOD .. " + ALT + L", hl.dsp.window.resize({ x = 10, y = 0, relative
 hl.bind(MAIN_MOD .. " + ALT + K", hl.dsp.window.resize({ x = 0, y = -10, relative = true }))
 hl.bind(MAIN_MOD .. " + ALT + J", hl.dsp.window.resize({ x = 0, y = 10, relative = true }))
 
--- Y and O cycle back and forth through the main monitor's numbered workspaces; see actions.lua.
+-- Y and O cycle back and forth through the main monitor's numbered workspaces.
 hl.bind(MAIN_MOD .. " + Y", actions.focus_workspace(-1))
 hl.bind(MAIN_MOD .. " + O", actions.focus_workspace(1))
 hl.bind(MAIN_MOD .. " + SHIFT + Y", actions.move_to_workspace(-1))

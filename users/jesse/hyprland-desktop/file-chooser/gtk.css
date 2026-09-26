@@ -13,8 +13,6 @@ menu {
   -gtk-icon-theme: "Couture";
 }
 
-/* Frame */
-
 decoration,
 .csd.tiled decoration {
   border-radius: 20px;
@@ -74,8 +72,6 @@ dialog .dialog-vbox {
   background-position: center bottom;
   background-repeat: no-repeat;
 }
-
-/* Header bar */
 
 dialog headerbar.titlebar,
 dialog headerbar.titlebar:backdrop {
@@ -183,8 +179,6 @@ dialog headerbar button:disabled:backdrop label {
   color: inherit;
 }
 
-/* Panes */
-
 filechooser,
 filechooser > box,
 filechooser paned,
@@ -202,8 +196,6 @@ filechooser paned > separator:backdrop {
   background: none;
   box-shadow: none;
 }
-
-/* Sidebar */
 
 filechooser placessidebar.sidebar,
 filechooser placessidebar.sidebar:backdrop {
@@ -285,8 +277,6 @@ filechooser placessidebar list > separator {
   margin: 8px 10px 4px;
   background: @surface0;
 }
-
-/* List pane */
 
 filechooser paned > box {
   border-radius: 14px;
@@ -397,8 +387,6 @@ filechooser entry image {
   color: @overlay2;
 }
 
-/* File list */
-
 filechooser treeview.view,
 filechooser treeview.view:backdrop {
   -GtkTreeView-horizontal-separator: 12px;
@@ -473,8 +461,6 @@ filechooser scrollbar slider:hover {
   background: alpha(@text, 0.28);
 }
 
-/* Bottom bar */
-
 filechooser actionbar {
   margin-top: 8px;
 }
@@ -518,8 +504,6 @@ filechooser checkbutton check:checked {
   background: @mauve;
   color: @crust;
 }
-
-/* Popovers and menus */
 
 popover,
 popover.background,

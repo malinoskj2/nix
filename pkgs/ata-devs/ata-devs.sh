@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Map the ataN.NN port names in kernel ATA errors to their sd block devices.
-#
 # USB disks have no ATA port and are reported as such.
 #
 # Adapted from https://serverfault.com/q/244944.

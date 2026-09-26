@@ -38,7 +38,6 @@ void useGlassToolbarColors() {
 }
 
 /**
- * Replaces Swing's paint manager with the plain {@code RepaintManager.PaintManager}.
  * The IDE forces {@code swing.bufferPerWindow=true}, whose per-window back buffer drops alpha
  * on Wayland; the plain manager paints straight into the window's ARGB surface instead.
  */
@@ -61,21 +60,12 @@ void turnOffProjectGradient() {
     }
 }
 
-/**
- * Glazes every JFrame currently open in the IDE.
- */
 void glazeOpenWindows() {
     Frame.frames
       .grep(JFrame)
       .each { glaze(it) }
 }
 
-/**
- * Makes one window's main header translucent: clears the window background, stops the header
- * and its children from painting opaque, and gives the header the glass color.
- *
- * @param frame the window to glaze; left untouched if it has no {@code ToolbarFrameHeader}
- */
 void glaze(JFrame frame) {
     def header = descendantsOf(frame.rootPane).find { it.class.simpleName == 'ToolbarFrameHeader' }
     if (!header) return
@@ -87,11 +77,8 @@ void glaze(JFrame frame) {
 }
 
 /**
- * Sets a window's background to fully transparent.
  * {@code Frame.setBackground} rejects alpha on decorated frames, so this writes the private
  * {@code background} field directly.
- *
- * @param frame the window to make transparent
  */
 void makeTransparent(Frame frame) {
     Component
@@ -100,12 +87,6 @@ void makeTransparent(Frame frame) {
       .set(frame, CLEAR)
 }
 
-/**
- * Lists a component and everything nested inside it, depth-first.
- *
- * @param component the root of the tree to walk
- * @return {@code component} followed by all of its descendants
- */
 List<Component> descendantsOf(Component component) {
     def children = component instanceof Container ? component.components as List : []
     [component] + children.collectMany { descendantsOf(it) }

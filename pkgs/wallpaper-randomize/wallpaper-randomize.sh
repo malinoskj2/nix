@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Give each monitor with a Noctalia video wallpaper a random video from ~/.wallpapers/video.
-#
 # The script runs before Noctalia starts: the mpvpaper plugin reads assignments.json at launch and
 # keeps that video until the next launch. Monitors without an existing assignment are left alone.
 # Slideshow mode is forced off, since only then does the plugin poll mpv.
@@ -9,8 +7,6 @@ readonly video_dir="$HOME/.wallpapers/video"
 readonly mpvpaper_dir="${XDG_STATE_HOME:-$HOME/.local/state}/noctalia/mpvpaper"
 readonly state_file="$mpvpaper_dir/assignments.json"
 
-# Prints the first entry of videos that is neither the monitor's previous video nor in
-# used_videos. With too few videos, it settles for any but the previous one, then for the first.
 pick_video() {
   local previous="$1"
   local video

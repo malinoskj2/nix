@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Print the remaining Claude Code and Codex usage limits.
-#
 # The OAuth credentials are the ones each CLI stores at sign-in, under $CLAUDE_CONFIG_DIR
 # (default ~/.claude) and $CODEX_HOME (default ~/.codex). The script exits 1 when either
 # provider's limits are unavailable.

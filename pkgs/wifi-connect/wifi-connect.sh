@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Join a Wi-Fi network interactively: scan, pick an SSID, enter its passphrase.
-#
 # The script must run as root. Nothing about the network is declared in Nix: the generated
 # wpa_supplicant config lives under /run/wifi-connect, so a reboot forgets it.
 

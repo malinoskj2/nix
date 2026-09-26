@@ -1,8 +1,3 @@
-"""Render the control button's frames: rest.png plus the hover shimmer loop.
-
-Requires ImageMagick with librsvg.
-"""
-
 import argparse
 import json
 import math
@@ -21,6 +16,7 @@ SHIMMER_OPACITY = 0.95
 SHIMMER_ROSE = "f5a3d0"
 
 
+# ImageMagick needs librsvg to read the logo.
 def run_magick(*args: str | Path) -> None:
     subprocess.run(["magick", *args], check=True)
 
@@ -116,7 +112,9 @@ def render_frame(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(
+        description="Render the control button's frames: rest.png plus the hover shimmer loop."
+    )
     parser.add_argument("--logo", type=Path, required=True, help="SVG with @lambda1@..@lambda6@ fill placeholders")
     parser.add_argument("--out-dir", type=Path, required=True, help="directory that receives the PNG frames")
     parser.add_argument("--width", type=int, required=True, help="button width in pixels")

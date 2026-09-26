@@ -22,7 +22,7 @@
 
   boot.tmp.useTmpfs = true;
 
-  # Overrides global.nix's default, leaving the clock on UTC.
+  # Overrides the shared default, leaving the clock on UTC.
   time.timeZone = null;
 
   users.users.pi = {

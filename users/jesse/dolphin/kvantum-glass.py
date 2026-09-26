@@ -1,10 +1,3 @@
-"""Turn a Kvantum theme's window background into translucent glass.
-
-Reads SOURCE.kvconfig and SOURCE.svg and writes the edited pair to DESTINATION.kvconfig and
-DESTINATION.svg. How Kvantum chooses between the Window and Dialog elements, which the edits rely
-on, is explained in users/jesse/dolphin/kvantum-theme.nix.
-"""
-
 import argparse
 import re
 from pathlib import Path
@@ -81,7 +74,7 @@ def edit_svg(svg: str, base: str, glass: str, opacity: str) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description="Turn a Kvantum theme's window background into translucent glass.")
     parser.add_argument("source", help="theme path without the .kvconfig and .svg suffixes")
     parser.add_argument("destination", help="output path without the .kvconfig and .svg suffixes")
     parser.add_argument("base", help="window color as the theme's SVG spells it, bare uppercase rrggbb")

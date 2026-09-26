@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Pause each monitor's Noctalia video wallpaper while its visible workspace has windows.
-#
 # Every wallpaper stays paused while the Noctalia lock screen is up, since the video is hidden
 # behind it. Updates are event-driven: Hyprland events cover windows, workspaces and new mpvpaper
 # surfaces, and logind's LockedHint covers locking and unlocking.
@@ -42,7 +40,6 @@ print_monitor_states() {
     | "\(.name) \($windows > 0)"'
 }
 
-# Fails if any monitor's mpv couldn't be reached.
 apply_pause_states() {
   local locked
 
