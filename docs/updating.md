@@ -183,6 +183,10 @@ Treat a bump as a hardware change and test it on the device.
   `electron` and `engines.node`. Its `packageManager` is pnpm 12, which
   `nixpkgs-unstable` doesn't have yet, so `pnpm_11` builds it until `pnpm_12`
   lands. Rebase
+  [`catppuccin.patch`](../pkgs/orca-ade/catppuccin.patch), which maps Orca's
+  dark application tokens and every Monaco editor surface to Catppuccin Mocha.
+  Upstream may add new dark-mode variables or Monaco call sites, so search for
+  both the `.dark` token block and `vs-dark` when rebasing it. Rebase
   [`claude-hooks.patch`](../pkgs/orca-ade/claude-hooks.patch): it keeps Orca out
   of the read-only `~/.claude/settings.json` by writing its hooks to
   `~/.orca/agent-hooks/claude-settings.json` and passing that file with
@@ -201,6 +205,8 @@ Treat a bump as a hardware change and test it on the device.
     and in a sandbox workspace over SSH;
   - open a Claude chat tab (Settings → Experimental) and check that its
     `claude` process has `--settings`;
+  - check the chat view, sidebars, tabs, popovers and status bar use Mocha, then
+    open a file and a diff to check the Catppuccin Monaco theme;
   - run `orca-ide agent hooks status --json` and check that Claude reports
     `installed`;
   - click a video path in a chat tab and in a terminal, locally and in a

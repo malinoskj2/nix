@@ -50,7 +50,7 @@ Noctalia plugins take the palette through `nix.palette` and a
 
 Bar icons are white at 70% (`#ffffffb3`).
 
-The GTK file chooser, Dolphin and Firefox use **mauve** as their accent. That
+The GTK file chooser, Dolphin, Firefox and Orca use **mauve** as their accent. That
 is the one known split from the peach used by the shell; keep new shell
 components on peach.
 
