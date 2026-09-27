@@ -93,7 +93,12 @@ let
     } $out/.mcp.json
   '';
 
+  # Orca's relay installs its Claude hooks here rather than in the read-only ~/.claude/settings.json.
   claude = writeShellScriptBin "claude" ''
+    settings=$HOME/.orca/agent-hooks/claude-settings.json
+    if [[ -f $settings ]]; then
+      set -- --settings "$settings" "$@"
+    fi
     exec ${lib.getExe claude-code} --plugin-dir ${plugin} "$@"
   '';
 

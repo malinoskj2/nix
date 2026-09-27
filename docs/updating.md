@@ -186,10 +186,12 @@ Treat a bump as a hardware change and test it on the device.
   [`claude-hooks.patch`](../pkgs/orca-ade/claude-hooks.patch): it keeps Orca out
   of the read-only `~/.claude/settings.json` by writing its hooks to
   `~/.orca/agent-hooks/claude-settings.json` and passing that file with
-  `--settings`. Upstream Claude launches move often, so check every one still
-  gets the flag, not just the build. Then, in Orca:
+  `--settings`. Over SSH it writes the same file on the remote, which the agent
+  sandbox's `claude` wrapper loads. Upstream Claude launches move often, so
+  check every one still gets the flag, not just the build. Then, in Orca:
   - check that a `claude` typed into an Orca terminal and one Orca launches
-    both show working and done in the sidebar, with the running tool;
+    both show working and done in the sidebar, with the running tool, locally
+    and in a sandbox workspace over SSH;
   - open a Claude chat tab (Settings → Experimental) and check that its
     `claude` process has `--settings`;
   - run `orca-ide agent hooks status --json` and check that Claude reports

@@ -39,7 +39,7 @@ index 8c09335f..26eaf262 100644
        ...CLAUDE_TUI_RESUME_BASE_ARGS,
        '--resume',
 diff --git a/src/main/claude/hook-service.ts b/src/main/claude/hook-service.ts
-index 73e7add4..4a6863af 100644
+index 73e7add4..0065d2ec 100644
 --- a/src/main/claude/hook-service.ts
 +++ b/src/main/claude/hook-service.ts
 @@ -15,6 +15,7 @@ import {
@@ -111,7 +111,29 @@ index 73e7add4..4a6863af 100644
    // Why: the statusline feed is opportunistic (usage display, not agent status); a user who deleted the
    // managed entry has opted out, and the marker distinguishes that deletion from a first install.
    private installManagedStatusLine(config: HooksConfig): HooksConfig {
-@@ -252,6 +277,10 @@ export class ClaudeHookService {
+@@ -193,12 +218,18 @@ export class ClaudeHookService {
+     options: ClaudeHookInstallOptions = {}
+   ): Promise<AgentHookInstallStatus> {
+     // Why: remote Windows is unsupported; local process.platform cannot identify the remote OS.
+-    const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
++    const remoteHooksDir = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks`
++    // Why: as locally, the remote ~/.claude/settings.json may be read-only, so Claude's hooks
++    // go to their own file, which the remote's claude must load with --settings.
++    const usesSessionSettings = this.options.agent === 'claude'
++    const remoteConfigPath = usesSessionSettings
++      ? `${remoteHooksDir}/claude-settings.json`
++      : getRemoteConfigPath(remoteHome, this.options.settings)
+     const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
+-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
++    const remoteScriptPath = `${remoteHooksDir}/${remoteScriptFileName}`
+     // Why: surface fallible SFTP installs as structured errors.
+     try {
+-      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
++      const config = usesSessionSettings ? {} : await readHooksJsonRemote(sftp, remoteConfigPath)
+       if (!config) {
+         return {
+           agent: this.options.agent,
+@@ -252,6 +283,10 @@ export class ClaudeHookService {
    }
  
    remove(): AgentHookInstallStatus {
