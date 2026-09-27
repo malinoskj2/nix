@@ -63,6 +63,7 @@
   wtype,
   xwayland,
   xz,
+  zcode,
 }:
 
 let
@@ -197,6 +198,7 @@ let
       wtype
       xwayland
       xz
+      zcode
     ];
   };
 
@@ -310,7 +312,7 @@ symlinkJoin {
     ssh
   ];
   meta = {
-    description = "Run Claude Code or Codex in a Docker sandbox with the GPU and a headless Wayland session";
+    description = "Run Claude Code, Codex or ZCode in a Docker sandbox with the GPU and a headless Wayland session";
     mainProgram = "agent-sandbox";
     platforms = lib.platforms.linux;
   };
