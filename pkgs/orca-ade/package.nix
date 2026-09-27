@@ -35,7 +35,10 @@ stdenv.mkDerivation (finalAttrs: {
     hash = "sha256-gUj0REuVXpAB1DnxllrIFrTqI54geC8XkZAmwItTtzc=";
   };
 
-  patches = [ ./claude-hooks.patch ];
+  patches = [
+    ./claude-hooks.patch
+    ./open-video-externally.patch
+  ];
 
   # The glibc floor guards Ubuntu 20.04 users of the upstream AppImage.
   postPatch = ''
