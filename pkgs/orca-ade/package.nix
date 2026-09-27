@@ -36,6 +36,7 @@ stdenv.mkDerivation (finalAttrs: {
   };
 
   patches = [
+    ./catppuccin.patch
     ./claude-hooks.patch
     ./open-video-externally.patch
   ];
