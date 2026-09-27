@@ -16,4 +16,6 @@ let
 in
 {
   home.packages = [ (pkgs.claude-desktop.override { inherit theme; }) ];
+
+  xdg.mimeApps.defaultApplications."x-scheme-handler/claude" = "com.anthropic.Claude.desktop";
 }

@@ -1,4 +1,14 @@
+{ lib, ... }:
 {
+  xdg.mimeApps.defaultApplications = lib.genAttrs [
+    "video/mp4"
+    "video/ogg"
+    "video/quicktime"
+    "video/vnd.avi"
+    "video/webm"
+    "video/x-matroska"
+  ] (_: "mpv.desktop");
+
   programs.mpv = {
     enable = true;
     defaultProfiles = [ "high-quality" ];
