@@ -1,4 +1,4 @@
-# Trees moved off /media are bound back so container paths stay unchanged.
+# Keep legacy paths stable while their data lives on the appropriate disks.
 let
   mkDisk = uuid: {
     device = "/dev/disk/by-uuid/${uuid}";
@@ -25,7 +25,7 @@ in
     "/mnt/media4" = mkDisk "8eb80012-a38b-4b82-9c63-eb0e17cfb490";
 
     "/media/storage/media/legacy_media" = mkBind "/mnt/media2/legacy_media";
-    "/media/storage/media/movies" = mkBind "/mnt/media3/movies";
+    "/media/storage/media/movies" = mkBind "/media/data/media/movies";
     "/media/storage/media/tv" = mkBind "/mnt/media2/tv";
     "/media/storage/media/tv_cartoon" = mkBind "/mnt/media2/tv_cartoon";
   };
