@@ -3,6 +3,7 @@
     enable = true;
     defaultProfiles = [ "high-quality" ];
     config = {
+      autofit-larger = "75%x75%";
       hdr-compute-peak = true;
       hwdec = "auto-safe";
       interpolation = true;

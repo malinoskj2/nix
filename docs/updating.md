@@ -188,7 +188,14 @@ Treat a bump as a hardware change and test it on the device.
   `~/.orca/agent-hooks/claude-settings.json` and passing that file with
   `--settings`. Over SSH it writes the same file on the remote, which the agent
   sandbox's `claude` wrapper loads. Upstream Claude launches move often, so
-  check every one still gets the flag, not just the build. Then, in Orca:
+  check every one still gets the flag, not just the build. Also rebase
+  [`open-video-externally.patch`](../pkgs/orca-ade/open-video-externally.patch),
+  which opens a clicked video path with the system default (mpv) instead of
+  Orca's editor. The `postPatch` also edits upstream source in place: it drops
+  the AppImage's glibc floor check, turns on keeping the computer awake while
+  agents run, and makes the SSH relay writable after it's extracted on the
+  remote. Each uses `--replace-fail`, so a moved line fails the build; find
+  where the new release does the same thing. Then, in Orca:
   - check that a `claude` typed into an Orca terminal and one Orca launches
     both show working and done in the sidebar, with the running tool, locally
     and in a sandbox workspace over SSH;
@@ -196,6 +203,8 @@ Treat a bump as a hardware change and test it on the device.
     `claude` process has `--settings`;
   - run `orca-ide agent hooks status --json` and check that Claude reports
     `installed`;
+  - click a video path in a chat tab and in a terminal, locally and in a
+    sandbox workspace, and check that it opens in a floating mpv;
   - check that `~/.claude/settings.json` is unchanged and that a plain
     `claude` outside Orca has no Orca hooks;
   - check that Getting started shows Enable Orca CLI as done. It only looks
