@@ -16,7 +16,7 @@ it when the language changes, and check new work against it.
 - **Color has roles.** A color means the same thing on every surface (see
   [Color](#color)). Don't pick a color for a single element.
 - **Off-palette values need a reason** in a comment next to them (for example,
-  the inactive border's gray, because Catppuccin's neutrals are tinted blue).
+  the window shadow's gray, because Catppuccin's neutrals are tinted blue).
 
 ## Color
 
@@ -182,9 +182,8 @@ Hyprland springs, defined in `hyprland.lua`:
   end, and the bar's glass matches it.
 - Bar icons have no tooltips when their menu shows the same information
   (`show_tooltip = false`, from a Noctalia patch).
-- Windows have radius 10 and a 2 px peach-to-sky border. Apps that draw their
-  own chrome (Firefox, Zed, Claude, DataGrip, Dolphin) and Alacritty have no
-  border. Hyprbars is only a thin drag strip on Alacritty.
+- Windows have radius 10 and no border; hyprfocus's dip marks focus. Hyprbars
+  is only a thin drag strip on Alacritty.
 - Icons are Catppuccin Mocha Papirus, built two ways. The GTK file chooser
   uses Couture: blue folders, with one accent per place and a gray trash in
   its list and sidebar. Dolphin uses Papirus-Dark-Catppuccin: peach folders,

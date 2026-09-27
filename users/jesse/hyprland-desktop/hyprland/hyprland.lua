@@ -21,8 +21,7 @@ local CHROME_WEBGPU = table.concat({
   "--disable-gpu-sandbox",
 }, " ")
 
--- These grays stay outside the palette because Catppuccin's neutrals carry a blue tint.
-local INACTIVE_BORDER = "rgba(595959aa)"
+-- This gray stays outside the palette because Catppuccin's neutrals carry a blue tint.
 local SHADOW = "rgba(00000059)"
 
 local FILE_CHOOSER_APP = "xdg-desktop-portal-gtk"
@@ -102,17 +101,7 @@ hl.config({
   },
   general = {
     allow_tearing = true,
-    border_size = 2,
-    col = {
-      active_border = {
-        angle = 150,
-        colors = {
-          rgba(nix.palette.peach, nix.alpha.active_border),
-          rgba(nix.palette.sky, nix.alpha.active_border),
-        },
-      },
-      inactive_border = INACTIVE_BORDER,
-    },
+    border_size = 0,
     layout = "master",
     resize_on_border = true,
   },
@@ -172,7 +161,7 @@ hl.animation({ leaf = "windowsOut", enabled = true, speed = 7, spring = "glide",
 hl.animation({ leaf = "layersIn", enabled = true, speed = 7, spring = "pop" })
 hl.animation({ leaf = "layersOut", enabled = true, speed = 7, spring = "glide" })
 -- A border color fade redraws the window for a second after every focus change, which wakes the GPU
--- for no visible gain on mostly borderless windows.
+-- for no visible gain on borderless windows.
 hl.animation({ leaf = "border", enabled = false })
 hl.animation({ leaf = "borderangle", enabled = false })
 -- `fadeOut` is off because the `windowsOut` popin already animates closing windows.
@@ -180,7 +169,7 @@ hl.animation({ leaf = "fadeOut", enabled = false })
 hl.animation({ leaf = "fadeSwitch", enabled = true, speed = 3, bezier = "linear" })
 hl.animation({ leaf = "workspaces", enabled = true, speed = 6, spring = "sway" })
 
--- Most windows are borderless, so hyprfocus dips the focused one to make focus changes visible.
+-- Windows are borderless, so hyprfocus dips the focused one to make focus changes visible.
 hl.plugin.load(nix.hyprfocus)
 
 hl.config({
@@ -371,7 +360,6 @@ hl.window_rule({
   match = { class = "^(Alacritty)$" },
   immediate = true,
   opacity = "1.0 override 0.85 override",
-  border_size = 0,
 })
 
 hl.window_rule({
@@ -380,13 +368,9 @@ hl.window_rule({
   ["hyprbars:no_bar"] = true,
 })
 
--- These applications draw their own chrome, so borders only add noise; `immediate` allows tearing
--- where input latency matters.
-hl.window_rule({ match = { class = "^(com\\.anthropic\\.Claude)$" }, border_size = 0 })
-hl.window_rule({ match = { class = "^(dev\\.zed\\.Zed)$" }, border_size = 0 })
-hl.window_rule({ match = { class = "^(firefox)$" }, immediate = true, border_size = 0 })
-hl.window_rule({ match = { class = "^(jetbrains-datagrip)$" }, immediate = true, border_size = 0 })
-hl.window_rule({ match = { class = "^(org\\.kde\\.dolphin)$" }, border_size = 0 })
+-- `immediate` allows tearing where input latency matters.
+hl.window_rule({ match = { class = "^(firefox)$" }, immediate = true })
+hl.window_rule({ match = { class = "^(jetbrains-datagrip)$" }, immediate = true })
 
 -- Dialog-like windows float rather than disturb the tiled layout.
 hl.window_rule({ match = { class = "^(dev\\.noctalia\\.Noctalia)$" }, float = true, size = { 1080, 920 } })
@@ -396,6 +380,5 @@ hl.window_rule({
   match = { class = FILE_CHOOSER_CLASS },
   float = true,
   rounding = 20,
-  border_size = 0,
   no_shadow = true,
 })
