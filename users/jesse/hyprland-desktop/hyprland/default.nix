@@ -29,8 +29,6 @@ in
     settings.nix._var = {
       inherit hyprctl palette;
       alpha = {
-        # The active border stays outside the glass levels because it marks focus, not a surface.
-        active_border = alphaHex 99;
         chrome = alphaHex glass.chrome;
       };
       control_button_id = (lib.importTOML ../noctalia/plugins/control-button/plugin.toml).id;
