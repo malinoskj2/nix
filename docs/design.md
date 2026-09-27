@@ -183,7 +183,7 @@ Hyprland springs, defined in `hyprland.lua`:
 - Bar icons have no tooltips when their menu shows the same information
   (`show_tooltip = false`, from a Noctalia patch).
 - Windows have radius 10 and no border; hyprfocus's dip marks focus. Hyprbars
-  is only a thin drag strip on Alacritty.
+  is only a thin drag strip on Alacritty and mpv.
 - Icons are Catppuccin Mocha Papirus, built two ways. The GTK file chooser
   uses Couture: blue folders, with one accent per place and a gray trash in
   its list and sidebar. Dolphin uses Papirus-Dark-Catppuccin: peach folders,

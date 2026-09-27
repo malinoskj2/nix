@@ -189,7 +189,8 @@ hl.curve("hyprfocusDip", { type = "bezier", points = { { 0.25, 1 }, { 0.5, 1 } }
 hl.animation({ leaf = "hyprfocusIn", enabled = true, speed = 1.5, bezier = "hyprfocusDip" })
 hl.animation({ leaf = "hyprfocusOut", enabled = true, speed = 4, bezier = "hyprfocusDip" })
 
--- Alacritty has no title bar of its own, so hyprbars gives it a thin one to grab and double-click.
+-- Alacritty and mpv have no title bar of their own, so hyprbars gives them a thin one to grab and
+-- double-click.
 hl.plugin.load(nix.hyprbars)
 
 hl.config({
@@ -344,7 +345,8 @@ hl.bind(MAIN_MOD .. " + O", actions.focus_workspace(1))
 hl.bind(MAIN_MOD .. " + SHIFT + Y", actions.move_to_workspace(-1))
 hl.bind(MAIN_MOD .. " + SHIFT + O", actions.move_to_workspace(1))
 
--- Only Alacritty has a bar to grab, so the mouse moves and resizes windows with the modifier held.
+-- Only Alacritty and mpv have a bar to grab, so the mouse moves and resizes windows with the
+-- modifier held.
 hl.bind(MAIN_MOD .. " + mouse:272", hl.dsp.window.drag(), { mouse = true })
 hl.bind(MAIN_MOD .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
@@ -355,7 +357,7 @@ hl.window_rule({
   suppress_event = "maximize",
 })
 
--- Alacritty is the one window that keeps a hyprbars bar, and it dims while unfocused.
+-- Alacritty dims while unfocused.
 hl.window_rule({
   match = { class = "^(Alacritty)$" },
   immediate = true,
@@ -363,8 +365,8 @@ hl.window_rule({
 })
 
 hl.window_rule({
-  name = "hide-hyprbars-outside-alacritty",
-  match = { class = "negative:^(Alacritty)$" },
+  name = "hide-hyprbars-outside-alacritty-and-mpv",
+  match = { class = "negative:^(Alacritty|mpv)$" },
   ["hyprbars:no_bar"] = true,
 })
 
