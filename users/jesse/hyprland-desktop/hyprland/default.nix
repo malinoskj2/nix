@@ -11,6 +11,15 @@ let
   hyprland = osConfig.programs.hyprland.package;
   hyprctl = lib.getExe' hyprland "hyprctl";
   palette = config.palette.mocha;
+  # The Home Manager module reloads Hyprland after a switch only when it owns the Hyprland package.
+  reload = ''
+    export XDG_RUNTIME_DIR=''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+    if [[ -d $XDG_RUNTIME_DIR/hypr ]]; then
+      for i in $(${hyprctl} instances -j | ${lib.getExe pkgs.jq} -r '.[].instance'); do
+        ${hyprctl} -i "$i" reload config-only
+      done
+    fi
+  '';
 in
 {
   assertions = [
@@ -53,11 +62,15 @@ in
   };
 
   xdg.configFile = {
+    "hypr/hyprland.lua".onChange = reload;
     # The Home Manager module writes this only when it owns the Hyprland package.
     "hypr/.luarc.json".text = builtins.toJSON {
       diagnostics.globals = [ "hl" ];
       workspace.library = [ "${hyprland}/share/hypr/stubs" ];
     };
-    "hypr/actions.lua".source = ./actions.lua;
+    "hypr/actions.lua" = {
+      source = ./actions.lua;
+      onChange = reload;
+    };
   };
 }
