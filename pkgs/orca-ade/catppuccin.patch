@@ -133,8 +133,8 @@ index df9c8e73..7578f873 100644
 +  --chart-3: #94e2d5;
 +  --chart-4: #cba6f7;
 +  --chart-5: #f5c2e7;
-+  /* Keep both sidebars on the same Mocha base surface. */
-+  --worktree-sidebar: var(--background);
++  /* Keep both sidebars on the darker Mocha mantle surface. */
++  --worktree-sidebar: #181825;
 +  --worktree-sidebar-foreground: #cdd6f4;
 +  --worktree-sidebar-accent: #313244;
 +  --worktree-sidebar-accent-foreground: #cdd6f4;
@@ -159,7 +159,7 @@ index df9c8e73..7578f873 100644
    --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
    --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
    --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
-@@ -339,31 +337,31 @@
+@@ -339,31 +337,39 @@
    --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
    --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
    --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
@@ -210,6 +210,14 @@ index df9c8e73..7578f873 100644
 +  --tab-group-split-divider-strong: #7f849c;
  }
  
++/* The patched palette keeps both workspace sidebars on mantle, even when a
++   saved left-sidebar appearance would otherwise replace its surface inline. */
++.dark [data-native-file-drop-target='project-sidebar'],
++.dark .titlebar-left {
++  --worktree-sidebar: #181825 !important;
++  --sidebar: #181825 !important;
++}
++
  .plugin-security-chrome {
 @@ -1214,7 +1212,7 @@ html.native-shell .app-layout {
  .dark [role='option'].jump-palette-item[data-selected='true'],
