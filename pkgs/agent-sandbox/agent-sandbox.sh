@@ -14,7 +14,7 @@ fi
 
 data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
 sandbox_home=$data/home
-shared=("$HOME/projects" "$HOME/nix" "$HOME/.cache/img2char3d")
+shared=("$HOME/projects" "$HOME/nix" "$HOME/orca/workspaces" "$HOME/.cache/img2char3d")
 screenshots=/tmp/screenshot
 image_ref="agent-sandbox:${AGENT_SANDBOX_TAG#hash-}"
 clipboard_dir=$(mktemp --directory "$runtime/agent-sandbox-clipboard.XXXXXX")
