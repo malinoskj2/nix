@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rust Review"
+  short_description: "Review Rust behavior, safety, and design"
+  default_prompt: "Use $rust-review-jesse to review this Rust change and report findings."

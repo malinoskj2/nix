@@ -19,6 +19,17 @@ let
       skill = "laravel-review-jesse";
       sandbox_mode = "read-only";
     };
+    rust-builder = {
+      description = "Implements Rust features, fixes and refactors using repository-specific standards and idiomatic Rust design.";
+      source = claudeAgents + "/rust-builder.md";
+      skill = "rust-build-jesse";
+    };
+    rust-reviewer = {
+      description = "Reviews Rust changes for requirements, correctness, failure safety, bounded operation and design without applying changes.";
+      source = claudeAgents + "/rust-reviewer.md";
+      skill = "rust-review-jesse";
+      sandbox_mode = "read-only";
+    };
   };
   mkAgent =
     name: agent:

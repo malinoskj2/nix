@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rust Builder"
+  short_description: "Implement and verify repository-aware Rust changes"
+  default_prompt: "Use $rust-build-jesse to implement and verify this Rust change."

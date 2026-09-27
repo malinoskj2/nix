@@ -21,6 +21,8 @@ in
       laravel-builder = ./agents/laravel-builder.md;
       laravel-orchestrator = ./agents/laravel-orchestrator.md;
       laravel-reviewer = ./agents/laravel-reviewer.md;
+      rust-builder = ./agents/rust-builder.md;
+      rust-reviewer = ./agents/rust-reviewer.md;
     };
     skills = {
       codex-image = ./codex-image;
@@ -29,6 +31,9 @@ in
       laravel-orchestrator = ./skills/laravel-orchestrator;
       laravel-review-jesse = ./skills/laravel-review-jesse;
       recommit = ./skills/recommit;
+      rust-build-jesse = ./skills/rust-build-jesse;
+      rust-design-jesse = ./skills/rust-design-jesse;
+      rust-review-jesse = ./skills/rust-review-jesse;
     };
     rules = {
       rust = ./rules/rust.md;
