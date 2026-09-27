@@ -28,6 +28,14 @@ Shape the recommendation around the domain:
   partial failure as normal behavior where they can occur.
 - Return typed errors when callers make different decisions by failure kind.
   Add context at adapter boundaries and reserve panics for programmer errors.
+- For a full-featured application CLI, prefer `clap`'s derive API unless the
+  repository has another established parser. Represent constrained arguments
+  with enums, newtypes and `FromStr` or typed value parsers so invalid syntax is
+  rejected before application services start.
+- Prefer `thiserror` for domain, adapter and reusable-library errors that callers
+  inspect. Use `anyhow` at executable and orchestration boundaries where the only
+  remaining action is to add context and report the failure. Do not erase an
+  error into `anyhow::Error` before the last caller that needs to match it.
 - Introduce a trait for a real capability boundary, caller-selected behavior,
   multiple implementations or a useful test seam. Avoid pass-through layers and
   speculative interfaces.

@@ -42,7 +42,15 @@ be run.
 5. **Rust design:** ownership matches retention, async code does not block or
    hold guards across `.await`, domain states are typed, errors support caller
    policy, and abstractions own real rules rather than forwarding calls.
-6. **Tests and observability:** tests cover the behavior and material failure
+6. **CLI and error boundaries:** CLI syntax, defaults, conflicts and constrained
+   values are represented by the parser and rejected before expensive services
+   start. For full-featured application CLIs, `clap` derive is the default absent
+   a repository convention or measured constraint. Typed `thiserror` errors
+   remain available while callers need policy decisions; `anyhow` is confined to
+   report-only application/orchestration boundaries with useful context. String
+   matching on errors and premature type erasure are findings. Parser tests cover
+   grammar changes; process-level tests are reserved for exit and output contracts.
+7. **Tests and observability:** tests cover the behavior and material failure
    paths at the right boundary; diagnostics are actionable and do not expose
    secrets.
 
