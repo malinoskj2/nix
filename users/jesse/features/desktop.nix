@@ -49,6 +49,11 @@
     DOWNLOAD = "/media/scratch/download";
   };
 
+  xdg.mimeApps = {
+    enable = true;
+    defaultApplications."x-scheme-handler/claude-cli" = "claude-code-url-handler.desktop";
+  };
+
   services.gpg-agent = {
     enable = true;
     defaultCacheTtl = 50400;

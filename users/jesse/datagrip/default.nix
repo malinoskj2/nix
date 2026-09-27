@@ -7,6 +7,8 @@ in
 {
   home.packages = [ datagrip ];
 
+  xdg.mimeApps.defaultApplications."x-scheme-handler/jetbrains" = "jetbrainsd.desktop";
+
   xdg.configFile."${configDir}/extensions/com.intellij/startup/glass-header.groovy".source =
     ./glass-header.groovy;
 }

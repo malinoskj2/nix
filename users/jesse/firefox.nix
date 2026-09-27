@@ -23,6 +23,19 @@ in
   home.file."${cfg.profilesPath}/${cfg.profiles.default.path}/chrome/wavefox".source =
     "${inputs.wavefox}/chrome";
 
+  xdg.mimeApps.defaultApplications = lib.genAttrs [
+    "application/x-extension-htm"
+    "application/x-extension-html"
+    "application/x-extension-shtml"
+    "application/x-extension-xht"
+    "application/x-extension-xhtml"
+    "application/xhtml+xml"
+    "text/html"
+    "x-scheme-handler/chrome"
+    "x-scheme-handler/http"
+    "x-scheme-handler/https"
+  ] (_: "firefox.desktop");
+
   programs.firefox = {
     enable = true;
     configPath = "${config.xdg.configHome}/mozilla/firefox";
