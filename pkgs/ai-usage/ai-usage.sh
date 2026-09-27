@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# The OAuth credentials are the ones each CLI stores at sign-in, under $CLAUDE_CONFIG_DIR
-# (default ~/.claude) and $CODEX_HOME (default ~/.codex). The script exits 1 when either
+# The credentials are the ones each CLI stores at sign-in. The script exits 1 when any
 # provider's limits are unavailable.
 
 readonly claude_auth_file="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.credentials.json"
 readonly codex_auth_file="${CODEX_HOME:-$HOME/.codex}/auth.json"
+readonly opencode_auth_file="${XDG_DATA_HOME:-$HOME/.local/share}/opencode/auth.json"
 
 format_duration() {
   local total_seconds="$1"
@@ -188,8 +188,95 @@ show_codex_usage() {
   done <<<"$windows"
 }
 
+show_zai_usage() {
+  local api_key response error_message plan windows
+  local label used reset
+
+  printf 'Z.AI\n'
+
+  api_key="${ZAI_API_KEY:-${Z_AI_API_KEY:-${GLM_API_KEY:-}}}"
+  if [[ -z "$api_key" ]]; then
+    if [[ ! -r "$opencode_auth_file" ]]; then
+      printf "  unavailable: %s not found; run 'opencode auth login'\n" "$opencode_auth_file"
+      return 1
+    fi
+
+    if ! api_key="$(jq -er '.["zai-coding-plan"].key' "$opencode_auth_file")"; then
+      printf "  unavailable: Z.AI Coding Plan key missing; run 'opencode auth login'\n"
+      return 1
+    fi
+  fi
+
+  if ! response="$(
+    curl -q -L --silent --show-error --fail-with-body \
+      --connect-timeout 10 --max-time 30 \
+      'https://api.z.ai/api/monitor/usage/quota/limit' \
+      -H 'Accept: application/json' \
+      --config <(printf 'header = "Authorization: Bearer %s"\n' "$api_key")
+  )"; then
+    error_message="$(jq -r '.msg // .message // empty' <<<"$response" 2>/dev/null)"
+    printf "  unavailable: usage request failed%s; check the Z.AI API key\n" \
+      "${error_message:+ ($error_message)}"
+    return 1
+  fi
+
+  if ! plan="$(jq -er 'select(.code == 200 and .success == true) | .data.level // empty' <<<"$response")"; then
+    printf '  unavailable: Z.AI returned an unsuccessful response\n'
+    return 1
+  fi
+
+  if ! windows="$(
+    jq -er '
+      [
+        .data.limits[]
+        | select(.type == "CREDIT_LIMIT" or .type == "TOKENS_LIMIT" or .type == "TIME_LIMIT")
+        | {
+            label: (
+              if .type == "TIME_LIMIT" then "MCP"
+              elif .unit == 3 and .number == 5 then "5-hour"
+              elif .unit == 3 then "\(.number)-hour"
+              elif .unit == 4 and .number == 1 then "daily"
+              elif .unit == 4 then "\(.number)-day"
+              elif .unit == 5 and .number == 1 then "monthly"
+              elif .unit == 6 and .number == 1 then "weekly"
+              elif .unit == 6 then "\(.number)-week"
+              else "quota"
+              end
+            ),
+            used: (
+              .percentage
+              // if (.usage | type) == "number" and .usage > 0
+                then 100 * .currentValue / .usage
+                else null
+                end
+            ),
+            reset: (.nextResetTime / 1000 | floor)
+          }
+      ]
+      | if length == 0 or any(
+          .[];
+          (.used | type) != "number" or (.reset | type) != "number"
+        ) then
+          error("invalid usage windows")
+        else
+          .[] | [.label, .used, .reset] | @tsv
+        end
+    ' <<<"$response"
+  )"; then
+    printf '  unavailable: Z.AI returned an unexpected response\n'
+    return 1
+  fi
+
+  printf '  plan     %s\n' "${plan^}"
+  while IFS=$'\t' read -r label used reset; do
+    print_window "$label" "$used" "$reset"
+  done <<<"$windows"
+}
+
 status=0
 show_claude_usage || status=1
 printf '\n'
 show_codex_usage || status=1
+printf '\n'
+show_zai_usage || status=1
 exit "$status"
