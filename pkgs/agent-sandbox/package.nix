@@ -102,6 +102,12 @@ let
     exec ${lib.getExe claude-code} --plugin-dir ${plugin} "$@"
   '';
 
+  # The sandbox keeps a separate writable Codex home so project trust can persist,
+  # which means later host config changes do not reach an existing SSH sandbox.
+  codex' = writeShellScriptBin "codex" ''
+    exec ${lib.getExe codex} --no-alt-screen "$@"
+  '';
+
   # The desktop's pinned Hyprland, able to nest in the headless sway on the NVIDIA GPU: sway offers
   # xdg_wm_base 5, not the 6 Aquamarine asks for, and NVIDIA's GBM can neither allocate the linear
   # buffers Aquamarine requests for a nested output nor import the implicit-modifier ones it falls
@@ -142,7 +148,7 @@ let
       blender'
       chromium'
       claude
-      codex
+      codex'
       coreutils
       curl
       dbus

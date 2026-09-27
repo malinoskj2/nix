@@ -47,6 +47,7 @@ in
     package = null;
     skills = ./claude/skills;
     context = ./claude/rules/worktrees.md;
+    settings.tui.alternate_screen = "never";
   };
 
   home.file = lib.mapAttrs' mkAgent agents;
