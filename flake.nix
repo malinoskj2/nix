@@ -126,6 +126,7 @@
           "wallpaper-randomize"
           "wallpaper-select"
           "wifi-connect"
+          "zcode"
           "zsh-claude-command"
         ];
       in

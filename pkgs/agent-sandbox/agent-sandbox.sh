@@ -13,6 +13,9 @@ if [[ ${1:-} == --codex ]]; then
 elif [[ ${1:-} == --opencode ]]; then
   agent=opencode
   shift
+elif [[ ${1:-} == --zcode ]]; then
+  agent=zcode
+  shift
 fi
 
 data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
@@ -43,7 +46,7 @@ wl-paste --type image --watch agent-sandbox-clipboard-sync "$clipboard_dir" \
   >/dev/null 2>"$clipboard_dir/watcher.log" &
 clipboard_watcher_pid=$!
 
-mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.config/git"
+mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.zcode/cli" "$sandbox_home/.zcode/v2" "$sandbox_home/.config/git"
 for dir in "${shared[@]}"; do
   mkdir -p "$dir" "$sandbox_home${dir#"$HOME"}"
 done
@@ -187,6 +190,23 @@ for name in rules skills plugins; do
   args+=(--volume "$src:$HOME/.codex/$name:ro")
 done
 
+# Seed ZCode's provider and credential state from the host, newer copy wins, so
+# a login or provider change in either environment is not lost on the next launch.
+for name in v2/provider_config.json v2/credentials.json; do
+  src=$HOME/.zcode/$name
+  dst=$sandbox_home/.zcode/$name
+  if [[ -f $src && (! -f $dst || $src -nt $dst) ]]; then
+    cp "$src" "$dst"
+  fi
+done
+
+# The CLI settings file is seeded once so ZCode can persist theme and tool
+# permissions without later host edits clobbering them.
+if [[ -f $HOME/.zcode/cli/setting.json && ! -s $sandbox_home/.zcode/cli/setting.json ]]; then
+  cp "$HOME/.zcode/cli/setting.json" "$sandbox_home/.zcode/cli/setting.json"
+  chmod u+w "$sandbox_home/.zcode/cli/setting.json"
+fi
+
 if [[ -t 0 && -t 1 ]]; then
   args+=(--interactive --tty)
 else
@@ -198,6 +218,8 @@ if [[ $agent == codex ]]; then
   set -- codex --dangerously-bypass-approvals-and-sandbox "$@"
 elif [[ $agent == opencode ]]; then
   set -- opencode "$@"
+elif [[ $agent == zcode ]]; then
+  set -- zcode "$@"
 fi
 # A named sandbox is the long-lived SSH host that agent-sandbox@.service runs;
 # inhibiting idle for its lifetime would keep the machine awake indefinitely.

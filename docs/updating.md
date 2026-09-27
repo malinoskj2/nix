@@ -237,6 +237,17 @@ Treat a bump as a hardware change and test it on the device.
   `postPatch` that lets diffusers load its local pipeline still applies. Either
   way, build `hy3dgen`: its import checks load xatlas and the compiled
   extensions.
+- **zcode.** [`pkgs/zcode/`](../pkgs/zcode) builds the terminal harness from one
+  zai-org/ZCode commit (Z.ai publishes no prebuilt CLI; the desktop binaries on
+  GitHub and their CDN are Electron only). It stages the agent bundle, the
+  official TUI runtime and `playwright-core` with upstream's own staging
+  scripts into the layout their `build:zcode` distribution uses, minus the
+  `--web` server and client. To move it, change `rev`, refresh the source hash
+  and the pnpm dependency hash, and re-check the `pnpmFieldPatch`: pnpm ignores
+  the `pnpm.overrides` and `patchedDependencies` fields in the root
+  `package.json` but still enforces them against the lockfile, so the patch
+  appends them to `pnpm-workspace.yaml`; if upstream moves or drops them, drop
+  the patch. Then run `zcode --version` and `zcode doctor`.
 
 ## Darwin
 

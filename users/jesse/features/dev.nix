@@ -13,6 +13,7 @@
     pkg-config
     playwright-test
     python3
+    zcode
 
     unstable.codex
     unstable.opencode
