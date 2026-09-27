@@ -38,6 +38,19 @@ entry point, domain logic and persistence or external boundary.
   them.
 - Return errors with enough structure for callers to choose policy. Do not panic
   on configuration, network, input or database failures.
+- For application CLIs, use the repository's established parser; when choosing
+  one for a full-featured CLI, prefer `clap` with its derive API. Model commands
+  with `Parser`, `Subcommand` and `Args`, closed values with `ValueEnum`, and
+  other constrained values with typed fields or value parsers. Express syntax
+  relationships with parser constraints and reject invalid CLI input before
+  initializing databases, network clients or workers. Keep semantic validation
+  that needs application state in the application layer.
+- Use `thiserror` for typed domain, adapter and reusable-library errors, including
+  `#[from]` or `#[source]` where the causal chain matters. Use `anyhow` for
+  executable and orchestration functions whose caller only reports failure;
+  attach actionable `Context` at I/O and subsystem boundaries. Keep a concrete
+  error type until no caller needs to match on it, and avoid string inspection
+  as control flow.
 - Bound network bodies, deadlines, retries, concurrency, queues and result sets.
   Every spawned task needs an owner and a shutdown path; avoid blocking or
   holding a mutex guard across `.await`.
@@ -53,7 +66,11 @@ entry point, domain logic and persistence or external boundary.
 Test observable behavior and the material failures introduced or changed. Use
 focused unit tests for domain logic and the repository's real integration setup
 for database, process or protocol semantics. Exercise a batch beyond its chunk
-size when batching behavior changes.
+size when batching behavior changes. Test CLI grammar with `try_parse_from` (or
+the established parser's equivalent) when commands, defaults, conflicts or value
+validation change; do not spawn the full application merely to test parsing.
+Use `assert_cmd` when exit status or stdout/stderr is the contract, and consider
+`trycmd` only when a larger stable matrix benefits from snapshot cases.
 
 Discover required checks from the repository's CI, task runner and scripts, then
 run the checks relevant to the change. Normally this includes formatting,
