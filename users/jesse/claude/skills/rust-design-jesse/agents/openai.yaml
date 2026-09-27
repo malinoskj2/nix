@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rust Design"
+  short_description: "Design Rust types, boundaries, and architecture"
+  default_prompt: "Use $rust-design-jesse to design this Rust change before implementation."
