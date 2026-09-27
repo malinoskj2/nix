@@ -44,6 +44,10 @@ stdenv.mkDerivation (finalAttrs: {
         "const verifyLinuxGlibcFloor = () => {}"
     substituteInPlace src/shared/default-global-settings.ts \
       --replace-fail "keepComputerAwakeWhileAgentsRun: false," "keepComputerAwakeWhileAgentsRun: true,"
+    # The relay is uploaded from the read-only store, and Orca writes into it after extracting.
+    substituteInPlace src/main/ssh/system-ssh-file-transfer.ts \
+      --replace-fail 'tar -xzf - -C ''${shellEscape(remoteDir)}`' \
+        'tar -xzf - -C ''${shellEscape(remoteDir)} && chmod -R u+w ''${shellEscape(remoteDir)}`'
   '';
 
   pnpmDeps = fetchPnpmDeps {
