@@ -39,6 +39,7 @@
   mold,
   nix,
   nodejs,
+  opencode,
   openssh,
   playwright-driver,
   playwright-mcp,
@@ -180,6 +181,7 @@ let
       nestedHyprland
       nix
       nodejs
+      opencode
       orcaCli
       playwright-test
       procps
