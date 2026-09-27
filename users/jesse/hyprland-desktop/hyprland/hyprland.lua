@@ -25,7 +25,8 @@ local CHROME_WEBGPU = table.concat({
 local INACTIVE_BORDER = "rgba(595959aa)"
 local SHADOW = "rgba(00000059)"
 
-local FILE_CHOOSER_CLASS = "^(xdg-desktop-portal-gtk)$"
+local FILE_CHOOSER_APP = "xdg-desktop-portal-gtk"
+local FILE_CHOOSER_CLASS = "^(" .. FILE_CHOOSER_APP .. ")$"
 
 -- These Noctalia layer namespaces omit the `noctalia-` prefix, which `noctalia_layers` adds.
 local GLASS_LAYERS = { "bar-.+" }
@@ -319,8 +320,9 @@ hl.bind(MAIN_MOD .. " + SHIFT + C", hl.dsp.exec_cmd(CHROME_WEBGPU))
 hl.bind(MAIN_MOD .. " + D", hl.dsp.exec_cmd(DB_CLIENT))
 hl.bind(MAIN_MOD .. " + E", hl.dsp.exec_cmd(EDITOR))
 
--- Q and V act on the focused window; floating resizes it too, as its tiled size rarely fits.
-hl.bind(MAIN_MOD .. " + Q", hl.dsp.window.close())
+-- Q and V act on the focused window; Q quits its app too, and floating resizes it, as its tiled size
+-- rarely fits.
+hl.bind(MAIN_MOD .. " + Q", actions.close_and_quit({ [FILE_CHOOSER_APP] = true }))
 hl.bind(MAIN_MOD .. " + V", actions.toggle_floating())
 
 -- Noctalia owns the shell, so these binds go through its IPC.

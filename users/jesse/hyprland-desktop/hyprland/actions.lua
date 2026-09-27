@@ -43,6 +43,37 @@ return function(nix)
     end
   end
 
+  -- A process that still owns another window or a layer, like Noctalia, is left running.
+  local function owns_other_surface(window)
+    for _, other in ipairs(hl.get_windows()) do
+      if other.pid == window.pid and other.address ~= window.address then
+        return true
+      end
+    end
+    for _, layer in ipairs(hl.get_layers()) do
+      if layer.pid == window.pid then
+        return true
+      end
+    end
+    return false
+  end
+
+  -- Closing only asks the app, which can keep running without windows, so its last window's
+  -- close also sends it SIGTERM. Classes in `keep_running` only close.
+  function actions.close_and_quit(keep_running)
+    return function()
+      local window = hl.get_active_window()
+      if window == nil then
+        return
+      end
+
+      if window.pid ~= nil and window.pid > 0 and not keep_running[window.class] and not owns_other_surface(window) then
+        hl.dispatch(hl.dsp.window.signal({ signal = 15, window = window }))
+      end
+      hl.dispatch(hl.dsp.window.close({ window = window }))
+    end
+  end
+
   function actions.toggle_floating()
     return function()
       local window = hl.get_active_window()
