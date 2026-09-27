@@ -46,6 +46,7 @@ in
     enable = true;
     package = null;
     skills = ./claude/skills;
+    context = ./claude/rules/worktrees.md;
   };
 
   home.file = lib.mapAttrs' mkAgent agents;
