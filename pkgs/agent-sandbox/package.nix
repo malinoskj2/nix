@@ -108,6 +108,11 @@ let
     exec ${lib.getExe codex} --no-alt-screen "$@"
   '';
 
+  # Use the SSH bridge back to the running desktop, never Electron inside the sandbox.
+  orcaCli = writeShellScriptBin "orca-ide" ''
+    exec "$HOME/.orca-relay/bin/orca" "$@"
+  '';
+
   # The desktop's pinned Hyprland, able to nest in the headless sway on the NVIDIA GPU: sway offers
   # xdg_wm_base 5, not the 6 Aquamarine asks for, and NVIDIA's GBM can neither allocate the linear
   # buffers Aquamarine requests for a nested output nor import the implicit-modifier ones it falls
@@ -175,6 +180,7 @@ let
       nestedHyprland
       nix
       nodejs
+      orcaCli
       playwright-test
       procps
       (python3.withPackages (_: [ hy3dgen ]))
@@ -216,6 +222,7 @@ let
       ln -s ${bashInteractive}/bin/bash bin/sh
       ln -s ${bashInteractive}/bin/bash bin/bash
       ln -s ${coreutils}/bin/env usr/bin/env
+      ln -s ${orcaCli}/bin/orca-ide usr/bin/orca-ide
       # For prebuilt binaries such as the Claude CLI that Claude Desktop installs over SSH.
       ln -s ${glibc}/lib/ld-linux-x86-64.so.2 lib64/ld-linux-x86-64.so.2
       ln -s ${nixConf} etc/nix/nix.conf
@@ -235,6 +242,7 @@ let
         "PATH=${env}/bin:/usr/bin"
         "LANG=C.UTF-8"
         "CLAUDE_CODE_SANDBOXED=1"
+        "ORCA_CLI_COMMAND=orca-ide"
         "LOCALE_ARCHIVE=${glibcLocales}/lib/locale/locale-archive"
         "SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
         "NIX_SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"

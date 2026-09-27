@@ -38,6 +38,8 @@ Don't delete sockets or lock files in `$XDG_RUNTIME_DIR`: the sway and Hyprland 
 
 ## Tools
 
+Orca's CLI is `orca-ide`, which forwards to `~/.orca-relay/bin/orca`, the SSH bridge to the running desktop. If an older sandbox lacks `orca-ide`, use `~/.orca-relay/bin/orca` directly. Do not launch an Orca Electron binary from `/nix/store` for CLI commands. Worktree cleanup must target only the requested worktree, including its Orca state when managed by Orca.
+
 Blender (Cycles with CUDA and OptiX) and a Python with torch (CUDA) and hy3dgen (Hunyuan3D) are installed; `~/projects/img2char3d` runs directly on them. Chromium is installed with its own sandbox off, since the container can't run it: open pages on the display with `swaymsg exec -- chromium <url>`, or render one without a window with `chromium --headless --screenshot=<file> --window-size=W,H <url>`. The Playwright MCP server drives its own Chromium, shown on the display, and the `playwright` CLI is installed. Nix talks to the host daemon. Get a missing tool with `nix shell nixpkgs#<package>` or `nix run nixpkgs#<package>`.
 
 All sandboxes share a 20G memory limit; past it the kernel kills the largest process. Run one cargo build or test at a time, including across subagents and separate target dirs. Each one already uses every core, and several at once fill the limit with linkers.
