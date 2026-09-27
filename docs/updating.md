@@ -187,6 +187,9 @@ Treat a bump as a hardware change and test it on the device.
   dark application tokens and every Monaco editor surface to Catppuccin Mocha.
   Upstream may add new dark-mode variables or Monaco call sites, so search for
   both the `.dark` token block and `vs-dark` when rebasing it. Rebase
+  [`glass-titlebar.patch`](../pkgs/orca-ade/glass-titlebar.patch) when Orca
+  changes its Electron window options or top-bar layout, then confirm only the
+  36px titlebar band shows compositor blur. Rebase
   [`claude-hooks.patch`](../pkgs/orca-ade/claude-hooks.patch): it keeps Orca out
   of the read-only `~/.claude/settings.json` by writing its hooks to
   `~/.orca/agent-hooks/claude-settings.json` and passing that file with
