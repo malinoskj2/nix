@@ -1,0 +1,154 @@
+diff --git a/src/main/window/createMainWindow.ts b/src/main/window/createMainWindow.ts
+index 41d84d1a..610878f9 100644
+--- a/src/main/window/createMainWindow.ts
++++ b/src/main/window/createMainWindow.ts
+@@ -108,7 +108,14 @@ export function createMainWindow(
+     acceptFirstMouse: true,
+     // Why: auto-hide the Windows/Linux menu bar to save a row (Alt reveals it); macOS uses the system menu bar anyway.
+     autoHideMenuBar: true,
+-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
++    // Why: the Linux renderer paints opaque content below a translucent titlebar; the native
++    // window must expose an alpha channel for Hyprland's blur to show through that top band.
++    backgroundColor:
++      process.platform === 'linux'
++        ? '#00000000'
++        : nativeTheme.shouldUseDarkColors
++          ? '#0a0a0a'
++          : '#ffffff',
+     // Why: macOS 'hiddenInset' keeps native traffic lights in our custom titlebar; Windows 'hidden' removes the OS title bar so it doesn't double up.
+     titleBarStyle:
+       process.platform === 'darwin'
+@@ -117,7 +124,7 @@ export function createMainWindow(
+           ? 'hidden'
+           : undefined,
+     // Why: Linux ignores titleBarStyle 'hidden'; frame:false drops the native frame so we don't get a double title bar (renderer draws its own).
+-    ...(process.platform === 'linux' ? { frame: false } : {}),
++    ...(process.platform === 'linux' ? { frame: false, transparent: true } : {}),
+     // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts on zoom change.
+     ...(process.platform === 'darwin'
+       ? {
+diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
+index df9c8e73..69e62ccc 100644
+--- a/src/renderer/src/assets/main.css
++++ b/src/renderer/src/assets/main.css
+@@ -734,6 +734,16 @@
+   overflow: hidden;
+ }
+ 
++/* The native Linux window is alpha-capable. Keep only the titlebar band translucent;
++   the base fill below it prevents terminal and page surfaces from becoming glass. */
++html.native-shell.dark body {
++  background: transparent;
++}
++
++html.native-shell.dark .app-layout {
++  background: linear-gradient(to bottom, transparent 36px, var(--background) 36px);
++}
++
+ /* Why: native windows have a stable content box and need no wake-time viewport reflow. */
+ html.native-shell,
+ html.native-shell body,
+@@ -851,6 +861,21 @@ html.native-shell .app-layout {
+   background: var(--bg-titlebar, var(--card));
+ }
+ 
++html.native-shell.dark .titlebar,
++html.native-shell.dark .titlebar-left,
++html.native-shell.dark .titlebar-left-floating,
++html.native-shell.dark .orca-titlebar-glass {
++  background: rgb(17 17 27 / 55%);
++}
++
++html.native-shell.dark .orca-right-sidebar-surface {
++  background: transparent;
++}
++
++html.native-shell.dark .orca-right-sidebar-activity-bar {
++  background: linear-gradient(to bottom, rgb(17 17 27 / 55%) 36px, var(--sidebar) 36px);
++}
++
+ .titlebar-traffic-light-pad {
+   width: calc(80px / var(--ui-zoom-factor, 1));
+   flex-shrink: 0;
+diff --git a/src/renderer/src/components/right-sidebar/index.tsx b/src/renderer/src/components/right-sidebar/index.tsx
+index cc9011bb..8a59b14b 100644
+--- a/src/renderer/src/components/right-sidebar/index.tsx
++++ b/src/renderer/src/components/right-sidebar/index.tsx
+@@ -79,7 +79,7 @@ function RightSidebarInner(): React.JSX.Element {
+   const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
+ 
+   const panelContent = rightSidebarOpen ? (
+-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
++    <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-sidebar scrollbar-sleek-parent">
+       {/* Why: sidebar panels no longer use key={activeWorktreeId} because
+           the full unmount/remount cycle on every worktree switch triggered
+           an IPC storm (watchWorktree + readDir + git:branchCompare + …)
+@@ -151,7 +151,7 @@ function RightSidebarInner(): React.JSX.Element {
+     >
+       {/* Panel content area */}
+       <div
+-        className="flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden"
++        className="orca-right-sidebar-surface flex flex-col flex-1 min-w-0 overflow-hidden"
+         style={{
+           borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
+         }}
+@@ -176,7 +176,7 @@ function RightSidebarInner(): React.JSX.Element {
+              right-sidebar-header-side-inset applies exactly that remainder
+              (138-40=98px) as padding-right so the close button clears the
+              minimize button without the full 138px gap. */
+-          <div className="flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border right-sidebar-header-side-inset right-sidebar-header-drag">
++          <div className="orca-titlebar-glass flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border right-sidebar-header-side-inset right-sidebar-header-drag">
+             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
+               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
+             </span>
+@@ -199,7 +199,7 @@ function RightSidebarInner(): React.JSX.Element {
+       {activityBarPosition === 'side' && (
+         <ContextMenu>
+           <ContextMenuTrigger asChild>
+-            <div className="flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border side-activity-bar-windows-inset">
++            <div className="orca-right-sidebar-activity-bar flex flex-col items-center w-10 min-w-[40px] border-l border-border side-activity-bar-windows-inset">
+               <TooltipProvider delayDuration={400}>{sideActivityBarIcons}</TooltipProvider>
+             </div>
+           </ContextMenuTrigger>
+diff --git a/src/renderer/src/components/right-sidebar/right-sidebar-top-activity-bar.tsx b/src/renderer/src/components/right-sidebar/right-sidebar-top-activity-bar.tsx
+index bfb04337..e8211dd2 100644
+--- a/src/renderer/src/components/right-sidebar/right-sidebar-top-activity-bar.tsx
++++ b/src/renderer/src/components/right-sidebar/right-sidebar-top-activity-bar.tsx
+@@ -37,7 +37,7 @@ export function RightSidebarTopActivityBar({
+   return (
+     /* ── Top activity bar: horizontal icon row ── */
+     <ContextMenu>
+-      <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
++      <div className="orca-titlebar-glass flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
+         {!hasDesktopWindowChrome && (
+           <TooltipProvider delayDuration={400}>
+             <ContextMenuTrigger asChild>
+diff --git a/src/renderer/src/components/tab-group/TabGroupPanel.tsx b/src/renderer/src/components/tab-group/TabGroupPanel.tsx
+index 6e48ddd0..cb8e8de8 100644
+--- a/src/renderer/src/components/tab-group/TabGroupPanel.tsx
++++ b/src/renderer/src/components/tab-group/TabGroupPanel.tsx
+@@ -246,7 +246,7 @@ export default function TabGroupPanel({
+       {/* Why: each split group needs its own tab row because multiple groups can show at once but the titlebar has only one shared center slot. */}
+       {/* Why: macOS hiddenInset titleBarStyle makes -webkit-app-region: drag the only way to move the window from this tab row. */}
+       <div
+-        className="h-[32px] shrink-0 border-b border-border bg-card"
++        className="orca-titlebar-glass h-[32px] shrink-0 border-b border-border"
+         data-tab-group-strip-id={groupId}
+         data-terminal-focus-release-surface="true"
+         data-worktree-id={worktreeId}
+diff --git a/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx b/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx
+index 77f04fb3..e34416b8 100644
+--- a/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx
++++ b/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx
+@@ -316,7 +316,10 @@ export default function TabGroupSplitLayout({
+           ref={dragSplit.setDragRootNode}
+           className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border"
+         >
+-          <div className="h-[4px] shrink-0 bg-card" data-terminal-focus-release-surface="true" />
++          <div
++            className="orca-titlebar-glass h-[4px] shrink-0"
++            data-terminal-focus-release-surface="true"
++          />
+           <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
+             <SplitNode
+               node={layout}

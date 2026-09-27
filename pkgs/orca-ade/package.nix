@@ -43,6 +43,7 @@ stdenv.mkDerivation (finalAttrs: {
 
   patches = [
     ./catppuccin.patch
+    ./glass-titlebar.patch
     ./claude-hooks.patch
     ./open-video-externally.patch
     ./nix-syntax.patch
