@@ -23,6 +23,12 @@ let
     ;
   electron = electron_43;
   pnpm = pnpm_11.override { nodejs = nodejs_24; };
+  vscode-nix-ide = fetchFromGitHub {
+    owner = "nix-community";
+    repo = "vscode-nix-ide";
+    rev = "065fcba88075f682cdd4db7738f13d2c9e2d5c6a";
+    hash = "sha256-GLVWBO0JrsK4dxZ7F2xeXltAFgBV4bkfiPQcb7EuFHU=";
+  };
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "orca-ade";
@@ -39,6 +45,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./catppuccin.patch
     ./claude-hooks.patch
     ./open-video-externally.patch
+    ./nix-syntax.patch
   ];
 
   # The glibc floor guards Ubuntu 20.04 users of the upstream AppImage.
@@ -52,6 +59,9 @@ stdenv.mkDerivation (finalAttrs: {
     substituteInPlace src/main/ssh/system-ssh-file-transfer.ts \
       --replace-fail 'tar -xzf - -C ''${shellEscape(remoteDir)}`' \
         'tar -xzf - -C ''${shellEscape(remoteDir)} && chmod -R u+w ''${shellEscape(remoteDir)}`'
+    grammars=src/renderer/src/lib/monaco-languages/textmate-grammars
+    cp ${vscode-nix-ide}/dist/nix.tmLanguage.json $grammars/nix.tmLanguage.json
+    cp ${vscode-nix-ide}/LICENSE $grammars/nix-LICENSE.txt
   '';
 
   pnpmDeps = fetchPnpmDeps {
