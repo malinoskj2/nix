@@ -26,6 +26,80 @@ effects, derived state and exposed results. Use focused, non-mutating checks whe
 they can confirm or reject a concrete concern; state when verification could not
 be run.
 
+## Project structure
+
+Use one of these two patterns: a single package with a library and thin binary
+entry points, or a Cargo workspace with multiple focused crates. Start with the
+single-package pattern; split into crates when independent consumers, dependency
+boundaries or distinct responsibilities justify it. Keep business logic out of
+`main.rs`. Organize modules by domain responsibility, not a catch-all `utils`.
+The names below are examples; create only modules and crates the project needs.
+
+Single package with a library:
+
+```text
+project/
+├── Cargo.toml
+├── src/
+│   ├── lib.rs          # Module declarations and public API
+│   ├── main.rs         # Configuration, wiring, invocation, error reporting
+│   ├── domain.rs       # Domain types and rules
+│   ├── service.rs      # Application operations
+│   ├── storage.rs      # Persistence adapter
+│   └── error.rs        # Typed errors derived with thiserror
+└── tests/
+    └── workflow.rs    # Public API integration tests
+```
+
+Multiple crates in a workspace:
+
+```text
+project/
+├── Cargo.toml          # [workspace], members, shared dependency versions
+└── crates/
+    ├── domain/
+    │   ├── Cargo.toml
+    │   └── src/lib.rs  # Domain types, rules and typed errors
+    ├── storage/
+    │   ├── Cargo.toml
+    │   └── src/lib.rs  # Persistence; depends on domain
+    └── app/
+        ├── Cargo.toml
+        ├── src/lib.rs  # Operations and wiring; uses domain and storage
+        ├── src/main.rs # Thin executable; reports errors with anyhow
+        └── tests/workflow.rs
+```
+
+Keep workspace dependencies acyclic and domain crates independent of application
+entry points and infrastructure. Each crate owns its modules and integration
+tests. Use nested module directories as a domain grows. Apply the chosen pattern
+within the requested scope; do not turn a focused change into an unrelated
+repository-wide reorganization.
+
+## Error handling
+
+Error handling must use `thiserror` and `anyhow`; this is a requirement, not a
+preference, even when the existing code uses another error-handling approach.
+Use `thiserror` derives for owned domain, adapter and reusable-library error
+types; use `anyhow::Result` and `anyhow::Context` at executable and report-only
+orchestration boundaries. Keep typed errors until the last caller that needs to
+match them. Do not replace these crates with hand-written error boilerplate,
+string errors or another error framework. Add the dependencies to the crates
+that use them; a library without a report-only boundary does not need artificial
+`anyhow` conversions merely to use both crates.
+
+Review against these structure and error-handling requirements. Report violations
+in the reviewed scope without applying fixes or demanding unrelated restructuring.
+
+## Formatting
+
+Require exactly one empty line between Rust items, including between free
+functions and between methods in an `impl` block. Function or method definitions
+must never be placed directly against each other. The empty line may be omitted
+only between logically grouped non-function items, such as a compact group of
+module declarations, imports or closely related constants. Treat violations in
+the reviewed scope as findings rather than optional stylistic preferences.
+
 ## Review priorities
 
 1. **Requirement coverage:** requested behavior exists end to end, including
@@ -41,11 +115,12 @@ be run.
    tasks have owners and are joined.
 5. **Rust design:** ownership matches retention, async code does not block or
    hold guards across `.await`, domain states are typed, errors support caller
-   policy, and abstractions own real rules rather than forwarding calls.
+   policy, and abstractions own real rules rather than forwarding calls. Project structure
+   follows the library or multi-crate workspace pattern above.
 6. **CLI and error boundaries:** CLI syntax, defaults, conflicts and constrained
    values are represented by the parser and rejected before expensive services
    start. For full-featured application CLIs, `clap` derive is the default absent
-   a repository convention or measured constraint. Typed `thiserror` errors
+   a repository convention or measured constraint. `thiserror` and `anyhow` are required. Typed errors
    remain available while callers need policy decisions; `anyhow` is confined to
    report-only application/orchestration boundaries with useful context. String
    matching on errors and premature type erasure are findings. Parser tests cover
