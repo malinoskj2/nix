@@ -15,6 +15,7 @@
     python3
 
     unstable.codex
+    unstable.opencode
   ];
 
   home.sessionVariables = {

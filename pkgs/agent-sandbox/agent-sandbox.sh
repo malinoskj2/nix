@@ -10,6 +10,9 @@ agent=claude
 if [[ ${1:-} == --codex ]]; then
   agent=codex
   shift
+elif [[ ${1:-} == --opencode ]]; then
+  agent=opencode
+  shift
 fi
 
 data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
@@ -193,6 +196,8 @@ fi
 echo "agent-sandbox: VNC on 127.0.0.1:$vnc_port, nested Hyprland on 127.0.0.1:$hyprland_vnc_port" >&2
 if [[ $agent == codex ]]; then
   set -- codex --dangerously-bypass-approvals-and-sandbox "$@"
+elif [[ $agent == opencode ]]; then
+  set -- opencode "$@"
 fi
 # A named sandbox is the long-lived SSH host that agent-sandbox@.service runs;
 # inhibiting idle for its lifetime would keep the machine awake indefinitely.
