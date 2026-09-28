@@ -4,6 +4,7 @@
     ../claude
     ../codex.nix
     ../fastfetch
+    ../opencode
     ../starship.nix
     ../zed.nix
     ../zsh.nix
