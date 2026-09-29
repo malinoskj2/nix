@@ -99,6 +99,20 @@ To upgrade:
 7. Update all four version assertions.
 8. Build `home`.
 
+### j2bar
+
+`j2bar` is the shell of the `home` desktop. It has no remote, so the input is
+the local repository at `~/projects/j2bar`, on `master`, and only `home` can
+fetch it: the update workflow can't, and neither can another machine that
+evaluates `home`. Its nixpkgs follows `nixpkgs-hyprland`, the commit its own
+flake pins, so it is built with the libraries it is tested with.
+
+`nix flake update` moves it to `master`'s newest commit with everything else;
+`nix flake update j2bar` moves it alone. After a Hyprland upgrade, run j2bar's
+golden test and check its surfaces against
+[`look.lua`](../users/jesse/hyprland-desktop/hyprland/look.lua), whose layer
+rules and hyprglass layers name j2bar's namespaces.
+
 ### Firefox
 
 `nixpkgs-firefox` is an exact nixpkgs commit, and `wavefox` is the WaveFox

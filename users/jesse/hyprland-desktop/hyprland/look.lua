@@ -72,8 +72,9 @@ hl.layer_rule({ match = { namespace = noctalia_layers({ "attached-panel" }) }, n
 
 -- One layer holds every notification banner, so each slides in and out through Noctalia instead.
 hl.layer_rule({ match = { namespace = noctalia_layers({ "notification" }) }, no_anim = true })
--- j2bar's screen corners are there from the start and never move.
-hl.layer_rule({ match = { namespace = "^j2bar-screen-corner$" }, no_anim = true })
+-- j2bar's screen corners are there from the start and never move, and its on-screen display
+-- comes out of its edge by itself.
+hl.layer_rule({ match = { namespace = "^j2bar-(screen-corner|osd)$" }, no_anim = true })
 
 hl.layer_rule({
   match = { namespace = "^noctalia-desktop-widget-" .. nix.control_button_id .. ":.+$" },
@@ -198,6 +199,16 @@ glass.layer("noctalia-notification", {
   preset = "panel",
   mask_mode = "region",
   corner_radius = 20,
+  rounding_power = 2.0,
+  rim_light = 2.6,
+  rim_shadow = 2.7,
+})
+
+-- `corner_radius` must match the radius of j2bar's on-screen display.
+glass.layer("j2bar-osd", {
+  preset = "panel",
+  mask_mode = "region",
+  corner_radius = 12,
   rounding_power = 2.0,
   rim_light = 2.6,
   rim_shadow = 2.7,

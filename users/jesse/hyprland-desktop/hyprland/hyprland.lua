@@ -24,8 +24,8 @@ local CHROME_WEBGPU = table.concat({
 local FILE_CHOOSER_APP = "xdg-desktop-portal-gtk"
 local FILE_CHOOSER_CLASS = "^(" .. FILE_CHOOSER_APP .. ")$"
 
-local function noctalia_msg(command)
-  return hl.dsp.exec_cmd(nix.noctalia .. " msg " .. command)
+local function j2bar_msg(command)
+  return hl.dsp.exec_cmd(nix.j2bar .. " msg " .. command)
 end
 
 -- The side monitor stands portrait on the left, so the main monitor starts at its rotated width.
@@ -69,6 +69,11 @@ hl.config({
     repeat_delay = 260,
     repeat_rate = 24,
   },
+  misc = {
+    -- If j2bar's locker dies, the next one takes the lock over instead of the session staying
+    -- on Hyprland's dead-lock screen.
+    allow_session_lock_restore = true,
+  },
 })
 
 -- agent-sandbox's nested Hyprland loads the same file, so both draw surfaces alike.
@@ -99,13 +104,6 @@ hl.curve("land", { type = "spring", stiffness = 625, dampening = 42.5, mass = 1 
 hl.animation({ leaf = "hyprsheetIn", enabled = true, speed = 7, spring = "land" })
 hl.animation({ leaf = "hyprsheetOut", enabled = true, speed = 7, spring = "land" })
 
--- Noctalia reads its mpvpaper wallpaper assignments only at startup, so they're randomized first.
--- The wallpaper launcher randomizes them itself.
-hl.on("hyprland.start", function()
-  local randomize = nix.wallpaper_randomize and nix.wallpaper_randomize .. "; " or ""
-  hl.exec_cmd(randomize .. "exec " .. nix.noctalia)
-end)
-
 -- Letters are mnemonic for the application; SHIFT picks a variant.
 hl.bind(MAIN_MOD .. " + Return", hl.dsp.exec_cmd(TERMINAL))
 hl.bind(MAIN_MOD .. " + F", hl.dsp.exec_cmd(BROWSER))
@@ -119,14 +117,14 @@ hl.bind(MAIN_MOD .. " + E", hl.dsp.exec_cmd(EDITOR))
 hl.bind(MAIN_MOD .. " + Q", actions.close_and_quit({ [FILE_CHOOSER_APP] = true }))
 hl.bind(MAIN_MOD .. " + V", actions.toggle_floating())
 
--- Noctalia owns the shell, so these binds go through its IPC.
-hl.bind(MAIN_MOD .. " + P", noctalia_msg("screenshot-region"))
-hl.bind(MAIN_MOD .. " + Escape", noctalia_msg("session lock"))
-hl.bind(MAIN_MOD .. " + Space", noctalia_msg("panel-toggle launcher"))
-hl.bind(MAIN_MOD .. " + S", noctalia_msg("panel-toggle control-center"))
-hl.bind("XF86AudioRaiseVolume", noctalia_msg("volume-up"), { locked = true, repeating = true })
-hl.bind("XF86AudioLowerVolume", noctalia_msg("volume-down"), { locked = true, repeating = true })
-hl.bind("XF86AudioMute", noctalia_msg("volume-mute"), { locked = true })
+-- j2bar is the shell, so these binds go through its commands.
+hl.bind(MAIN_MOD .. " + P", j2bar_msg("screenshot-region"))
+hl.bind(MAIN_MOD .. " + Escape", j2bar_msg("session lock"))
+hl.bind(MAIN_MOD .. " + Space", j2bar_msg("panel-toggle launcher"))
+hl.bind(MAIN_MOD .. " + S", j2bar_msg("panel-toggle control-center"))
+hl.bind("XF86AudioRaiseVolume", j2bar_msg("volume-up"), { locked = true, repeating = true })
+hl.bind("XF86AudioLowerVolume", j2bar_msg("volume-down"), { locked = true, repeating = true })
+hl.bind("XF86AudioMute", j2bar_msg("volume-mute"), { locked = true })
 
 -- H, J, K and L follow vim's directions to move focus, swap with SHIFT and resize with ALT.
 hl.bind(MAIN_MOD .. " + H", hl.dsp.focus({ direction = "left" }))
