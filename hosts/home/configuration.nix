@@ -7,6 +7,7 @@
     ../common/optional/docker.nix
     ../common/optional/fonts.nix
     ../common/optional/hyprland.nix
+    ../common/optional/j2bar.nix
     ../common/optional/nh.nix
     ../common/optional/pipewire.nix
     ../common/optional/workstation.nix
@@ -24,7 +25,7 @@
   networking = {
     hostName = "home";
 
-    # Noctalia's network integration talks to NetworkManager over D-Bus, so
+    # j2bar's network source talks to NetworkManager over D-Bus, so
     # NetworkManager owns the interfaces and creates the wired DHCP profile.
     networkmanager.enable = true;
   };

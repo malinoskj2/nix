@@ -72,7 +72,7 @@ Hyprland and Noctalia desktop, imported only by the `home` profile.
 Each `pkgs/<name>/package.nix` is a local package. `pkgs/default.nix` picks up
 every directory, and the `additions` overlay exposes them as `pkgs.<name>`. A
 new package also goes in the `packages` list in `flake.nix`. Its `callPackage` supplies
-claude-code and codex from `pkgs.unstable`, and a stand-in for j2bar. Install local packages by
+claude-code and codex from `pkgs.unstable`. Install local packages by
 name. Linux-only packages set `meta.platforms`. `git-open-branch` installs the
 `git-open` command.
 

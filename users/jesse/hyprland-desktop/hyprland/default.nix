@@ -28,14 +28,11 @@ let
       main = "DP-2";
       side = "DP-1";
     };
-    noctalia = lib.getExe pkgs.unstable.noctalia;
+    j2bar = lib.getExe config.programs.j2bar.package;
     workspaces = {
       first = 1;
       last = 5;
     };
-  }
-  // lib.optionalAttrs (!config.wallpaper.launcher.enable) {
-    wallpaper_randomize = lib.getExe pkgs.wallpaper-randomize;
   };
   # The Home Manager module reloads Hyprland after a switch only when it owns the Hyprland package.
   reload = ''
