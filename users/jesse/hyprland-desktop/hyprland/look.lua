@@ -79,7 +79,12 @@ hl.layer_rule({
   no_anim = true,
 })
 -- j2bar's polkit prompt is a panel in the middle of the screen.
-hl.layer_rule({ match = { namespace = "^j2bar-polkit$" }, animation = "popin 80%" })
+hl.layer_rule({
+  match = { namespace = "^j2bar-polkit$" },
+  blur = true,
+  ignore_alpha = 0.5,
+  animation = "popin 80%",
+})
 hl.layer_rule({ match = { namespace = "^j2bar-osd$" }, blur = true, ignore_alpha = 0.5 })
 -- j2bar's launcher covers the output and dims it, so the whole desktop blurs behind it.
 hl.layer_rule({ match = { namespace = "^j2bar-launcher$" }, blur = true, animation = "fade" })
