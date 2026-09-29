@@ -176,6 +176,7 @@ hl.window_rule({ match = { class = "^(firefox)$" }, immediate = true })
 hl.window_rule({ match = { class = "^(jetbrains-datagrip)$" }, immediate = true })
 
 -- Dialog-like windows float rather than disturb the tiled layout.
+hl.window_rule({ match = { class = "^(dev\\.noctalia\\.Noctalia)$" }, float = true, size = { 1080, 920 } })
 hl.window_rule({ match = { class = "^(mpv)$" }, float = true, center = true, keep_aspect_ratio = true })
 -- The file chooser's GTK theme draws its own frame and shadow; Hyprland caps rounding at 20.
 hl.window_rule({

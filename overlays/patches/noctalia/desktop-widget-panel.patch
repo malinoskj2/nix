@@ -1,0 +1,310 @@
+diff --git a/src/shell/desktop/desktop_widget.h b/src/shell/desktop/desktop_widget.h
+--- a/src/shell/desktop/desktop_widget.h
++++ b/src/shell/desktop/desktop_widget.h
+@@ -8,6 +8,7 @@
+ #include <functional>
+ #include <memory>
+ #include <string>
++#include <string_view>
+ #include <unordered_map>
+ 
+ class AnimationManager;
+@@ -20,6 +21,7 @@
+   using LayoutCallback = std::function<void()>;
+   using RedrawCallback = std::function<void()>;
+   using FrameTickRequestCallback = std::function<void()>;
++  using PanelToggleCallback = std::function<void(std::string_view panelId)>;
+ 
+   virtual ~DesktopWidget() = default;
+ 
+@@ -55,6 +57,8 @@
+   void setFrameTickRequestCallback(FrameTickRequestCallback callback) {
+     m_frameTickRequestCallback = std::move(callback);
+   }
++  // Toggles a panel anchored to the widget, which only the host can place on its output.
++  void setPanelToggleCallback(PanelToggleCallback callback) { m_panelToggleCallback = std::move(callback); }
+   void setContentScale(float scale) noexcept {
+     if (scale == m_baseScale) {
+       return;
+@@ -118,6 +122,14 @@
+     }
+   }
+ 
++  [[nodiscard]] bool requestPanelToggle(std::string_view panelId) {
++    if (!m_panelToggleCallback) {
++      return false;
++    }
++    m_panelToggleCallback(panelId);
++    return true;
++  }
++
+   [[nodiscard]] float boxInnerWidth() const noexcept;
+   [[nodiscard]] float boxInnerHeight() const noexcept;
+   // True while layout() runs, including the nested update() calls a doLayout may make (which open
+@@ -168,6 +180,7 @@
+   LayoutCallback m_layoutCallback;
+   RedrawCallback m_redrawCallback;
+   FrameTickRequestCallback m_frameTickRequestCallback;
++  PanelToggleCallback m_panelToggleCallback;
+ 
+   bool m_bgEnabled = false;
+   ColorSpec m_bgColor;
+diff --git a/src/shell/desktop/desktop_widgets_host.cpp b/src/shell/desktop/desktop_widgets_host.cpp
+--- a/src/shell/desktop/desktop_widgets_host.cpp
++++ b/src/shell/desktop/desktop_widgets_host.cpp
+@@ -9,6 +9,7 @@
+ #include "scripting/plugin_registry.h"
+ #include "shell/desktop/desktop_widget_layout.h"
+ #include "shell/desktop/widget_transform.h"
++#include "shell/panel/panel_manager.h"
+ #include "shell/wallpaper/wallpaper_geometry.h"
+ #include "time/time_format.h"
+ #include "ui/builders.h"
+@@ -321,6 +322,21 @@
+     }
+   });
+ 
++  // Like a macOS menu, the panel opens below the bar with its left edge under the widget's.
++  instance->widget->setPanelToggleCallback([rawInstance](std::string_view panelId) {
++    const DesktopWidgetState& placed = rawInstance->state;
++    PanelManager::instance().togglePanel(
++        std::string(panelId),
++        PanelOpenRequest{
++            .output = rawInstance->output,
++            .anchorX = placed.cx - rawInstance->intrinsicWidth * 0.5F,
++            .anchorY = placed.cy + rawInstance->intrinsicHeight * 0.5F,
++            .hasExplicitAnchor = true,
++            .hasAnchorPosition = true,
++            .anchorIsLeftEdge = true,
++        }
++    );
++  });
+   instance->surface->setConfigureCallback([rawInstance](std::uint32_t /*width*/, std::uint32_t /*height*/) {
+     rawInstance->surface->requestLayout();
+   });
+diff --git a/src/shell/desktop/widgets/plugin_desktop_widget.cpp b/src/shell/desktop/widgets/plugin_desktop_widget.cpp
+--- a/src/shell/desktop/widgets/plugin_desktop_widget.cpp
++++ b/src/shell/desktop/widgets/plugin_desktop_widget.cpp
+@@ -4,6 +4,7 @@
+ #include "i18n/i18n.h"
+ #include "notification/notifications.h"
+ #include "scripting/plugin_runtime_context.h"
++#include "scripting/script_api_context.h"
+ #include "ui/builders.h"
+ #include "ui/controls/flex.h"
+ 
+@@ -77,11 +78,20 @@
+     return;
+   }
+ 
++  auto alive = std::weak_ptr<bool>(m_alive);
+   m_runtime = std::make_shared<scripting::ScriptRuntime>(
+-      m_entryId, m_settings, m_scriptApi, m_pluginDir, m_httpClient, m_clipboard
++      m_entryId, m_settings, m_scriptApi, m_pluginDir, m_httpClient, m_clipboard,
++      [this, alive](std::string_view panelId) {
++        auto token = alive.lock();
++        if (token == nullptr || !*token) {
++          return;
++        }
++        if (!requestPanelToggle(panelId)) {
++          m_scriptApi.invokeTogglePanel(std::string(panelId));
++        }
++      }
+   );
+ 
+-  auto alive = std::weak_ptr<bool>(m_alive);
+   m_runtimeSubscription = m_runtime->subscribe([this, alive](scripting::ScriptResult result) {
+     auto token = alive.lock();
+     if (token == nullptr || !*token) {
+diff --git a/src/shell/panel/panel_manager.cpp b/src/shell/panel/panel_manager.cpp
+--- a/src/shell/panel/panel_manager.cpp
++++ b/src/shell/panel/panel_manager.cpp
+@@ -684,8 +684,8 @@
+       && barConfig.reserveSpace
+       && barConfig.thickness > 0;
+   const auto marginLeftFromAnchor = clampMargin(
+-      request.anchorX - static_cast<float>(panelWidth) * 0.5F, static_cast<std::int32_t>(panelWidth), outputWidth,
+-      screenPadding
++      request.anchorX - (request.anchorIsLeftEdge ? 0.0F : static_cast<float>(panelWidth) * 0.5F),
++      static_cast<std::int32_t>(panelWidth), outputWidth, screenPadding
+   );
+   const auto marginTopFromAnchor = clampMargin(
+       request.anchorY - static_cast<float>(panelHeight) * 0.5F, static_cast<std::int32_t>(panelHeight), outputHeight,
+diff --git a/src/shell/panel/panel_manager.h b/src/shell/panel/panel_manager.h
+--- a/src/shell/panel/panel_manager.h
++++ b/src/shell/panel/panel_manager.h
+@@ -42,6 +42,8 @@
+   float anchorY = 0.0F;
+   bool hasExplicitAnchor = false;
+   bool hasAnchorPosition = false;
++  // A floating panel from a horizontal bar's edge puts its left edge, not its center, at anchorX.
++  bool anchorIsLeftEdge = false;
+   std::string_view context;
+   std::string_view sourceBarName;
+ };
+diff --git a/src/ui/ui_tree_reconciler.cpp b/src/ui/ui_tree_reconciler.cpp
+--- a/src/ui/ui_tree_reconciler.cpp
++++ b/src/ui/ui_tree_reconciler.cpp
+@@ -374,7 +374,9 @@
+       if (want.type == "graph") {
+         return callbackProp(want, "onPointerMove") != nullptr || callbackProp(want, "onPointerLeave") != nullptr;
+       }
+-      return callbackProp(want, "onClick") != nullptr || callbackProp(want, "onHover") != nullptr;
++      return callbackProp(want, "onClick") != nullptr
++          || callbackProp(want, "onRightClick") != nullptr
++          || callbackProp(want, "onHover") != nullptr;
+     }
+ 
+     // If a reconcile flips that need, the existing node cannot be reused (its
+@@ -421,16 +423,35 @@
+       return inputArea;
+     }
+ 
+-    void wireWrapperActivation(InputArea* inputArea, const std::function<void()>& sink) {
++    // Either sink may be empty; the keyboard activates the left-click one.
++    void wireWrapperActivation(
++        InputArea* inputArea, const std::function<void()>& sink, const std::function<void()>& rightSink
++    ) {
+       // A wrapper created hover-only starts with an empty button mask.
+-      inputArea->setAcceptedButtons(InputArea::buttonMask(BTN_LEFT));
+-      inputArea->setOnClick([sink](const InputArea::PointerData&) { sink(); });
+-      inputArea->setFocusable(true);
+-      inputArea->setOnKeyDown([sink](const InputArea::KeyData& key) {
+-        if (key.pressed && KeybindMatcher::matches(KeybindAction::Validate, key.sym, key.modifiers)) {
+-          sink();
++      std::uint32_t buttons = 0;
++      if (sink) {
++        buttons |= InputArea::buttonMask(BTN_LEFT);
++      }
++      if (rightSink) {
++        buttons |= InputArea::buttonMask(BTN_RIGHT);
++      }
++      inputArea->setAcceptedButtons(buttons);
++      inputArea->setOnClick([sink, rightSink](const InputArea::PointerData& data) {
++        const auto& target = data.button == BTN_RIGHT ? rightSink : sink;
++        if (target) {
++          target();
+         }
+       });
++      inputArea->setFocusable(static_cast<bool>(sink));
++      if (sink) {
++        inputArea->setOnKeyDown([sink](const InputArea::KeyData& key) {
++          if (key.pressed && KeybindMatcher::matches(KeybindAction::Validate, key.sym, key.modifiers)) {
++            sink();
++          }
++        });
++      } else {
++        inputArea->setOnKeyDown(nullptr);
++      }
+     }
+ 
+     // Wrapper input handlers deviate from the retain-absent-props default:
+@@ -460,10 +481,11 @@
+                                                             "visible",   "gap",     "padding",     "paddingH",
+                                                             "paddingV",  "align",   "justify",     "fill",
+                                                             "radius",    "border",  "borderWidth", "minWidth",
+-                                                            "minHeight", "onClick", "onHover"};
++                                                            "minHeight", "onClick", "onRightClick", "onHover"};
+       static const std::unordered_set<std::string> kBox = {"width",       "height",   "flexGrow", "opacity",
+                                                            "visible",     "fill",     "radius",   "border",
+-                                                           "borderWidth", "softness", "onClick",  "onHover"};
++                                                           "borderWidth", "softness", "onClick",  "onRightClick",
++                                                           "onHover"};
+       static const std::unordered_set<std::string> kLabel = {"width",      "height",   "flexGrow", "opacity",
+                                                              "visible",    "text",     "fontSize", "color",
+                                                              "fontWeight", "maxWidth", "maxLines", "textAlign",
+@@ -472,7 +494,8 @@
+                                                              "visible", "name",   "size",     "color"};
+       static const std::unordered_set<std::string> kImage = {"width",   "height",      "flexGrow", "opacity",
+                                                              "visible", "path",        "radius",   "fit",
+-                                                             "border",  "borderWidth", "onClick",  "onHover"};
++                                                             "border",  "borderWidth", "onClick",  "onRightClick",
++                                                             "onHover"};
+       static const std::unordered_set<std::string> kSeparator = {"width",   "height",  "flexGrow",
+                                                                  "opacity", "visible", "thickness",
+                                                                  "color",   "spacing", "orientation"};
+@@ -582,7 +605,7 @@
+     std::string key;
+     Node* node = nullptr;
+     std::string callbackName;             // last-wired button onClick / control onChange target
+-    std::string rightCallbackName;        // last-wired button onRightClick target
++    std::string rightCallbackName;        // last-wired onRightClick target
+     std::string hoverCallbackName;        // last-wired onHover target (button/box/image/row/column)
+     std::string submitCallbackName;       // last-wired input onSubmit target
+     std::string dragEndCallbackName;      // last-wired slider onDragEnd target
+@@ -661,7 +684,7 @@
+       auto flex = std::make_unique<Flex>();
+       flex->setDirection(FlexDirection::Vertical);
+       flex->setAlign(FlexAlign::Stretch);
+-      if (callbackProp(desired, "onClick") != nullptr || callbackProp(desired, "onHover") != nullptr) {
++      if (wantsInputAreaWrapper(desired)) {
+         return wrapClickable(std::move(flex), callbackProp(desired, "onClick") != nullptr);
+       }
+       return flex;
+@@ -670,7 +693,7 @@
+       auto flex = std::make_unique<Flex>();
+       flex->setDirection(FlexDirection::Horizontal);
+       flex->setAlign(FlexAlign::Stretch);
+-      if (callbackProp(desired, "onClick") != nullptr || callbackProp(desired, "onHover") != nullptr) {
++      if (wantsInputAreaWrapper(desired)) {
+         return wrapClickable(std::move(flex), callbackProp(desired, "onClick") != nullptr);
+       }
+       return flex;
+@@ -688,7 +711,7 @@
+       return zone;
+     }
+     if (desired.type == "box") {
+-      if (callbackProp(desired, "onClick") != nullptr || callbackProp(desired, "onHover") != nullptr) {
++      if (wantsInputAreaWrapper(desired)) {
+         return wrapClickable(std::make_unique<Box>(), callbackProp(desired, "onClick") != nullptr);
+       }
+       return std::make_unique<Box>();
+@@ -700,7 +723,7 @@
+       return std::make_unique<Glyph>();
+     }
+     if (desired.type == "image") {
+-      if (callbackProp(desired, "onClick") != nullptr || callbackProp(desired, "onHover") != nullptr) {
++      if (wantsInputAreaWrapper(desired)) {
+         return wrapClickable(std::make_unique<Image>(), callbackProp(desired, "onClick") != nullptr);
+       }
+       return std::make_unique<Image>();
+@@ -862,21 +885,27 @@
+ 
+   void UiTreeReconciler::syncWrapperCallbacks(Slot& slot, const UiTreeNode& desired, Node* node) {
+     InputArea* inputArea = inputAreaFromSlot(node);
+-    if (const std::string* onClick = callbackProp(desired, "onClick"); onClick != nullptr) {
+-      if (*onClick != slot.callbackName) {
+-        slot.callbackName = *onClick;
+-        if (inputArea != nullptr) {
+-          wireWrapperActivation(inputArea, [this, name = slot.callbackName]() {
++    const std::string* onClick = callbackProp(desired, "onClick");
++    const std::string* onRightClick = callbackProp(desired, "onRightClick");
++    const std::string left = onClick != nullptr ? *onClick : std::string();
++    const std::string right = onRightClick != nullptr ? *onRightClick : std::string();
++    if (left != slot.callbackName || right != slot.rightCallbackName) {
++      slot.callbackName = left;
++      slot.rightCallbackName = right;
++      if (inputArea != nullptr && left.empty() && right.empty()) {
++        clearWrapperActivation(inputArea);
++      } else if (inputArea != nullptr) {
++        const auto sinkFor = [this](const std::string& name) -> std::function<void()> {
++          if (name.empty()) {
++            return {};
++          }
++          return [this, name]() {
+             if (m_sink) {
+               m_sink(ControlCallback{name});
+             }
+-          });
+-        }
+-      }
+-    } else if (!slot.callbackName.empty()) {
+-      slot.callbackName.clear();
+-      if (inputArea != nullptr) {
+-        clearWrapperActivation(inputArea);
++          };
++        };
++        wireWrapperActivation(inputArea, sinkFor(left), sinkFor(right));
+       }
+     }
+     if (const std::string* onHover = callbackProp(desired, "onHover"); onHover != nullptr) {
