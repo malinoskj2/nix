@@ -63,10 +63,11 @@ To upgrade:
    Hyprland, and rebase
    [`layer-shape.patch`](../pkgs/hyprglass/layer-shape.patch) onto it. hyprglass
    hooks Hyprland's private `renderLayer`, so open a floating panel (the clock's
-   calendar) and check its glass, not just the build. Its top rim should gleam
-   once as it opens, and its edges shouldn't flicker dark while it scales in.
-   Then send two notifications: each banner should have its own rounded glass,
-   even while one slides in or out.
+   calendar) and an attached one (the control center) and check their glass,
+   not just the build. The floating panel's top rim should gleam once as it
+   opens, and its edges shouldn't flicker dark while it scales in; the
+   attached one shouldn't gleam. Then send two notifications: each banner
+   should have its own rounded glass, even while one slides in or out.
 4. Read [`pkgs/hyprsheet/main.cpp`](../pkgs/hyprsheet/main.cpp) against the
    new source. It uses Hyprland's private window transformers, xdg-foreign
    parents, window fadeouts and layout moves, hooks `CWindowFadeout::create`,
@@ -157,6 +158,31 @@ Treat a bump as a hardware change and test it on the device.
 - **htop.** [`pkgs/htop-vim-navigation/`](../pkgs/htop-vim-navigation) asserts
   the htop versions its patch was checked against. If a nixpkgs update trips
   it, re-check the patch next to it and add the new version.
+- **Noctalia.** The `unstable` overlay in
+  [`overlays/default.nix`](../overlays/default.nix) patches Noctalia so floating
+  panels skip its clip reveal and Hyprland scales them in instead, so a bar
+  widget's panel centers under the widget, so a plugin panel can set its own
+  padding and resize to fit its content, so plugin sliders can be styled, so
+  notification toasts are laid out like macOS 27's banners and slide in and
+  out across the screen edge, so a desktop widget's panel opens under the
+  widget and plugin rows take a right click, and so a bar widget can turn off
+  its hover tooltip. It asserts the version the patches
+  were checked against. When `nixpkgs-unstable` moves Noctalia, re-check
+  [`overlays/patches/noctalia/`](../overlays/patches/noctalia) against the new
+  source, then:
+  - click the clock (the calendar should open centered under it);
+  - hover the volume icon (no tooltip should appear), then click it (the sound
+    menu should open centered under it, with a thin peach slider);
+  - hover the network icon (no tooltip should appear), then click it (the
+    network menu should scale in at its final size, then grow when Other
+    Networks expands);
+  - click the snowflake button (the system menu should open below the bar with
+    its left edge under the button's), then right-click it (the control center
+    should open);
+  - open the control center;
+  - send a few notifications with `notify-send` (each banner should slide in
+    from the right with its own rounded glass, and slide back out when it
+    expires).
 - **Claude Desktop.** [`pkgs/claude-desktop/`](../pkgs/claude-desktop) fetches
   one `.deb` from Anthropic's APT repository. To move it, copy the newest
   `Version` and `SHA256` from

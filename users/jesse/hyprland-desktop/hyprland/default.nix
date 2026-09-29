@@ -17,6 +17,7 @@ let
     alpha = {
       chrome = alphaHex glass.chrome;
     };
+    control_button_id = (lib.importTOML ../noctalia/plugins/control-button/plugin.toml).id;
     # Hyprland swaps plugins its config loads through `hl.plugin.load` when a switch changes their
     # store paths; the module's `plugins` option runs `hyprctl plugin load` only once at startup.
     hyprbars = "${pkgs.hyprlandPlugins.hyprbars}/lib/libhyprbars.so";
