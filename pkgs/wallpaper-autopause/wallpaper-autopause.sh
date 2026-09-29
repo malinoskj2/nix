@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Every wallpaper stays paused while the Noctalia lock screen is up, since the video is hidden
-# behind it. Updates are event-driven: Hyprland events cover windows, workspaces and new mpvpaper
-# surfaces, and logind's LockedHint covers locking and unlocking.
+# Every wallpaper stays paused while the lock screen is up, since the video is hidden behind it.
+# Updates are event-driven: Hyprland events cover windows, workspaces and new mpvpaper surfaces, and
+# logind's LockedHint covers locking and unlocking.
 
-readonly mpvpaper_dir="${XDG_STATE_HOME:-$HOME/.local/state}/noctalia/mpvpaper"
+readonly state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/wallpaper"
 
 find_hyprland_socket() {
   local candidate
@@ -52,14 +52,14 @@ apply_pause_states() {
     while read -r monitor pause; do
       [[ "$locked" == true ]] && pause=true
       printf '{"command":["set_property","pause",%s]}\n' "$pause" |
-        socat - "UNIX-CONNECT:$mpvpaper_dir/ipc-$monitor.sock" >/dev/null 2>&1 || failed=1
+        socat - "UNIX-CONNECT:$state_dir/ipc-$monitor.sock" >/dev/null 2>&1 || failed=1
     done
     ((failed == 0))
   }
 }
 
 # A (re)started mpvpaper maps its surface slightly before its mpv IPC socket is up, hence the
-# retries. Instances start paused (mpv_options), so nothing plays in the meantime.
+# retries. Instances start paused, so nothing plays in the meantime.
 apply_to_new_instance() {
   for _ in {1..10}; do
     apply_pause_states && return
