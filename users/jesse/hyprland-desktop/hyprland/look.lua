@@ -72,9 +72,14 @@ hl.layer_rule({ match = { namespace = noctalia_layers({ "attached-panel" }) }, n
 
 -- One layer holds every notification banner, so each slides in and out through Noctalia instead.
 hl.layer_rule({ match = { namespace = noctalia_layers({ "notification" }) }, no_anim = true })
--- j2bar's screen corners are there from the start and never move, and its on-screen display and
--- the fade before an idle action move by themselves.
-hl.layer_rule({ match = { namespace = "^j2bar-(screen-corner|osd|idle-fade)$" }, no_anim = true })
+-- j2bar's screen corners are there from the start and never move, and its on-screen display,
+-- its notification banners and the fade before an idle action move by themselves.
+hl.layer_rule({
+  match = { namespace = "^j2bar-(screen-corner|osd|notification|idle-fade)$" },
+  no_anim = true,
+})
+-- j2bar's polkit prompt is a panel in the middle of the screen.
+hl.layer_rule({ match = { namespace = "^j2bar-polkit$" }, animation = "popin 80%" })
 hl.layer_rule({ match = { namespace = "^j2bar-osd$" }, blur = true, ignore_alpha = 0.5 })
 -- j2bar's launcher covers the output and dims it, so the whole desktop blurs behind it.
 hl.layer_rule({ match = { namespace = "^j2bar-launcher$" }, blur = true, animation = "fade" })
@@ -207,11 +212,24 @@ glass.layer("noctalia-notification", {
   rim_shadow = 2.7,
 })
 
--- `corner_radius` must match the radius of j2bar's on-screen display.
-glass.layer("j2bar-osd", {
+-- `corner_radius` must match the radius of j2bar's on-screen display and of its polkit prompt.
+for _, namespace in ipairs({ "j2bar-osd", "j2bar-polkit" }) do
+  glass.layer(namespace, {
+    preset = "panel",
+    mask_mode = "region",
+    corner_radius = 12,
+    rounding_power = 2.0,
+    rim_light = 2.6,
+    rim_shadow = 2.7,
+  })
+end
+
+-- Each of j2bar's banners is its own piece of the blur region, as Noctalia's are.
+-- `corner_radius` must match j2bar's banner radius.
+glass.layer("j2bar-notification", {
   preset = "panel",
   mask_mode = "region",
-  corner_radius = 12,
+  corner_radius = 20,
   rounding_power = 2.0,
   rim_light = 2.6,
   rim_shadow = 2.7,
