@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# The video is loaded straight into mpv over the plugin's IPC socket, so the plugin never learns
-# about it and a Noctalia restart reverts to its assignment.
+# The video is loaded straight into the running mpv, and recorded as the monitor's assignment so a
+# restarted mpvpaper keeps it. The next session assigns a new one.
 
 readonly video_dir="$HOME/.wallpapers/video"
-readonly mpvpaper_dir="${XDG_STATE_HOME:-$HOME/.local/state}/noctalia/mpvpaper"
+readonly state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/wallpaper"
+readonly state_file="$state_dir/assignments.json"
 
 usage() {
   cat <<'EOF'
 Usage: wallpaper-select [monitor]
 
-Switch a monitor's running Noctalia video wallpaper to one picked in the Noctalia launcher.
+Switch a monitor's running video wallpaper to one picked in the Noctalia launcher.
 The monitor defaults to the focused one.
 EOF
 }
@@ -47,6 +48,21 @@ list_videos() {
     done
 }
 
+assign() {
+  local monitor="$1"
+  local target="$2"
+  local temp_file
+
+  exec 9>"$state_dir/lock"
+  flock 9
+  if ! jq -e '.assignments | type == "object"' "$state_file" >/dev/null 2>&1; then
+    printf '{"assignments":{}}\n' >"$state_file"
+  fi
+  temp_file="$(mktemp "$state_file.XXXXXX")"
+  jq --arg monitor "$monitor" --arg target "$target" '.assignments[$monitor] = $target' \
+    "$state_file" >"$temp_file" && mv "$temp_file" "$state_file"
+}
+
 case "${1:-}" in
   -h | --help)
     usage
@@ -55,7 +71,7 @@ case "${1:-}" in
 esac
 
 monitor="${1:-$(hyprctl -j monitors | jq -r '.[] | select(.focused) | .name')}"
-socket="$mpvpaper_dir/ipc-$monitor.sock"
+socket="$state_dir/ipc-$monitor.sock"
 
 if ! query_video_path "$socket" | jq -e '.error == "success"' >/dev/null; then
   die "no running video wallpaper on $monitor"
@@ -66,9 +82,11 @@ choice="$(list_videos "$current" | noctalia dmenu -p "Wallpaper ($monitor)")" ||
 choice="${choice% (current)}"
 [[ -n "$choice" ]] || exit 0
 
+# Text typed into the launcher comes back as it is when it matches nothing.
 target="$video_dir/$choice"
-[[ -f "$target" ]] || die "not found: $target"
+[[ "$choice" != */* && -f "$target" ]] || die "not a video in $video_dir: $choice"
 [[ "$target" != "$current" ]] || exit 0
 
 jq -nc --arg target "$target" '{command: ["loadfile", $target, "replace"]}' |
   send_to_mpv "$socket" >/dev/null
+assign "$monitor" "$target"

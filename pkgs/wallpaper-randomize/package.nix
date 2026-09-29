@@ -3,6 +3,7 @@
   findutils,
   jq,
   lib,
+  util-linux,
   writeShellApplication,
 }:
 
@@ -12,10 +13,11 @@ writeShellApplication {
     coreutils
     findutils
     jq
+    util-linux
   ];
   text = builtins.readFile ./wallpaper-randomize.sh;
   meta = {
-    description = "Assign each monitor a random Noctalia video wallpaper";
+    description = "Assign monitors random video wallpapers";
     platforms = lib.platforms.linux;
   };
 }

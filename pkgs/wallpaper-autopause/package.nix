@@ -25,7 +25,7 @@ writeShellApplication {
   ];
   text = builtins.readFile ./wallpaper-autopause.sh;
   meta = {
-    description = "Pause Noctalia video wallpapers on occupied workspaces and the lock screen";
+    description = "Pause video wallpapers on occupied workspaces and the lock screen";
     platforms = lib.platforms.linux;
   };
 }
