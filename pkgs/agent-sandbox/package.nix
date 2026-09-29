@@ -52,6 +52,7 @@
   symlinkJoin,
   systemd,
   tmux,
+  tzdata,
   unzip,
   wayvnc,
   which,
@@ -231,6 +232,7 @@ let
       ln -s ${glibc}/lib/ld-linux-x86-64.so.2 lib64/ld-linux-x86-64.so.2
       ln -s ${nixConf} etc/nix/nix.conf
       ln -s ${fontconfig.out}/etc/fonts/conf.d etc/fonts/conf.d
+      ln -s ${tzdata}/share/zoneinfo etc/zoneinfo
       ln -s ${./sway.conf} etc/sway/config
       ln -s ${./nested-sway.conf} etc/sway/nested
       ln -s ${./CLAUDE.md} etc/claude-code/CLAUDE.md
@@ -248,6 +250,9 @@ let
         "CLAUDE_CODE_SANDBOXED=1"
         "ORCA_CLI_COMMAND=orca-ide"
         "LOCALE_ARCHIVE=${glibcLocales}/lib/locale/locale-archive"
+        # As on NixOS: the host's /etc/localtime is mounted, and a TZ that names a zone resolves
+        # through TZDIR for glibc and /etc/zoneinfo for readers that ignore TZDIR, such as chrono.
+        "TZDIR=/etc/zoneinfo"
         "SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
         "NIX_SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
         "FONTCONFIG_FILE=${

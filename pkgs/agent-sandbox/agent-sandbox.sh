@@ -141,6 +141,33 @@ if [[ -d $HOME/.config/git ]]; then
   args+=(--volume "$HOME/.config/git:$HOME/.config/git:ro")
 fi
 
+# The display draws text, icons and Hyprland's compositing the way the desktop does: its fonts and
+# their rendering settings, its desktop entries and icon themes, and its Hyprland look.lua.
+if [[ -f /etc/fonts/fonts.conf ]]; then
+  args+=(--volume /etc/fonts:/etc/fonts:ro --env FONTCONFIG_FILE=/etc/fonts/fonts.conf)
+fi
+for dir in "$HOME/.config/fontconfig" "$HOME/.local/share/fonts"; do
+  if [[ -d $dir ]]; then
+    mkdir -p "$sandbox_home${dir#"$HOME"}"
+    args+=(--volume "$dir:$dir:ro")
+  fi
+done
+if [[ -f $HOME/.config/hypr/look.lua ]]; then
+  args+=(--volume "$HOME/.config/hypr:/run/host-hypr:ro")
+fi
+# The profiles these name aren't mounted, so their store paths stand in for them.
+data_dirs=()
+IFS=: read -ra host_data_dirs <<<"${XDG_DATA_DIRS:-}"
+for dir in "${host_data_dirs[@]}"; do
+  if dir=$(realpath -e "$dir" 2>/dev/null) && [[ $dir == /nix/store/* ]]; then
+    data_dirs+=("$dir")
+  fi
+done
+if [[ ${#data_dirs[@]} -gt 0 ]]; then
+  joined=$(printf '%s:' "${data_dirs[@]}")
+  args+=(--env "XDG_DATA_DIRS=${joined%:}")
+fi
+
 for name in CLAUDE.md settings.json skills hooks agents commands output-styles plugins rules; do
   src=$HOME/.claude/$name
   if [[ -d $src ]]; then
