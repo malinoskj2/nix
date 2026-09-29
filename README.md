@@ -14,7 +14,7 @@ imported as-is. Borrow whatever's useful.
 ## ✨ Highlights
 
 - 🪟 **Hyprland in Lua** with a [patched hyprfocus](overlays/patches/hyprfocus) and
-  custom [Noctalia plugins](users/jesse/hyprland-desktop/noctalia/plugins)
+  [j2bar](users/jesse/hyprland-desktop/j2bar.nix), my own shell
 - 🎨 **One Catppuccin palette** in [`palette.nix`](users/jesse/global/palette.nix),
   shared by every themed app
 - 🤖 **Every host built in CI** on native x86_64-linux, aarch64-linux and

@@ -43,7 +43,7 @@ return function(nix)
     end
   end
 
-  -- A process that still owns another window or a layer, like Noctalia, is left running.
+  -- A process that still owns another window or a layer is left running.
   local function owns_other_surface(window)
     for _, other in ipairs(hl.get_windows()) do
       if other.pid == window.pid and other.address ~= window.address then
