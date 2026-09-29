@@ -44,6 +44,8 @@ Blender (Cycles with CUDA and OptiX) and a Python with torch (CUDA) and hy3dgen 
 
 All sandboxes share a 20G memory limit; past it the kernel kills the largest process. Run one cargo build or test at a time, including across subagents and separate target dirs. Each one already uses every core, and several at once fill the limit with linkers.
 
+Cargo compiles through sccache, whose cache at `~/.cache/sccache` every sandbox shares, so a new worktree reuses the dependency crates another one already built. Don't delete it as scratch.
+
 ## Disk
 
 `~/projects` is on the host's disk, so anything you leave behind stays there.
