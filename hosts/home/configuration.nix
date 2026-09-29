@@ -36,6 +36,11 @@
     }
   ];
 
+  zramSwap.enable = true;
+  # Zram takes swap before the swapfile, so swapping out is cheap, but past 100 the kernel would
+  # prefer it to dropping cache and spill idle apps onto the swapfile once zram fills.
+  boot.kernel.sysctl."vm.swappiness" = 100;
+
   nix.settings = {
     max-jobs = 16;
     cores = 16;
