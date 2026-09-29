@@ -43,8 +43,8 @@ print_monitor_states() {
 apply_pause_states() {
   local locked
 
-  # An unreachable Noctalia counts as locked so the video never plays unseen.
-  locked="$(noctalia msg status 2>/dev/null | jq -r '.locked' 2>/dev/null || true)"
+  # An unreachable j2bar counts as locked so the video never plays unseen.
+  locked="$(j2bar msg status 2>/dev/null | jq -r '.locked' 2>/dev/null || true)"
   [[ "$locked" == false ]] || locked=true
 
   print_monitor_states | {
