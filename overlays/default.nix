@@ -26,6 +26,26 @@ in
         claude-code = unstable.claude-code.override {
           manifest = final.lib.importJSON ./claude-code/manifest.zst.json;
         };
+        # TODO: drop this override once nixpkgs-unstable reaches 0.157.1. Older clients aren't
+        # offered the GPT-6 models.
+        codex = unstable.codex.overrideAttrs (old: rec {
+          version = "0.157.1";
+          src = final.fetchFromGitHub {
+            owner = "openai";
+            repo = "codex";
+            tag = "rust-v${version}";
+            hash = "sha256-HuNL5VGd2LenhbCdcz0i8b6lRw3sicwXytyfXgCgy88=";
+          };
+          cargoDeps = final.rustPlatform.fetchCargoVendor {
+            inherit src;
+            inherit (old) sourceRoot;
+            hash = "sha256-Mp4chq9QuQB19FrOZBhmUtPrDoEpZZna79+MZs9rGUo=";
+          };
+          patches = (old.patches or [ ]) ++ [ ./patches/codex/no-daemon_auto_start.patch ];
+          postPatch = old.postPatch + ''
+            sed -i '1i#![recursion_limit = "256"]' chatgpt/src/lib.rs
+          '';
+        });
         # Hyprland scales floating panels in and out like windows, so Noctalia's own clip reveal
         # would run on top of it, a bar widget's panel centers under the widget like a macOS
         # menu bar item, a plugin panel can set its own padding and resize to fit its content

@@ -155,6 +155,14 @@ Treat a bump as a hardware change and test it on the device.
   instead of the version in `nixpkgs-unstable`. To move it, replace that file
   with `https://downloads.claude.ai/claude-code-releases/<version>/manifest.zst.json`.
   Drop the override once `nixpkgs-unstable` catches up.
+- **Codex.** The `unstable` overlay builds Codex from a newer `rust-v<version>`
+  tag than `nixpkgs-unstable` has, because OpenAI doesn't offer its newest
+  models to older clients. It carries nixpkgs' own patch and `postPatch` for
+  that version, with the patch in
+  [`overlays/patches/codex/`](../overlays/patches/codex). To move it, change
+  `version`, then refresh the source hash and the cargo vendor hash, and copy
+  any new patch or `postPatch` line from nixpkgs' `pkgs/by-name/co/codex/`.
+  Drop the override once `nixpkgs-unstable` catches up.
 - **htop.** [`pkgs/htop-vim-navigation/`](../pkgs/htop-vim-navigation) asserts
   the htop versions its patch was checked against. If a nixpkgs update trips
   it, re-check the patch next to it and add the new version.
