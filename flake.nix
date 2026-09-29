@@ -123,6 +123,8 @@
           "orca-ade"
           "pubip"
           "wallpaper-autopause"
+          "wallpaper-outputs"
+          "wallpaper-play"
           "wallpaper-randomize"
           "wallpaper-select"
           "wifi-connect"
