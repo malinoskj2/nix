@@ -5,7 +5,6 @@
   programs.j2bar = {
     enable = true;
     package = pkgs.j2bar;
-    systemd.enable = true;
     settings = {
       output = "DP-2";
       control_button = {
