@@ -48,6 +48,7 @@
   python3,
   ripgrep,
   runCommand,
+  sccache,
   sway,
   symlinkJoin,
   systemd,
@@ -189,6 +190,7 @@ let
       procps
       (python3.withPackages (_: [ hy3dgen ]))
       ripgrep
+      sccache
       sway
       tmux
       unzip
@@ -278,6 +280,11 @@ let
         "CARGO_PROFILE_DEV_DEBUG=line-tables-only"
         "CARGO_PROFILE_TEST_DEBUG=line-tables-only"
         "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS=-C link-arg=-fuse-ld=mold"
+        # The cache lands in the sandboxes' shared home, never the host's: a sandbox must not
+        # write objects the host links. Each container runs its own server, so each enforces
+        # the size cap on its own.
+        "RUSTC_WRAPPER=sccache"
+        "SCCACHE_CACHE_SIZE=50G"
       ];
     };
   };

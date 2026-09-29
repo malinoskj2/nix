@@ -9,7 +9,12 @@
     rust-analyzer
     rustc
     rustfmt
+    sccache
   ];
 
-  home.sessionVariables.LIBGIT2_SYS_USE_PKG_CONFIG = "1";
+  home.sessionVariables = {
+    LIBGIT2_SYS_USE_PKG_CONFIG = "1";
+    RUSTC_WRAPPER = "sccache";
+    SCCACHE_CACHE_SIZE = "50G";
+  };
 }
