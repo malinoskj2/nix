@@ -2,9 +2,9 @@
   coreutils,
   findutils,
   hyprland,
+  j2bar,
   jq,
   lib,
-  noctalia,
   socat,
   util-linux,
   writeShellApplication,
@@ -16,8 +16,8 @@ writeShellApplication {
     coreutils
     findutils
     hyprland
+    j2bar
     jq
-    noctalia
     socat
     util-linux
   ];

@@ -10,7 +10,7 @@ usage() {
   cat <<'EOF'
 Usage: wallpaper-select [monitor]
 
-Switch a monitor's running video wallpaper to one picked in the Noctalia launcher.
+Switch a monitor's running video wallpaper to one picked in j2bar's launcher.
 The monitor defaults to the focused one.
 EOF
 }
@@ -32,6 +32,7 @@ query_video_path() {
   printf '{"command":["get_property","path"]}\n' | send_to_mpv "$socket"
 }
 
+# The launcher shows what follows the tab as the entry's description.
 list_videos() {
   local current="$1"
   local name
@@ -41,7 +42,7 @@ list_videos() {
     sort |
     while read -r name; do
       if [[ "$video_dir/$name" == "$current" ]]; then
-        printf '%s (current)\n' "$name"
+        printf '%s\tcurrent\n' "$name"
       else
         printf '%s\n' "$name"
       fi
@@ -78,8 +79,8 @@ if ! query_video_path "$socket" | jq -e '.error == "success"' >/dev/null; then
 fi
 current="$(query_video_path "$socket" | jq -r '.data')"
 
-choice="$(list_videos "$current" | noctalia dmenu -p "Wallpaper ($monitor)")" || true
-choice="${choice% (current)}"
+choice="$(list_videos "$current" | j2bar dmenu -p "Wallpaper ($monitor)")" || true
+choice="${choice%%$'\t'*}"
 [[ -n "$choice" ]] || exit 0
 
 # Text typed into the launcher comes back as it is when it matches nothing.

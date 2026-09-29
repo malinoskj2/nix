@@ -3,9 +3,9 @@
   dbus,
   glib,
   hyprland,
+  j2bar,
   jq,
   lib,
-  noctalia,
   socat,
   systemd,
   writeShellApplication,
@@ -18,8 +18,8 @@ writeShellApplication {
     dbus
     glib
     hyprland
+    j2bar
     jq
-    noctalia
     socat
     systemd
   ];
