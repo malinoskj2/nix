@@ -100,8 +100,10 @@ hl.animation({ leaf = "hyprsheetIn", enabled = true, speed = 7, spring = "land" 
 hl.animation({ leaf = "hyprsheetOut", enabled = true, speed = 7, spring = "land" })
 
 -- Noctalia reads its mpvpaper wallpaper assignments only at startup, so they're randomized first.
+-- The wallpaper launcher randomizes them itself.
 hl.on("hyprland.start", function()
-  hl.exec_cmd(nix.wallpaper_randomize .. "; exec " .. nix.noctalia)
+  local randomize = nix.wallpaper_randomize and nix.wallpaper_randomize .. "; " or ""
+  hl.exec_cmd(randomize .. "exec " .. nix.noctalia)
 end)
 
 -- Letters are mnemonic for the application; SHIFT picks a variant.

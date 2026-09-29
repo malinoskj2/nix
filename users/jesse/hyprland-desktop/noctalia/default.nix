@@ -177,6 +177,20 @@ let
       };
     };
   };
+
+  # The wallpaper launcher's mpvpaper would share the background layer with the plugin's and with
+  # Noctalia's still wallpaper.
+  configFile =
+    if config.wallpaper.launcher.enable then
+      (pkgs.formats.toml { }).generate "config.toml" (
+        lib.recursiveUpdate settings {
+          wallpaper.enabled = false;
+          plugins.enabled = lib.remove "noctalia/mpvpaper" settings.plugins.enabled;
+        }
+      )
+    else
+      ./config.toml;
+  settings = lib.importTOML ./config.toml;
 in
 {
   home.packages = [
@@ -193,8 +207,8 @@ in
   xdg.configFile."noctalia/config.toml".source =
     pkgs.runCommand "noctalia-config.toml" { nativeBuildInputs = [ noctalia ]; }
       ''
-        noctalia config validate ${./config.toml}
-        cp ${./config.toml} $out
+        noctalia config validate ${configFile}
+        cp ${configFile} $out
       '';
 
   xdg.dataFile = lib.mapAttrs' (
