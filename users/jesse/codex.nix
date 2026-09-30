@@ -1,6 +1,6 @@
 { lib, pkgs, ... }:
 let
-  codexAgentFormat = pkgs.formats.toml { };
+  tomlFormat = pkgs.formats.toml { };
   claudeAgents = ./claude/agents;
   agents = {
     laravel-builder = {
@@ -34,7 +34,7 @@ let
   mkAgent =
     name: agent:
     lib.nameValuePair ".codex/agents/${name}.toml" {
-      source = codexAgentFormat.generate "codex-agent-${name}.toml" (
+      source = tomlFormat.generate "codex-agent-${name}.toml" (
         {
           inherit name;
           inherit (agent) description;
@@ -51,15 +51,61 @@ let
         }
       );
     };
+  settings = tomlFormat.generate "codex-settings.toml" {
+    tui.alternate_screen = "never";
+  };
+  # Codex saves folder trust and model choices to its own config.toml, so it
+  # has to be a writable file with these settings merged in, not a store link.
+  mergeSettings =
+    pkgs.writers.writePython3 "codex-merge-settings"
+      {
+        libraries = [ pkgs.python3Packages.tomlkit ];
+      }
+      ''
+        import sys
+        from collections.abc import MutableMapping
+        from pathlib import Path
+
+        import tomlkit
+
+
+        def merge(dst, src):
+            for key, value in src.items():
+                old = dst.get(key)
+                if isinstance(old, MutableMapping) and isinstance(
+                    value, MutableMapping
+                ):
+                    merge(old, value)
+                else:
+                    dst[key] = value
+
+
+        settings = tomlkit.parse(Path(sys.argv[1]).read_text())
+        target = Path(sys.argv[2])
+        if target.exists():
+            config = tomlkit.parse(target.read_text())
+        else:
+            config = tomlkit.document()
+        merge(config, settings)
+        target.unlink(missing_ok=True)
+        target.write_text(tomlkit.dumps(config))
+      '';
 in
 {
   programs.codex = {
     enable = true;
     package = null;
     skills = ./claude/skills;
-    context = ./claude/rules/worktrees.md;
-    settings.tui.alternate_screen = "never";
+    context = lib.concatMapStringsSep "\n" builtins.readFile [
+      ./claude/rules/worktrees.md
+      ./claude/rules/media.md
+    ];
   };
 
   home.file = lib.mapAttrs' mkAgent agents;
+
+  home.activation.codexSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+    run mkdir -p "$HOME/.codex"
+    run ${mergeSettings} ${settings} "$HOME/.codex/config.toml"
+  '';
 }

@@ -36,6 +36,7 @@ in
       rust-review-jesse = ./skills/rust-review-jesse;
     };
     rules = {
+      media = ./rules/media.md;
       rust = ./rules/rust.md;
       worktrees = ./rules/worktrees.md;
     };

@@ -22,6 +22,7 @@ data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
 sandbox_home=$data/home
 shared=("$HOME/projects" "$HOME/nix" "$HOME/orca/workspaces" "$HOME/.cache/img2char3d")
 screenshots=/tmp/screenshot
+media=/tmp/agent-media
 image_ref="agent-sandbox:${AGENT_SANDBOX_TAG#hash-}"
 clipboard_dir=$(mktemp --directory "$runtime/agent-sandbox-clipboard.XXXXXX")
 
@@ -50,7 +51,7 @@ mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.zcode/cl
 for dir in "${shared[@]}"; do
   mkdir -p "$dir" "$sandbox_home${dir#"$HOME"}"
 done
-mkdir -p "$screenshots"
+mkdir -p "$screenshots" "$media"
 
 # Keys for serving SSH sessions from the container (agent-sandbox-ssh). Only the
 # host key and the client's public key go into the container.
@@ -133,6 +134,7 @@ for dir in "${shared[@]}"; do
   args+=(--volume "$dir:$dir")
 done
 args+=(--volume "$screenshots:$screenshots:ro")
+args+=(--volume "$media:$media")
 args+=(--volume "$clipboard_dir:/run/host-clipboard:ro")
 args+=(--volume "$ssh_dir/host_ed25519:/run/agent-sandbox-ssh/host_ed25519:ro")
 args+=(--volume "$ssh_dir/authorized_keys:/run/agent-sandbox-ssh/authorized_keys:ro")
@@ -205,7 +207,7 @@ if [[ -f $HOME/.codex/config.toml && ! -s $sandbox_home/.codex/config.toml ]]; t
   chmod u+w "$sandbox_home/.codex/config.toml"
 fi
 
-for name in rules skills plugins; do
+for name in AGENTS.md rules skills plugins; do
   src=$HOME/.codex/$name
   if [[ -d $src ]]; then
     mkdir -p "$sandbox_home/.codex/$name"
