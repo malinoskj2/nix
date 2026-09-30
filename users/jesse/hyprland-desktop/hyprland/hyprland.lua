@@ -185,3 +185,60 @@ hl.window_rule({
   rounding = 20,
   no_shadow = true,
 })
+
+-- Workspace 5 floats every window until it leaves. Tags keep its previous state across reloads
+-- and disappear with the window, so closing one needs no separate bookkeeping.
+do
+  local WORKSPACE = 5
+  local WAS_TILED = "workspace-5-was-tiled"
+  local WAS_FLOATING = "workspace-5-was-floating"
+
+  local function sync_floating(window)
+    if window == nil or not window.mapped or window.workspace == nil then
+      return
+    end
+
+    local previous
+    for _, tag in ipairs(window.tags) do
+      if tag == WAS_TILED or tag == WAS_FLOATING then
+        previous = tag
+        break
+      end
+    end
+
+    local floating
+    if window.workspace.id == WORKSPACE then
+      if previous == nil then
+        previous = window.floating and WAS_FLOATING or WAS_TILED
+        hl.dispatch(hl.dsp.window.tag({ tag = "+" .. previous, window = window }))
+      end
+      floating = true
+    elseif previous ~= nil then
+      hl.dispatch(hl.dsp.window.tag({ tag = "-" .. previous, window = window }))
+      floating = previous == WAS_FLOATING
+    else
+      return
+    end
+
+    if window.floating ~= floating then
+      hl.dispatch(hl.dsp.window.float({ action = floating and "on" or "off", window = window }))
+    end
+  end
+
+  -- Move callbacks run before Hyprland finishes relocating the layout target. Wait a tick before
+  -- changing its floating state, and re-read the window in case it moved again or closed meanwhile.
+  local function schedule(window)
+    hl.timer(function()
+      sync_floating(window)
+    end, { timeout = 1, type = "oneshot" })
+  end
+
+  hl.on("window.open", schedule)
+  hl.on("window.move_to_workspace", schedule)
+  hl.on("window.update_rules", schedule)
+  hl.on("config.reloaded", function()
+    for _, window in ipairs(hl.get_windows()) do
+      schedule(window)
+    end
+  end)
+end
