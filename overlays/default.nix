@@ -26,20 +26,20 @@ in
         claude-code = unstable.claude-code.override {
           manifest = final.lib.importJSON ./claude-code/manifest.zst.json;
         };
-        # TODO: drop this override once nixpkgs-unstable reaches 0.157.1. Older clients aren't
-        # offered the GPT-6 models.
+        # TODO: drop this override once nixpkgs-unstable reaches 0.159.2. Older clients aren't
+        # offered GPT-6.1 Sol.
         codex = unstable.codex.overrideAttrs (old: rec {
-          version = "0.157.1";
+          version = "0.159.2";
           src = final.fetchFromGitHub {
             owner = "openai";
             repo = "codex";
             tag = "rust-v${version}";
-            hash = "sha256-HuNL5VGd2LenhbCdcz0i8b6lRw3sicwXytyfXgCgy88=";
+            hash = "sha256-fYzQEit5MxsEZw/UaISMbEIsy5iaAcqb7ElEOq9eVgs=";
           };
           cargoDeps = final.rustPlatform.fetchCargoVendor {
             inherit src;
             inherit (old) sourceRoot;
-            hash = "sha256-Mp4chq9QuQB19FrOZBhmUtPrDoEpZZna79+MZs9rGUo=";
+            hash = "sha256-U20V8MkGJZd+qTOQETzqB25QJPYxJGV89LiR1kToW7A=";
           };
           patches = (old.patches or [ ]) ++ [ ./patches/codex/no-daemon_auto_start.patch ];
           postPatch = old.postPatch + ''

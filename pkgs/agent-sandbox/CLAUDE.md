@@ -4,6 +4,7 @@ You are running inside a Docker sandbox. You may read anything you can find in t
 
 - `~/projects`, `~/nix` and `~/orca/workspaces` (Orca's worktrees), read-write, at the same paths as on the host
 - `/tmp/screenshot`, read-only: the human's screenshots
+- `/tmp/agent-media`, read-write: the screenshots and recordings you take, at the same path as on the host
 - `~/.cache/img2char3d`, read-write: model weights for `~/projects/img2char3d`
 - `~/.claude/projects`, read-write: auto-memory and session transcripts, shared with the human's sessions outside the sandbox
 - `/nix/store`, read-only, shared with the host
@@ -17,8 +18,8 @@ A headless sway Wayland session runs on `$WAYLAND_DISPLAY` with a single 1280x80
 If the display doesn't work, tell the user straight away instead of working around it: that includes `$XDG_RUNTIME_DIR/renderer` missing, `swaymsg` or `grim` failing, or an app failing to open a window. Also mention it if the renderer is `pixman`, which means the GPU renderer failed and the display is rendered on the CPU. Include the relevant lines from `$XDG_RUNTIME_DIR/logs`.
 
 - Launch an app: `swaymsg exec -- <command>`
-- Screenshot: `grim /tmp/screen.png`, then read the image. Coordinates in the image are output pixels.
-- Region screenshot: `grim -g "X,Y WxH" /tmp/region.png`
+- Screenshot: `grim /tmp/agent-media/screen.png`, then read the image. Coordinates in the image are output pixels.
+- Region screenshot: `grim -g "X,Y WxH" /tmp/agent-media/region.png`
 - Windows and geometry: `swaymsg -t get_tree`
 - Move the pointer: `swaymsg seat - cursor set X Y`
 - Click: `swaymsg seat - cursor press button1` then `swaymsg seat - cursor release button1`
@@ -30,7 +31,7 @@ If the display doesn't work, tell the user straight away instead of working arou
 A second headless sway, kept off `$WAYLAND_DISPLAY` and `$SWAYSOCK`, hosts a persistent Hyprland: the host desktop's pinned version, restarted whenever it exits. It draws to its own 1920x1080 output, `NESTED-1`, the size of the desktop's main monitor, and the human can watch and drive it over a second VNC port. It loads the desktop's `look.lua` from `/run/host-hypr`, so blur, layer rules, animations and plugins (hyprfocus, hyprbars, hyprglass) match the desktop's; the display also uses the desktop's fonts, fontconfig settings, desktop entries, icon themes and time zone database. Its cursor hides 0.1 s after the pointer stops, because a headless output draws the cursor into screenshots and the desktop's screenshots never show it. Use it to try Hyprland configs, plugins and Noctalia before they reach the host.
 
 - Clients: set `WAYLAND_DISPLAY=hyprland-1`, e.g. `WAYLAND_DISPLAY=hyprland-1 foot &`
-- Screenshot: `WAYLAND_DISPLAY=hyprland-1 grim -o NESTED-1 /tmp/hypr.png`
+- Screenshot: `WAYLAND_DISPLAY=hyprland-1 grim -o NESTED-1 /tmp/agent-media/hypr.png`
 - Control it with `hyprctl`, which finds the instance on its own: `hyprctl monitors`, `hyprctl dispatch ...`, `hyprctl plugin load <path>`, `hyprctl reload`
 - Its logs are `hyprland.log`, `nested-sway.log` and `wayvnc-hyprland.log` in `$XDG_RUNTIME_DIR/logs`. If it keeps crashing, `hyprland-restarts.log` there grows.
 
