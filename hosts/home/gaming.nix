@@ -109,6 +109,10 @@ in
           p.game-background-engine
         ];
         extraProfile = ''
+          # A bar started in nix develop can pass tens of KiB of compiler flags
+          # to Steam, overflowing Wine's small preloader stack. Games do not
+          # need those flags; keep the graphics and session environment intact.
+          unset BINDGEN_EXTRA_CLANG_ARGS NIX_CFLAGS_COMPILE NIX_CFLAGS_LINK NIX_LDFLAGS
           export GAME_BACKGROUND_LIMIT_AUTO=1 GAME_BACKGROUND_VULKAN=1
           export XDG_DATA_DIRS='${pkgs.game-background-limit}/share'"''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
           export LD_PRELOAD='${steamGameModePreload}/''${PLATFORM}/libgamemodeauto.so.0:${pkgs.game-background-limit}/preload/''${PLATFORM}/libgame-background.so'"''${LD_PRELOAD:+:$LD_PRELOAD}"
