@@ -121,6 +121,43 @@ The [TODO list](../todo.md) retains the XWayland/Wine Wayland comparison.
 Final GameMode cleanup/restoration after game exit still needs runtime
 verification. These checks did not establish zero added input latency.
 
+## Workspace 5 game audio
+
+`game-workspace-audio.service` mutes Steam game playback when workspace 5 is
+hidden on the physical Hyprland desktop, then restores each stream's prior mute
+state when returning or moving the game elsewhere. Workspace 5 remains audible
+when it is visible and focus moves to the side monitor. Steam's UI, microphone
+streams and unrelated applications are excluded. This works independently of
+the background frame limiter and needs no Steam restart or launch options.
+
+The helper reads PipeWire playback nodes and associates their process with
+`SteamAppId`, including Wine audio subprocesses and native games with custom
+window classes. If any window of the same app is outside workspace 5, its audio
+stays audible. Games that hide their process environment cannot be identified
+and remain untouched. Changes are checked every half second; audio can play for
+that interval when a new stream appears or the workspace changes.
+
+Normal stream mute and volume controls remain available. A stream muted before
+leaving stays muted on return; automated muting remembers the original state.
+While hidden, the helper enforces mute, so manual unmuting takes effect after
+returning. It restores current streams when stopped or when compositor IPC is
+unavailable. PipeWire's core cookie and object serial identify existing streams,
+and the helper rechecks identity before addressing a recycled numeric node ID.
+
+WirePlumber can save a mute when a game exits while hidden. A private restoration
+journal at `$XDG_STATE_HOME/game-workspace-audio/mute.json` (normally
+`~/.local/state/game-workspace-audio/mute.json`) retains the original state until
+a verified Steam stream with the same app ID and WirePlumber restoration key
+returns. That also recovers after a helper crash or stream recreation. Separate
+launches of the same app share the workspace policy and restoration key; when a
+replacement stream inherits the automated mute, it inherits the prior stream's
+original state. For a newly created stream, a deliberate new user mute cannot
+be distinguished from WirePlumber restoring the automated mute; the journal's
+original state wins. Existing streams that were manually muted stay muted.
+Stop the service while the game's playback streams still exist
+before removing this feature; otherwise a saved mute can remain until the helper
+runs again. A new stream may briefly inherit that mute before the next check.
+
 ## Background frame limit
 
 After activation and restarting Steam, every newly launched Steam game inherits

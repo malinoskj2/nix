@@ -114,6 +114,7 @@
           "game-background-engine"
           "game-background-limit"
           "game-latency-check"
+          "game-workspace-audio"
           "git-commitu"
           "git-open-branch"
           "htop-vim-navigation"
