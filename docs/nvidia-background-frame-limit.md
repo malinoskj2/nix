@@ -12,8 +12,12 @@ is disabled, but enabling it would not add the missing driver capability.
 
 ## Why the settings do not replace our limiter
 
-- NVIDIA's [Control Panel reference](https://www.nvidia.com/content/Control-Panel-Help/vLatest/en-us/mergedProjects/3D%20Settings/Manage_3D_Settings_(reference).htm)
-  describes **Background Application Max Frame Rate** with a 20–200 FPS range.
+- The Windows observation is correct: NVIDIA App's
+  [release notes](https://www.nvidia.com/en-us/software/nvidia-app/release-highlights/)
+  list Background Application Max Frame Rate among settings migrated from
+  Control Panel. NVIDIA's [settings reference](https://www.nvidia.com/content/Control-Panel-Help/vLatest/en-us/mergedProjects/3D%20Settings/Manage_3D_Settings_(reference).htm)
+  distinguishes **Max Frame Rate** (a general cap, 20–1000 FPS) from
+  **Background Application Max Frame Rate** (background only, 20–200 FPS).
   That Windows control is not exposed by the Linux settings examined here,
   and its documented range does not include our 10 FPS target.
 - The installed driver's `share/nvidia/nvidia-application-profiles-key-documentation`
@@ -49,6 +53,37 @@ returns environment-supplied values when an application asks for settings;
 `NvAPI_DRS_SetSetting` and `NvAPI_DRS_SaveSettings` return `NotSupported`.
 Supplying a Windows frame-limiter setting ID therefore does not install a
 Linux driver presentation limiter.
+
+## Online follow-up
+
+Additional searches covered Linux driver FPS caps, background caps, recent
+615 changes and Proton NVAPI settings. No supported equivalent was found.
+The [615 release announcement](https://forums.developer.nvidia.com/t/615-release-feedback-discussion/382815)
+adds Vulkan Reflex support and fixes Smooth Motion hangs; it does not
+announce a background cap. NVIDIA's [Linux gaming guide](https://docs.nvidia.com/datacenter/tesla/driver-installation-guide/gaming.html)
+documents Smooth Motion, DLSS overrides and application-integrated Reflex,
+without providing a focus-sensitive FPS switch.
+
+Common search results refer to different mechanisms:
+
+- `__GL_MaxFramesAllowed` controls queued OpenGL frames. The original
+  [KWin change](https://phabricator.kde.org/D19867), with an explanation by its
+  author, describes limiting the queue in `glXSwapBuffers`. Setting it to
+  `1` does not mean 1 FPS; it supplies no FPS target or focus condition.
+- [MangoHud](https://github.com/flightlessmango/MangoHud/blob/master/README.md)
+  has a real `fps_limit`; its [limiter source](https://github.com/flightlessmango/MangoHud/blob/master/src/fps_limiter.h)
+  implements sleeping in the layer. [Goverlay](https://github.com/benjamimgois/goverlay)
+  configures MangoHud and other tools. These can expose per-game settings
+  through a GUI, but they are not NVIDIA driver controls.
+- [libstrangle](https://github.com/milaq/libstrangle) implements an OpenGL
+  cap through `LD_PRELOAD`. [DXVK's configuration](https://github.com/doitsujin/dxvk/blob/master/dxvk.conf)
+  also has frame-rate settings inside the translation library. Neither
+  mechanism establishes an automatic NVIDIA background cap.
+
+The Windows setting IDs in NVAPI headers and working Proton DLSS overrides
+do not establish support for arbitrary Windows driver features on Linux.
+The DRS implementation and installed-driver probe above are the deciding
+evidence for that route.
 
 ## Rechecking after a driver upgrade
 
