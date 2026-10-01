@@ -86,8 +86,14 @@ hl.layer_rule({
   animation = "popin 80%",
 })
 hl.layer_rule({ match = { namespace = "^j2bar-osd$" }, blur = true, ignore_alpha = 0.5 })
--- j2bar's launcher covers the output and dims it, so the whole desktop blurs behind it.
-hl.layer_rule({ match = { namespace = "^j2bar-launcher$" }, blur = true, animation = "fade" })
+-- The launcher blurs only the wallpaper, hiding windows behind its glass.
+hl.layer_rule({
+  match = { namespace = "^j2bar-launcher$" },
+  blur = true,
+  xray = true,
+  ignore_alpha = 0,
+  animation = "fade",
+})
 
 hl.layer_rule({
   match = { namespace = "^noctalia-desktop-widget-" .. nix.control_button_id .. ":.+$" },
