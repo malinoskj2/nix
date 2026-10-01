@@ -301,6 +301,17 @@ Treat a bump as a hardware change and test it on the device.
   appends them to `pnpm-workspace.yaml`; if upstream moves or drops them, drop
   the patch. Then run `zcode --version` and `zcode doctor`.
 
+## Background game FPS limiting
+
+[`game-background-limit`](../pkgs/game-background-limit/) uses MangoHud's
+supported configuration reloads and the physical Hyprland event socket. When
+updating MangoHud or Hyprland, run its package checks and verify hidden-overlay
+`fps_limit=10` to `fps_limit=0` reloads, focus transitions, and uncapping after
+listener failure. Test the game through Steam's actual runtime with both library
+architectures available. Reload delay and focused overhead need runtime checks;
+an isolated software-renderer result does not establish AION performance. See
+[game latency](game-latency.md#background-frame-limit) for launch instructions.
+
 ## Things an update never touches
 
 - `system.stateVersion` and `home.stateVersion` record each machine's install
