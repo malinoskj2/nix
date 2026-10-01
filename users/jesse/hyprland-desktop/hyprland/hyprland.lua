@@ -44,6 +44,16 @@ hl.monitor({
   scale = 1,
 })
 
+-- Wine otherwise picks the portrait display at (0, 0) as primary. AION's fullscreen
+-- rendering then gets pillarboxed even when its outer window is on the main display.
+local function set_xwayland_primary()
+  hl.exec_cmd(nix.xrandr .. " --output " .. nix.monitors.main .. " --primary")
+end
+
+hl.on("hyprland.start", set_xwayland_primary)
+hl.on("config.reloaded", set_xwayland_primary)
+hl.on("monitor.layout_changed", set_xwayland_primary)
+
 -- The side monitor gets a named workspace of its own, so it never takes a numbered one.
 hl.workspace_rule({
   workspace = "name:side",
@@ -174,6 +184,28 @@ hl.window_rule({
 -- `immediate` allows tearing where input latency matters.
 hl.window_rule({ match = { class = "^(firefox)$" }, immediate = true })
 hl.window_rule({ match = { class = "^(jetbrains-datagrip)$" }, immediate = true })
+
+-- Proton windows identify their Steam app but may supply neither a tearing hint nor a game
+-- content type. Gamescope is also a game surface, so both get automatic direct scanout.
+hl.window_rule({
+  name = "steam-games-low-latency",
+  match = { class = "^(steam_app_[0-9]+|gamescope)$" },
+  immediate = true,
+  content = "game",
+})
+
+-- X11 position requests can put a floating Steam game on the side workspace while it renders
+-- on the main monitor. Keep Steam games here, including before they enter fullscreen.
+hl.window_rule({
+  name = "steam-games-placement",
+  match = { class = "^steam_app_[0-9]+$" },
+  monitor = nix.monitors.main,
+  workspace = "5",
+  suppress_event = "x11configurerequest",
+})
+
+-- Native games that advertise their content type need no class-specific rule.
+hl.window_rule({ name = "game-content-low-latency", match = { content = "^game$" }, immediate = true })
 
 -- Dialog-like windows float rather than disturb the tiled layout.
 hl.window_rule({ match = { class = "^(dev\\.noctalia\\.Noctalia)$" }, float = true, size = { 1080, 920 } })

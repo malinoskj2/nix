@@ -1,0 +1,15 @@
+--- a/src/desktop/view/Window.cpp
++++ b/src/desktop/view/Window.cpp
+@@ -2759,9 +2759,11 @@
+         m_popupHead->recheckTree();
+     }
+ 
++    // The first asynchronous frame has not been marked torn yet. Check eligibility
++    // without that request bit, retaining every actual tearing blocker.
+     // tearing: if solitary, redraw it. This still might be a single surface window
+     if (PMONITOR && PMONITOR->m_solitaryClient.lock() == m_self.lock() && canBeTorn() && PMONITOR->m_tearingState.canTear && wlSurface()->resource()->m_current.texture &&
+-        !PMONITOR->isTearingBlocked()) {
++        !(PMONITOR->isTearingBlocked(true) & ~Monitor::CMonitor::TC_NOT_TORN)) {
+         CRegion damageBox{wlSurface()->resource()->m_current.accumulateBufferDamage()};
+ 
+         if (!damageBox.empty()) {

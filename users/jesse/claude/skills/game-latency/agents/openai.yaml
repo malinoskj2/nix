@@ -1,0 +1,4 @@
+interface:
+  display_name: "Game Latency"
+  short_description: "Diagnose Hyprland game presentation and input latency"
+  default_prompt: "Use $game-latency to check this game for avoidable compositor and Linux input latency."
