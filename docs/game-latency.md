@@ -117,8 +117,107 @@ or environments. In-game VSync/Reflex/frame generation/caps, effective mouse
 overrides, Wine child render geometry, raw-input delivery, exit-time restoration
 and end-to-end latency still require separate verification.
 
-The [TODO list](../todo.md) retains the unimplemented 10 FPS unfocused
-MangoHud/focus-listener investigation and XWayland/Wine Wayland comparison. No
-Gamescope wrapper or background limiter was installed. Final GameMode cleanup/restoration
-after game exit still needs runtime verification. These checks did not establish
-zero added input latency.
+The [TODO list](../todo.md) retains the XWayland/Wine Wayland comparison.
+Final GameMode cleanup/restoration after game exit still needs runtime
+verification. These checks did not establish zero added input latency.
+
+## Background frame limit
+
+`game-background-limit` launches a game through MangoHud with the overlay hidden,
+a 10 FPS limit while its windows are unfocused, and no MangoHud frame limit while
+one of its windows is focused. After activating the configuration and restarting
+Steam, set the game's Steam launch options to:
+
+```sh
+game-background-limit %command%
+```
+
+For a game outside Steam, use `game-background-limit GAME [ARGS...]`. Remove the
+wrapper and relaunch to disable it. Existing game processes are unaffected by
+building or activating this configuration; the wrapper must start the game.
+The wrapper replaces `MANGOHUD_CONFIG` and `MANGOHUD_CONFIGFILE` for that launch,
+so an existing MangoHud configuration cannot supply a competing cap or overlay.
+Game settings, VSync and driver limits can still cap focused gameplay.
+
+Every launch has a separate private file under
+`$XDG_CACHE_HOME/game-background-limit/launch-*/MangoHud.conf` (the cache home
+defaults to `~/.cache`). The directory is private to the user. Home/cache stays
+shared inside pressure-vessel, which replaces `/run/user` with a private mount
+and would hide a runtime-directory config from the game. The wrapper watches the
+physical Hyprland session's event socket and writes that file only when the
+desired cap changes. It identifies the launch's windows by the exact inherited
+`MANGOHUD_CONFIGFILE` value in each window PID's environment, rather than a Steam
+app ID or window class. Two launches of the same game therefore have independent
+limits. Multiple windows from one launch, including a launcher that retains the
+same environment, form one group: focusing any of them uncaps that launch.
+Processes that discard the marker or have unreadable environments cannot be
+identified; an unidentified launch remains uncapped.
+
+No game window at startup, a closed last window, unavailable focus data, or a
+disconnected compositor releases the cap. The listener retries a disconnected
+session and reconciles on reconnection. While connected it blocks on events and
+game exit; it does not periodically query focus or sample gameplay. A separate
+watchdog blocks on a pipe and restores the uncapped file if the listener dies,
+including `SIGKILL`. Normal exit removes the directory. A killed listener can
+leave its small, uncapped cache file; it has no effect on a new launch's unique
+file and can be removed after that game exits. The launched command must remain alive until its game
+exits, as Steam's Proton supervisor normally does.
+
+This uses MangoHud's supported file watcher, not synthesized keypresses or a
+MangoHud source patch. MangoHud 0.8.3's control socket supports HUD, logging and
+FCAT toggles, but does not set the frame limit. Its file watcher polls every
+100 ms and waits another 100 ms before reloading, so cap transitions usually
+take roughly 100–200 ms after a focus event, plus scheduling/query time. A frame
+already sleeping at the background limit can also finish its sleep. A focused
+limit of zero takes MangoHud's limiter's no-sleep path. The hidden HUD skips its
+overlay drawing and frame-statistics update; CPU/GPU display statistics,
+logging and overlay/limit hotkeys are disabled explicitly. MangoHud still loads
+its layer, checks keybindings and watches its config; its NVIDIA GPU sampler can
+still run. This is not a claim of zero focused overhead.
+
+Steam's FHS environment includes the wrapper and both architectures' MangoHud
+libraries/manifests. Nix's MangoHud launcher adds store paths to
+`LD_LIBRARY_PATH` and `XDG_DATA_DIRS`, enables the Vulkan layer with `MANGOHUD=1`,
+and loads its OpenGL shim where supported. The wrapper uses a copied launcher
+whose shim preload is an explicit store path with a `${PLATFORM}` token,
+selecting the appropriate architecture even after pressure-vessel replaces
+`LD_LIBRARY_PATH`. It preserves the existing GameMode preload. The upstream Nix package supplies the
+32-bit shim/library and Vulkan manifest alongside the 64-bit versions. The
+pressure-vessel runtime imports the Vulkan manifests into its own overrides
+directory. Isolated shell checks confirmed the shared config, both library
+architectures and imported manifests there without missing-shim preload errors.
+Actual AION startup still needs verification after relaunch.
+
+Validation on 1 October 2026:
+
+- Listener tests cover startup, independent launch markers, focus loss/regain,
+  multiple windows, last-window close/reopen, disconnect/reconnect, malformed
+  events/JSON, and the actual listener being killed while the game stays alive.
+- Package and full `home` host builds passed; no configuration was activated.
+- A separate Xvfb display with software Vulkan (`lavapipe`), immediate present,
+  and a 64×64 `vkcube` confirmed the real MangoHud reload: 30 frames at 10 FPS
+  completed in 3.24 seconds including startup/exit. Releasing a 10 FPS cap after
+  one second let a 2,000-frame run finish in 1.64 seconds.
+- The same rendering test through Steam's new FHS environment and installed
+  sniper pressure-vessel runtime completed 30 capped frames in 3.76 seconds
+  including startup/exit, and the 2,000-frame release test in 2.20 seconds.
+  A separate 32-bit libc executable loaded the correct MangoHud shim inside
+  that runtime with `LD_LIBRARY_PATH` cleared. This checks injection/paths,
+  not a 32-bit game's rendering or anti-cheat behavior.
+- Alternating 20,000-frame runs took 3.06–3.19 seconds without MangoHud and
+  3.31–3.91 seconds with the hidden, uncapped configuration. These short runs
+  include initialization/teardown and software rendering; they establish
+  measurable work and cannot predict AION's overhead or input latency.
+
+AION's anti-cheat/Proton compatibility, actual 10 FPS presentation when
+unfocused, focused frame times, tearing and direct scanout remain to be checked
+on its restarted game process. No live game caps or focus were changed. No
+Gamescope stage was added.
+
+Upstream references:
+
+- [MangoHud 0.8.3 configuration discovery](https://github.com/flightlessmango/MangoHud/blob/v0.8.3/src/config.cpp)
+- [File watcher and reload timing](https://github.com/flightlessmango/MangoHud/blob/v0.8.3/src/notify.cpp)
+- [Control socket commands](https://github.com/flightlessmango/MangoHud/blob/v0.8.3/src/control.cpp)
+- [Limiter's zero-cap path](https://github.com/flightlessmango/MangoHud/blob/v0.8.3/src/fps_limiter.h)
+- [Hidden overlay presentation path](https://github.com/flightlessmango/MangoHud/blob/v0.8.3/src/vulkan.cpp)
