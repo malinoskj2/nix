@@ -10,17 +10,13 @@
     let
       onSystem = lib.filterAttrs (_: host: host.pkgs.stdenv.hostPlatform.system == system);
       nixosHosts = onSystem self.nixosConfigurations;
-      homeHosts = onSystem self.homeConfigurations;
       hostPackages =
         host:
         let
           users = lib.attrValues (host.config.home-manager.users or { });
         in
         host.config.environment.systemPackages ++ lib.concatMap (user: user.home.packages) users;
-      installedPaths = lib.catAttrs "outPath" (
-        lib.concatMap hostPackages (lib.attrValues nixosHosts)
-        ++ lib.concatMap (host: host.config.home.packages) (lib.attrValues homeHosts)
-      );
+      installedPaths = lib.catAttrs "outPath" (lib.concatMap hostPackages (lib.attrValues nixosHosts));
       installedPackages = lib.filterAttrs (
         _: package: lib.elem package.outPath installedPaths
       ) self'.packages;
@@ -31,11 +27,9 @@
           )
         )
       );
-      hostChecks =
-        lib.mapAttrs' (
-          name: host: lib.nameValuePair "host-${name}" host.config.system.build.toplevel
-        ) nixosHosts
-        // lib.mapAttrs' (name: host: lib.nameValuePair "host-${name}" host.activationPackage) homeHosts;
+      hostChecks = lib.mapAttrs' (
+        name: host: lib.nameValuePair "host-${name}" host.config.system.build.toplevel
+      ) nixosHosts;
       packageChecks = lib.mapAttrs' (
         name: package: lib.nameValuePair "package-${name}" package
       ) installedPackages;

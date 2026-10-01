@@ -23,8 +23,8 @@ opens a pull request only when every check passes.
 
 ### The release
 
-`nixpkgs`, `home-manager`, `catppuccin` and `nixpkgs-darwin` all follow
-branches for the same NixOS release. To change release, move all four to the new
+`nixpkgs`, `home-manager` and `catppuccin` all follow
+branches for the same NixOS release. To change release, move all three to the new
 release's branches in one commit. A new release can also break the hy3dgen and
 Eisvogel pins in [Pins outside `flake.lock`](#pins-outside-flakelock), which
 depend on its Python and TeX Live.
@@ -300,14 +300,6 @@ Treat a bump as a hardware change and test it on the device.
   `package.json` but still enforces them against the lockfile, so the patch
   appends them to `pnpm-workspace.yaml`; if upstream moves or drops them, drop
   the patch. Then run `zcode --version` and `zcode doctor`.
-
-## Darwin
-
-The Mac's nixpkgs gets only the `additions` and `unstable` overlays. The
-Linux-only `pins` overlay and the `apple-fonts` overlay never reach Darwin, so
-don't add either to the `darwin` arguments in
-[`flake/nixpkgs.nix`](../flake/nixpkgs.nix). A Hyprland, Firefox or Apple fonts
-bump therefore never changes the Mac.
 
 ## Things an update never touches
 

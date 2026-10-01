@@ -2,7 +2,6 @@
   inputs,
   nixpkgsArgs,
   self,
-  withSystem,
   ...
 }:
 {
@@ -19,18 +18,5 @@
           ../hosts/${name}/configuration.nix
         ];
       };
-    darwin =
-      name:
-      withSystem "aarch64-darwin" (
-        { pkgs, ... }:
-        inputs.home-manager.lib.homeManagerConfiguration {
-          inherit pkgs;
-          extraSpecialArgs = { inherit inputs; };
-          modules = [
-            inputs.catppuccin.homeModules.catppuccin
-            ../users/jesse/profiles/${name}.nix
-          ];
-        }
-      );
   };
 }

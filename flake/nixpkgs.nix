@@ -1,6 +1,5 @@
 {
   inputs,
-  lib,
   self,
   ...
 }:
@@ -18,7 +17,6 @@ let
       self.overlays.pins
       inputs.apple-fonts.overlays.default
     ];
-    darwin = mkNixpkgsArgs [ ];
   };
 in
 {
@@ -29,10 +27,6 @@ in
   perSystem =
     { system, ... }:
     {
-      _module.args.pkgs =
-        if (lib.systems.elaborate system).isDarwin then
-          import inputs.nixpkgs-darwin (nixpkgsArgs.darwin // { inherit system; })
-        else
-          import inputs.nixpkgs (nixpkgsArgs.linux // { inherit system; });
+      _module.args.pkgs = import inputs.nixpkgs (nixpkgsArgs.linux // { inherit system; });
     };
 }
