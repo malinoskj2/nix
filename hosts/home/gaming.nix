@@ -63,6 +63,22 @@ in
     };
   };
 
+  systemd.user.services.game-workspace-audio = {
+    description = "Mute Steam games while workspace 5 is hidden";
+    after = [
+      "graphical-session.target"
+      "pipewire.service"
+      "wireplumber.service"
+    ];
+    partOf = [ "graphical-session.target" ];
+    wantedBy = [ "graphical-session.target" ];
+    serviceConfig = {
+      ExecStart = lib.getExe pkgs.game-workspace-audio;
+      Restart = "on-failure";
+      RestartSec = 1;
+    };
+  };
+
   programs = {
     # Check tearing eligibility before the first frame has been marked torn.
     # Keep this on the physical desktop; nested agent compositors do not use DRM.
