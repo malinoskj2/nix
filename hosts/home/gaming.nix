@@ -27,7 +27,10 @@ let
   ];
 in
 {
-  environment.systemPackages = [ pkgs.game-latency-check ];
+  environment.systemPackages = [
+    pkgs.game-background-limit
+    pkgs.game-latency-check
+  ];
 
   nixpkgs.overlays = [
     (_final: prev: {
@@ -84,9 +87,16 @@ in
     steam = {
       enable = true;
       package = pkgs.steam.override {
+        # Launch option: game-background-limit %command%. Keep both MangoHud
+        # architectures and their Vulkan manifests visible inside Steam's FHS
+        # environment and pressure-vessel; the wrapper scopes injection per game.
+        extraPkgs = p: [ p.game-background-limit ];
         # The preload library must stay inactive in Steam's startup tools.
         # Build the same game-ID and fork guards for both library architectures.
-        extraLibraries = p: [ (lib.getLib (steamGameMode p)) ];
+        extraLibraries = p: [
+          (lib.getLib (steamGameMode p))
+          p.mangohud
+        ];
         extraProfile = ''
           export LD_PRELOAD='${steamGameModePreload}/''${PLATFORM}/libgamemodeauto.so.0'"''${LD_PRELOAD:+:$LD_PRELOAD}"
         '';
