@@ -4,48 +4,44 @@
   python3,
   makeWrapper,
   hyprland,
-  mangohud,
+  game-background-engine,
   pkgsi686Linux,
   linkFarm,
-  runCommand,
 }:
 let
-  # Pressure-vessel replaces LD_LIBRARY_PATH, so use explicit architecture
-  # tokens in the preload path. The shim locates its adjacent library via
-  # realpath, which follows these symlinks to the original MangoHud outputs.
-  preload = linkFarm "mangohud-game-preload" [
+  bits = toString stdenvNoCC.hostPlatform.parsed.cpu.bits;
+  engine32 = pkgsi686Linux.game-background-engine;
+  preload = linkFarm "game-background-preload" [
     {
-      name = "x86_64/libMangoHud_shim.so";
-      path = "${mangohud}/lib/mangohud/libMangoHud_shim.so";
+      name = "x86_64/libgame-background.so";
+      path = "${game-background-engine}/lib/libgame-background.so";
     }
     {
-      name = "i686/libMangoHud_shim.so";
-      path = "${pkgsi686Linux.mangohud}/lib/mangohud/libMangoHud_shim.so";
+      name = "i686/libgame-background.so";
+      path = "${engine32}/lib/libgame-background.so";
     }
   ];
-  shim =
+  manifests = linkFarm "game-background-manifests" (
+    [
+      {
+        name = "vulkan/implicit_layer.d/background-${bits}.json";
+        path = "${game-background-engine}/share/vulkan/implicit_layer.d/background-${bits}.json";
+      }
+    ]
+    ++ lib.optional stdenvNoCC.hostPlatform.isx86_64 {
+      name = "vulkan/implicit_layer.d/background-32.json";
+      path = "${engine32}/share/vulkan/implicit_layer.d/background-32.json";
+    }
+  );
+  library =
     if stdenvNoCC.hostPlatform.isx86_64 then
-      "${preload}/\${PLATFORM}/libMangoHud_shim.so"
+      "${preload}/\${PLATFORM}/libgame-background.so"
     else
-      "${mangohud}/lib/mangohud/libMangoHud_shim.so";
-  launcher = runCommand "mangohud-game-launcher" { nativeBuildInputs = [ python3 ]; } ''
-    mkdir -p $out/bin
-    cp ${mangohud}/bin/mangohud $out/bin/mangohud
-    chmod u+w $out/bin/mangohud
-    python - "$out/bin/mangohud" '${shim}' <<'PY'
-    import pathlib, sys
-    path = pathlib.Path(sys.argv[1])
-    original = 'MANGOHUD_LIB_NAME="libMangoHud_shim.so"'
-    text = path.read_text()
-    if original not in text:
-        raise SystemExit("Review the MangoHud launcher: preload assignment changed")
-    path.write_text(text.replace(original, "MANGOHUD_LIB_NAME='" + sys.argv[2] + "'"))
-    PY
-  '';
+      "${game-background-engine}/lib/libgame-background.so";
 in
 stdenvNoCC.mkDerivation {
   pname = "game-background-limit";
-  version = "1";
+  version = "2";
   src = ./.;
   nativeBuildInputs = [ makeWrapper ];
   nativeCheckInputs = [ python3 ];
@@ -56,13 +52,17 @@ stdenvNoCC.mkDerivation {
   '';
   installPhase = ''
     install -Dm644 game_background_limit.py $out/lib/game_background_limit.py
+    install -Dm644 automatic.py $out/lib/automatic.py
+    ln -s ${manifests} $out/share
+    ln -s ${preload} $out/preload
     makeWrapper ${python3}/bin/python3 $out/bin/game-background-limit \
       --add-flags $out/lib/game_background_limit.py \
-      --set GAME_BACKGROUND_MANGOHUD ${launcher}/bin/mangohud \
+      --set GAME_BACKGROUND_LIB '${library}' \
+      --set GAME_BACKGROUND_DATA ${manifests} \
       --set GAME_BACKGROUND_HYPRCTL ${hyprland}/bin/hyprctl
   '';
   meta = {
-    description = "Hide MangoHud and limit an unfocused Hyprland game to 10 FPS";
+    description = "Limit unfocused Steam games to 10 FPS without an overlay";
     mainProgram = "game-background-limit";
     platforms = lib.platforms.linux;
   };

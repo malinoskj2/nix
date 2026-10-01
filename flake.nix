@@ -111,6 +111,7 @@
           "battery"
           "claude-desktop"
           "find-service"
+          "game-background-engine"
           "game-background-limit"
           "game-latency-check"
           "git-commitu"
