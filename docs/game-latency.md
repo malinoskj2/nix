@@ -209,9 +209,27 @@ Validation on 1 October 2026:
   EGL hook/proc-address checks pass, but actual EGL presentation remains to be
   verified in a working renderer.
 
-No configuration was activated, Steam restarted, or live game caps/focus changed
-for these checks. AION's anti-cheat/Proton compatibility, actual background FPS,
-focused frame times, tearing and direct scanout remain to be checked after its
-relaunch. Software-renderer results cannot predict AION overhead. See the
+The package and software-renderer checks above did not activate configuration,
+restart Steam, or change live game caps/focus. A subsequent AION session on
+1 October confirmed the game launches with both GameMode and the limiter loaded.
+Read-only XPresent completion events on its rendering child measured 72–112 FPS
+while focused and approximately 10 FPS after the user switched workspaces. A
+separate five-second background sample counted exactly 50 frames. These samples
+verify the background cap, not focused overhead, frame times, tearing or direct
+scanout. The return-to-focus transition was outside the recorded sample. See the
 [engine's source and license notes](../pkgs/game-background-engine/SOURCES.md)
 for the narrow MangoHud code adaptations and loader references.
+
+### Steam launched from a development shell
+
+A development build of the bar inherited large Nix compiler flags and passed them
+to Steam. Wine's preloader crashed in the dynamic loader before creating a game
+window with an approximately 50 KiB environment. Restarting Steam with a clean
+desktop environment restored AION startup without disabling either preload.
+
+The Steam profile in `hosts/home/gaming.nix` now removes `BINDGEN_EXTRA_CLANG_ARGS`,
+`NIX_CFLAGS_COMPILE`, `NIX_CFLAGS_LINK` and `NIX_LDFLAGS` automatically. Testing the
+built Steam runtime with the running bar's environment removed 17,551 bytes of
+compiler flags while retaining the display, GameMode and limiter configuration.
+The home host build passed; activation and a subsequent Steam restart are needed
+to use this profile for future launches.
