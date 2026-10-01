@@ -49,6 +49,23 @@ nh os switch ~/nix -H media --target-host media --build-host media
 sudo password on `media`. Its containers aren't part of this configuration:
 the private media-stack repository deploys them.
 
+Skin Trader's existing containers are recovered by
+`skin-trader-startup.service` after Docker and `/mnt/media3` are available. This
+keeps the `nofail` data disk from leaving the application stopped when Docker
+tries its restart policies before the disk mounts. The unit validates the
+project and bind mounts, waits up to ten minutes for PostgreSQL health, then
+starts the API and workers. Failed attempts retry without stopping PostgreSQL.
+It creates no containers or data and does not change other Docker services.
+The application repository's `deploy.sh` still builds and updates the containers.
+
+Verify the boot recovery script locally with
+`python3 hosts/media/test-skin-trader-startup.py`. After activating the host,
+check `systemctl status skin-trader-startup.service` and
+`systemctl show skin-trader-startup.service -p RequiresMountsFor -p After`.
+If the disk failed to mount, restore it and start the service explicitly with
+`sudo systemctl start skin-trader-startup.service`; a failed mount dependency
+prevents the service from executing its own retry loop.
+
 For a new install, install NixOS with SSH and jesse's key, then, before the
 first deploy, create jesse's password hash. Accounts come only from the
 config, so without this file jesse's password is locked and sudo stops

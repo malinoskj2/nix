@@ -13,6 +13,7 @@
     ./containers.nix
     ./hardware-configuration.nix
     ./nvidia.nix
+    ./skin-trader.nix
     ./storage.nix
   ];
 
