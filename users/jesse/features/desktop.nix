@@ -45,7 +45,6 @@
   );
 
   home.sessionVariables = {
-    BROWSER = "firefox";
     DOWNLOAD = "/media/scratch/download";
   };
 
