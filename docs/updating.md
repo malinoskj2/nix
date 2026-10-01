@@ -52,10 +52,19 @@ To upgrade:
 
 1. Point `nixpkgs-hyprland` at a nixpkgs commit with the new Hyprland.
 2. Rebase each patch in
+   [`hosts/home/tearing-first-frame.patch`](../hosts/home/tearing-first-frame.patch),
    [`overlays/patches/hyprbars/`](../overlays/patches/hyprbars) and
    [`overlays/patches/hyprfocus/`](../overlays/patches/hyprfocus). They hook
    Hyprland internals, so a clean apply isn't enough. Read them against the new
-   source. One hyprbars patch drops the plugin's event listeners when it
+   source. The Hyprland tearing patch checks first-frame eligibility without
+   requiring that frame to already be marked torn; remove it if upstream fixes
+   that check, and verify fullscreen tearing and direct scanout with `hyprctl monitors`.
+   Check the visible-cursor path separately: the
+   [cursor/tearing investigation](../users/jesse/claude/skills/game-latency/references/cursor-tearing.md)
+   records the Linux/NVIDIA/Aquamarine restrictions behind Hyprland's software
+   cursor policy. Async flip capability alone does not justify removing its
+   cursor guards. Re-check the matching kernel, driver and backend on upgrades.
+   One hyprbars patch drops the plugin's event listeners when it
    unloads, so check that upstream hasn't added a listener it misses. The
    other adds the bar through the renderer's current pass, so a window
    transformer scales and fades it with its window.
@@ -96,7 +105,7 @@ To upgrade:
    [`hyprland.lua`](../users/jesse/hyprland-desktop/hyprland/hyprland.lua)
    uses: `bar_part_of_window`, `bar_precedence_over_border`, `bar_title_enabled`,
    `on_double_click`, and the `hyprbars:no_bar` window rule.
-7. Update all four version assertions.
+7. Update all version assertions, including the desktop tearing patch in `hosts/home/gaming.nix`.
 8. Build `home`.
 
 ### j2bar
@@ -166,6 +175,27 @@ Treat a bump as a hardware change and test it on the device.
 - **htop.** [`pkgs/htop-vim-navigation/`](../pkgs/htop-vim-navigation) asserts
   the htop versions its patch was checked against. If a nixpkgs update trips
   it, re-check the patch next to it and add the new version.
+- **Steam GameMode.** [`hosts/home/gaming.nix`](../hosts/home/gaming.nix)
+  patches Steam's 32-bit and 64-bit GameMode libraries with
+  [`steam-gamemode.patch`](../hosts/home/steam-gamemode.patch). It gates automatic
+  registration on a nonzero Steam game ID, prevents forked children from
+  unregistering their parent, and handles disconnected D-Bus calls without
+  aborting. Review the patch and its version assertion when updating GameMode;
+  check Steam startup and automatic registration for native and Proton games.
+  The preload uses a store-path directory selected by the loader's literal
+  `${PLATFORM}` token for 32-bit/64-bit libraries; verify it inside Steam's
+  pressure-vessel container, where `/run/host/lib` symlinks can resolve into
+  the inner runtime instead. The automatic loader's RUNPATH must include its
+  companion `libgamemode.so` directory because Steam replaces LD_LIBRARY_PATH.
+  Test an actual automatic registration request for each architecture, not just
+  whether `libgamemodeauto` appears in process mappings. After activation, check
+  that the user daemon is running the new binary; its security-wrapper ExecStart
+  path stays constant, so the unit has an explicit package restart trigger.
+  The desktop daemon also carries
+  [`gamemode-ioprio.patch`](../hosts/home/gamemode-ioprio.patch): unset I/O
+  priority must be interpreted from CPU niceness, distinct from explicit
+  best-effort priority zero. Check boost/restore across threads and preservation
+  of custom priorities when updating the 1.8.2 version assertion.
 - **Noctalia.** The `unstable` overlay in
   [`overlays/default.nix`](../overlays/default.nix) patches Noctalia so floating
   panels skip its clip reveal and Hyprland scales them in instead, so a bar

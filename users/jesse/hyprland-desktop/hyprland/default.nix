@@ -14,6 +14,7 @@ let
   # Prepended to hyprland.lua and look.lua as `nix`.
   vars = {
     inherit hyprctl palette;
+    xrandr = lib.getExe pkgs.xrandr;
     alpha = {
       chrome = alphaHex glass.chrome;
     };
@@ -45,6 +46,8 @@ let
   '';
 in
 {
+  home.packages = [ pkgs.hyprland-quit ];
+
   assertions = [
     {
       assertion = hyprland.version == supportedHyprland;

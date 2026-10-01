@@ -26,6 +26,7 @@ in
     };
     skills = {
       codex-image = ./codex-image;
+      game-latency = ./skills/game-latency;
       gauntlet = ./skills/gauntlet;
       laravel-build-jesse = ./skills/laravel-build-jesse;
       laravel-orchestrator = ./skills/laravel-orchestrator;

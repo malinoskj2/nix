@@ -1,0 +1,2 @@
+# Tests source this package's Bash helpers, including when linted on their own.
+external-sources=true
