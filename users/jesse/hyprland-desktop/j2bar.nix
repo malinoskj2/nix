@@ -7,6 +7,10 @@
     package = pkgs.j2bar;
     settings = {
       output = "DP-2";
+      control_button = {
+        x = 6;
+        y = 4;
+      };
     };
   };
 
