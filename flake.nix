@@ -56,12 +56,6 @@
       repo = "nixpkgs";
       ref = "nixos-26.05";
     };
-    nixpkgs-darwin = {
-      type = "github";
-      owner = "nixos";
-      repo = "nixpkgs";
-      ref = "nixpkgs-26.05-darwin";
-    };
     nixpkgs-firefox = {
       type = "github";
       owner = "nixos";
@@ -101,7 +95,6 @@
       { lib, mkHost, ... }:
       let
         systems = [
-          "aarch64-darwin"
           "aarch64-linux"
           "x86_64-linux"
         ];
@@ -110,9 +103,6 @@
           "katana"
           "media"
           "pi"
-        ];
-        darwinHosts = [
-          "macbook"
         ];
         packages = [
           "agent-sandbox"
@@ -155,7 +145,6 @@
 
         flake = {
           nixosConfigurations = lib.genAttrs nixosHosts mkHost.nixos;
-          homeConfigurations = lib.genAttrs darwinHosts mkHost.darwin;
         };
 
         perSystem =

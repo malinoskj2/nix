@@ -17,8 +17,8 @@ imported as-is. Borrow whatever's useful.
   custom [Noctalia plugins](users/jesse/hyprland-desktop/noctalia/plugins)
 - 🎨 **One Catppuccin palette** in [`palette.nix`](users/jesse/global/palette.nix),
   shared by every themed app
-- 🤖 **Every host built in CI** on native x86_64-linux, aarch64-linux and
-  aarch64-darwin runners, with weekly auto-updates
+- 🤖 **Every host built in CI** on native x86_64-linux and aarch64-linux runners,
+  with weekly auto-updates
 - ⚡ **sched_ext tuning** for the 9950X3D in [`scheduler.nix`](hosts/home/scheduler.nix)
 
 ## 🚀 Usage
