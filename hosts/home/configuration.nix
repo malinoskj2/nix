@@ -57,9 +57,9 @@
   # instead of killing anything. MemoryMax reclaims too, then OOM-kills the
   # largest process. A little swap lets reclaim page out tmpfs.
   systemd.slices.agent-sandbox.sliceConfig = {
-    # The sandbox shares cores 4-7 with the desktop. If games or the browser
-    # stutter on them, a low CPUWeight here hands those cores to the desktop on
-    # contention without shrinking the cpuset.
+    # CCD1 has 32 MiB L3, without V-Cache. Include its SMT siblings and
+    # constrain every container in this slice; the desktop can use both CCDs.
+    AllowedCPUs = "8-15,24-31";
     MemoryMax = "20G";
     MemorySwapMax = "4G";
   };
