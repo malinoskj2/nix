@@ -25,6 +25,7 @@ let
       path = "${lib.getLib (steamGameMode pkgs.pkgsi686Linux)}/lib/libgamemodeauto.so.0";
     }
   ];
+
 in
 {
   environment.systemPackages = [
@@ -50,6 +51,17 @@ in
   # ExecStart uses a stable security-wrapper path; changing its target alone
   # does not make systemd notice that the running user daemon needs replacing.
   systemd.user.services.gamemoded.restartTriggers = [ pkgs.gamemode ];
+  systemd.user.services.game-background-limit = {
+    description = "Limit unfocused Steam games to 10 FPS";
+    after = [ "graphical-session.target" ];
+    partOf = [ "graphical-session.target" ];
+    wantedBy = [ "graphical-session.target" ];
+    serviceConfig = {
+      ExecStart = "${lib.getExe pkgs.game-background-limit} --daemon";
+      Restart = "on-failure";
+      RestartSec = 1;
+    };
+  };
 
   programs = {
     # Check tearing eligibility before the first frame has been marked torn.
@@ -87,18 +99,19 @@ in
     steam = {
       enable = true;
       package = pkgs.steam.override {
-        # Launch option: game-background-limit %command%. Keep both MangoHud
-        # architectures and their Vulkan manifests visible inside Steam's FHS
-        # environment and pressure-vessel; the wrapper scopes injection per game.
+        # Every Steam game inherits the standalone presentation limiter.
+        # Its guard leaves Steam UI/helpers and opted-out games uncapped.
         extraPkgs = p: [ p.game-background-limit ];
         # The preload library must stay inactive in Steam's startup tools.
         # Build the same game-ID and fork guards for both library architectures.
         extraLibraries = p: [
           (lib.getLib (steamGameMode p))
-          p.mangohud
+          p.game-background-engine
         ];
         extraProfile = ''
-          export LD_PRELOAD='${steamGameModePreload}/''${PLATFORM}/libgamemodeauto.so.0'"''${LD_PRELOAD:+:$LD_PRELOAD}"
+          export GAME_BACKGROUND_LIMIT_AUTO=1 GAME_BACKGROUND_VULKAN=1
+          export XDG_DATA_DIRS='${pkgs.game-background-limit}/share'"''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+          export LD_PRELOAD='${steamGameModePreload}/''${PLATFORM}/libgamemodeauto.so.0:${pkgs.game-background-limit}/preload/''${PLATFORM}/libgame-background.so'"''${LD_PRELOAD:+:$LD_PRELOAD}"
         '';
       };
     };

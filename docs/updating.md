@@ -303,14 +303,24 @@ Treat a bump as a hardware change and test it on the device.
 
 ## Background game FPS limiting
 
-[`game-background-limit`](../pkgs/game-background-limit/) uses MangoHud's
-supported configuration reloads and the physical Hyprland event socket. When
-updating MangoHud or Hyprland, run its package checks and verify hidden-overlay
-`fps_limit=10` to `fps_limit=0` reloads, focus transitions, and uncapping after
-listener failure. Test the game through Steam's actual runtime with both library
-architectures available. Reload delay and focused overhead need runtime checks;
-an isolated software-renderer result does not establish AION performance. See
-[game latency](game-latency.md#background-frame-limit) for launch instructions.
+[`game-background-engine`](../pkgs/game-background-engine/) is a local standalone
+Vulkan/GLX/EGL limiter, with narrow MIT-licensed MangoHud adaptations documented
+in its [source notes](../pkgs/game-background-engine/SOURCES.md). It does not
+link or load MangoHud. [`game-background-limit`](../pkgs/game-background-limit/)
+provides the physical Hyprland event controller and manual launcher; the home
+Steam profile injects both engine architectures automatically.
+
+After graphics loader/header, Steam runtime, libc or Hyprland updates, build the
+engine/controller checks and the home host. Verify both pointer widths through
+Steam's actual pressure-vessel runtime, including loader chains, proc-address
+presentation routes, focus loss/regain, and uncapping after compositor or
+controller failure. Keep the focused atomic bypass free of clocks, config reads,
+pacing locks and sleeps, and keep background waits interruptible. Review helper
+names if Steam changes its launch chain. Preserve the included upstream MIT
+notice. Runtime compatibility and focused overhead still need representative
+game checks; an isolated software renderer does not establish AION performance.
+See [game latency](game-latency.md#background-frame-limit) for activation and
+per-game opt-out instructions.
 
 ## Things an update never touches
 
