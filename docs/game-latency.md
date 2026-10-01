@@ -200,11 +200,11 @@ Validation on 1 October 2026:
   30 frames at 10 FPS in 3.09/3.20 seconds. Releasing the cap after one second
   completed a 2,000-frame run in 1.40/1.41 seconds; controller EOF gave
   1.44/1.42 seconds. GLX `glxgears` reported 10.076 FPS.
-- The actual installed sniper pressure-vessel runtime also rendered both
-  architectures: 30 capped frames took 4.54/3.61 seconds including runtime
-  startup, and the one-second cap-release runs took 1.69/1.69 seconds. These
-  timings used an earlier revision of the same standalone engine; final-path
-  regression checks are tracked with the change's validation.
+- The final automatic Steam profile and installed sniper pressure-vessel runtime
+  also rendered both architectures without a per-game wrapper or manually
+  supplied preload/enable flags: 30 capped frames took 3.73/3.73 seconds including
+  runtime startup, and the one-second cap-release runs took 2.06/1.69 seconds.
+  The profile selected the correct preload architecture throughout the runtime.
 - The isolated EGL demos crashed before registration even without the limiter.
   EGL hook/proc-address checks pass, but actual EGL presentation remains to be
   verified in a working renderer.
