@@ -86,13 +86,21 @@ hl.layer_rule({
   animation = "popin 80%",
 })
 hl.layer_rule({ match = { namespace = "^j2bar-osd$" }, blur = true, ignore_alpha = 0.5 })
--- The launcher blurs only the wallpaper, hiding windows behind its glass.
+-- The lower launcher layer blurs only the wallpaper; the upper layer's glass samples that
+-- backdrop, keeping windows out of both the frosted field and the refractive container.
 hl.layer_rule({
-  match = { namespace = "^j2bar-launcher$" },
+  match = { namespace = "^j2bar-launcher-backdrop$" },
   blur = true,
   xray = true,
   ignore_alpha = 0,
-  animation = "fade",
+  no_anim = true,
+})
+hl.layer_rule({
+  match = { namespace = "^j2bar-launcher$" },
+  blur = true,
+  xray = false,
+  ignore_alpha = 0.05,
+  no_anim = true,
 })
 
 hl.layer_rule({
@@ -203,6 +211,30 @@ glass.layer("noctalia-panel", {
     nix.palette.lavender,
     nix.palette.mauve,
     nix.palette.pink,
+  },
+  gleam_strength = 1.0,
+  gleam_width = 1.2,
+  gleam_length = 0.6,
+  gleam_duration = 1.2,
+  gleam_delay = 0.1,
+  gleam_rest = 0.3,
+})
+
+-- The launcher sends two separate glass regions: the container and its search capsule. The
+-- capsule's radius clamps to half its height; the container keeps its 36 px corners.
+glass.layer("j2bar-launcher", {
+  preset = "panel",
+  mask_mode = "region",
+  corner_radius = 36,
+  rounding_power = 2.0,
+  rim_light = 2.6,
+  rim_shadow = 2.7,
+  live_resample = true,
+  gleam_colors = {
+    nix.palette.peach,
+    nix.palette.teal,
+    nix.palette.lavender,
+    nix.palette.mauve,
   },
   gleam_strength = 1.0,
   gleam_width = 1.2,
