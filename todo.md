@@ -18,5 +18,5 @@
 
 - [ ] Compare Aion's XWayland and Wine Wayland paths for input latency, tearing, direct scanout and compatibility.
 - [ ] Investigate MangoHud with a Hyprland focus listener for a 10 FPS unfocused game limit and uncapped focused gameplay, with the overlay hidden; verify overhead and Aion compatibility without Gamescope.
-- [ ] Configure CPU placement so sandboxes run on the second CCD and the host plus games run on the first (V-Cache) CCD; verify CPU topology and include the corresponding SMT threads.
+- [x] Configure and verify CPU placement: desktop on all cores, sandboxes on the second (non-V-Cache) CCD, and GameMode games on the first (V-Cache) CCD. Activated and verified on 2026-10-01, including topology, SMT siblings, all three running sandboxes, and AION's game threads.
 - [ ] Investigate making links always open in Firefox on the main desktop and switching focus to that Firefox window and its workspace when a link opens.

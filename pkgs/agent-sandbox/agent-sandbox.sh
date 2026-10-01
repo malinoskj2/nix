@@ -102,9 +102,9 @@ args=(
   --pids-limit 8192
   # Memory limits come from the slice, which reclaims before it kills.
   --cgroup-parent agent-sandbox.slice
-  # All of CCD1 plus half of CCD0, leaving cores 0-3 and their SMT siblings to
-  # the desktop alone.
-  --cpuset-cpus "4-15,20-31"
+  # Only the non-V-Cache CCD1, including its SMT siblings. The desktop can
+  # still use all cores; GameMode pins registered games to CCD0 separately.
+  --cpuset-cpus "8-15,24-31"
   --shm-size 2g
   --device nvidia.com/gpu=all
   --publish "127.0.0.1:$vnc_port:5900"

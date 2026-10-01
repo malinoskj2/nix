@@ -60,6 +60,12 @@ in
       });
     gamemode = {
       enable = true;
+      # CCD0 has 96 MiB L3 (V-Cache); include its SMT siblings. Pin only
+      # registered games and keep both CCDs online for the unrestricted desktop.
+      settings.cpu = {
+        pin_cores = "0-7,16-23";
+        park_cores = "no";
+      };
       # Steam inherits the automatic client library, but its persistent UI must
       # not keep GameMode active after the last game exits. Filters are path
       # substrings, so avoid "steam" (which also appears in game install paths).

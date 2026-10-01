@@ -37,6 +37,43 @@ Its source is shared; a Nix activation installs a new copy of changed skill
 content. Building alone does not update the installed skills or restart any
 running game, Steam, GameMode daemon or compositor.
 
+## CPU placement
+
+The `home` configuration leaves desktop applications and host services free to
+use all 16 physical cores (logical CPUs `0-31`). The scheduler prefers the
+V-Cache CCD but can use either CCD.
+
+The topology was checked against sysfs L3 cache sizes and SMT siblings:
+
+| Workload | Logical CPUs | Cache |
+| --- | --- | --- |
+| Desktop and host services | `0-31` | Both CCDs |
+| Registered GameMode games | `0-7,16-23` | CCD0, 96 MiB L3 / V-Cache |
+| Agent sandbox containers | `8-15,24-31` | CCD1, 32 MiB L3 |
+
+`hosts/home/gaming.nix` sets GameMode's explicit `pin_cores` list and disables
+core parking. This sets thread affinity for registered games, rather than a
+cgroup boundary; games that do not register with GameMode are unaffected.
+The desktop still shares each CCD with its restricted workload.
+
+`hosts/home/configuration.nix` limits the entire `agent-sandbox.slice` with
+`AllowedCPUs`, and `pkgs/agent-sandbox/agent-sandbox.sh` sets the matching Docker
+cpuset. Nix builds requested from containers use the host Nix daemon, so they
+retain access to all cores.
+
+After activation, check the slice's `EffectiveCPUs` and each container's actual
+`cpuset.cpus.effective`; existing containers can retain their old Docker cpuset
+setting while inheriting the narrower slice limit. Recreating a sandbox picks
+up the new launcher setting but stops its running agents. Check actual game
+thread affinity with the diagnostic after GameMode reloads its configuration.
+Building alone does not apply any of these limits.
+
+After the user's switch on 1 October 2026, live checks confirmed all three running
+sandboxes had Docker and effective cgroup CPU sets of `8-15,24-31`. The physical
+desktop Hyprland and Firefox processes retained `0-31`. Every inspected thread
+of all 19 registered GameMode clients used `0-7,16-23`, including all 198 threads
+of AION's `GameThread` process. The host Nix daemon retained `0-31`.
+
 ## Running the diagnostic
 
 `game-latency-check` is a Bash script with `jq` and standard Linux diagnostic
@@ -81,7 +118,7 @@ overrides, Wine child render geometry, raw-input delivery, exit-time restoration
 and end-to-end latency still require separate verification.
 
 The [TODO list](../todo.md) retains the unimplemented 10 FPS unfocused
-MangoHud/focus-listener investigation, XWayland/Wine Wayland comparison and
-sandbox placement on the second CCD. No Gamescope wrapper or background limiter
-was installed. Final GameMode cleanup/restoration after game exit still needs
-runtime verification. These checks did not establish zero added input latency.
+MangoHud/focus-listener investigation and XWayland/Wine Wayland comparison. No
+Gamescope wrapper or background limiter was installed. Final GameMode cleanup/restoration
+after game exit still needs runtime verification. These checks did not establish
+zero added input latency.
