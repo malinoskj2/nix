@@ -3,7 +3,6 @@
   dbus,
   glib,
   hyprland,
-  j2bar,
   jq,
   lib,
   socat,
@@ -18,7 +17,6 @@ writeShellApplication {
     dbus
     glib
     hyprland
-    j2bar
     jq
     socat
     systemd

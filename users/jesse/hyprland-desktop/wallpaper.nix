@@ -33,6 +33,7 @@ in
           PartOf = [ "graphical-session.target" ];
         };
         Service = {
+          Environment = [ "J2BAR_BIN=${config.home.sessionVariables.J2BAR_BIN}" ];
           ExecStart = lib.getExe pkgs.wallpaper-autopause;
           Restart = "on-failure";
           RestartSec = 2;

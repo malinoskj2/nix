@@ -103,7 +103,6 @@ in
     in
     {
       inherit firefox hyprland xdg-desktop-portal-hyprland;
-      j2bar = inputs.j2bar.packages.${final.stdenv.hostPlatform.system}.default;
       hyprlandPlugins = hyprlandPlugins // {
         hyprbars = patchPlugin "hyprbars" [
           ./patches/hyprbars/transformed-pass.patch
