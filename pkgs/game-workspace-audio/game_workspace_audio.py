@@ -1,5 +1,6 @@
 """Mute Steam playback while workspace 5 is hidden, preserving user mute states."""
 
+from dataclasses import dataclass
 import fcntl
 import json
 import os
@@ -81,6 +82,37 @@ def hidden_games(windows, monitors, game_for_pid=process_game):
     return {app for app, states in games.items() if states and all(states)}
 
 
+@dataclass
+class Stream:
+    node_id: int
+    app: str
+    restore_key: str
+    muted: bool
+
+
+@dataclass
+class RestorationRecord:
+    originals: dict[str, bool]
+
+    @classmethod
+    def capture(cls, members):
+        # A manual mute is already sufficient; never claim ownership.
+        if all(stream.muted for _, stream in members):
+            return None
+        return cls({identity: stream.muted for identity, stream in members})
+
+    def remember(self, identity, stream):
+        if identity in self.originals:
+            return False
+        # WirePlumber can carry our mute into a recreated stream. Inherit the
+        # application's original state unless the new stream is already audible.
+        self.originals[identity] = stream.muted and all(self.originals.values())
+        return True
+
+    def target(self, identity, background):
+        return background or self.originals[identity]
+
+
 def streams(snapshot, game_for_pid=process_game):
     core = next((item["info"]["cookie"] for item in snapshot if item.get("type") == "PipeWire:Interface:Core"), None)
     if core is None:
@@ -108,65 +140,84 @@ def streams(snapshot, game_for_pid=process_game):
         if key is None:
             continue
         identity = json.dumps([core, props["object.serial"]])
-        result[identity] = {"id": item["id"], "app": app, "key": json.dumps([app, *key]), "mute": mute}
+        result[identity] = Stream(item["id"], app, json.dumps([app, *key]), mute)
     return result
+
+
+class RestorationJournal:
+    def __init__(self, path):
+        self.path = path
+        try:
+            saved = json.loads(path.read_text())
+            if not isinstance(saved, dict) or any(
+                not isinstance(value, dict) or not value or any(not isinstance(mute, bool) for mute in value.values())
+                for value in saved.values()
+            ):
+                raise ValueError("invalid audio restoration journal")
+        except FileNotFoundError:
+            saved = {}
+        self.records = {key: RestorationRecord(originals) for key, originals in saved.items()}
+
+    def save(self):
+        temporary = self.path.with_suffix(".tmp")
+        saved = {key: record.originals for key, record in self.records.items()}
+        temporary.write_text(json.dumps(saved))
+        temporary.chmod(0o600)
+        temporary.replace(self.path)
+
+    def claim(self, key, record):
+        self.records[key] = record
+        self.save()  # Journal before changing anything, for crash recovery.
+
+    def release(self, key):
+        del self.records[key]
+        self.save()
+
+
+def set_stream_mute(identity, stream, target):
+    # IDs are recycled; revalidate serial/core and game immediately before
+    # addressing the node through wpctl.
+    latest = streams(json.loads(command("pw-dump"))).get(identity)
+    if not latest or latest.node_id != stream.node_id or latest.restore_key != stream.restore_key:
+        raise OSError("audio stream changed before mute update")
+    command("wpctl", "set-mute", stream.node_id, int(target))
 
 
 class Controller:
     def __init__(self, path, set_mute=None):
-        self.path = path
+        self.journal = RestorationJournal(path)
         self.set_mute = set_mute
-        try:
-            self.saved = json.loads(path.read_text())
-            if not isinstance(self.saved, dict) or any(
-                not isinstance(value, dict) or not value or any(not isinstance(mute, bool) for mute in value.values())
-                for value in self.saved.values()
-            ):
-                raise ValueError("invalid audio restoration journal")
-        except FileNotFoundError:
-            self.saved = {}
 
-    def save(self):
-        temporary = self.path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(self.saved))
-        temporary.chmod(0o600)
-        temporary.replace(self.path)
+    def apply(self, identity, stream, target):
+        if self.set_mute:
+            self.set_mute(stream.node_id, target)
+        else:
+            set_stream_mute(identity, stream, target)
 
     def reconcile(self, current, hidden):
         by_key = {}
         for identity, stream in current.items():
-            by_key.setdefault(stream["key"], []).append((identity, stream))
+            by_key.setdefault(stream.restore_key, []).append((identity, stream))
+
         for key, members in by_key.items():
-            background = members[0][1]["app"] in hidden
-            if background and key not in self.saved:
-                # A manual mute is already sufficient; never claim ownership.
-                if all(stream["mute"] for _, stream in members):
-                    continue
-                self.saved[key] = {identity: stream["mute"] for identity, stream in members}
-                self.save()  # Journal before changing anything, for crash recovery.
-            if key not in self.saved:
+            background = members[0][1].app in hidden
+            record = self.journal.records.get(key)
+            if record is None and background:
+                record = RestorationRecord.capture(members)
+                if record is not None:
+                    self.journal.claim(key, record)
+            if record is None:
                 continue
-            originals = self.saved[key]
+
             for identity, stream in members:
-                if identity not in originals:
-                    # A recreated stream can inherit the automated mute from
-                    # WirePlumber. Inherit the prior application's original state.
-                    originals[identity] = all(originals.values()) if stream["mute"] else False
-                    self.save()
-                target = True if background else originals[identity]
-                if stream["mute"] != target:
-                    if self.set_mute:
-                        self.set_mute(stream["id"], target)
-                    else:
-                        # IDs are recycled; revalidate serial/core and game
-                        # immediately before addressing the node through wpctl.
-                        latest = streams(json.loads(command("pw-dump"))).get(identity)
-                        if not latest or latest["id"] != stream["id"] or latest["key"] != key:
-                            raise OSError("audio stream changed before mute update")
-                        command("wpctl", "set-mute", stream["id"], int(target))
+                if record.remember(identity, stream):
+                    self.journal.save()
+                target = record.target(identity, background)
+                if stream.muted != target:
+                    self.apply(identity, stream, target)
+
             if not background:
-                del self.saved[key]
-                self.save()
+                self.journal.release(key)
         # Keep absent streams in the journal: WirePlumber can remember our mute
         # across a stream/game restart. Only a verified Steam game with the same
         # application and restore key can consume that restoration record.
