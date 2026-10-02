@@ -140,27 +140,6 @@
         "type": "github"
       }
     },
-    "j2bar": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs-hyprland"
-        ]
-      },
-      "locked": {
-        "lastModified": 1790689389,
-        "narHash": "sha256-Oqt7G2NSUh3ZGtaOpVkGxYERfYR4LfQ/gTSiKZnxl+M=",
-        "ref": "master",
-        "rev": "184359a59cd7f3c2593b6fd375db3e2fa82016ca",
-        "revCount": 195,
-        "type": "git",
-        "url": "file:///home/jesse/projects/j2bar"
-      },
-      "original": {
-        "ref": "master",
-        "type": "git",
-        "url": "file:///home/jesse/projects/j2bar"
-      }
-    },
     "nix-index-database": {
       "inputs": {
         "nixpkgs": [
@@ -284,7 +263,6 @@
         "catppuccin": "catppuccin",
         "flake-parts": "flake-parts",
         "home-manager": "home-manager",
-        "j2bar": "j2bar",
         "nix-index-database": "nix-index-database",
         "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs",

@@ -29,14 +29,6 @@
       ref = "release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # j2bar has no remote, so the input is the local repository. It is built against the nixpkgs
-    # Hyprland comes from, which its own flake pins too.
-    j2bar = {
-      type = "git";
-      url = "file:///home/jesse/projects/j2bar";
-      ref = "master";
-      inputs.nixpkgs.follows = "nixpkgs-hyprland";
-    };
     nix-index-database = {
       type = "github";
       owner = "nix-community";

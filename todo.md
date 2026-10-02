@@ -10,7 +10,7 @@
 
 ## Repository audit — 2026-10-02
 
-- [ ] **High:** Make the `j2bar` flake input available to fresh CI runners and other machines. Replace or accommodate the local `/home/jesse/projects/j2bar` dependency so checks and weekly updates work (`flake.nix`, `.github/workflows/`).
+- [x] **High:** Remove the local `j2bar` flake input while the bar is managed manually. Nix no longer fetches or installs it; desktop commands use the local development binary.
 - [ ] **High:** Fix ARM package exports: `agent-sandbox` includes x86-only `hy3dgen`, and `game-background-limit` unconditionally pulls i686 packages. Restrict supported platforms or make dependencies conditional; verify `nix flake check --all-systems --no-build` (`pkgs/agent-sandbox/package.nix`, `pkgs/game-background-limit/package.nix`).
 - [ ] **High:** Format `hosts/media/test-skin-trader-startup.py` with Ruff and verify the Nix treefmt check passes.
 - [ ] **Medium:** Serialize task archive updates per task list and use unique temporary files. Concurrent completions currently leave stale blockers and can fail on shared `.tmp` files (`users/jesse/claude/archive-completed-task.sh`).

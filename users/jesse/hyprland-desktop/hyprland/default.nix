@@ -29,7 +29,7 @@ let
       main = "DP-2";
       side = "DP-1";
     };
-    j2bar = lib.getExe config.programs.j2bar.package;
+    j2bar = config.home.sessionVariables.J2BAR_BIN;
     workspaces = {
       first = 1;
       last = 5;

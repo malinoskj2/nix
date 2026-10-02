@@ -5,6 +5,7 @@
 readonly video_dir="$HOME/.wallpapers/video"
 readonly state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/wallpaper"
 readonly state_file="$state_dir/assignments.json"
+readonly j2bar="${J2BAR_BIN:-j2bar}"
 
 usage() {
   cat <<'EOF'
@@ -79,7 +80,7 @@ if ! query_video_path "$socket" | jq -e '.error == "success"' >/dev/null; then
 fi
 current="$(query_video_path "$socket" | jq -r '.data')"
 
-choice="$(list_videos "$current" | j2bar dmenu -p "Wallpaper ($monitor)")" || true
+choice="$(list_videos "$current" | "$j2bar" dmenu -p "Wallpaper ($monitor)")" || true
 choice="${choice%%$'\t'*}"
 [[ -n "$choice" ]] || exit 0
 

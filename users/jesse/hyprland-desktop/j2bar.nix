@@ -1,18 +1,7 @@
-{ inputs, pkgs, ... }:
+{ config, ... }:
 {
-  imports = [ inputs.j2bar.homeModules.default ];
-
-  programs.j2bar = {
-    enable = true;
-    package = pkgs.j2bar;
-    settings = {
-      output = "DP-2";
-      control_button = {
-        x = 6;
-        y = 4;
-      };
-    };
-  };
+  # Both the development binary and ~/.config/j2bar/config.toml are managed outside Nix.
+  home.sessionVariables.J2BAR_BIN = "${config.home.homeDirectory}/projects/j2bar/target/release/j2bar";
 
   wallpaper.launcher.enable = true;
 }

@@ -110,17 +110,20 @@ To upgrade:
 
 ### j2bar
 
-`j2bar` is the shell of the `home` desktop. It has no remote, so the input is
-the local repository at `~/projects/j2bar`, on `master`, and only `home` can
-fetch it: the update workflow can't, and neither can another machine that
-evaluates `home`. Its nixpkgs follows `nixpkgs-hyprland`, the commit its own
-flake pins, so it is built with the libraries it is tested with.
+`j2bar` is the shell of the `home` desktop and is managed manually while it is
+in development. This flake does not fetch, build or install its binary. Desktop
+bindings and wallpaper tools use `~/projects/j2bar/target/release/j2bar`, selected
+by `J2BAR_BIN`. Build it in the bar's own repository; `nix flake update` does not
+update it. Wallpaper tools also accept a `J2BAR_BIN` override, falling back to
+`j2bar` on `PATH` when it is unset.
 
-`nix flake update` moves it to `master`'s newest commit with everything else;
-`nix flake update j2bar` moves it alone. After a Hyprland upgrade, run j2bar's
-golden test and check its surfaces against
+After a Hyprland upgrade, run j2bar's golden test and check its surfaces against
 [`look.lua`](../users/jesse/hyprland-desktop/hyprland/look.lua), whose layer
 rules and hyprglass layers name j2bar's namespaces.
+
+Bar settings live in the regular `~/.config/j2bar/config.toml` file and are edited directly.
+A Nix switch does not generate or place that file. Hyprland's bindings and layer
+rules, the PAM lock service, fonts and wallpaper tools remain declared in this flake.
 
 ### Firefox
 
