@@ -1,10 +1,11 @@
 import copy
+import json
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from game_workspace_audio import Controller, hidden_games, process_game, streams
+from game_workspace_audio import Controller, Stream, hidden_games, process_game, streams
 
 
 def window(app="42", workspace=5, pid=123):
@@ -12,7 +13,7 @@ def window(app="42", workspace=5, pid=123):
 
 
 def stream(identity="10", key="game", mute=False, app="42", node=20):
-    return {identity: {"id": node, "key": key, "app": app, "mute": mute}}
+    return {identity: Stream(node, app, key, mute)}
 
 
 class AudioTest(unittest.TestCase):
@@ -30,7 +31,7 @@ class AudioTest(unittest.TestCase):
         self.assertEqual(self.calls, [(20, True)])
         self.controller.reconcile(stream(mute=True), set())
         self.assertEqual(self.calls, [(20, True), (20, False)])
-        self.assertEqual(self.controller.saved, {})
+        self.assertEqual(self.controller.journal.records, {})
 
     def test_new_stream_while_hidden(self):
         self.controller.reconcile({}, {"42"})
@@ -45,7 +46,7 @@ class AudioTest(unittest.TestCase):
     def test_mixed_manual_mutes_on_same_application(self):
         current = stream() | stream(identity="11", mute=True, node=21)
         self.controller.reconcile(current, {"42"})
-        current["10"]["mute"] = True
+        current["10"].muted = True
         self.controller.reconcile(current, set())
         self.assertEqual(self.calls, [(20, True), (20, False)])
 
@@ -82,7 +83,20 @@ class AudioTest(unittest.TestCase):
         controller = Controller(self.path, fail)
         with self.assertRaises(OSError):
             controller.reconcile(stream(), {"42"})
-        self.assertTrue(Controller(self.path).saved)
+        self.assertTrue(Controller(self.path).journal.records)
+
+    def test_existing_journal_format_is_restored(self):
+        self.path.write_text(json.dumps({"game": {"10": False}}))
+        controller = Controller(self.path, lambda node, mute: self.calls.append((node, mute)))
+        controller.reconcile(stream(mute=True), set())
+        self.assertEqual(self.calls, [(20, False)])
+        self.assertEqual(json.loads(self.path.read_text()), {})
+
+    def test_failed_journal_write_does_not_mute(self):
+        with patch("pathlib.Path.replace", side_effect=OSError("disk unavailable")):
+            with self.assertRaises(OSError):
+                self.controller.reconcile(stream(), {"42"})
+        self.assertEqual(self.calls, [])
 
     def test_changed_identity_aborts_before_wpctl(self):
         controller = Controller(self.path)
@@ -93,7 +107,7 @@ class AudioTest(unittest.TestCase):
             with self.assertRaises(OSError):
                 controller.reconcile(stream(), {"42"})
         run.assert_called_once_with("pw-dump")
-        self.assertTrue(controller.saved)
+        self.assertTrue(controller.journal.records)
 
     def test_verified_identity_changes_only_stream_mute(self):
         controller = Controller(self.path)
@@ -147,7 +161,7 @@ class AudioTest(unittest.TestCase):
         ]
         actual = streams(snapshot, lambda _: "42")
         self.assertEqual(len(actual), 1)
-        self.assertEqual(next(iter(actual.values()))["app"], "42")
+        self.assertEqual(next(iter(actual.values())).app, "42")
         other_core = copy.deepcopy(snapshot)
         other_core[0]["info"]["cookie"] = 101
         self.assertNotEqual(set(actual), set(streams(other_core, lambda _: "42")))

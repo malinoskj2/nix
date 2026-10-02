@@ -85,6 +85,25 @@ void lifecycle_test() {
     assert(find(instances, instance) == nullptr);
 }
 }
+static void control_test() {
+    int sockets[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sockets) == 0);
+    assert(send(sockets[1], "FB?F", 4, MSG_NOSIGNAL) == 4);
+    assert(shutdown(sockets[1], SHUT_WR) == 0);
+    read_control(sockets[0]);
+    // Focus/background commands are accepted in order. An unknown byte ends
+    // the session before subsequent commands can change the cap.
+    assert(capped.load());
+    char greeting[40]{};
+    auto size = recv(sockets[1], greeting, sizeof(greeting) - 1, 0);
+    char expected[40];
+    snprintf(expected, sizeof(expected), "v1 %s\n", token);
+    assert(size == ssize_t(strlen(expected)) && !strcmp(greeting, expected));
+    close(sockets[0]);
+    close(sockets[1]);
+    set_cap(false);
+}
+
 int main(int argc, char **argv) {
     assert(instances[capacity - 1].key == reinterpret_cast<void *>(100));
     instances[capacity - 1].key.store(nullptr);
@@ -93,6 +112,7 @@ int main(int argc, char **argv) {
         return 0;
     }
     graphics_started();
+    control_test();
     lifecycle_test();
     presented_one = 0; presented_two = 0;
     // Dispatch goes to the correct device without shared global next-present.
@@ -145,5 +165,5 @@ int main(int argc, char **argv) {
     int status;
     assert(waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == 0);
     set_cap(false);
-    puts("dispatch, GL proc-address, focused bypass, cap and interruptible release passed");
+    puts("control protocol, dispatch, GL proc-address, focused bypass, cap and interruptible release passed");
 }

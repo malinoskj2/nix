@@ -26,6 +26,82 @@ media=/tmp/agent-media
 image_ref="agent-sandbox:${AGENT_SANDBOX_TAG#hash-}"
 clipboard_dir=$(mktemp --directory "$runtime/agent-sandbox-clipboard.XXXXXX")
 
+# Keep bind mounts in order: writable child mounts override read-only parents.
+mounts=()
+
+mount_readonly() {
+  local src=$1 dst=${2:-$1}
+  if [[ $dst == "$HOME"/* ]]; then
+    local placeholder=$sandbox_home${dst#"$HOME"}
+    if [[ -d $src ]]; then
+      mkdir -p "$placeholder"
+    elif [[ -f $src ]]; then
+      mkdir -p "$(dirname "$placeholder")"
+      touch "$placeholder"
+    else
+      return 0
+    fi
+  elif [[ ! -e $src ]]; then
+    return 0
+  fi
+  mounts+=(--volume "$src:$dst:ro")
+}
+
+copy_if_newer() {
+  local src=$1 dst=$2
+  if [[ -f $src && (! -f $dst || $src -nt $dst) ]]; then
+    cp "$src" "$dst"
+  fi
+}
+
+seed_if_empty() {
+  local src=$1 dst=$2
+  if [[ -f $src && ! -s $dst ]]; then
+    cp "$src" "$dst"
+    chmod u+w "$dst"
+  fi
+}
+
+configure_claude() {
+  local name
+  for name in CLAUDE.md settings.json skills hooks agents commands output-styles plugins rules; do
+    mount_readonly "$HOME/.claude/$name"
+  done
+
+  for name in tasks tasks-archive projects; do
+    mkdir -p "$HOME/.claude/$name" "$sandbox_home/.claude/$name"
+    mounts+=(--volume "$HOME/.claude/$name:$HOME/.claude/$name")
+  done
+
+  if [[ -d $HOME/.claude/plugins/data ]]; then
+    mkdir -p "$data/plugin-data"
+    mounts+=(--volume "$data/plugin-data:$HOME/.claude/plugins/data")
+  fi
+}
+
+configure_codex() {
+  # Every sandbox can run Codex, including Orca's SSH hosts. Authentication
+  # follows the newer copy; writable config is seeded once, including empty
+  # placeholders left by older launches.
+  copy_if_newer "$HOME/.codex/auth.json" "$sandbox_home/.codex/auth.json"
+  seed_if_empty "$HOME/.codex/config.toml" "$sandbox_home/.codex/config.toml"
+
+  local name
+  for name in AGENTS.md rules skills plugins; do
+    mount_readonly "$HOME/.codex/$name"
+  done
+}
+
+configure_zcode() {
+  # Preserve logins/provider changes from either environment. Settings are
+  # seeded once so later host edits cannot overwrite sandbox tool permissions.
+  local name
+  for name in v2/provider_config.json v2/credentials.json; do
+    copy_if_newer "$HOME/.zcode/$name" "$sandbox_home/.zcode/$name"
+  done
+  seed_if_empty "$HOME/.zcode/cli/setting.json" "$sandbox_home/.zcode/cli/setting.json"
+}
+
 cleanup() {
   trap - EXIT
   if [[ -n ${clipboard_watcher_pid:-} ]]; then
@@ -72,6 +148,10 @@ printf 'root:x:0:\n%s:x:%s:%s\n' "$group" "$gid" "$user" >"$data/group"
 if ! docker image inspect "$image_ref" >/dev/null 2>&1; then
   "$AGENT_SANDBOX_IMAGE" | docker load >/dev/null
 fi
+
+configure_claude
+configure_codex
+configure_zcode
 
 workdir=$HOME/projects
 for dir in "${shared[@]}"; do
@@ -140,7 +220,7 @@ args+=(--volume "$ssh_dir/host_ed25519:/run/agent-sandbox-ssh/host_ed25519:ro")
 args+=(--volume "$ssh_dir/authorized_keys:/run/agent-sandbox-ssh/authorized_keys:ro")
 
 if [[ -d $HOME/.config/git ]]; then
-  args+=(--volume "$HOME/.config/git:$HOME/.config/git:ro")
+  mount_readonly "$HOME/.config/git"
 fi
 
 # The display draws text, icons and Hyprland's compositing the way the desktop does: its fonts and
@@ -150,12 +230,11 @@ if [[ -f /etc/fonts/fonts.conf ]]; then
 fi
 for dir in "$HOME/.config/fontconfig" "$HOME/.local/share/fonts"; do
   if [[ -d $dir ]]; then
-    mkdir -p "$sandbox_home${dir#"$HOME"}"
-    args+=(--volume "$dir:$dir:ro")
+    mount_readonly "$dir"
   fi
 done
 if [[ -f $HOME/.config/hypr/look.lua ]]; then
-  args+=(--volume "$HOME/.config/hypr:/run/host-hypr:ro")
+  mount_readonly "$HOME/.config/hypr" /run/host-hypr
 fi
 # The profiles these name aren't mounted, so their store paths stand in for them.
 data_dirs=()
@@ -170,71 +249,7 @@ if [[ ${#data_dirs[@]} -gt 0 ]]; then
   args+=(--env "XDG_DATA_DIRS=${joined%:}")
 fi
 
-for name in CLAUDE.md settings.json skills hooks agents commands output-styles plugins rules; do
-  src=$HOME/.claude/$name
-  if [[ -d $src ]]; then
-    mkdir -p "$sandbox_home/.claude/$name"
-  elif [[ -f $src ]]; then
-    touch "$sandbox_home/.claude/$name"
-  else
-    continue
-  fi
-  args+=(--volume "$src:$HOME/.claude/$name:ro")
-done
-
-for name in tasks tasks-archive projects; do
-  mkdir -p "$HOME/.claude/$name" "$sandbox_home/.claude/$name"
-  args+=(--volume "$HOME/.claude/$name:$HOME/.claude/$name")
-done
-
-if [[ -d $HOME/.claude/plugins/data ]]; then
-  mkdir -p "$data/plugin-data"
-  args+=(--volume "$data/plugin-data:$HOME/.claude/plugins/data")
-fi
-
-# Every sandbox can run Codex, including the SSH hosts Orca launches it in.
-# Keep mutable Codex state isolated, but seed authentication from the host. The
-# newer copy wins so a token refreshed in either environment is not replaced by
-# an older one on the next launch.
-if [[ -f $HOME/.codex/auth.json && (! -f $sandbox_home/.codex/auth.json || $HOME/.codex/auth.json -nt $sandbox_home/.codex/auth.json) ]]; then
-  cp "$HOME/.codex/auth.json" "$sandbox_home/.codex/auth.json"
-fi
-
-# Seed a writable config once so Codex can persist project trust and settings.
-# Older launches left an empty mount placeholder, which also needs seeding.
-if [[ -f $HOME/.codex/config.toml && ! -s $sandbox_home/.codex/config.toml ]]; then
-  cp "$HOME/.codex/config.toml" "$sandbox_home/.codex/config.toml"
-  chmod u+w "$sandbox_home/.codex/config.toml"
-fi
-
-for name in AGENTS.md rules skills plugins; do
-  src=$HOME/.codex/$name
-  if [[ -d $src ]]; then
-    mkdir -p "$sandbox_home/.codex/$name"
-  elif [[ -f $src ]]; then
-    touch "$sandbox_home/.codex/$name"
-  else
-    continue
-  fi
-  args+=(--volume "$src:$HOME/.codex/$name:ro")
-done
-
-# Seed ZCode's provider and credential state from the host, newer copy wins, so
-# a login or provider change in either environment is not lost on the next launch.
-for name in v2/provider_config.json v2/credentials.json; do
-  src=$HOME/.zcode/$name
-  dst=$sandbox_home/.zcode/$name
-  if [[ -f $src && (! -f $dst || $src -nt $dst) ]]; then
-    cp "$src" "$dst"
-  fi
-done
-
-# The CLI settings file is seeded once so ZCode can persist theme and tool
-# permissions without later host edits clobbering them.
-if [[ -f $HOME/.zcode/cli/setting.json && ! -s $sandbox_home/.zcode/cli/setting.json ]]; then
-  cp "$HOME/.zcode/cli/setting.json" "$sandbox_home/.zcode/cli/setting.json"
-  chmod u+w "$sandbox_home/.zcode/cli/setting.json"
-fi
+args+=("${mounts[@]}")
 
 if [[ -t 0 && -t 1 ]]; then
   args+=(--interactive --tty)

@@ -70,50 +70,6 @@ local FIELD = color("crust", 0.35)
 local ERROR = color("red")
 local CLEAR = "#00000000"
 
-local state = {
-  nm = nil, -- nil until the first answer, then true or false
-  wifiDevice = nil,
-  wifiEnabled = false,
-  ethernet = nil, -- { device, connection } of a connected wired device
-  networks = {},
-  known = {},
-  route = nil, -- { device, gateway }
-  address = nil,
-  linkSpeed = nil, -- Mb/s the kernel reports for the route's device
-  rates = nil, -- { rx, tx } in bytes per second
-}
-
-local hovered = nil
-local showOther = false
-local prompt = nil -- { ssid, error } while a password is asked for
-local password = ""
-local joining = {} -- ssid -> true while nmcli connects
-local failures = {} -- ssid -> message
-local counters = nil
-local tick = 0
-local open = false
--- Until the first round of queries has answered, nothing renders, so the panel's first frame,
--- which Noctalia holds for it, already has its final size.
-local loaded = false
-local loading = 0
-
-local render
-
-local function tracked(callback)
-  if loaded then
-    return callback
-  end
-  loading += 1
-  return function(...)
-    callback(...)
-    loading -= 1
-    if loading == 0 and not loaded then
-      loaded = true
-      render()
-    end
-  end
-end
-
 -- `nmcli -t` separates fields with `:` and escapes `:` and `\` inside values.
 local function splitTerse(line)
   local fields = {}
@@ -161,180 +117,288 @@ local function nmcli(args, callback)
   run(argv, callback)
 end
 
-local function refreshDevices()
-  nmcli(
-    { "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device" },
-    tracked(function(result)
-      if result.exitCode ~= 0 then
-        state.nm = false
-        state.wifiDevice = nil
-        state.ethernet = nil
-        render()
-        return
-      end
-      state.nm = true
-      state.wifiDevice = nil
-      state.ethernet = nil
-      for _, line in ipairs(lines(result.stdout)) do
-        local fields = splitTerse(line)
-        local device, kind, status, connection = fields[1], fields[2], fields[3], fields[4]
-        if kind == "wifi" and state.wifiDevice == nil then
-          state.wifiDevice = device
-        elseif kind == "ethernet" and status == "connected" and state.ethernet == nil then
-          state.ethernet = { device = device, connection = connection }
-        end
-      end
-      render()
-    end)
-  )
-  nmcli(
-    { "-t", "-f", "WIFI", "radio" },
-    tracked(function(result)
-      if result.exitCode == 0 then
-        state.wifiEnabled = noctalia.string.trim(result.stdout) == "enabled"
-        render()
-      end
-    end)
-  )
-  nmcli(
-    { "-t", "-f", "NAME,TYPE", "connection", "show" },
-    tracked(function(result)
-      if result.exitCode ~= 0 then
-        return
-      end
-      state.known = {}
-      for _, line in ipairs(lines(result.stdout)) do
-        local fields = splitTerse(line)
-        if fields[2] == "802-11-wireless" then
-          state.known[fields[1]] = true
-        end
-      end
-      render()
-    end)
-  )
+local function parseDevices(text)
+  local wifi, ethernet
+  for _, line in ipairs(lines(text)) do
+    local fields = splitTerse(line)
+    local device, kind, status, connection = fields[1], fields[2], fields[3], fields[4]
+    if kind == "wifi" and wifi == nil then
+      wifi = device
+    elseif kind == "ethernet" and status == "connected" and ethernet == nil then
+      ethernet = { device = device, connection = connection }
+    end
+  end
+  return wifi, ethernet
 end
 
-local function refreshNetworks(rescan)
-  -- A rescan takes seconds, so it never holds the first render back.
-  local wrap = rescan and function(callback)
-    return callback
-  end or tracked
-  nmcli(
-    { "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY,RATE", "device", "wifi", "list", "--rescan", rescan and "yes" or "no" },
-    wrap(function(result)
-      if result.exitCode ~= 0 then
-        return
+local function parseKnown(text)
+  local known = {}
+  for _, line in ipairs(lines(text)) do
+    local fields = splitTerse(line)
+    if fields[2] == "802-11-wireless" then
+      known[fields[1]] = true
+    end
+  end
+  return known
+end
+
+local function parseNetworks(text)
+  local bySsid = {}
+  local networks = {}
+  for _, line in ipairs(lines(text)) do
+    local fields = splitTerse(line)
+    local ssid = fields[2]
+    if ssid ~= nil and ssid ~= "" then
+      local network = {
+        ssid = ssid,
+        inUse = fields[1] == "*",
+        signal = tonumber(fields[3]) or 0,
+        secure = fields[4] ~= nil and fields[4] ~= "" and fields[4] ~= "--",
+        rate = tonumber(string.match(fields[5] or "", "%d+")),
+      }
+      local existing = bySsid[ssid]
+      if existing == nil then
+        bySsid[ssid] = network
+        table.insert(networks, network)
+      else
+        existing.inUse = existing.inUse or network.inUse
+        existing.signal = math.max(existing.signal, network.signal)
       end
-      local bySsid = {}
-      local networks = {}
-      for _, line in ipairs(lines(result.stdout)) do
-        local fields = splitTerse(line)
-        local ssid = fields[2]
-        if ssid ~= nil and ssid ~= "" then
-          local network = {
-            ssid = ssid,
-            inUse = fields[1] == "*",
-            signal = tonumber(fields[3]) or 0,
-            secure = fields[4] ~= nil and fields[4] ~= "" and fields[4] ~= "--",
-            rate = tonumber(string.match(fields[5] or "", "%d+")),
-          }
-          local existing = bySsid[ssid]
-          if existing == nil then
-            bySsid[ssid] = network
-            table.insert(networks, network)
-          else
-            existing.inUse = existing.inUse or network.inUse
-            existing.signal = math.max(existing.signal, network.signal)
+    end
+  end
+  table.sort(networks, function(a, b)
+    if a.inUse ~= b.inUse then
+      return a.inUse
+    end
+    return a.signal > b.signal
+  end)
+  return networks
+end
+
+local function trafficSample(contents, device, now)
+  for line in string.gmatch(contents or "", "[^\n]+") do
+    local name, rest = string.match(line, "^%s*([^:%s]+):%s*(.*)$")
+    if name == device then
+      local values = {}
+      for value in string.gmatch(rest, "%d+") do
+        table.insert(values, tonumber(value))
+      end
+      if values[1] ~= nil and values[9] ~= nil then
+        return { device = device, at = now, rx = values[1], tx = values[9] }
+      end
+    end
+  end
+  return nil
+end
+
+-- Discovery owns the network snapshot and sampling history; menu callbacks only
+-- request refreshes. Rendering reads a snapshot without managing pending queries.
+local function createNetworkMonitor(onChange)
+  local state = {
+    nm = nil, -- nil until the first answer, then true or false
+    wifiDevice = nil,
+    wifiEnabled = false,
+    ethernet = nil, -- { device, connection } of a connected wired device
+    networks = {},
+    known = {},
+    route = nil, -- { device, gateway }
+    address = nil,
+    linkSpeed = nil, -- Mb/s reported by the route's device
+    rates = nil, -- { rx, tx } in bytes per second
+  }
+  local counters = nil
+  local routeGeneration = 0
+  local loaded = false
+  local loading = 0
+
+  -- Hold the first frame until cached discovery finishes. Slow scans and link
+  -- speed reads can fill in later without delaying the menu's initial size.
+  local function finishQuery()
+    loading -= 1
+    if loading == 0 and not loaded then
+      loaded = true
+      onChange()
+    end
+  end
+
+  local function tracked(callback)
+    if loaded then
+      return callback
+    end
+    loading += 1
+    return function(...)
+      callback(...)
+      finishQuery()
+    end
+  end
+
+  local function refreshDevices()
+    nmcli(
+      { "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device" },
+      tracked(function(result)
+        state.nm = result.exitCode == 0
+        state.wifiDevice, state.ethernet = parseDevices(state.nm and result.stdout or "")
+        onChange()
+      end)
+    )
+    nmcli(
+      { "-t", "-f", "WIFI", "radio" },
+      tracked(function(result)
+        if result.exitCode == 0 then
+          state.wifiEnabled = noctalia.string.trim(result.stdout) == "enabled"
+          onChange()
+        end
+      end)
+    )
+    nmcli(
+      { "-t", "-f", "NAME,TYPE", "connection", "show" },
+      tracked(function(result)
+        if result.exitCode == 0 then
+          state.known = parseKnown(result.stdout)
+          onChange()
+        end
+      end)
+    )
+  end
+
+  local function scan(rescan)
+    local callback = function(result)
+      if result.exitCode == 0 then
+        state.networks = parseNetworks(result.stdout)
+        onChange()
+      end
+    end
+    nmcli(
+      { "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY,RATE", "device", "wifi", "list", "--rescan", rescan and "yes" or "no" },
+      rescan and callback or tracked(callback)
+    )
+  end
+
+  local function refreshAddress()
+    routeGeneration += 1
+    local generation = routeGeneration
+    run(
+      { nix.ip, "-j", "route", "show", "default" },
+      tracked(function(result)
+        if generation ~= routeGeneration then
+          return
+        end
+        local routes = result.exitCode == 0 and noctalia.json.decode(result.stdout) or nil
+        local best = nil
+        for _, route in ipairs(routes or {}) do
+          if best == nil or (route.metric or 0) < (best.metric or 0) then
+            best = route
           end
         end
-      end
-      table.sort(networks, function(a, b)
-        if a.inUse ~= b.inUse then
-          return a.inUse
+        local route = best and { device = best.dev, gateway = best.gateway } or nil
+        local previous = state.route
+        state.route = route
+        if route == nil or previous == nil or route.device ~= previous.device then
+          state.address = nil
+          state.linkSpeed = nil
+          state.rates = nil
+          counters = nil
         end
-        return a.signal > b.signal
-      end)
-      state.networks = networks
-      render()
-    end)
-  )
-end
-
-local function refreshAddress()
-  run(
-    { nix.ip, "-j", "route", "show", "default" },
-    tracked(function(result)
-      local routes = result.exitCode == 0 and noctalia.json.decode(result.stdout) or nil
-      local best = nil
-      for _, route in ipairs(routes or {}) do
-        if best == nil or (route.metric or 0) < (best.metric or 0) then
-          best = route
+        if route == nil then
+          onChange()
+          return
         end
-      end
-      state.route = best and { device = best.dev, gateway = best.gateway } or nil
-      if state.route == nil then
-        state.address = nil
-        state.linkSpeed = nil
-        render()
-        return
-      end
-      -- The speed only fills the header's corner, so it doesn't hold the first render back.
-      noctalia.readFileAsync("/sys/class/net/" .. state.route.device .. "/speed", function(contents)
-        local speed = tonumber(noctalia.string.trim(contents or ""))
-        state.linkSpeed = speed ~= nil and speed > 0 and speed or nil
-        render()
-      end)
-      run(
-        { nix.ip, "-j", "-4", "address", "show", "dev", state.route.device },
-        tracked(function(address)
-          local interfaces = address.exitCode == 0 and noctalia.json.decode(address.stdout) or nil
-          local info = interfaces and interfaces[1] and interfaces[1].addr_info
-          state.address = info and info[1] and info[1]["local"] or nil
-          render()
+        -- All replies belong to this route query. A late answer from the previous
+        -- interface must not overwrite the address or speed of its replacement.
+        noctalia.readFileAsync("/sys/class/net/" .. route.device .. "/speed", function(contents)
+          if generation ~= routeGeneration then
+            return
+          end
+          local speed = tonumber(noctalia.string.trim(contents or ""))
+          state.linkSpeed = speed ~= nil and speed > 0 and speed or nil
+          onChange()
         end)
-      )
-    end)
-  )
-end
-
-local function sampleTraffic()
-  if state.route == nil then
-    return
+        run(
+          { nix.ip, "-j", "-4", "address", "show", "dev", route.device },
+          tracked(function(address)
+            if generation ~= routeGeneration then
+              return
+            end
+            local interfaces = address.exitCode == 0 and noctalia.json.decode(address.stdout) or nil
+            local info = interfaces and interfaces[1] and interfaces[1].addr_info
+            state.address = info and info[1] and info[1]["local"] or nil
+            onChange()
+          end)
+        )
+      end)
+    )
   end
-  local device = state.route.device
-  noctalia.readFileAsync("/proc/net/dev", function(contents)
-    if contents == nil then
+
+  local function sample()
+    if state.route == nil then
       return
     end
-    for line in string.gmatch(contents, "[^\n]+") do
-      local name, rest = string.match(line, "^%s*([^:%s]+):%s*(.*)$")
-      if name == device then
-        local values = {}
-        for value in string.gmatch(rest, "%d+") do
-          table.insert(values, tonumber(value))
-        end
-        local now = noctalia.nowMs()
-        local sample = { device = device, at = now, rx = values[1], tx = values[9] }
-        if counters ~= nil and counters.device == device and now > counters.at then
-          local seconds = (now - counters.at) / 1000
-          state.rates = {
-            rx = math.max(0, (sample.rx - counters.rx) / seconds),
-            tx = math.max(0, (sample.tx - counters.tx) / seconds),
-          }
-          render()
-        end
-        counters = sample
+    local device = state.route.device
+    noctalia.readFileAsync("/proc/net/dev", function(contents)
+      if state.route == nil or state.route.device ~= device then
         return
       end
+      local next = trafficSample(contents, device, noctalia.nowMs())
+      if next == nil then
+        return
+      end
+      if counters ~= nil and counters.device == device and next.at > counters.at then
+        local seconds = (next.at - counters.at) / 1000
+        state.rates = {
+          rx = math.max(0, (next.rx - counters.rx) / seconds),
+          tx = math.max(0, (next.tx - counters.tx) / seconds),
+        }
+        onChange()
+      end
+      counters = next
+    end)
+  end
+
+  local function refresh(rescan)
+    -- The barrier also covers commands that fail synchronously before returning.
+    local initial = not loaded
+    if initial then
+      loading += 1
     end
-  end)
+    refreshDevices()
+    scan(rescan)
+    refreshAddress()
+    if initial then
+      finishQuery()
+    end
+  end
+
+  return {
+    snapshot = function()
+      return table.freeze(table.clone(state))
+    end,
+    ready = function()
+      return loaded
+    end,
+    refresh = refresh,
+    scan = scan,
+    sample = sample,
+    resetTraffic = function()
+      counters = nil
+      state.rates = nil
+    end,
+  }
 end
 
-local function refreshAll(rescan)
-  refreshDevices()
-  refreshNetworks(rescan)
-  refreshAddress()
-end
+local render
+local network = createNetworkMonitor(function()
+  render()
+end)
+local menu = {
+  hovered = nil,
+  showOther = false,
+  prompt = nil, -- { ssid, error, key } while a password is asked for
+  password = "",
+  joining = {}, -- ssid -> true while nmcli connects
+  failures = {}, -- ssid -> message
+  tick = 0,
+  open = false,
+}
 
 local function formatRate(bytes)
   if bytes == nil then
@@ -350,53 +414,53 @@ local function formatRate(bytes)
 end
 
 local function join(ssid, secret)
-  joining[ssid] = true
-  failures[ssid] = nil
+  menu.joining[ssid] = true
+  menu.failures[ssid] = nil
   local args = { "--wait", "30", "device", "wifi", "connect", ssid }
   if secret ~= nil then
     table.insert(args, "password")
     table.insert(args, secret)
   end
   nmcli(args, function(result)
-    joining[ssid] = nil
+    menu.joining[ssid] = nil
     if result.exitCode == 0 then
-      prompt = nil
-      password = ""
+      menu.prompt = nil
+      menu.password = ""
     else
       local message = noctalia.string.trim(result.stderr ~= "" and result.stderr or result.stdout)
       message = string.gsub(message, "^Error: ", "")
       if secret ~= nil or string.find(message, "[Ss]ecrets") then
-        prompt =
+        menu.prompt =
           { ssid = ssid, error = secret ~= nil and "The password may be incorrect." or nil, key = noctalia.nowMs() }
       else
-        failures[ssid] = message
+        menu.failures[ssid] = message
       end
     end
-    refreshAll(false)
+    network.refresh(false)
     render()
   end)
   render()
 end
 
-local function choose(network)
-  if network.inUse or joining[network.ssid] then
+local function choose(accessPoint)
+  if accessPoint.inUse or menu.joining[accessPoint.ssid] then
     return
   end
-  if prompt ~= nil and prompt.ssid == network.ssid then
-    prompt = nil
-  elseif network.secure and not state.known[network.ssid] then
-    prompt = { ssid = network.ssid, key = noctalia.nowMs() }
-    password = ""
+  if menu.prompt ~= nil and menu.prompt.ssid == accessPoint.ssid then
+    menu.prompt = nil
+  elseif accessPoint.secure and not network.snapshot().known[accessPoint.ssid] then
+    menu.prompt = { ssid = accessPoint.ssid, key = noctalia.nowMs() }
+    menu.password = ""
   else
-    prompt = nil
-    join(network.ssid, nil)
+    menu.prompt = nil
+    join(accessPoint.ssid, nil)
   end
   render()
 end
 
 local function submitPassword()
-  if prompt ~= nil and password ~= "" then
-    join(prompt.ssid, password)
+  if menu.prompt ~= nil and menu.password ~= "" then
+    join(menu.prompt.ssid, menu.password)
   end
 end
 
@@ -425,14 +489,14 @@ end
 
 -- A named handler, so the leave Noctalia sends when a hovered row disappears still arrives.
 function onRowHover(inside, key)
-  local next = hovered
+  local next = menu.hovered
   if inside == "true" then
     next = key
-  elseif hovered == key then
+  elseif menu.hovered == key then
     next = nil
   end
-  if next ~= hovered then
-    hovered = next
+  if next ~= menu.hovered then
+    menu.hovered = next
     render()
   end
 end
@@ -440,7 +504,7 @@ end
 -- A full-width row whose highlight spans the content box, with its content inset like Apple's.
 local function row(key, height, children, props)
   props = props or {}
-  local active = props.onClick ~= nil and hovered == key
+  local active = props.onClick ~= nil and menu.hovered == key
   return ui.row({
     key = key,
     height = height,
@@ -533,7 +597,7 @@ local function speedImage(text)
   return speedImages[text]
 end
 
-local function currentSpeed()
+local function currentSpeed(state)
   if state.route == nil then
     return nil
   elseif state.linkSpeed ~= nil then
@@ -573,7 +637,7 @@ local function networkRow(network)
     }),
   })
   local trailing
-  if joining[network.ssid] then
+  if menu.joining[network.ssid] then
     trailing = label("Joining…", { color = SECONDARY })
   elseif network.secure then
     trailing = ui.glyph({ name = "lock-filled", size = 12, color = TERTIARY })
@@ -597,7 +661,7 @@ local function passwordRow(ssid)
     gap(NAME_OFFSET - 8, true),
     ui.row({ height = 26, radius = 7, fill = FIELD, paddingH = 0, align = "center", flexGrow = 1 }, {
       ui.input({
-        key = "password:" .. ssid .. ":" .. tostring(prompt.key),
+        key = "password:" .. ssid .. ":" .. tostring(menu.prompt.key),
         password = true,
         focus = true,
         frameVisible = false,
@@ -606,7 +670,7 @@ local function passwordRow(ssid)
         height = 26,
         flexGrow = 1,
         onChange = function(value)
-          password = value
+          menu.password = value
         end,
         onSubmit = submitPassword,
       }),
@@ -617,7 +681,7 @@ local function passwordRow(ssid)
       radius = 7,
       paddingH = 12,
       align = "center",
-      fill = hovered == "join:" .. ssid and color("peach", 0.85) or ACCENT,
+      fill = menu.hovered == "join:" .. ssid and color("peach", 0.85) or ACCENT,
       onClick = submitPassword,
       onHover = "onRowHover",
     }, { label("Join", { color = ON_ACCENT, fontWeight = "semibold" }) }),
@@ -686,13 +750,14 @@ local function sectionHeader(text, props)
 end
 
 function render()
-  if not open or not loaded then
+  if not menu.open or not network.ready() then
     return
   end
+  local state = network.snapshot()
   local layout = stack()
   local hasWifi = state.wifiDevice ~= nil
 
-  local speed = currentSpeed()
+  local speed = currentSpeed(state)
   local speedPath = speed and speedImage(formatSpeed(speed))
   layout.add(
     HEADER_CENTER,
@@ -742,23 +807,26 @@ function render()
     local function addNetworks(list)
       for _, network in ipairs(list) do
         layout.next(NETWORK_ROW_HEIGHT, networkRow(network))
-        if prompt ~= nil and prompt.ssid == network.ssid then
+        if menu.prompt ~= nil and menu.prompt.ssid == network.ssid then
           layout.next(PROMPT_HEIGHT, passwordRow(network.ssid))
-          if prompt.error then
+          if menu.prompt.error then
             layout.next(
               DETAIL_ROW_HEIGHT,
               ui.row({ height = DETAIL_ROW_HEIGHT, paddingH = INSET, align = "center" }, {
                 gap(NAME_OFFSET, true),
-                label(prompt.error, { fontSize = DETAIL_FONT_SIZE, color = ERROR, maxWidth = ERROR_WIDTH }),
+                label(menu.prompt.error, { fontSize = DETAIL_FONT_SIZE, color = ERROR, maxWidth = ERROR_WIDTH }),
               })
             )
           end
-        elseif failures[network.ssid] then
+        elseif menu.failures[network.ssid] then
           layout.next(
             DETAIL_ROW_HEIGHT,
             ui.row({ height = DETAIL_ROW_HEIGHT, paddingH = INSET, align = "center" }, {
               gap(NAME_OFFSET, true),
-              label(failures[network.ssid], { fontSize = DETAIL_FONT_SIZE, color = ERROR, maxWidth = ERROR_WIDTH }),
+              label(
+                menu.failures[network.ssid],
+                { fontSize = DETAIL_FONT_SIZE, color = ERROR, maxWidth = ERROR_WIDTH }
+              ),
             })
           )
         end
@@ -774,18 +842,22 @@ function render()
     layout.next(
       ROW_HEIGHT,
       sectionHeader("Other Networks", {
-        trailing = ui.glyph({ name = showOther and "chevron-down" or "chevron-right", size = 14, color = SECONDARY }),
+        trailing = ui.glyph({
+          name = menu.showOther and "chevron-down" or "chevron-right",
+          size = 14,
+          color = SECONDARY,
+        }),
         onClick = function()
-          showOther = not showOther
-          if showOther then
-            refreshNetworks(true)
+          menu.showOther = not menu.showOther
+          if menu.showOther then
+            network.scan(true)
           end
           render()
         end,
       }),
       SEPARATOR_GAP
     )
-    if showOther then
+    if menu.showOther then
       if #other == 0 then
         layout.next(
           ROW_HEIGHT,
@@ -816,32 +888,31 @@ function render()
 end
 
 function onOpen()
-  open = true
-  hovered = nil
-  showOther = false
-  prompt = nil
-  failures = {}
-  counters = nil
-  state.rates = nil
-  tick = 0
+  menu.open = true
+  menu.hovered = nil
+  menu.showOther = false
+  menu.prompt = nil
+  menu.failures = {}
+  network.resetTraffic()
+  menu.tick = 0
   panel.setWantsSecondTicks(true)
   render()
-  refreshAll(false)
+  network.refresh(false)
   -- A rescan takes a few seconds, so the cached list shows first.
-  refreshNetworks(true)
+  network.scan(true)
 end
 
 function onClose()
-  open = false
+  menu.open = false
 end
 
 function update()
-  if not open then
+  if not menu.open then
     return
   end
-  tick += 1
-  sampleTraffic()
-  if tick % 5 == 0 then
-    refreshAll(false)
+  menu.tick += 1
+  network.sample()
+  if menu.tick % 5 == 0 then
+    network.refresh(false)
   end
 end
