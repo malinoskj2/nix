@@ -23,6 +23,7 @@ let
     hyprbars = "${pkgs.hyprlandPlugins.hyprbars}/lib/libhyprbars.so";
     hyprfocus = "${pkgs.hyprlandPlugins.hyprfocus}/lib/libhyprfocus.so";
     hyprglass = "${pkgs.hyprglass}/lib/libhyprglass.so";
+    hyprrecede = "${pkgs.hyprrecede}/lib/libhyprrecede.so";
     hyprsheet = "${pkgs.hyprsheet}/lib/libhyprsheet.so";
     monitors = {
       main = "DP-2";

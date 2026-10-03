@@ -55,13 +55,10 @@ hl.layer_rule({
   animation = "popin 80%",
 })
 hl.layer_rule({ match = { namespace = "^j2bar-osd$" }, blur = true, ignore_alpha = 0.5 })
--- The lower launcher layer blurs only the wallpaper; the upper layer's glass samples that
--- backdrop, keeping windows out of both the frosted field and the refractive container.
+-- The lower launcher layer only draws the scrim and fades it itself. hyprrecede, below, tilts and
+-- blurs what lies behind it, windows included, and the upper layer's glass samples that.
 hl.layer_rule({
   match = { namespace = "^j2bar-launcher-backdrop$" },
-  blur = true,
-  xray = true,
-  ignore_alpha = 0,
   no_anim = true,
 })
 hl.layer_rule({
@@ -204,3 +201,33 @@ glass.layer("j2bar-notification", {
   rim_light = 2.6,
   rim_shadow = 2.7,
 })
+
+-- While j2bar's launcher, a picker or its polkit prompt is open, hyprrecede leans the windows on
+-- that monitor back, shades them from the top and blurs everything below the shell's layers, the
+-- way Liquid34 pushes the window behind a modal back. The launcher's backdrop layer is how it
+-- knows: j2bar maps it with the launcher or a picker and unmaps it the moment either is dismissed,
+-- so the windows spring back while the panel is still leaving.
+hl.plugin.load(nix.hyprrecede)
+
+hl.config({
+  plugin = {
+    hyprrecede = {
+      namespace = "^j2bar-(launcher-backdrop|polkit)$",
+      angle = 16,
+      scale = 0.86,
+      perspective = 1400,
+      shade = 0.62,
+      blur = 1,
+    },
+  },
+})
+
+-- Liquid34's transitions: the tilt takes 620 ms on its `--ease-settle`, the shade 500 ms on CSS's
+-- `ease`, and the backdrop follows the launcher's spring through a 240 ms transition, which this
+-- overdamped spring matches.
+hl.curve("settle", { type = "bezier", points = { { 0.3, 1.25 }, { 0.4, 1 } } })
+hl.curve("ease", { type = "bezier", points = { { 0.25, 0.1 }, { 0.25, 1 } } })
+hl.curve("backdrop", { type = "spring", stiffness = 40, dampening = 15, mass = 1 })
+hl.animation({ leaf = "hyprrecedeTilt", enabled = true, speed = 6.2, bezier = "settle" })
+hl.animation({ leaf = "hyprrecedeShade", enabled = true, speed = 5, bezier = "ease" })
+hl.animation({ leaf = "hyprrecedeBlur", enabled = true, speed = 7, spring = "backdrop" })
