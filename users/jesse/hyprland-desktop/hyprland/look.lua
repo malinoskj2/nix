@@ -222,11 +222,10 @@ hl.config({
 })
 
 -- Liquid34's transitions: the tilt takes 620 ms on its `--ease-settle`, the shade 500 ms on CSS's
--- `ease`, and the backdrop follows the launcher's spring through a 240 ms transition, which this
--- overdamped spring matches.
+-- `ease`. The blur finishes in 240 ms, during the launcher reveal, without a spring's settling
+-- tail after the launcher is already fully visible.
 hl.curve("settle", { type = "bezier", points = { { 0.3, 1.25 }, { 0.4, 1 } } })
 hl.curve("ease", { type = "bezier", points = { { 0.25, 0.1 }, { 0.25, 1 } } })
-hl.curve("backdrop", { type = "spring", stiffness = 40, dampening = 15, mass = 1 })
 hl.animation({ leaf = "hyprrecedeTilt", enabled = true, speed = 6.2, bezier = "settle" })
 hl.animation({ leaf = "hyprrecedeShade", enabled = true, speed = 5, bezier = "ease" })
-hl.animation({ leaf = "hyprrecedeBlur", enabled = true, speed = 7, spring = "backdrop" })
+hl.animation({ leaf = "hyprrecedeBlur", enabled = true, speed = 2.4, bezier = "ease" })
