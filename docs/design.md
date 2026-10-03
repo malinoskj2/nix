@@ -1,6 +1,6 @@
 # Design
 
-The `home` desktop (Hyprland, Noctalia and the GTK file chooser) follows one
+The `home` desktop (Hyprland, j2bar and the GTK file chooser) follows one
 design language: macOS 27's layout and type, drawn in Catppuccin Mocha on
 glass, with a few motifs of its own. This file is the reference for it. Change
 it when the language changes, and check new work against it.
@@ -30,8 +30,7 @@ with the glass opacity levels:
 | `root` | 80% | A window's own background |
 | `solid` | 90% | Text areas |
 
-Noctalia plugins take the palette through `nix.palette` and a
-`color(name, alpha)` helper, with these roles:
+Shell components use the Catppuccin palette with these roles:
 
 | Role | Color | Where |
 |---|---|---|
@@ -72,12 +71,13 @@ imitate (the calendar's month is "September", bold, like "Network").
 
 ## Glass
 
-- **Hyprland blur** is strong (3 passes, vibrancy 0.2), because Noctalia's glass
+- **Hyprland blur** is strong (3 passes, vibrancy 0.2), because the shell's glass
   relies on what shows through it.
-- **hyprglass** applies macOS 27's Clear widget glass to Noctalia layers:
+- **hyprglass** applies macOS 27's Clear widget glass to j2bar layers:
   almost no refraction, a directional rim, and a gleam in the lambda colors
   across a floating panel's top rim once when it opens. Its corner radii must
-  match Noctalia's: 12 for panels, 20 for notification banners.
+  match the surface: 12 for the on-screen display and polkit prompt,
+  20 for notification banners and 36 for the launcher container.
 - **The bar** is 8% glass with a 30% white 1px outline and no shadow.
 - **Notification banners** are 55% glass, with no outline or app name.
 - **The file chooser** draws its own frame: radius 20, a crust `chrome` body
@@ -122,10 +122,8 @@ menu's do. In both:
 
 - Hover highlights have radius 7.
 - A separator is a 1 px line 5.5 px from the rows on either side.
-- Noctalia snaps layout to whole px, so rows are placed from their centers
-  (each plugin's `stack` or `track`), never by accumulating heights.
-- A panel that changes height calls `panel.setSize`, so it maps at its final
-  size and grows in place.
+- Place rows from their centers to avoid accumulating layout rounding.
+- A panel maps at its final size and grows in place when its content changes.
 
 The calendar is a widget tile, not a menu, but takes the same type, colors and
 hem (scaled to 7 px stops) and the same 5 px padding and hem spacing.
@@ -144,8 +142,7 @@ values in text, and it ends with the hem, 12 px below the footer.
   the top to rosewater at the bottom (the hem reversed). It sits in the file
   chooser's sidebar.
 - **Striped text.** Status values filled with the sunset cloud's stripes, drawn
-  as SVG because Noctalia labels take one flat color. SVG images are cached by
-  path, so each file name carries a hash of its content.
+  within the shell's text rendering.
 - **The status dot.** A 9 px ● before striped text: peach when active, overlay1
   when muted or off.
 - **The lambda colors.** Peach, yellow, teal, lavender, mauve and pink, in that
@@ -164,7 +161,7 @@ Hyprland springs, defined in `hyprland.lua`:
 | `glide` (critically damped) | Anything closing, which never bounces |
 | `land` (just under critical, stopped on arrival) | The file chooser sheet opening and closing |
 
-- Floating panels scale in with "popin 80%", with Noctalia's own reveal off.
+- The polkit prompt scales in with "popin 80%"; the launcher animates itself.
 - Notification banners slide in and out across the screen edge.
 - The file chooser grows its parent window into itself and back (hyprsheet),
   without resizing either window.
@@ -177,11 +174,8 @@ Hyprland springs, defined in `hyprland.lua`:
 - The bar is on DP-2 only, 32 px. Left to right: the workspace pills, the
   active window title in the center, then media, volume and network (10 px
   apart), a `✦` separator and the clock.
-- The control button, a snowflake glass pill, isn't a bar widget. It's the
-  `jesse/control-button` Noctalia desktop widget, placed over the bar's left
-  end, and the bar's glass matches it.
-- Bar icons have no tooltips when their menu shows the same information
-  (`show_tooltip = false`, from a Noctalia patch).
+- The shell owns the snowflake control button and its system menu.
+- Bar icons have no tooltips when their menu shows the same information.
 - Windows have radius 10 and no border; hyprfocus's dip marks focus. Hyprbars
   is only a thin drag strip on Alacritty and mpv.
 - Icons are Catppuccin Mocha Papirus, built two ways. The GTK file chooser
@@ -198,5 +192,5 @@ Before calling a new surface done, check that it:
 - uses the color roles above, peach as the accent, with no new colors;
 - uses SF Pro Text in the menu style;
 - ends a menu with the hem and keeps settings behind the header's value;
-- matches its hyprglass radius to its Noctalia radius;
+- matches its hyprglass radius to its surface radius;
 - has been checked in the running desktop at 1x, not only in a mockup.

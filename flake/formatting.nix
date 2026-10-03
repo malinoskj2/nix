@@ -27,9 +27,6 @@
         # Indents switch cases; programs.shfmt has no option for it.
         shfmt.options = [ "-ci" ];
 
-        # Noctalia plugin scripts are Luau, which StyLua parses alongside Lua.
-        stylua.includes = [ "*.luau" ];
-
         # Lint before formatting so fixes are formatted in the same run.
         deadnix.priority = 1;
         statix.priority = 2;
