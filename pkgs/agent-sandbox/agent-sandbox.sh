@@ -20,7 +20,7 @@ fi
 
 data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
 sandbox_home=$data/home
-shared=("$HOME/projects" "$HOME/nix" "$HOME/orca/workspaces" "$HOME/.cache/img2char3d")
+shared=("$HOME/projects" "$HOME/nix" "$HOME/orca/workspaces" "$HOME/.cache/img2char3d" "$HOME/.local/share/Steam/steamapps/common")
 screenshots=/tmp/screenshot
 media=/tmp/agent-media
 image_ref="agent-sandbox:${AGENT_SANDBOX_TAG#hash-}"
