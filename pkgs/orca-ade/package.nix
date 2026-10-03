@@ -11,6 +11,7 @@
   gtk3,
   python3,
   unstable,
+  appearanceSettings ? { },
 }:
 
 let
@@ -51,6 +52,21 @@ stdenv.mkDerivation (finalAttrs: {
 
   # The glibc floor guards Ubuntu 20.04 users of the upstream AppImage.
   postPatch = ''
+    # Apply declarative appearance to new and existing profiles at startup,
+    # without replacing Orca's mutable workspace/session state.
+    cat > src/shared/nix-appearance-settings.ts <<'EOF'
+    import type { GlobalSettings } from './global-settings-types'
+    export const nixAppearanceSettings = ${builtins.toJSON appearanceSettings} satisfies Partial<GlobalSettings>
+    EOF
+    sed -i "1i import { nixAppearanceSettings } from './nix-appearance-settings'" \
+      src/shared/default-global-settings.ts
+    substituteInPlace src/shared/default-global-settings.ts \
+      --replace-fail 'voice: args.voice' 'voice: args.voice, ...nixAppearanceSettings'
+    sed -i "1i import { nixAppearanceSettings } from '../../../shared/nix-appearance-settings'" \
+      src/main/persistence/loading-store/normalize-loaded-global-settings.ts
+    substituteInPlace src/main/persistence/loading-store/normalize-loaded-global-settings.ts \
+      --replace-fail '...stripRetiredGlobalSettings(parsed.settings),' \
+        '...stripRetiredGlobalSettings(parsed.settings), ...nixAppearanceSettings,'
     substituteInPlace config/electron-builder.config.cjs \
       --replace-fail "const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')" \
         "const verifyLinuxGlibcFloor = () => {}"

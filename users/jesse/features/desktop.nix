@@ -17,7 +17,15 @@
     imagemagick
     ktx-tools
     mediainfo
-    orca-ade
+    (orca-ade.override {
+      appearanceSettings = {
+        theme = "dark";
+        appFontFamily = "Geist";
+        editorFontFamily = "FiraCode Nerd Font Mono";
+        terminalFontFamily = "FiraCode Nerd Font Mono";
+        terminalThemeDark = "Catppuccin Mocha";
+      };
+    })
     pwvucontrol
     vulkan-tools
     wl-clipboard
