@@ -190,6 +190,8 @@ static std::vector<SP<SRecede>>         recedes;
 static std::vector<CHyprSignalListener> listeners;
 
 static SRecede*                         recedeFor(const PHLMONITOR& monitor) {
+    if (!monitor)
+        return nullptr;
     const auto IT = std::ranges::find_if(recedes, [&](const auto& r) { return r->monitor.get() == monitor.get(); });
     return IT == recedes.end() ? nullptr : IT->get();
 }
@@ -345,6 +347,17 @@ class CRecedeTransformer : public Render::IWindowTransformer {
             return in;
 
         const auto* RECEDE = recedeFor(MONITOR);
+        // The backdrop blurs the composed desktop once. Reapplying each translucent window's
+        // own live blur after tilting gives neighbouring terminals separate blur boundaries.
+        // Hyprland samples the matte's red channel, so black suppresses that extra blur.
+        if (!IS_FRAME && RECEDE && RECEDE->blur->value() > 1e-4F && configValues.blur->value() > 0.F) {
+            const auto GUARD = g_pHyprRenderer->bindTempFB(in);
+            Render::GL::g_pHyprOpenGL->setCapStatus(GL_SCISSOR_TEST, false);
+            glClearColor(0.F, 0.F, 0.F, 1.F);
+            glClear(GL_COLOR_BUFFER_BIT);
+            return in;
+        }
+
         const auto  PROJ   = RECEDE ? projectionFor(*RECEDE) : std::nullopt;
         const float SHADE  = RECEDE && IS_FRAME ? std::clamp(RECEDE->shade->value(), 0.F, 1.F) * configValues.shade->value() : 0.F;
         if (!PROJ && SHADE <= 0.F)
@@ -425,7 +438,8 @@ struct SAttached {
 static std::vector<SAttached> attached;
 
 static void                   attach(const PHLWINDOW& w) {
-    if (!Desktop::View::validMapped(w) || std::ranges::any_of(attached, [&](const auto& a) { return a.window.get() == w.get(); }))
+    if (!Desktop::View::validMapped(w) || !recedeFor(w->m_monitor.lock()) ||
+        std::ranges::any_of(attached, [&](const auto& a) { return a.window.get() == w.get(); }))
         return;
 
     auto transformer = makeUnique<CRecedeTransformer>(PHLWINDOWREF{w});
@@ -433,9 +447,22 @@ static void                   attach(const PHLWINDOW& w) {
     w->m_transformers.emplace_back(std::move(transformer));
 }
 
-// Every window gets a transformer while any monitor recedes, and draws itself untouched on the
-// others: a window can span monitors, slide in with a workspace or move over mid-way.
-static void attachAll() {
+// Even a no-op transformer changes Hyprland's rendering path, including output orientation.
+// Only windows belonging to a receding monitor may use it. Reconcile before building a render
+// pass so windows moved between outputs and newly opened windows follow their current monitor.
+static void syncAttachments() {
+    std::erase_if(attached, [](const auto& a) {
+        const auto WINDOW = a.window.lock();
+        if (!WINDOW)
+            return true;
+        const auto MONITOR = WINDOW->m_monitor.lock();
+        if (Desktop::View::validMapped(WINDOW) && recedeFor(MONITOR))
+            return false;
+        std::erase_if(WINDOW->m_transformers, [&a](const auto& t) { return t.get() == a.transformer; });
+        if (MONITOR)
+            g_pHyprRenderer->damageMonitor(MONITOR);
+        return true;
+    });
     for (const auto& w : Desktop::windowState()->windows()) {
         attach(w);
     }
@@ -458,8 +485,7 @@ static void removeRecede(SRecede* recede) {
     recede->damage();
     std::erase_if(recedes, [recede](const auto& r) { return r.get() == recede; });
 
-    if (recedes.empty())
-        detachAll();
+    syncAttachments();
 }
 
 // Animation callbacks can't free the variables that run them, so this waits for the event loop.
@@ -501,7 +527,7 @@ static void onLayerOpened(PHLLS ls) {
         recede = createRecede(MONITOR);
 
     recede->layers.emplace_back(ls);
-    attachAll();
+    syncAttachments();
     recede->retarget(1.F);
 
     // An end callback set on a variable at rest runs straight away, so they go on once moving.
@@ -544,6 +570,8 @@ static void onRenderStage(eRenderStage stage) {
 // falls on a window also covers where that part of it is drawn. Damage outside the box doesn't
 // reach the window's drawing, and while the windows move the whole monitor is damaged anyway.
 static void onRenderPre(PHLMONITOR monitor) {
+    if (!recedes.empty())
+        syncAttachments();
     auto* recede = recedeFor(monitor);
     if (!recede || recede->animating())
         return;
