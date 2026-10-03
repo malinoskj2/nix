@@ -47,12 +47,13 @@ hl.layer_rule({
   match = { namespace = "^j2bar-(screen-corner|osd|notification|idle-fade)$" },
   no_anim = true,
 })
--- j2bar's polkit prompt is a panel in the middle of the screen.
+-- The panels and polkit prompt animate their capsules themselves.
+hl.layer_rule({ match = { namespace = "^noctalia-panel$" }, no_anim = true })
 hl.layer_rule({
   match = { namespace = "^j2bar-polkit$" },
   blur = true,
   ignore_alpha = 0.5,
-  animation = "popin 80%",
+  no_anim = true,
 })
 hl.layer_rule({ match = { namespace = "^j2bar-osd$" }, blur = true, ignore_alpha = 0.5 })
 -- The lower launcher layer only draws the scrim and fades it itself. hyprrecede, below, tilts and
@@ -179,24 +180,22 @@ glass.layer("j2bar-launcher", {
   gleam_rest = 0.3,
 })
 
--- `corner_radius` must match the radius of j2bar's on-screen display and of its polkit prompt.
-for _, namespace in ipairs({ "j2bar-osd", "j2bar-polkit" }) do
+-- Match the radius of each capsule j2bar draws in its blur region.
+for _, namespace in ipairs({ "noctalia-panel", "j2bar-polkit", "j2bar-notification" }) do
   glass.layer(namespace, {
     preset = "panel",
     mask_mode = "region",
-    corner_radius = 12,
+    corner_radius = 18,
     rounding_power = 2.0,
     rim_light = 2.6,
     rim_shadow = 2.7,
   })
 end
 
--- Each of j2bar's banners is its own piece of the blur region.
--- `corner_radius` must match j2bar's banner radius.
-glass.layer("j2bar-notification", {
+glass.layer("j2bar-osd", {
   preset = "panel",
   mask_mode = "region",
-  corner_radius = 20,
+  corner_radius = 22,
   rounding_power = 2.0,
   rim_light = 2.6,
   rim_shadow = 2.7,
