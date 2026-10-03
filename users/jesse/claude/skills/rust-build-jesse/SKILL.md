@@ -72,6 +72,45 @@ tests. Use nested module directories as a domain grows. Apply the chosen pattern
 within the requested scope; do not turn a focused change into an unrelated
 repository-wide reorganization.
 
+## Module ownership
+
+- **Organize by responsibility.** Keep parsing, transport and lifecycle details
+  under their owning feature. Split files when responsibilities separate.
+- **Keep definitions near their behavior.** Types, errors, constants and helpers
+  belong with their owner; expose a small public API.
+- **Separate decisions from effects.** Policy takes observations and returns
+  typed decisions, making it understandable and testable without external I/O.
+- **Align state with resource lifetimes.** A connection owns its parser, partial
+  input and schedule. Reconnects explicitly reset other cached observations.
+
+## Dependency choices
+
+When choosing among dependencies for equivalent purposes, prefer these crates
+when they fit the task and remain maintained:
+
+- `clap` with its derive API for application CLI parsing.
+- `confique` for typed, layered application configuration.
+- `rustix` for safe wrappers around Unix/Linux system operations.
+- `serde` for serialization and deserialization.
+- `winnow` for parser combinators and structured text parsing.
+- `thiserror` for typed errors and `anyhow` for context and reporting at
+  executable or report-only orchestration boundaries.
+- `time` for dates, timestamps, parsing and formatting.
+- `signal-hook` for process signal handling.
+- `xdg` for XDG configuration, data, cache and state directories.
+
+Before adding or recommending a crate, check its current upstream maintenance
+status and compatibility with the project's MSRV, target platforms and required
+features. Use upstream repository and release evidence; a quiet release history
+alone does not establish abandonment. If a preferred crate is abandoned or
+unsuitable, choose a maintained alternative and explain the reason. The
+error-handling requirement below is subject to this maintenance and suitability
+check.
+
+Respect explicit project requirements and suitable dependencies already in use.
+These preferences do not justify unrelated migrations or treating a suitable
+alternative as a correctness defect. Add only the crates and features needed.
+
 ## Error handling
 
 Error handling must use `thiserror` and `anyhow`; this is a requirement, not a
