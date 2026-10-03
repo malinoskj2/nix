@@ -111,14 +111,24 @@ def main():
     server.listen(64)
     server.setblocking(False)
     selector.register(server, selectors.EVENT_READ, "server")
+    wake_read, wake_write = socket.socketpair()
+    wake_read.setblocking(False)
+    wake_write.setblocking(False)
+    selector.register(wake_read, selectors.EVENT_READ, "signal")
     clients = {}
     events = None
     signature = None
     buffered = b""
     retry = 0
+    stopping = False
 
     def stop(_signum, _frame):
-        raise InterruptedError
+        nonlocal stopping
+        stopping = True
+        try:
+            wake_write.send(b"\0")
+        except OSError:
+            pass
 
     def disconnect_events():
         nonlocal events, signature, retry, buffered
@@ -141,7 +151,7 @@ def main():
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     try:
-        while True:
+        while not stopping:
             if events is None and time.monotonic() >= retry:
                 try:
                     signature = physical_signature()
@@ -167,7 +177,10 @@ def main():
             if pending:
                 remaining = max(0, min(pending) - time.monotonic())
                 timeout = remaining if timeout is None else min(timeout, remaining)
-            for key, _ in selector.select(timeout):
+            ready = selector.select(timeout)
+            if stopping:
+                break
+            for key, _ in ready:
                 if key.data == "server":
                     connection, _ = server.accept()
                     connection.setblocking(False)
@@ -187,7 +200,7 @@ def main():
                     except (OSError, ValueError):
                         remove_client(key.fileobj)
                         changed = True
-                else:
+                elif key.data == "hypr":
                     try:
                         data = events.recv(65536)
                         if not data:
@@ -208,14 +221,14 @@ def main():
                     reconcile(signature, clients)
                 except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
                     disconnect_events()
-    except InterruptedError:
-        pass
     finally:
         for connection in list(clients):
             remove_client(connection)
         if events is not None:
             events.close()
         server.close()
+        wake_read.close()
+        wake_write.close()
         selector.close()
         path.unlink(missing_ok=True)
     return 0

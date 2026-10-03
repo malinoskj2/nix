@@ -110,8 +110,8 @@ class ControllerTests(unittest.TestCase):
                 connection.close()
                 events.close()
                 self.assertEqual(client.recv(1), b"F")
-                daemon.kill()
-                daemon.wait(timeout=3)
+                daemon.terminate()
+                self.assertEqual(daemon.wait(timeout=3), 0)
                 self.assertEqual(client.recv(1), b"")
             finally:
                 if connection is not None:
