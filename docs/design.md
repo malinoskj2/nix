@@ -165,6 +165,10 @@ Hyprland springs, defined in `hyprland.lua`:
 - Notification banners slide in and out across the screen edge.
 - The file chooser grows its parent window into itself and back (hyprsheet),
   without resizing either window.
+- While the launcher, a picker or the polkit prompt is open, the windows behind
+  it lean back 16° about the bottom of the screen, shrink to 86%, darken from
+  the top and blur with the wallpaper, and spring back as it closes
+  (hyprrecede).
 - hyprfocus shrinks a window to 99% on focus. An open file chooser dips the same
   way through hyprsheet, which scales its frame rather than resizing it.
 - Shimmer and gleam effects play on hover or on open, never continuously.
