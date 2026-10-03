@@ -60,8 +60,10 @@ stdenv.mkDerivation (finalAttrs: {
     EOF
     sed -i "1i import { nixAppearanceSettings } from './nix-appearance-settings'" \
       src/shared/default-global-settings.ts
-    substituteInPlace src/shared/default-global-settings.ts \
-      --replace-fail 'voice: args.voice' 'voice: args.voice, ...nixAppearanceSettings'
+    # Keep the declarative overrides after the defaults without TS2783's duplicate-key error
+    # for overrides also named explicitly in the defaults object.
+    sed -i 's/^  return {$/  return Object.assign<GlobalSettings, Partial<GlobalSettings>>({/; s/^  }$/  }, nixAppearanceSettings)/' \
+      src/shared/default-global-settings.ts
     sed -i "1i import { nixAppearanceSettings } from '../../../shared/nix-appearance-settings'" \
       src/main/persistence/loading-store/normalize-loaded-global-settings.ts
     substituteInPlace src/main/persistence/loading-store/normalize-loaded-global-settings.ts \
