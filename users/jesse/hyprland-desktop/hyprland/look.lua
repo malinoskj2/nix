@@ -3,21 +3,9 @@
 -- This gray stays outside the palette because Catppuccin's neutrals carry a blue tint.
 local SHADOW = "rgba(00000059)"
 
--- These Noctalia layer namespaces omit the `noctalia-` prefix, which `noctalia_layers` adds.
-local GLASS_LAYERS = { "bar-.+" }
-local TRANSLUCENT_LAYERS = { "dock", "osd", "window-switcher" }
-
 -- ("rrggbb", "aa") -> "rgba(rrggbbaa)"
 local function rgba(color, alpha)
   return "rgba(" .. color .. alpha .. ")"
-end
-
-local function noctalia_layers(...)
-  local names = {}
-  for _, group in ipairs({ ... }) do
-    table.move(group, 1, #group, #names + 1, names)
-  end
-  return "^noctalia-(" .. table.concat(names, "|") .. ")$"
 end
 
 hl.config({
@@ -25,7 +13,7 @@ hl.config({
     enable_hyprcursor = false,
   },
   decoration = {
-    -- Blur is strong and vibrant because Noctalia's glass surfaces rely on what shows through them.
+    -- Blur is strong and vibrant because the shell's glass surfaces rely on what shows through them.
     blur = {
       noise = 0.02,
       passes = 3,
@@ -53,25 +41,6 @@ hl.config({
   },
 })
 
--- Noctalia draws glass, so its layers need blur; `ignore_alpha` keeps it off transparent margins.
-hl.layer_rule({
-  match = { namespace = noctalia_layers(GLASS_LAYERS, TRANSLUCENT_LAYERS) },
-  blur = true,
-  blur_popups = true,
-  no_anim = true,
-})
-
-hl.layer_rule({ match = { namespace = noctalia_layers(TRANSLUCENT_LAYERS) }, ignore_alpha = 0.5 })
-hl.layer_rule({ match = { namespace = noctalia_layers(GLASS_LAYERS) }, ignore_alpha = 0.02 })
-hl.layer_rule({ match = { namespace = noctalia_layers(GLASS_LAYERS) }, xray = true })
-
--- Floating panels scale in and out like windows; attached panels grow out of the bar through
--- Noctalia's own reveal instead.
-hl.layer_rule({ match = { namespace = noctalia_layers({ "panel" }) }, animation = "popin 80%" })
-hl.layer_rule({ match = { namespace = noctalia_layers({ "attached-panel" }) }, no_anim = true })
-
--- One layer holds every notification banner, so each slides in and out through Noctalia instead.
-hl.layer_rule({ match = { namespace = noctalia_layers({ "notification" }) }, no_anim = true })
 -- j2bar's screen corners are there from the start and never move, and its on-screen display,
 -- its notification banners and the fade before an idle action move by themselves.
 hl.layer_rule({
@@ -101,12 +70,6 @@ hl.layer_rule({
   xray = false,
   ignore_alpha = 0.05,
   no_anim = true,
-})
-
-hl.layer_rule({
-  match = { namespace = "^noctalia-desktop-widget-" .. nix.control_button_id .. ":.+$" },
-  blur = true,
-  ignore_alpha = 0.05,
 })
 
 -- Springs keep their velocity when retargeted mid-animation. Overshoot is 14% for `pop` and 8%
@@ -170,7 +133,7 @@ hl.config({
   },
 })
 
--- hyprglass draws Noctalia's panels as refractive glass in the compositor, the only place that can
+-- hyprglass draws j2bar's panels as refractive glass in the compositor, the only place that can
 -- see what lies behind a layer. Windows stay as they are.
 hl.plugin.load(nix.hyprglass)
 
@@ -193,31 +156,6 @@ glass.preset("panel", {
   specular_strength = 0.0,
   tint_color = 0x00000000,
   vibrancy = 0.0,
-})
-
--- Every floating panel shares this namespace, so these settings apply to all of them; the blur
--- region Noctalia sends marks where each one is. `corner_radius` must match Noctalia's panel radius.
-glass.layer("noctalia-panel", {
-  preset = "panel",
-  mask_mode = "region",
-  corner_radius = 12,
-  rounding_power = 2.0,
-  rim_light = 2.6,
-  rim_shadow = 2.7,
-  gleam_colors = {
-    nix.palette.peach,
-    nix.palette.yellow,
-    nix.palette.teal,
-    nix.palette.lavender,
-    nix.palette.mauve,
-    nix.palette.pink,
-  },
-  gleam_strength = 1.0,
-  gleam_width = 1.2,
-  gleam_length = 0.6,
-  gleam_duration = 1.2,
-  gleam_delay = 0.1,
-  gleam_rest = 0.3,
 })
 
 -- The launcher sends two separate glass regions: the container and its search capsule. The
@@ -244,17 +182,6 @@ glass.layer("j2bar-launcher", {
   gleam_rest = 0.3,
 })
 
--- Each notification banner is its own piece of the blur region, so each gets its own glass. Banners
--- come and go too often for a gleam. `corner_radius` must match Noctalia's banner radius.
-glass.layer("noctalia-notification", {
-  preset = "panel",
-  mask_mode = "region",
-  corner_radius = 20,
-  rounding_power = 2.0,
-  rim_light = 2.6,
-  rim_shadow = 2.7,
-})
-
 -- `corner_radius` must match the radius of j2bar's on-screen display and of its polkit prompt.
 for _, namespace in ipairs({ "j2bar-osd", "j2bar-polkit" }) do
   glass.layer(namespace, {
@@ -267,7 +194,7 @@ for _, namespace in ipairs({ "j2bar-osd", "j2bar-polkit" }) do
   })
 end
 
--- Each of j2bar's banners is its own piece of the blur region, as Noctalia's are.
+-- Each of j2bar's banners is its own piece of the blur region.
 -- `corner_radius` must match j2bar's banner radius.
 glass.layer("j2bar-notification", {
   preset = "panel",
@@ -277,6 +204,3 @@ glass.layer("j2bar-notification", {
   rim_light = 2.6,
   rim_shadow = 2.7,
 })
-
--- Attached panels flare into the bar, so their glass follows the region alone, without a rim.
-glass.layer("noctalia-attached-panel", { preset = "panel", mask_mode = "region" })

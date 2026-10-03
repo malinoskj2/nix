@@ -9,7 +9,7 @@ let
 in
 {
   options.wallpaper.launcher.enable = lib.mkEnableOption ''
-    playing the video wallpapers from systemd units. Noctalia's mpvpaper plugin plays them otherwise
+    playing the video wallpapers from systemd units
   '';
 
   config = {
@@ -17,13 +17,6 @@ in
       pkgs.wallpaper-randomize
       pkgs.wallpaper-select
     ];
-
-    # Noctalia's plugin keeps the assignments and mpv's sockets in its own directory, where the
-    # wallpaper scripts don't look.
-    home.file = lib.mkIf (!cfg.enable) {
-      ".local/state/wallpaper".source =
-        config.lib.file.mkOutOfStoreSymlink "${config.xdg.stateHome}/noctalia/mpvpaper";
-    };
 
     systemd.user.services = {
       wallpaper-autopause = {
