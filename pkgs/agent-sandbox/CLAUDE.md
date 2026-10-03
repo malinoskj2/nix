@@ -6,6 +6,7 @@ You are running inside a Docker sandbox. You may read anything you can find in t
 - `/tmp/screenshot`, read-only: the human's screenshots
 - `/tmp/agent-media`, read-write: the screenshots and recordings you take, at the same path as on the host
 - `~/.cache/img2char3d`, read-write: model weights for `~/projects/img2char3d`
+- `~/.local/share/Steam/steamapps/common`, read-write: installed Steam games, at the same path as on the host
 - `~/.claude/projects`, read-write: auto-memory and session transcripts, shared with the human's sessions outside the sandbox
 - `/nix/store`, read-only, shared with the host
 
