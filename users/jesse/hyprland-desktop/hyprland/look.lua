@@ -189,6 +189,7 @@ for _, namespace in ipairs({ "noctalia-panel", "j2bar-polkit", "j2bar-notificati
     rounding_power = 2.0,
     rim_light = 2.6,
     rim_shadow = 2.7,
+    live_resample = namespace == "noctalia-panel",
   })
 end
 
