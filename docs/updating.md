@@ -42,10 +42,12 @@ set, patched by the `pins` overlay in
 set: [`pkgs/hyprglass/`](../pkgs/hyprglass) builds one hyprglass release
 against the pinned Hyprland and patches its layer glass.
 [`pkgs/hyprsheet/`](../pkgs/hyprsheet) is a local plugin built against the
-pinned Hyprland that draws a file chooser's parent scaled into the chooser.
-Four assertions check the Hyprland version: `supportedHyprlandVersions` in that
-overlay, in `pkgs/hyprglass/package.nix` and in `pkgs/hyprsheet/package.nix`,
-and `supportedHyprland` in
+pinned Hyprland that draws a file chooser's parent scaled into the chooser, and
+[`pkgs/hyprrecede/`](../pkgs/hyprrecede) is one that tilts and blurs the
+windows behind j2bar's launcher.
+Five assertions check the Hyprland version: `supportedHyprlandVersions` in that
+overlay, in `pkgs/hyprglass/package.nix`, in `pkgs/hyprsheet/package.nix` and
+in `pkgs/hyprrecede/package.nix`, and `supportedHyprland` in
 [`users/jesse/hyprland-desktop/hyprland/default.nix`](../users/jesse/hyprland-desktop/hyprland/default.nix).
 
 To upgrade:
@@ -97,16 +99,28 @@ To upgrade:
    without its buttons changing size. Moving the pointer onto it shouldn't
    dip it. Do the same from Alacritty: its title bar should shrink
    with it, not stay behind until the chooser has opened.
-5. Rebase
+5. Read [`pkgs/hyprrecede/main.cpp`](../pkgs/hyprrecede/main.cpp) against the
+   new source. It draws windows through Hyprland's private window
+   transformers with its own shader, relies on Hyprland passing a transformed
+   window's blur matte through the same transformers right after its frame,
+   adds a blur rect at the `RENDER_POST_WINDOWS` stage, and widens the
+   monitor's private damage ring in `render.pre`. Open j2bar's launcher over
+   a browser and an Alacritty: both should lean back about the bottom centre
+   of the screen, darken from the top and blur together with the wallpaper,
+   and spring back as soon as Escape is pressed. While it's open, scroll the
+   browser: the page should redraw where it is drawn, tilted, with no
+   untilted strips left behind. Do the same over a fullscreen window and with
+   a window on the other monitor, which should stay as it is.
+6. Rebase
    [`aquamarine-nested.patch`](../pkgs/agent-sandbox/aquamarine-nested.patch)
    onto that commit's Aquamarine, then start a sandbox and check that
    `hyprctl monitors` inside it lists `NESTED-1`.
-6. Confirm that commit's hyprbars still supports what
+7. Confirm that commit's hyprbars still supports what
    [`hyprland.lua`](../users/jesse/hyprland-desktop/hyprland/hyprland.lua)
    uses: `bar_part_of_window`, `bar_precedence_over_border`, `bar_title_enabled`,
    `on_double_click`, and the `hyprbars:no_bar` window rule.
-7. Update all version assertions, including the desktop tearing patch in `hosts/home/gaming.nix`.
-8. Build `home`.
+8. Update all version assertions, including the desktop tearing patch in `hosts/home/gaming.nix`.
+9. Build `home`.
 
 ### j2bar
 
