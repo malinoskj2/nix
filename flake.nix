@@ -113,6 +113,7 @@
           "hy3dgen"
           "hyprglass"
           "hyprland-quit"
+          "hyprrecede"
           "hyprsheet"
           "markdown-to-pdf"
           "orca-ade"
