@@ -5,6 +5,7 @@ In a local Orca worktree, launch an agent in an existing named sandbox with:
 ```sh
 agent-sandbox-exec sandbox-skintrader codex
 agent-sandbox-exec sandbox-skintrader claude
+agent-sandbox-exec sandbox-skintrader zcode
 ```
 
 The first argument is the suffix of the `agent-sandbox@<suffix>.service` user

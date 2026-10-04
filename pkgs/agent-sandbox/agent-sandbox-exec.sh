@@ -4,7 +4,7 @@ set -euo pipefail
 # Enter an existing sandbox from a local Orca terminal. Keep Orca's pane
 # identity with the agent; docker exec otherwise starts with only the image env.
 if [[ $# -lt 2 ]]; then
-  echo 'usage: agent-sandbox-exec <sandbox alias> <claude|codex> [agent arguments...]' >&2
+  echo 'usage: agent-sandbox-exec <sandbox alias> <claude|codex|zcode> [agent arguments...]' >&2
   exit 2
 fi
 
@@ -15,7 +15,7 @@ if [[ ! $alias =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
   echo "agent-sandbox-exec: invalid sandbox alias: $alias" >&2
   exit 2
 fi
-if [[ $agent != claude && $agent != codex ]]; then
+if [[ $agent != claude && $agent != codex && $agent != zcode ]]; then
   echo "agent-sandbox-exec: unsupported agent: $agent" >&2
   exit 2
 fi
@@ -107,6 +107,8 @@ fi
 
 if [[ $agent == codex ]]; then
   set -- codex --dangerously-bypass-approvals-and-sandbox "$@"
+elif [[ $agent == zcode ]]; then
+  set -- zcode "$@"
 else
   set -- claude "$@"
 fi
