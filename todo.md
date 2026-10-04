@@ -14,7 +14,7 @@
 
 - [x] **High:** Remove the local `j2bar` flake input while the bar is managed manually. Nix no longer fetches or installs it; desktop commands use the local development binary.
 - [ ] **High:** Fix ARM package exports: `agent-sandbox` includes x86-only `hy3dgen`, and `game-background-limit` unconditionally pulls i686 packages. Restrict supported platforms or make dependencies conditional; verify `nix flake check --all-systems --no-build` (`pkgs/agent-sandbox/package.nix`, `pkgs/game-background-limit/package.nix`).
-- [ ] **High:** Format `hosts/media/test-skin-trader-startup.py` with Ruff and verify the Nix treefmt check passes.
+- [x] **High:** Format `hosts/media/test-skin-trader-startup.py` with Ruff and verify the Nix treefmt check passes.
 - [ ] **Medium:** Serialize task archive updates per task list and use unique temporary files. Concurrent completions currently leave stale blockers and can fail on shared `.tmp` files (`users/jesse/claude/archive-completed-task.sh`).
 - [ ] **Medium:** Replace Codex configuration atomically during activation instead of deleting `config.toml` before writing its replacement; preserve saved settings on interruption or write failure (`users/jesse/codex.nix`).
 - [ ] **Medium:** Prevent concurrent sandbox launches from selecting the same VNC ports. Lock allocation through container startup or let Docker allocate ports (`pkgs/agent-sandbox/agent-sandbox.sh`).
