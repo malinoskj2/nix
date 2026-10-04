@@ -8,6 +8,7 @@
 - [x] Configure and verify CPU placement: desktop on all cores, sandboxes on the second (non-V-Cache) CCD, and GameMode games on the first (V-Cache) CCD. Activated and verified on 2026-10-01, including topology, SMT siblings, all three running sandboxes, and AION's game threads.
 - [x] Open web links in Firefox on the main monitor when it has a window, then switch to its workspace.
 - [ ] Launch containerized Claude Code and Codex directly in Orca terminals without SSH, preserving Orca integrations. The `docker exec` launcher forwards pane/worktree identity, connects hooks through a private Unix socket, and uses the desktop Orca CLI; see [the direct-launch notes](docs/agent-sandbox-orca.md). Expose session files as needed, then verify agent status, Orca commands/tools, session history and resume for both agents (`pkgs/agent-sandbox/`, `pkgs/orca-ade/`).
+- [ ] Switch the desktop to the merged j2bar integration and validate it live: bar rendering and focus effects through the bundled plugin, then enable the bundled wallpaper and Steam services, retire the legacy ones and remove the local development checkout from the bar's path (`users/jesse/hyprland-desktop/j2bar.nix`).
 
 ## Repository audit — 2026-10-02
 
