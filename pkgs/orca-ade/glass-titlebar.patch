@@ -28,10 +28,10 @@ index 41d84d1a..610878f9 100644
      ...(process.platform === 'darwin'
        ? {
 diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index df9c8e73..69e62ccc 100644
+index 94339d52..554edde3 100644
 --- a/src/renderer/src/assets/main.css
 +++ b/src/renderer/src/assets/main.css
-@@ -734,6 +734,16 @@
+@@ -780,6 +780,16 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
    overflow: hidden;
  }
  
@@ -48,7 +48,7 @@ index df9c8e73..69e62ccc 100644
  /* Why: native windows have a stable content box and need no wake-time viewport reflow. */
  html.native-shell,
  html.native-shell body,
-@@ -851,6 +861,21 @@ html.native-shell .app-layout {
+@@ -897,6 +907,21 @@ html.native-shell .app-layout {
    background: var(--bg-titlebar, var(--card));
  }
  
@@ -124,10 +124,10 @@ index bfb04337..e8211dd2 100644
            <TooltipProvider delayDuration={400}>
              <ContextMenuTrigger asChild>
 diff --git a/src/renderer/src/components/tab-group/TabGroupPanel.tsx b/src/renderer/src/components/tab-group/TabGroupPanel.tsx
-index 6e48ddd0..cb8e8de8 100644
+index f6ad4b04..a10dddd3 100644
 --- a/src/renderer/src/components/tab-group/TabGroupPanel.tsx
 +++ b/src/renderer/src/components/tab-group/TabGroupPanel.tsx
-@@ -246,7 +246,7 @@ export default function TabGroupPanel({
+@@ -261,7 +261,7 @@ export default function TabGroupPanel({
        {/* Why: each split group needs its own tab row because multiple groups can show at once but the titlebar has only one shared center slot. */}
        {/* Why: macOS hiddenInset titleBarStyle makes -webkit-app-region: drag the only way to move the window from this tab row. */}
        <div
