@@ -25,9 +25,10 @@ The host proxy forwards only to Orca's current `127.0.0.1` hook port; it reads
 the endpoint file for each connection so an Orca restart can change that port.
 The agent's curl shim sends only Orca hook URLs through this socket. Other
 requests use normal curl. Orca's hook token still authenticates each event.
-The socket and proxy are removed when the agent exits. Hook files are seeded
-into the sandbox if missing, and Codex's hook trust entries are added without
-replacing other sandbox configuration.
+The socket and proxy are removed when the agent exits. Each direct launch syncs
+Orca's managed hook scripts and settings into the sandbox, including changes
+from an Orca update. Codex's managed hook trust hashes are refreshed while
+preserving other sandbox configuration and per-hook enabled choices.
 
 The bridge was checked from an isolated Docker container against the live
 Orca listener. An unsigned request received HTTP 403, and a signed Codex
