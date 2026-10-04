@@ -23,6 +23,7 @@ sandbox_home=$data/home
 shared=("$HOME/projects" "$HOME/nix" "$HOME/orca/workspaces" "$HOME/.cache/img2char3d" "$HOME/.local/share/Steam/steamapps/common")
 screenshots=/tmp/screenshot
 media=/tmp/agent-media
+orca_relay_dir=$runtime/agent-sandbox-orca
 image_ref="agent-sandbox:${AGENT_SANDBOX_TAG#hash-}"
 clipboard_dir=$(mktemp --directory "$runtime/agent-sandbox-clipboard.XXXXXX")
 
@@ -128,6 +129,8 @@ for dir in "${shared[@]}"; do
   mkdir -p "$dir" "$sandbox_home${dir#"$HOME"}"
 done
 mkdir -p "$screenshots" "$media"
+mkdir -p "$orca_relay_dir"
+chmod 700 "$orca_relay_dir"
 
 # Keys for serving SSH sessions from the container (agent-sandbox-ssh). Only the
 # host key and the client's public key go into the container.
@@ -215,12 +218,18 @@ for dir in "${shared[@]}"; do
 done
 args+=(--volume "$screenshots:$screenshots:ro")
 args+=(--volume "$media:$media")
+args+=(--volume "$orca_relay_dir:$orca_relay_dir")
 args+=(--volume "$clipboard_dir:/run/host-clipboard:ro")
 args+=(--volume "$ssh_dir/host_ed25519:/run/agent-sandbox-ssh/host_ed25519:ro")
 args+=(--volume "$ssh_dir/authorized_keys:/run/agent-sandbox-ssh/authorized_keys:ro")
 
 if [[ -d $HOME/.config/git ]]; then
   mount_readonly "$HOME/.config/git"
+fi
+# Orca's CLI reads its runtime metadata and connects to the desktop's Unix
+# socket from this directory. Keep Orca's mutable workspace state host-owned.
+if [[ -d $HOME/.config/orca ]]; then
+  mount_readonly "$HOME/.config/orca"
 fi
 
 # The display draws text, icons and Hyprland's compositing the way the desktop does: its fonts and
