@@ -91,7 +91,6 @@ require("look")
 
 -- While a file chooser is open, hyprsheet draws the app that opened it scaled into the chooser and
 -- faded out, so a tiled app keeps its layout and never re-lays out for a size it only appears at.
-hl.plugin.load(nix.hyprsheet)
 
 hl.config({
   plugin = {
