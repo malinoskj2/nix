@@ -40,6 +40,7 @@
   nix,
   nodejs,
   opencode,
+  orca-ade,
   openssh,
   playwright-driver,
   playwright-mcp,
@@ -99,7 +100,7 @@ let
 
   # Orca's relay installs its Claude hooks here rather than in the read-only ~/.claude/settings.json.
   claude = writeShellScriptBin "claude" ''
-    settings=$HOME/.orca/agent-hooks/claude-settings.json
+    settings=''${AGENT_SANDBOX_CLAUDE_SETTINGS:-$HOME/.orca/agent-hooks/claude-settings.json}
     if [[ -f $settings ]]; then
       set -- --settings "$settings" "$@"
     fi
@@ -112,9 +113,24 @@ let
     exec ${lib.getExe codex} --no-alt-screen "$@"
   '';
 
-  # Use the SSH bridge back to the running desktop, never Electron inside the sandbox.
+  # The desktop CLI connects to its Unix runtime socket through the read-only
+  # ~/.config/orca mount. The Electron app itself is never started here.
   orcaCli = writeShellScriptBin "orca-ide" ''
-    exec "$HOME/.orca-relay/bin/orca" "$@"
+    exec ${lib.getExe orca-ade} "$@"
+  '';
+
+  orcaCurl = writeShellApplication {
+    name = "curl";
+    runtimeEnv.AGENT_SANDBOX_REAL_CURL = lib.getExe curl;
+    text = builtins.readFile ./orca-curl.sh;
+  };
+
+  hookProxy = writeShellScriptBin "agent-sandbox-hook-proxy" ''
+    exec ${lib.getExe python3} ${./hook-proxy.py} "$@"
+  '';
+
+  prepareOrcaHooks = writeShellScriptBin "agent-sandbox-prepare-orca-hooks" ''
+    exec ${lib.getExe python3} ${./prepare-orca-hooks.py} "$@"
   '';
 
   # The desktop's pinned Hyprland, able to nest in the headless sway on the NVIDIA GPU: sway offers
@@ -316,12 +332,28 @@ let
     runtimeEnv.AGENT_SANDBOX_SSHD = lib.getExe' openssh "sshd";
     text = builtins.readFile ./agent-sandbox-ssh.sh;
   };
+
+  execAgent = writeShellApplication {
+    name = "agent-sandbox-exec";
+    runtimeInputs = [
+      coreutils
+      gnugrep
+      systemd
+    ];
+    runtimeEnv = {
+      AGENT_SANDBOX_HOOK_PROXY = lib.getExe hookProxy;
+      AGENT_SANDBOX_PREPARE_ORCA_HOOKS = lib.getExe prepareOrcaHooks;
+      AGENT_SANDBOX_ORCA_PATH = "${orcaCurl}/bin:${env}/bin:/usr/bin";
+    };
+    text = builtins.readFile ./agent-sandbox-exec.sh;
+  };
 in
 symlinkJoin {
   name = "agent-sandbox";
   paths = [
     launcher
     ssh
+    execAgent
   ];
   meta = {
     description = "Run Claude Code, Codex or ZCode in a Docker sandbox with the GPU and a headless Wayland session";
