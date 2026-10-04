@@ -35,7 +35,7 @@ class PrepareOrcaHooksTest(unittest.TestCase):
             )
             original = (
                 'model = "test"\n'
-                f'[hooks.state.{json.dumps(sandbox_key)}]\n'
+                f"[hooks.state.{json.dumps(sandbox_key)}]\n"
                 'enabled = false\ntrusted_hash = "sha256:old"\n'
                 '[projects."/work"]\ntrust_level = "trusted"\n'
             )
@@ -55,10 +55,13 @@ class PrepareOrcaHooksTest(unittest.TestCase):
             )
             config_text = (sandbox_codex / "config.toml").read_text()
             config = tomllib.loads(config_text)
-            self.assertEqual(config["hooks"]["state"][sandbox_key], {
-                "enabled": False,
-                "trusted_hash": "sha256:new",
-            })
+            self.assertEqual(
+                config["hooks"]["state"][sandbox_key],
+                {
+                    "enabled": False,
+                    "trusted_hash": "sha256:new",
+                },
+            )
             self.assertEqual(config["projects"]["/work"]["trust_level"], "trusted")
             self.assertEqual(config_text.count(f"[hooks.state.{json.dumps(sandbox_key)}]"), 1)
 

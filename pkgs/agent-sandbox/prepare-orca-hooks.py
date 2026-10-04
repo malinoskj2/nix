@@ -108,9 +108,7 @@ def main() -> None:
         fcntl.flock(lock, fcntl.LOCK_EX)
         for name in ("claude-hook.sh", "codex-hook.sh", "claude-statusline.sh"):
             sync_managed_file(host_hooks / name, sandbox_hooks / name, 0o700)
-        sync_managed_file(
-            host_hooks / "claude-settings.json", sandbox_hooks / "claude-settings.json", 0o600
-        )
+        sync_managed_file(host_hooks / "claude-settings.json", sandbox_hooks / "claude-settings.json", 0o600)
         sync_managed_file(
             host_home / ".config/orca/codex-runtime-home/home/hooks.json",
             sandbox_home / ".codex/hooks.json",
