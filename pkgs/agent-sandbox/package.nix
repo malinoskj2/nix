@@ -1,4 +1,5 @@
 {
+  at-spi2-core,
   bashInteractive,
   blender,
   buildEnv,
@@ -22,6 +23,7 @@
   git,
   glibc,
   glibcLocales,
+  gobject-introspection,
   gnugrep,
   gnumake,
   gnused,
@@ -169,6 +171,7 @@ let
   env = buildEnv {
     name = "agent-sandbox-env";
     paths = [
+      at-spi2-core
       bashInteractive
       blender'
       chromium'
@@ -204,7 +207,10 @@ let
       orcaCli
       playwright-test
       procps
-      (python3.withPackages (_: [ hy3dgen ]))
+      (python3.withPackages (ps: [
+        hy3dgen
+        ps.pygobject3
+      ]))
       ripgrep
       sccache
       sway
@@ -267,6 +273,12 @@ let
         "LANG=C.UTF-8"
         "CLAUDE_CODE_SANDBOXED=1"
         "ORCA_CLI_COMMAND=orca-ide"
+        "GI_TYPELIB_PATH=${
+          lib.makeSearchPath "lib/girepository-1.0" [
+            at-spi2-core
+            gobject-introspection
+          ]
+        }"
         "LOCALE_ARCHIVE=${glibcLocales}/lib/locale/locale-archive"
         # As on NixOS: the host's /etc/localtime is mounted, and a TZ that names a zone resolves
         # through TZDIR for glibc and /etc/zoneinfo for readers that ignore TZDIR, such as chrono.
