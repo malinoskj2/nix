@@ -18,18 +18,12 @@ let
     alpha = {
       chrome = alphaHex glass.chrome;
     };
-    # Hyprland swaps plugins its config loads through `hl.plugin.load` when a switch changes their
-    # store paths; the module's `plugins` option runs `hyprctl plugin load` only once at startup.
-    hyprbars = "${pkgs.hyprlandPlugins.hyprbars}/lib/libhyprbars.so";
-    hyprfocus = "${pkgs.hyprlandPlugins.hyprfocus}/lib/libhyprfocus.so";
-    hyprglass = "${pkgs.hyprglass}/lib/libhyprglass.so";
-    hyprrecede = "${pkgs.hyprrecede}/lib/libhyprrecede.so";
-    hyprsheet = "${pkgs.hyprsheet}/lib/libhyprsheet.so";
     monitors = {
       main = "DP-2";
       side = "DP-1";
     };
     j2bar = config.home.sessionVariables.J2BAR_BIN;
+    j2barPlugin = "${config.programs.j2bar.hyprlandPlugin.package}/lib/libj2bar-hyprland.so";
     workspaces = {
       first = 1;
       last = 5;

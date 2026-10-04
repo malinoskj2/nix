@@ -2,6 +2,10 @@
   description = "NixOS and Home Manager configurations";
 
   inputs = {
+    j2bar = {
+      url = "git+file:///home/jesse/projects/j2bar?ref=master";
+      inputs.nixpkgs.follows = "nixpkgs-hyprland";
+    };
     apple-fonts = {
       type = "github";
       owner = "Lyndeno";
