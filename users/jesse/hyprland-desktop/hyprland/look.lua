@@ -92,8 +92,12 @@ hl.animation({ leaf = "fadeOut", enabled = false })
 hl.animation({ leaf = "fadeSwitch", enabled = true, speed = 3, bezier = "linear" })
 hl.animation({ leaf = "workspaces", enabled = true, speed = 6, spring = "sway" })
 
--- Windows are borderless, so hyprfocus dips the focused one to make focus changes visible.
-hl.plugin.load(nix.hyprfocus)
+-- Home Manager loads the plugin before the main config. The nested sandbox imports look.lua directly.
+if not hl.plugin.hyprglass then
+  hl.plugin.load(nix.j2barPlugin)
+end
+
+-- Windows are borderless, so the bundled plugin dips the focused one to make focus changes visible.
 
 hl.config({
   plugin = {
@@ -112,9 +116,8 @@ hl.curve("hyprfocusDip", { type = "bezier", points = { { 0.25, 1 }, { 0.5, 1 } }
 hl.animation({ leaf = "hyprfocusIn", enabled = true, speed = 1.5, bezier = "hyprfocusDip" })
 hl.animation({ leaf = "hyprfocusOut", enabled = true, speed = 4, bezier = "hyprfocusDip" })
 
--- Alacritty and mpv have no title bar of their own, so hyprbars gives them a thin one to grab and
--- double-click.
-hl.plugin.load(nix.hyprbars)
+-- Alacritty and mpv have no title bar of their own, so the bundled plugin gives them a thin one to
+-- grab and double-click.
 
 hl.config({
   plugin = {
@@ -131,83 +134,82 @@ hl.config({
   },
 })
 
--- hyprglass draws j2bar's panels as refractive glass in the compositor, the only place that can
--- see what lies behind a layer. Windows stay as they are.
-hl.plugin.load(nix.hyprglass)
+-- The bundled glass effect draws j2bar's panels in the compositor, where it can see behind layers.
 
 local glass = hl.plugin.hyprglass
-glass.config({ enabled = false, default_theme = "dark", layers = { enabled = true } })
+if glass then
+  glass.config({ enabled = false, default_theme = "dark", layers = { enabled = true } })
 
--- Fitted to macOS 27's Clear widget glass: it darkens and saturates what's behind it and refracts
--- almost nothing, so the panels' own Catppuccin fill still sets the tone.
-glass.preset("panel", {
-  adaptive_boost = 0.0,
-  adaptive_dim = 0.0,
-  brightness = 0.91,
-  chromatic_aberration = 0.0,
-  contrast = 1.0,
-  edge_thickness = 0.01,
-  fresnel_strength = 0.0,
-  lens_distortion = 0.0,
-  refraction_strength = 0.05,
-  saturation = 1.33,
-  specular_strength = 0.0,
-  tint_color = 0x00000000,
-  vibrancy = 0.0,
-})
+  -- Fitted to macOS 27's Clear widget glass: it darkens and saturates what's behind it and refracts
+  -- almost nothing, so the panels' own Catppuccin fill still sets the tone.
+  glass.preset("panel", {
+    adaptive_boost = 0.0,
+    adaptive_dim = 0.0,
+    brightness = 0.91,
+    chromatic_aberration = 0.0,
+    contrast = 1.0,
+    edge_thickness = 0.01,
+    fresnel_strength = 0.0,
+    lens_distortion = 0.0,
+    refraction_strength = 0.05,
+    saturation = 1.33,
+    specular_strength = 0.0,
+    tint_color = 0x00000000,
+    vibrancy = 0.0,
+  })
 
--- The launcher sends two separate glass regions: the container and its search capsule. The
--- capsule's radius clamps to half its height; the container keeps its 36 px corners.
-glass.layer("j2bar-launcher", {
-  preset = "panel",
-  mask_mode = "region",
-  corner_radius = 36,
-  rounding_power = 2.0,
-  rim_light = 2.6,
-  rim_shadow = 2.7,
-  live_resample = true,
-  gleam_colors = {
-    nix.palette.peach,
-    nix.palette.teal,
-    nix.palette.lavender,
-    nix.palette.mauve,
-  },
-  gleam_strength = 1.0,
-  gleam_width = 1.2,
-  gleam_length = 0.6,
-  gleam_duration = 1.2,
-  gleam_delay = 0.1,
-  gleam_rest = 0.3,
-})
-
--- Match the radius of each capsule j2bar draws in its blur region.
-for _, namespace in ipairs({ "noctalia-panel", "j2bar-polkit", "j2bar-notification" }) do
-  glass.layer(namespace, {
+  -- The launcher sends two separate glass regions: the container and its search capsule. The
+  -- capsule's radius clamps to half its height; the container keeps its 36 px corners.
+  glass.layer("j2bar-launcher", {
     preset = "panel",
     mask_mode = "region",
-    corner_radius = 18,
+    corner_radius = 36,
     rounding_power = 2.0,
     rim_light = 2.6,
     rim_shadow = 2.7,
-    live_resample = namespace == "noctalia-panel",
+    live_resample = true,
+    gleam_colors = {
+      nix.palette.peach,
+      nix.palette.teal,
+      nix.palette.lavender,
+      nix.palette.mauve,
+    },
+    gleam_strength = 1.0,
+    gleam_width = 1.2,
+    gleam_length = 0.6,
+    gleam_duration = 1.2,
+    gleam_delay = 0.1,
+    gleam_rest = 0.3,
+  })
+
+  -- Match the radius of each capsule j2bar draws in its blur region.
+  for _, namespace in ipairs({ "noctalia-panel", "j2bar-polkit", "j2bar-notification" }) do
+    glass.layer(namespace, {
+      preset = "panel",
+      mask_mode = "region",
+      corner_radius = 18,
+      rounding_power = 2.0,
+      rim_light = 2.6,
+      rim_shadow = 2.7,
+      live_resample = namespace == "noctalia-panel",
+    })
+  end
+
+  glass.layer("j2bar-osd", {
+    preset = "panel",
+    mask_mode = "region",
+    corner_radius = 22,
+    rounding_power = 2.0,
+    rim_light = 2.6,
+    rim_shadow = 2.7,
   })
 end
-
-glass.layer("j2bar-osd", {
-  preset = "panel",
-  mask_mode = "region",
-  corner_radius = 22,
-  rounding_power = 2.0,
-  rim_light = 2.6,
-  rim_shadow = 2.7,
-})
 
 -- While j2bar's launcher, a picker or its polkit prompt is open, hyprrecede leans the windows on
 -- that monitor back, shades them from the top and blurs everything below the shell's layers, the
 -- way Liquid34 pushes the window behind a modal back. The launcher's backdrop layer is how it
 -- knows: j2bar maps it with the launcher or a picker and unmaps it the moment either is dismissed,
 -- so the windows spring back while the panel is still leaving.
-hl.plugin.load(nix.hyprrecede)
 
 hl.config({
   plugin = {
