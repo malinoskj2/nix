@@ -33,13 +33,13 @@ let
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "orca-ade";
-  version = "1.4.212";
+  version = "1.4.220";
 
   src = fetchFromGitHub {
     owner = "stablyai";
     repo = "orca";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-gUj0REuVXpAB1DnxllrIFrTqI54geC8XkZAmwItTtzc=";
+    hash = "sha256-1UP7svWbm9f9Af004weRc2QScPO/AF+YqQEZ5yjJuug=";
   };
 
   patches = [
@@ -87,7 +87,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit (finalAttrs) pname version src;
     inherit pnpm;
     fetcherVersion = 4;
-    hash = "sha256-3n2ZdT+NxA6Ht1AvDnqAYMwFzS1Z+USWpvBP9sfOJcw=";
+    hash = "sha256-b/d+Ma2G6xj0QgG1PzcD0sPXMkVrhwvoYC8PnpW3dc4=";
   };
 
   mobilePnpmDeps = fetchPnpmDeps {
@@ -96,7 +96,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     sourceRoot = "${finalAttrs.src.name}/mobile";
     fetcherVersion = 4;
-    hash = "sha256-fSC+EpPI00AnulrQcPurEGU6bwSXhc2wrX+Kg94BZPg=";
+    hash = "sha256-ixAfqcaKslNjHg5Kxa6gBmLJWOh8htSsCUH2uVUe4aE=";
   };
 
   postConfigure = ''

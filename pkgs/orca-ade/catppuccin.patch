@@ -1,8 +1,8 @@
 diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index df9c8e73..7578f873 100644
+index 9f1b84d8..94339d52 100644
 --- a/src/renderer/src/assets/main.css
 +++ b/src/renderer/src/assets/main.css
-@@ -255,83 +255,81 @@
+@@ -263,86 +263,84 @@
  /* ── Dark Mode ───────────────────────────────────────── */
  
  .dark {
@@ -92,6 +92,10 @@ index df9c8e73..7578f873 100644
 +  --status-success: #a6e3a1;
    --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
    --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+-  --status-warning: #eab308;
++  --status-warning: #f9e2af;
+   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
 -  --workspace-status-done: #c7a594;
 -  --workspace-status-review: #16a34a;
 -  --workspace-status-progress: #d4a300;
@@ -159,7 +163,7 @@ index df9c8e73..7578f873 100644
    --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
    --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
    --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
-@@ -339,31 +337,39 @@
+@@ -350,31 +348,48 @@
    --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
    --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
    --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
@@ -208,8 +212,8 @@ index df9c8e73..7578f873 100644
 -  --tab-group-split-divider-strong: #a1a1aa;
 +  --tab-group-split-divider: #585b70;
 +  --tab-group-split-divider-strong: #7f849c;
- }
- 
++}
++
 +/* The patched palette keeps both workspace sidebars on mantle, even when a
 +   saved left-sidebar appearance would otherwise replace its surface inline. */
 +.dark [data-native-file-drop-target='project-sidebar'],
@@ -218,8 +222,17 @@ index df9c8e73..7578f873 100644
 +  --sidebar: #181825 !important;
 +}
 +
++
++/* The patched palette keeps both workspace sidebars on mantle, even when a
++   saved left-sidebar appearance would otherwise replace its surface inline. */
++.dark [data-native-file-drop-target='project-sidebar'],
++.dark .titlebar-left {
++  --worktree-sidebar: #181825 !important;
++  --sidebar: #181825 !important;
+ }
+
  .plugin-security-chrome {
-@@ -1214,7 +1212,7 @@ html.native-shell .app-layout {
+@@ -1245,7 +1260,7 @@ html.native-shell .app-layout {
  .dark [role='option'].jump-palette-item[data-selected='true'],
  .dark .jump-palette-command [data-slot='command-item'][data-selected='true'],
  .dark .jump-palette-command [role='option'][data-selected='true'] {
@@ -229,13 +242,13 @@ index df9c8e73..7578f873 100644
    --jump-palette-selection-surface: var(--accent);
    background: var(--jump-palette-selection-surface);
 diff --git a/src/renderer/src/components/automations/AutomationEditorPromptEditor.tsx b/src/renderer/src/components/automations/AutomationEditorPromptEditor.tsx
-index 69de2374..e5e698cb 100644
+index 2772a6ae..dd0babcf 100644
 --- a/src/renderer/src/components/automations/AutomationEditorPromptEditor.tsx
 +++ b/src/renderer/src/components/automations/AutomationEditorPromptEditor.tsx
 @@ -6,7 +6,7 @@ import { syncContentOnMount, syncContentUpdate } from '@/components/editor/monac
  import { isMonacoFindWidgetOpen } from '@/components/editor/monaco-find-widget'
  import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
- import { resolveDocumentTheme } from '@/lib/document-theme'
+ import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 -import '@/lib/monaco-setup'
 +import { resolveMonacoTheme } from '@/lib/monaco-setup'
  import { useAppStore } from '@/store'
@@ -251,18 +264,18 @@ index 69de2374..e5e698cb 100644
            onMount={handleMount}
            options={options}
 diff --git a/src/renderer/src/components/editor/DiffSectionBody.tsx b/src/renderer/src/components/editor/DiffSectionBody.tsx
-index 3a21d282..56740a72 100644
+index 5ac46e17..80caa074 100644
 --- a/src/renderer/src/components/editor/DiffSectionBody.tsx
 +++ b/src/renderer/src/components/editor/DiffSectionBody.tsx
-@@ -3,6 +3,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+@@ -2,6 +2,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
  import { AlertCircle, RefreshCw } from 'lucide-react'
  import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
  import { cn } from '@/lib/utils'
 +import { resolveMonacoTheme } from '@/lib/monaco-setup'
  import { Button } from '@/components/ui/button'
- import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
  import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
-@@ -195,7 +196,7 @@ export function DiffSectionBody({
+ import { isCombinedDiffSizeUnknown } from './combined-diff-on-demand-load'
+@@ -157,7 +158,7 @@ export function DiffSectionBody({
            language={language}
            original={section.originalContent}
            modified={section.modifiedContent}
@@ -272,60 +285,50 @@ index 3a21d282..56740a72 100644
            // Why: @monaco-editor/react can dispose models before widget teardown.
            // Keep them through unmount and dispose unattached models next tick.
 diff --git a/src/renderer/src/components/editor/DiffViewer.tsx b/src/renderer/src/components/editor/DiffViewer.tsx
-index 77610151..d7c34f5e 100644
+index a2697069..2ecbfe31 100644
 --- a/src/renderer/src/components/editor/DiffViewer.tsx
 +++ b/src/renderer/src/components/editor/DiffViewer.tsx
-@@ -3,7 +3,7 @@ import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
+@@ -3,6 +3,7 @@ import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
  import type { editor } from 'monaco-editor'
  import { useAppStore } from '@/store'
  import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
--import { monaco } from '@/lib/monaco-setup'
-+import { monaco, resolveMonacoTheme } from '@/lib/monaco-setup'
++import { resolveMonacoTheme } from '@/lib/monaco-setup'
  import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
  import { useContextualCopySetup } from './useContextualCopySetup'
  import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
-@@ -354,7 +354,7 @@ export default function DiffViewer({
+@@ -295,7 +296,7 @@ export default function DiffViewer({
              language={language}
              original={originalContent}
              modified={modifiedContent}
--            theme={resolveDocumentTheme(settings?.theme ?? 'light') ? 'vs-dark' : 'vs'}
-+            theme={resolveMonacoTheme(resolveDocumentTheme(settings?.theme ?? 'light'))}
+-            theme={isDark ? 'vs-dark' : 'vs'}
++            theme={resolveMonacoTheme(isDark)}
              onMount={handleMount}
              // Why: key models by tab identity and preserve the modified undo stack across Changes-mode HEAD rotations.
              originalModelPath={currentDiffModelPaths.originalModelPath}
 diff --git a/src/renderer/src/components/editor/IpynbCellEditor.tsx b/src/renderer/src/components/editor/IpynbCellEditor.tsx
-index 3ec18d46..4e47a9d6 100644
+index 228bf57f..2a764fb7 100644
 --- a/src/renderer/src/components/editor/IpynbCellEditor.tsx
 +++ b/src/renderer/src/components/editor/IpynbCellEditor.tsx
-@@ -5,7 +5,7 @@ import rehypeRaw from 'rehype-raw'
- import rehypeSanitize from 'rehype-sanitize'
- import remarkGfm from 'remark-gfm'
- import { cn } from '@/lib/utils'
+@@ -1,7 +1,7 @@
+ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+ import type { Components } from 'react-markdown'
+ import type { editor } from 'monaco-editor'
 -import { monaco } from '@/lib/monaco-setup'
 +import { monaco, resolveMonacoTheme } from '@/lib/monaco-setup'
- import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
- import { resolveDocumentTheme } from '@/lib/document-theme'
+ import { computeEditorFontSize, resolveEditorFontStack } from '@/lib/editor-font-zoom'
  import { useAppStore } from '@/store'
-@@ -108,7 +108,7 @@ function IpynbCodeCellEditor({
-   }, [])
+ import { installMonacoEditorFindShortcut } from './editor-shortcuts'
+@@ -157,7 +157,7 @@ function IpynbSourceEditor({
+   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
  
-   useEffect(() => {
+   useLayoutEffect(() => {
 -    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
 +    monaco.editor.setTheme(resolveMonacoTheme(isDark))
    }, [isDark])
  
-   if (!active) {
-@@ -141,7 +141,7 @@ function IpynbCodeCellEditor({
-         height={editorHeight}
-         defaultLanguage={cell.language}
-         language={cell.language}
--        theme={isDark ? 'vs-dark' : 'vs'}
-+        theme={resolveMonacoTheme(isDark)}
-         value={source}
-         onMount={handleMount}
-         onChange={(value) => onChange(value ?? '')}
+   useLayoutEffect(() => {
 diff --git a/src/renderer/src/components/editor/MonacoCodeExcerpt.tsx b/src/renderer/src/components/editor/MonacoCodeExcerpt.tsx
-index a13ed13e..43384a35 100644
+index 1e2b31eb..29d3a2ba 100644
 --- a/src/renderer/src/components/editor/MonacoCodeExcerpt.tsx
 +++ b/src/renderer/src/components/editor/MonacoCodeExcerpt.tsx
 @@ -1,5 +1,5 @@
@@ -333,9 +336,9 @@ index a13ed13e..43384a35 100644
 -import { monaco } from '@/lib/monaco-setup'
 +import { monaco, resolveMonacoTheme } from '@/lib/monaco-setup'
  import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
- import { resolveDocumentTheme } from '@/lib/document-theme'
  import { useAppStore } from '@/store'
-@@ -57,7 +57,7 @@ export default function MonacoCodeExcerpt({
+ import { cn } from '@/lib/utils'
+@@ -37,7 +37,7 @@ export function useMonacoColorizedLines(lines: string[], language: string): stri
    const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
  
    useEffect(() => {
@@ -343,9 +346,9 @@ index a13ed13e..43384a35 100644
 +    monaco.editor.setTheme(resolveMonacoTheme(isDark))
    }, [isDark])
  
-   useEffect(() => {
+   // Why: colorize emits theme-specific token classes, so a theme switch must re-colorize.
 diff --git a/src/renderer/src/components/editor/MonacoEditor.tsx b/src/renderer/src/components/editor/MonacoEditor.tsx
-index cb3e9693..a573d323 100644
+index 17f65960..21a9c82f 100644
 --- a/src/renderer/src/components/editor/MonacoEditor.tsx
 +++ b/src/renderer/src/components/editor/MonacoEditor.tsx
 @@ -4,7 +4,7 @@ import Editor from '@monaco-editor/react'
@@ -357,7 +360,7 @@ index cb3e9693..a573d323 100644
  import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
  
  import { useContextualCopySetup } from './useContextualCopySetup'
-@@ -237,7 +237,7 @@ export default function MonacoEditor({
+@@ -236,7 +236,7 @@ export default function MonacoEditor({
          language={language}
          // Why: defaultValue, not controlled value — Orca owns post-mount content sync; a controlled path would double setValue.
          defaultValue={content}
@@ -367,10 +370,10 @@ index cb3e9693..a573d323 100644
          onMount={handleMount}
          options={{
 diff --git a/src/renderer/src/lib/monaco-setup.ts b/src/renderer/src/lib/monaco-setup.ts
-index c94a1478..929c700a 100644
+index 5c2c69d2..6031c6b5 100644
 --- a/src/renderer/src/lib/monaco-setup.ts
 +++ b/src/renderer/src/lib/monaco-setup.ts
-@@ -20,6 +20,98 @@ import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview
+@@ -21,6 +21,98 @@ import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview
  import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
  import { runMonacoSetupSteps } from './monaco-setup-steps'
  
@@ -469,7 +472,7 @@ index c94a1478..929c700a 100644
  globalThis.MonacoEnvironment = {
    getWorker(_workerId, label) {
      switch (label) {
-@@ -78,6 +170,10 @@ monacoTS.javascriptDefaults.setCompilerOptions({
+@@ -79,6 +171,10 @@ monacoTS.javascriptDefaults.setCompilerOptions({
  })
  
  runMonacoSetupSteps([
