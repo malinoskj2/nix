@@ -1,50 +1,90 @@
 {
   at-spi2-core,
+  bacon,
   bashInteractive,
+  bat,
+  bc,
   blender,
+  btop,
   buildEnv,
   cacert,
+  cargo,
+  cargo-audit,
+  cargo-nextest,
   chromium,
+  clang,
   claude-code,
+  clippy,
   codex,
   coreutils,
   curl,
   dbus,
   dejavu_fonts,
   diffutils,
+  dig,
   dockerTools,
+  envsubst,
+  eza,
   fd,
+  ffmpeg,
   file,
-  fontconfig,
   findutils,
+  fontconfig,
   foot,
   gawk,
   gcc,
+  ghidra,
   git,
+  git-commitu,
+  git-open-branch,
+  gitleaks,
+  glib,
   glibc,
   glibcLocales,
-  gobject-introspection,
   gnugrep,
   gnumake,
+  gnupg,
   gnused,
   gnutar,
+  gobject-introspection,
   grim,
   gzip,
+  htop-vim-navigation,
   hy3dgen,
   hyprland,
+  imagemagick,
   inotify-tools,
   jq,
+  killall,
+  ktx-tools,
   less,
   lib,
   liberation_ttf,
+  libva-utils,
+  lldb,
+  lshw,
   makeFontsConf,
+  man-db,
+  markdown-to-pdf,
+  mediainfo,
   mold,
+  mpv,
+  mpvpaper,
   muse,
+  neovim,
+  nil,
   nix,
+  nixfmt,
+  nmap,
   nodejs,
+  nssTools,
   opencode,
-  orca-ade,
   openssh,
+  orca-ade,
+  p7zip,
+  pandoc,
+  pciutils,
+  pkg-config,
   playwright-driver,
   playwright-mcp,
   playwright-test,
@@ -52,15 +92,31 @@
   python3,
   ripgrep,
   runCommand,
+  rust-analyzer,
+  rustc,
+  rustfmt,
   sccache,
+  sops,
+  source2viewer-cli,
+  ssh-to-age,
   sway,
+  swaybg,
   symlinkJoin,
   systemd,
+  tealdeer,
   tmux,
+  tokei,
+  tree,
   tzdata,
+  unrar,
   unzip,
+  usbutils,
+  vim,
+  vulkan-tools,
   wayvnc,
+  wget,
   which,
+  whois,
   wl-clipboard,
   wlrctl,
   writeShellApplication,
@@ -70,6 +126,9 @@
   xwayland,
   xz,
   zcode,
+  zip,
+  zoxide,
+  zsh,
 }:
 
 let
@@ -175,43 +234,85 @@ let
 
   env = buildEnv {
     name = "agent-sandbox-env";
+    # Match the host's development and inspection tools so agents can use PATH
+    # instead of searching the shared store. Keep GCC as the default C compiler.
     paths = [
       at-spi2-core
+      bacon
       bashInteractive
+      bat
+      bc
       blender'
+      btop
+      cargo
+      cargo-audit
+      cargo-nextest
       chromium'
+      (lib.lowPrio clang)
       claude
+      clippy
       codex'
       coreutils
       curl
       dbus
       diffutils
+      dig
+      envsubst
+      eza
       fd
+      ffmpeg
       file
       findutils
       foot
       gawk
-      gcc
+      (lib.hiPrio gcc)
+      ghidra
       git
+      git-commitu
+      git-open-branch
+      gitleaks
+      glib
       gnugrep
       gnumake
+      gnupg
       gnused
       gnutar
       grim
       gzip
+      htop-vim-navigation
       hyprctl
       hyprland'
+      imagemagick
       inotify-tools
       jq
+      killall
+      ktx-tools
       less
+      libva-utils
+      lldb
+      lshw
+      man-db
+      markdown-to-pdf
+      mediainfo
       mold
+      mpv
+      mpvpaper
       muse
+      neovim
       nestedHyprland
+      nil
       nix
+      nixfmt
+      nmap
       nodejs
+      nssTools
       opencode
       openssh
       orcaCli
+      p7zip
+      pandoc
+      pciutils
+      pkg-config
       playwright-test
       procps
       (python3.withPackages (ps: [
@@ -219,18 +320,37 @@ let
         ps.pygobject3
       ]))
       ripgrep
+      rust-analyzer
+      rustc
+      rustfmt
       sccache
+      sops
+      source2viewer-cli
+      ssh-to-age
       sway
+      swaybg
+      tealdeer
       tmux
+      tokei
+      tree
+      unrar
       unzip
+      usbutils
+      vim
+      vulkan-tools
       wayvnc
+      wget
       which
+      whois
       wl-clipboard
       wlrctl
       wtype
       xwayland
       xz
       zcode
+      zip
+      zoxide
+      zsh
     ];
   };
 
