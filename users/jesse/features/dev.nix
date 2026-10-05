@@ -7,6 +7,7 @@
 {
   home.packages = with pkgs; [
     gnumake
+    muse
     nil
     nixfmt
     nodejs

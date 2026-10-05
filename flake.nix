@@ -120,6 +120,7 @@
           "hyprrecede"
           "hyprsheet"
           "markdown-to-pdf"
+          "muse"
           "orca-ade"
           "pubip"
           "wallpaper-autopause"
