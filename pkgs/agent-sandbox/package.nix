@@ -1,48 +1,92 @@
 {
+  at-spi2-core,
+  bacon,
   bashInteractive,
   binutils,
+  bat,
+  bc,
   blender,
+  btop,
   buildEnv,
   cacert,
+  cargo,
+  cargo-audit,
+  cargo-nextest,
   chromium,
+  clang,
   claude-code,
+  clippy,
   codex,
   coreutils,
   curl,
   dbus,
   dejavu_fonts,
   diffutils,
+  dig,
   dockerTools,
+  envsubst,
+  eza,
   fd,
+  ffmpeg,
   file,
-  fontconfig,
   findutils,
+  fontconfig,
   foot,
   gawk,
   gcc,
+  ghidra,
   git,
+  git-commitu,
+  git-open-branch,
+  gitleaks,
+  glib,
   glibc,
   glibcLocales,
   gnugrep,
   gnumake,
+  gnupg,
   gnused,
   gnutar,
+  gobject-introspection,
   grim,
   gzip,
+  htop-vim-navigation,
   hy3dgen,
   hyprland,
+  imagemagick,
   inotify-tools,
   jq,
+  killall,
+  ktx-tools,
   less,
   lib,
   liberation_ttf,
+  libva-utils,
+  lldb,
+  lshw,
   makeFontsConf,
+  man-db,
+  markdown-to-pdf,
+  mediainfo,
   mold,
+  mpv,
+  mpvpaper,
+  muse,
+  neovim,
+  nil,
   nix,
   nix-ld,
+  nixfmt,
+  nmap,
   nodejs,
+  nssTools,
   opencode,
   openssh,
+  orca-ade,
+  p7zip,
+  pandoc,
+  pciutils,
+  pkg-config,
   playwright-driver,
   playwright-mcp,
   playwright-test,
@@ -51,14 +95,31 @@
   python3,
   ripgrep,
   runCommand,
+  rust-analyzer,
+  rustc,
+  rustfmt,
+  sccache,
+  sops,
+  source2viewer-cli,
+  ssh-to-age,
   sway,
+  swaybg,
   symlinkJoin,
   systemd,
+  tealdeer,
   tmux,
+  tokei,
+  tree,
+  tzdata,
+  unrar,
   unzip,
+  usbutils,
+  vim,
   vulkan-tools,
   wayvnc,
+  wget,
   which,
+  whois,
   wl-clipboard,
   wlrctl,
   writeShellApplication,
@@ -68,6 +129,9 @@
   xwayland,
   xz,
   zcode,
+  zip,
+  zoxide,
+  zsh,
 }:
 
 let
@@ -107,7 +171,7 @@ let
 
   # Orca's relay installs its Claude hooks here rather than in the read-only ~/.claude/settings.json.
   claude = writeShellScriptBin "claude" ''
-    settings=$HOME/.orca/agent-hooks/claude-settings.json
+    settings=''${AGENT_SANDBOX_CLAUDE_SETTINGS:-$HOME/.orca/agent-hooks/claude-settings.json}
     if [[ -f $settings ]]; then
       set -- --settings "$settings" "$@"
     fi
@@ -120,10 +184,29 @@ let
     exec ${lib.getExe codex} --no-alt-screen "$@"
   '';
 
-  # Use the SSH bridge back to the running desktop, never Electron inside the sandbox.
+  # The desktop CLI connects to its Unix runtime socket through the read-only
+  # ~/.config/orca mount. The Electron app itself is never started here.
   orcaCli = writeShellScriptBin "orca-ide" ''
-    exec "$HOME/.orca-relay/bin/orca" "$@"
+    exec ${lib.getExe orca-ade} "$@"
   '';
+
+  orcaCurl = writeShellApplication {
+    name = "curl";
+    runtimeEnv.AGENT_SANDBOX_REAL_CURL = lib.getExe curl;
+    text = builtins.readFile ./orca-curl.sh;
+  };
+
+  hookProxy = writeShellScriptBin "agent-sandbox-hook-proxy" ''
+    exec ${lib.getExe python3} ${./hook-proxy.py} "$@"
+  '';
+
+  prepareOrcaHooks = writeShellScriptBin "agent-sandbox-prepare-orca-hooks" ''
+    exec ${lib.getExe python3} ${./prepare-orca-hooks.py} "$@"
+  '';
+
+  # The container PATH an agent with an Orca hook bridge runs with: the curl
+  # shim leads, so hook URLs route through the private relay socket.
+  orcaPath = "${orcaCurl}/bin:${env}/bin:/usr/bin";
 
   # The desktop's pinned Hyprland, able to nest in the headless sway on the NVIDIA GPU: sway offers
   # xdg_wm_base 5, not the 6 Aquamarine asks for, and NVIDIA's GBM can neither allocate the linear
@@ -160,59 +243,126 @@ let
 
   env = buildEnv {
     name = "agent-sandbox-env";
+    # Match the host's development and inspection tools so agents can use PATH
+    # instead of searching the shared store. Keep GCC as the default C compiler.
     paths = [
+      at-spi2-core
+      bacon
       bashInteractive
-      binutils
+      (lib.hiPrio binutils)
+      bat
+      bc
       blender'
+      btop
+      cargo
+      cargo-audit
+      cargo-nextest
       chromium'
+      (lib.lowPrio clang)
       claude
+      clippy
       codex'
       coreutils
       curl
       dbus
       diffutils
+      dig
+      envsubst
+      eza
       fd
+      ffmpeg
       file
       findutils
       foot
       gawk
-      gcc
+      (lib.hiPrio gcc)
+      ghidra
       git
       glibc.bin
+      git-commitu
+      git-open-branch
+      gitleaks
+      glib
       gnugrep
       gnumake
+      gnupg
       gnused
       gnutar
       grim
       gzip
+      htop-vim-navigation
       hyprctl
       hyprland'
+      imagemagick
       inotify-tools
       jq
+      killall
+      ktx-tools
       less
+      libva-utils
+      lldb
+      lshw
+      man-db
+      markdown-to-pdf
+      mediainfo
       mold
+      mpv
+      mpvpaper
+      muse
+      neovim
       nestedHyprland
+      nil
       nix
+      nixfmt
+      nmap
       nodejs
+      nssTools
       opencode
+      openssh
       orcaCli
+      p7zip
+      pandoc
+      pciutils
+      pkg-config
       playwright-test
       procps
-      (python3.withPackages (_: [ hy3dgen ]))
+      (python3.withPackages (ps: [
+        hy3dgen
+        ps.pygobject3
+      ]))
       ripgrep
+      rust-analyzer
+      rustc
+      rustfmt
+      sccache
+      sops
+      source2viewer-cli
+      ssh-to-age
       sway
+      swaybg
+      tealdeer
       tmux
+      tokei
+      tree
+      unrar
       unzip
       unreal.package
+      usbutils
+      vim
       vulkan-tools
       wayvnc
+      wget
       which
+      whois
       wl-clipboard
       wlrctl
       wtype
       xwayland
       xz
       zcode
+      zip
+      zoxide
+      zsh
     ];
   };
 
@@ -245,6 +395,7 @@ let
       ln -s ${nix-ld}/libexec/nix-ld lib64/ld-linux-x86-64.so.2
       ln -s ${nixConf} etc/nix/nix.conf
       ln -s ${fontconfig.out}/etc/fonts/conf.d etc/fonts/conf.d
+      ln -s ${tzdata}/share/zoneinfo etc/zoneinfo
       ln -s ${./sway.conf} etc/sway/config
       ln -s ${./nested-sway.conf} etc/sway/nested
       ln -s ${./CLAUDE.md} etc/claude-code/CLAUDE.md
@@ -261,7 +412,16 @@ let
         "LANG=C.UTF-8"
         "CLAUDE_CODE_SANDBOXED=1"
         "ORCA_CLI_COMMAND=orca-ide"
+        "GI_TYPELIB_PATH=${
+          lib.makeSearchPath "lib/girepository-1.0" [
+            at-spi2-core
+            gobject-introspection
+          ]
+        }"
         "LOCALE_ARCHIVE=${glibcLocales}/lib/locale/locale-archive"
+        # As on NixOS: the host's /etc/localtime is mounted, and a TZ that names a zone resolves
+        # through TZDIR for glibc and /etc/zoneinfo for readers that ignore TZDIR, such as chrono.
+        "TZDIR=/etc/zoneinfo"
         "SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
         "NIX_SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
         "FONTCONFIG_FILE=${
@@ -301,6 +461,11 @@ let
         "CARGO_PROFILE_DEV_DEBUG=line-tables-only"
         "CARGO_PROFILE_TEST_DEBUG=line-tables-only"
         "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS=-C link-arg=-fuse-ld=mold"
+        # The cache lands in the sandboxes' shared home, never the host's: a sandbox must not
+        # write objects the host links. Each container runs its own server, so each enforces
+        # the size cap on its own.
+        "RUSTC_WRAPPER=sccache"
+        "SCCACHE_CACHE_SIZE=50G"
       ];
     };
   };
@@ -319,6 +484,7 @@ let
       # Prefix numeric-leading tags so ShellCheck does not mistake the generated
       # environment assignment for arithmetic (SC2100).
       AGENT_SANDBOX_TAG = "hash-${image.imageTag}";
+      AGENT_SANDBOX_ORCA_PATH = orcaPath;
     };
     text = builtins.readFile ./agent-sandbox.sh;
   };
@@ -332,6 +498,34 @@ let
     runtimeEnv.AGENT_SANDBOX_SSHD = lib.getExe' openssh "sshd";
     text = builtins.readFile ./agent-sandbox-ssh.sh;
   };
+
+  killAll = writeShellApplication {
+    name = "agent-sandbox-kill";
+    runtimeInputs = [
+      coreutils
+      gawk
+      procps
+      systemd
+    ];
+    text = builtins.readFile ./agent-sandbox-kill.sh;
+  };
+
+  execAgent = writeShellApplication {
+    name = "agent-sandbox-exec";
+    runtimeInputs = [
+      coreutils
+      git
+      gnugrep
+      systemd
+    ];
+    runtimeEnv = {
+      AGENT_SANDBOX_HOOK_PROXY = lib.getExe hookProxy;
+      AGENT_SANDBOX_PREPARE_ORCA_HOOKS = lib.getExe prepareOrcaHooks;
+      AGENT_SANDBOX_LAUNCHER = lib.getExe launcher;
+      AGENT_SANDBOX_ORCA_PATH = orcaPath;
+    };
+    text = builtins.readFile ./agent-sandbox-exec.sh;
+  };
 in
 symlinkJoin {
   name = "agent-sandbox";
@@ -341,9 +535,11 @@ symlinkJoin {
     launcher
     ssh
     unreal.installer
+    execAgent
+    killAll
   ];
   meta = {
-    description = "Run Claude Code, Codex or ZCode in a Docker sandbox with the GPU and a headless Wayland session";
+    description = "Run Claude Code, Codex, ZCode or Muse Code in a Docker sandbox with the GPU and a headless Wayland session";
     mainProgram = "agent-sandbox";
     platforms = lib.platforms.linux;
   };

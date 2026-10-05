@@ -67,6 +67,7 @@ in
       }
       // lib.optionalAttrs isLinux {
         lsblk = "lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINT";
+        sandbox = "agent-sandbox-exec";
       };
 
       # Skip compinit's checks when a dump exists; activation deletes it on every switch.

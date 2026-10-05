@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# The script runs before Noctalia starts: the mpvpaper plugin reads assignments.json at launch and
-# keeps that video until the next launch. Monitors without an existing assignment are left alone.
-# Slideshow mode is forced off, since only then does the plugin poll mpv.
+# Each monitor named gets a video that differs from its last one and from every other monitor's.
+# With no monitor named, the monitors that already have a video get a new one.
 
 readonly video_dir="$HOME/.wallpapers/video"
-readonly mpvpaper_dir="${XDG_STATE_HOME:-$HOME/.local/state}/noctalia/mpvpaper"
-readonly state_file="$mpvpaper_dir/assignments.json"
+readonly state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/wallpaper"
+readonly state_file="$state_dir/assignments.json"
 
 pick_video() {
   local previous="$1"
@@ -28,20 +27,38 @@ pick_video() {
   printf '%s\n' "${videos[0]}"
 }
 
-mkdir -p "$mpvpaper_dir"
-printf '{"interval":0}\n' >"$mpvpaper_dir/slideshow_override.json"
+mkdir -p "$state_dir"
+# wallpaper-select and a wallpaper-play per monitor write the file too.
+exec 9>"$state_dir/lock"
+flock 9
 
-mapfile -t connectors < <(jq -r '.assignments // {} | keys[]' "$state_file" 2>/dev/null)
+if ! jq -e '.assignments | type == "object"' "$state_file" >/dev/null 2>&1; then
+  printf '{"assignments":{}}\n' >"$state_file"
+fi
+
+connectors=("$@")
+if ((${#connectors[@]} == 0)); then
+  mapfile -t connectors < <(jq -r '.assignments | keys[]' "$state_file")
+fi
 mapfile -t videos < <(
   find "$video_dir" -maxdepth 1 -type f -regextype egrep -iregex '.*\.(mp4|webm|mkv|mov|gif)' |
     shuf
 )
 ((${#connectors[@]} > 0 && ${#videos[@]} > 0)) || exit 0
 
+declare -A rerolled=()
+for connector in "${connectors[@]}"; do
+  rerolled["$connector"]=1
+done
+
 declare -A used_videos=()
+while IFS=$'\t' read -r connector video; do
+  [[ -n "${rerolled[$connector]:-}" ]] || used_videos["$video"]=1
+done < <(jq -r '.assignments | to_entries[] | [.key, .value] | @tsv' "$state_file")
+
 assignments='{}'
 for connector in "${connectors[@]}"; do
-  previous="$(jq -r --arg connector "$connector" '.assignments[$connector]' "$state_file")"
+  previous="$(jq -r --arg connector "$connector" '.assignments[$connector] // ""' "$state_file")"
   video="$(pick_video "$previous")"
   used_videos["$video"]=1
   assignments="$(
@@ -50,5 +67,5 @@ for connector in "${connectors[@]}"; do
 done
 
 temp_file="$(mktemp "$state_file.XXXXXX")"
-jq --argjson assignments "$assignments" '.assignments = $assignments' "$state_file" >"$temp_file" &&
+jq --argjson assignments "$assignments" '.assignments += $assignments' "$state_file" >"$temp_file" &&
   mv "$temp_file" "$state_file"

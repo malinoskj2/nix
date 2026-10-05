@@ -30,7 +30,12 @@ hyprlandPlugins.mkHyprlandPlugin {
   # region's rect limit, and adds per-layer corner_radius, rounding_power, rim_light, rim_shadow
   # and the gleam_* options to hg.layer. The gleam sweeps the top rim once when a layer maps,
   # redrawing only the rim until then, and layer glass is drawn only inside the frame's damage.
-  patches = [ ./layer-shape.patch ];
+  # The panel contrast patch reports the sampled background's bright coverage to j2bar so its
+  # glass and ink can adapt together without including the panel itself in the sample.
+  patches = [
+    ./layer-shape.patch
+    ./panel-contrast.patch
+  ];
 
   buildPhase = ''
     runHook preBuild

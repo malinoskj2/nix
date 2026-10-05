@@ -4,8 +4,8 @@
   hyprland,
   jq,
   lib,
-  noctalia,
   socat,
+  util-linux,
   writeShellApplication,
 }:
 
@@ -16,12 +16,12 @@ writeShellApplication {
     findutils
     hyprland
     jq
-    noctalia
     socat
+    util-linux
   ];
   text = builtins.readFile ./wallpaper-select.sh;
   meta = {
-    description = "Pick a Noctalia video wallpaper for a monitor";
+    description = "Pick a monitor's video wallpaper";
     platforms = lib.platforms.linux;
   };
 }

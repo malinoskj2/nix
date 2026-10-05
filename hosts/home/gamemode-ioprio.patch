@@ -1,0 +1,36 @@
+--- a/daemon/gamemode-ioprio.c
++++ b/daemon/gamemode-ioprio.c
+@@ -37,6 +37,7 @@
+ #include "gamemode-config.h"
+ 
+ #include <dirent.h>
++#include <sys/resource.h>
+ #include <sys/syscall.h>
+ 
+ /**
+@@ -98,9 +99,22 @@
+ 	int ret = ioprio_get(IOPRIO_WHO_PROCESS, client);
+ 	if (ret == -1) {
+ 		LOG_ERROR("Failed to get ioprio value for [%d] with error %s\n", client, strerror(errno));
+-		ret = IOPRIO_DONT_SET;
+-	}
+-	/* We support only IOPRIO_CLASS_BE as IOPRIO_CLASS_RT required CAP_SYS_ADMIN */
++		return IOPRIO_DONT_SET;
++	}
++	/* NONE has no explicit priority: Linux derives it from CPU niceness.
++	 * Its zero data bits must not be mistaken for an explicit BE/0 priority. */
++	if (IOPRIO_PRIO_CLASS(ret) == IOPRIO_CLASS_NONE) {
++		errno = 0;
++		int nice = getpriority(PRIO_PROCESS, client);
++		if (errno) {
++			LOG_ERROR("Failed to get nice value for [%d] with error %s\n", client, strerror(errno));
++			return IOPRIO_DONT_SET;
++		}
++		return (nice + 20) / 5;
++	}
++	/* Leave explicitly selected realtime and idle classes alone. */
++	if (IOPRIO_PRIO_CLASS(ret) != IOPRIO_CLASS_BE)
++		return IOPRIO_DONT_SET;
+ 	return IOPRIO_PRIO_DATA(ret);
+ }
+ 
