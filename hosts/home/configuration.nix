@@ -60,6 +60,9 @@
   # is full it can't reclaim anon memory and throttles every sandbox indefinitely
   # instead of killing anything. MemoryMax reclaims too, then OOM-kills the
   # largest process. A little swap lets reclaim page out tmpfs.
+  # Keep the cgroup available for the launcher's read-only stats mount, even
+  # before the first container starts.
+  systemd.slices.agent-sandbox.wantedBy = [ "multi-user.target" ];
   systemd.slices.agent-sandbox.sliceConfig = {
     # CCD1 has 32 MiB L3, without V-Cache. Include its SMT siblings and
     # constrain every container in this slice; the desktop can use both CCDs.

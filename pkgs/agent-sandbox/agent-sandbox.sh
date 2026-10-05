@@ -203,6 +203,8 @@ args=(
   --pids-limit 8192
   # Memory limits come from the slice, which reclaims before it kills.
   --cgroup-parent agent-sandbox.slice
+  # The container's cgroup namespace hides the shared parent limit and usage.
+  --mount "type=bind,src=/sys/fs/cgroup/agent.slice/agent-sandbox.slice,dst=/run/agent-sandbox-cgroup,readonly"
   # Only the non-V-Cache CCD1, including its SMT siblings. The desktop can
   # still use all cores; GameMode pins registered games to CCD0 separately.
   --cpuset-cpus "8-15,24-31"

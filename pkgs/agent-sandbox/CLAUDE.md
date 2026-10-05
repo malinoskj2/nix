@@ -55,6 +55,8 @@ Blender (Cycles with CUDA and OptiX) and a Python with torch (CUDA) and hy3dgen 
 
 All sandboxes share a 20G memory limit; past it the kernel kills the largest process. Run one cargo build or test at a time, including across subagents and separate target dirs. Each one already uses every core, and several at once fill the limit with linkers.
 
+Read live shared memory stats from `/run/agent-sandbox-cgroup`, a read-only mount of the host's sandbox slice. `memory.max` and `memory.current` give the RAM limit and aggregate usage in bytes across all sandboxes; `memory.swap.max` and `memory.swap.current` give the separate swap limit and usage. `memory.max - memory.current` estimates headroom before the shared limit, but reclaimable cache can be freed and other agents can consume it concurrently. `free` and `/proc/meminfo` report host memory, while `/sys/fs/cgroup` shows only this container and hides the parent limit. Check `memory.stat` for cache and shmem usage, and `memory.events` and `memory.pressure` for reclaim/OOM activity and stalls.
+
 Cargo compiles through sccache, whose cache at `~/.cache/sccache` every sandbox shares, so a new worktree reuses the dependency crates another one already built. Don't delete it as scratch.
 
 ## Unreal Engine
