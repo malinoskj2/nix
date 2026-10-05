@@ -7,7 +7,9 @@ group=$(id -gn)
 runtime=/run/user/$uid
 
 agent=claude
-if [[ ${1:-} == --codex ]]; then
+if [[ ${1:-} == --claude ]]; then
+  shift
+elif [[ ${1:-} == --codex ]]; then
   agent=codex
   shift
 elif [[ ${1:-} == --muse ]]; then
@@ -189,9 +191,6 @@ free_port() {
   echo "$port"
 }
 
-vnc_port=$(free_port 5900)
-hyprland_vnc_port=$(free_port $((vnc_port + 1)))
-
 args=(
   --rm
   --init
@@ -208,8 +207,6 @@ args=(
   --cpuset-cpus "8-15,24-31"
   --shm-size 2g
   --device nvidia.com/gpu=all
-  --publish "127.0.0.1:$vnc_port:5900"
-  --publish "127.0.0.1:$hyprland_vnc_port:5901"
   # tmpfs is charged to the slice as shmem, and killing processes doesn't free
   # it. Uncapped, an agent filling it starves every sandbox of the slice limit.
   --tmpfs "/tmp:exec,mode=1777,size=4g"
@@ -230,6 +227,22 @@ args=(
   --env DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"
   --env SWAYSOCK="$runtime/sway.sock"
 )
+
+# Forward only the specific Orca fields agents and hook scripts use, not the
+# host environment. With a hook bridge socket, PATH switches to the Orca curl
+# shim inside the container so hook URLs reach the desktop through the relay.
+for name in \
+  ORCA_PANE_KEY ORCA_TAB_ID ORCA_WORKTREE_ID ORCA_TERMINAL_HANDLE \
+  ORCA_AGENT_LAUNCH_TOKEN ORCA_AGENT_HOOK_ENDPOINT \
+  ORCA_AGENT_HOOK_PORT ORCA_AGENT_HOOK_TOKEN ORCA_AGENT_HOOK_ENV \
+  ORCA_AGENT_HOOK_VERSION ORCA_AGENT_HOOK_TRANSPORT; do
+  if [[ -v $name ]]; then
+    args+=(--env "$name=${!name}")
+  fi
+done
+if [[ -n ${ORCA_AGENT_HOOK_SOCKET:-} ]]; then
+  args+=(--env "PATH=$AGENT_SANDBOX_ORCA_PATH" --env "ORCA_AGENT_HOOK_SOCKET=$ORCA_AGENT_HOOK_SOCKET")
+fi
 
 for dir in "${shared[@]}"; do
   args+=(--volume "$dir:$dir")
@@ -288,10 +301,6 @@ else
   args+=(--interactive)
 fi
 
-echo "agent-sandbox: VNC on 127.0.0.1:$vnc_port, nested Hyprland on 127.0.0.1:$hyprland_vnc_port" >&2
-if [[ -n $host_wayland ]]; then
-  echo "agent-sandbox: host display on $runtime/host-wayland-1" >&2
-fi
 if [[ $agent == codex ]]; then
   set -- codex --dangerously-bypass-approvals-and-sandbox "$@"
 elif [[ $agent == opencode ]]; then
@@ -301,11 +310,42 @@ elif [[ $agent == muse ]]; then
 elif [[ $agent == zcode ]]; then
   set -- zcode "$@"
 fi
+
+# Serialize port selection with container creation across concurrent
+# launches: a created container reserves its publishes, so a launcher that
+# picks the same ports loses the create and retries with freshly probed
+# ports instead of failing to bind.
+exec 9>"$runtime/agent-sandbox-ports.lock"
+cid=
+for _ in 1 2 3 4 5; do
+  flock 9
+  vnc_port=$(free_port 5900)
+  hyprland_vnc_port=$(free_port $((vnc_port + 1)))
+  publish_args=(
+    --publish "127.0.0.1:$vnc_port:5900"
+    --publish "127.0.0.1:$hyprland_vnc_port:5901"
+  )
+  if cid=$(docker create "${args[@]}" "${publish_args[@]}" "$image_ref" "$@"); then
+    break
+  fi
+  cid=
+done
+flock -u 9
+if [[ -z $cid ]]; then
+  echo "agent-sandbox: could not create the sandbox container" >&2
+  exit 1
+fi
+
+echo "agent-sandbox: VNC on 127.0.0.1:$vnc_port, nested Hyprland on 127.0.0.1:$hyprland_vnc_port" >&2
+if [[ -n $host_wayland ]]; then
+  echo "agent-sandbox: host display on $runtime/host-wayland-1" >&2
+fi
+
 # A named sandbox is the long-lived SSH host that agent-sandbox@.service runs;
 # inhibiting idle for its lifetime would keep the machine awake indefinitely.
 if [[ -n ${AGENT_SANDBOX_NAME:-} ]]; then
-  docker run "${args[@]}" "$image_ref" "$@"
+  docker start --attach --interactive "$cid"
 else
   systemd-inhibit --what=idle --who=agent-sandbox --why="agent sandbox running" \
-    docker run "${args[@]}" "$image_ref" "$@"
+    docker start --attach --interactive "$cid"
 fi

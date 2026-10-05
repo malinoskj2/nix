@@ -136,6 +136,10 @@ let
     exec ${lib.getExe python3} ${./prepare-orca-hooks.py} "$@"
   '';
 
+  # The container PATH an agent with an Orca hook bridge runs with: the curl
+  # shim leads, so hook URLs route through the private relay socket.
+  orcaPath = "${orcaCurl}/bin:${env}/bin:/usr/bin";
+
   # The desktop's pinned Hyprland, able to nest in the headless sway on the NVIDIA GPU: sway offers
   # xdg_wm_base 5, not the 6 Aquamarine asks for, and NVIDIA's GBM can neither allocate the linear
   # buffers Aquamarine requests for a nested output nor import the implicit-modifier ones it falls
@@ -334,6 +338,7 @@ let
       # Prefix numeric-leading tags so ShellCheck does not mistake the generated
       # environment assignment for arithmetic (SC2100).
       AGENT_SANDBOX_TAG = "hash-${image.imageTag}";
+      AGENT_SANDBOX_ORCA_PATH = orcaPath;
     };
     text = builtins.readFile ./agent-sandbox.sh;
   };
@@ -369,7 +374,8 @@ let
     runtimeEnv = {
       AGENT_SANDBOX_HOOK_PROXY = lib.getExe hookProxy;
       AGENT_SANDBOX_PREPARE_ORCA_HOOKS = lib.getExe prepareOrcaHooks;
-      AGENT_SANDBOX_ORCA_PATH = "${orcaCurl}/bin:${env}/bin:/usr/bin";
+      AGENT_SANDBOX_LAUNCHER = lib.getExe launcher;
+      AGENT_SANDBOX_ORCA_PATH = orcaPath;
     };
     text = builtins.readFile ./agent-sandbox-exec.sh;
   };

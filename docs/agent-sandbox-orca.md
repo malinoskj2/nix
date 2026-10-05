@@ -9,17 +9,24 @@ agent-sandbox-exec sandbox-skintrader zcode
 agent-sandbox-exec sandbox-skintrader muse
 ```
 
-The first argument is the suffix of the `agent-sandbox@<suffix>.service` user
-unit. The command starts that unit if necessary, waits for its container, and
-executes the agent in the current worktree path. Orca's pane, worktree, terminal,
-launch-token, and hook environment travels with the agent process. Further
-arguments go to the selected agent.
+The first argument names the sandbox, the suffix of the
+`agent-sandbox@<suffix>.service` user unit that the SSH helper still uses for
+its long-lived container. Every invocation creates its own fresh instance of
+that sandbox: a new container from the sandbox image, named
+`agent-sandbox-<suffix>-h<id>`, with the agent as the container's main
+process. Harnesses on one service never share a runtime, the container lives
+exactly as long as its harness, so the last harness to quit takes its whole
+instance down, and a later launch starts from a fresh container. Only state
+mapped from the host carries over between instances: the persistent sandbox
+home, the shared project directories and the other bind mounts. The
+container's writable layer, its `/tmp` and any Docker volumes are discarded
+when it stops. Orca's pane, worktree, terminal, launch-token, and hook
+environment travels with the agent process. Further arguments go to the
+selected agent.
 
 The sandbox image uses the desktop `orca-ide` CLI. A read-only bind of
 `~/.config/orca` gives it the live runtime metadata and Unix socket, so Orca
-commands can reach the desktop without the SSH relay. This mount is available
-after the named sandbox is recreated with the updated image; existing running
-containers retain their previous mounts and CLI.
+commands can reach the desktop without the SSH relay.
 
 For each agent launch, the command opens a private Unix socket under
 `/run/user/$UID/agent-sandbox-orca`, which is bind mounted into the sandbox.
