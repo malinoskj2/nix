@@ -18,7 +18,7 @@ esac
 runtime=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
 
-# Units before containers: agent-sandbox-exec starts a stopped unit on
+# Units before containers: agent-sandbox-ssh starts a stopped unit on
 # demand, so a unit left active can bring its container right back.
 while read -r unit; do
   systemctl --user stop "$unit"
