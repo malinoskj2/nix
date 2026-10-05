@@ -17,6 +17,7 @@
     ./hardware-configuration.nix
     ./boot.nix
     ./gaming.nix
+    ./memory-notifications.nix
     ./nvidia.nix
     ./obs.nix
     ./scheduler.nix
