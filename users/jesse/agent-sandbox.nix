@@ -4,7 +4,11 @@ let
 in
 {
   systemd.user.services."agent-sandbox@" = {
-    Unit.Description = "Agent sandbox %i";
+    Unit = {
+      Description = "Agent sandbox %i";
+      # Running sessions keep their launcher; updates apply on the next start.
+      X-SwitchMethod = "keep-old";
+    };
     Service = {
       Environment = "AGENT_SANDBOX_NAME=agent-sandbox-%i";
       WorkingDirectory = "%h/projects";
