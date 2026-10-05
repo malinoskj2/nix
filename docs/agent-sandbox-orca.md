@@ -1,17 +1,22 @@
 # Orca terminals in an agent sandbox
 
-In a local Orca worktree, launch an agent in an existing named sandbox with:
+From a repository or a local Orca worktree, launch an agent with:
 
 ```sh
-agent-sandbox-exec sandbox-skintrader codex
-agent-sandbox-exec sandbox-skintrader claude
-agent-sandbox-exec sandbox-skintrader zcode
-agent-sandbox-exec sandbox-skintrader muse
+agent-sandbox-exec codex
+agent-sandbox-exec claude
+agent-sandbox-exec zcode
+agent-sandbox-exec muse
 ```
 
-The first argument names the sandbox, the suffix of the
-`agent-sandbox@<suffix>.service` user unit that the SSH helper still uses for
-its long-lived container. Every invocation creates its own fresh instance of
+The sandbox name is derived from the Git repository name: `j2bar` becomes
+`sandbox-j2bar`. This works from subdirectories, and linked worktrees use the
+main repository's name. Run the command inside a Git repository. The Zsh
+alias also lets you use `sandbox codex`, for example.
+
+The sandbox name is the suffix of the `agent-sandbox@<suffix>.service` user
+unit that the SSH helper still uses for its long-lived container.
+Every invocation creates its own fresh instance of
 that sandbox: a new container from the sandbox image, named
 `agent-sandbox-<suffix>-h<id>`, with the agent as the container's main
 process. Harnesses on one service never share a runtime, the container lives

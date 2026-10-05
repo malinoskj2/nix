@@ -488,6 +488,7 @@ let
     name = "agent-sandbox-exec";
     runtimeInputs = [
       coreutils
+      git
       gnugrep
       systemd
     ];
