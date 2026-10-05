@@ -92,10 +92,9 @@ hl.animation({ leaf = "fadeOut", enabled = false })
 hl.animation({ leaf = "fadeSwitch", enabled = true, speed = 3, bezier = "linear" })
 hl.animation({ leaf = "workspaces", enabled = true, speed = 6, spring = "sway" })
 
--- Home Manager loads the plugin before the main config. The nested sandbox imports look.lua directly.
-if not hl.plugin.hyprglass then
-  hl.plugin.load(nix.j2barPlugin)
-end
+-- Keep the declaration on every reload: omitting a loaded config plugin unloads it.
+-- The nested sandbox imports look.lua directly, without the main config's declaration.
+hl.plugin.load(nix.j2barPlugin)
 
 -- Windows are borderless, so the bundled plugin dips the focused one to make focus changes visible.
 
