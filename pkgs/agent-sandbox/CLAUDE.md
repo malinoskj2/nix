@@ -5,6 +5,8 @@ You are running inside a Docker sandbox. You may read anything you can find in t
 - `~/projects`, `~/nix` and `~/orca/workspaces` (Orca's worktrees), read-write, at the same paths as on the host
 - `/tmp/screenshot`, read-only: the human's screenshots
 - `~/.cache/img2char3d`, read-write: model weights for `~/projects/img2char3d`
+- `~/.local/share/unreal-engine`, read-write: Epic's Linux Unreal Engine builds
+- `/tmp/agent-media`, read-write, at the same host path: agent screenshots and recordings
 - `~/.claude/projects`, read-write: auto-memory and session transcripts, shared with the human's sessions outside the sandbox
 - `/nix/store`, read-only, shared with the host
 
@@ -17,8 +19,8 @@ A headless sway Wayland session runs on `$WAYLAND_DISPLAY` with a single 1280x80
 If the display doesn't work, tell the user straight away instead of working around it: that includes `$XDG_RUNTIME_DIR/renderer` missing, `swaymsg` or `grim` failing, or an app failing to open a window. Also mention it if the renderer is `pixman`, which means the GPU renderer failed and the display is rendered on the CPU. Include the relevant lines from `$XDG_RUNTIME_DIR/logs`.
 
 - Launch an app: `swaymsg exec -- <command>`
-- Screenshot: `grim /tmp/screen.png`, then read the image. Coordinates in the image are output pixels.
-- Region screenshot: `grim -g "X,Y WxH" /tmp/region.png`
+- Screenshot: `mkdir -p /tmp/agent-media; grim /tmp/agent-media/screen.png`, then read the image. Coordinates in the image are output pixels. Give the user the absolute host path for every capture.
+- Region screenshot: `grim -g "X,Y WxH" /tmp/agent-media/region.png`
 - Windows and geometry: `swaymsg -t get_tree`
 - Move the pointer: `swaymsg seat - cursor set X Y`
 - Click: `swaymsg seat - cursor press button1` then `swaymsg seat - cursor release button1`
@@ -30,7 +32,7 @@ If the display doesn't work, tell the user straight away instead of working arou
 A second headless sway, kept off `$WAYLAND_DISPLAY` and `$SWAYSOCK`, hosts a persistent Hyprland: the host desktop's pinned version, restarted whenever it exits. It draws to its own 1280x800 output, `NESTED-1`, and the human can watch and drive it over a second VNC port. Use it to try Hyprland configs, plugins and Noctalia before they reach the host.
 
 - Clients: set `WAYLAND_DISPLAY=hyprland-1`, e.g. `WAYLAND_DISPLAY=hyprland-1 foot &`
-- Screenshot: `WAYLAND_DISPLAY=hyprland-1 grim -o NESTED-1 /tmp/hypr.png`
+- Screenshot: `WAYLAND_DISPLAY=hyprland-1 grim -o NESTED-1 /tmp/agent-media/hypr.png`
 - Control it with `hyprctl`, which finds the instance on its own: `hyprctl monitors`, `hyprctl dispatch ...`, `hyprctl plugin load <path>`, `hyprctl reload`
 - Its logs are `hyprland.log`, `nested-sway.log` and `wayvnc-hyprland.log` in `$XDG_RUNTIME_DIR/logs`. If it keeps crashing, `hyprland-restarts.log` there grows.
 
@@ -43,6 +45,43 @@ Orca's CLI is `orca-ide`, which forwards to `~/.orca-relay/bin/orca`, the SSH br
 Blender (Cycles with CUDA and OptiX) and a Python with torch (CUDA) and hy3dgen (Hunyuan3D) are installed; `~/projects/img2char3d` runs directly on them. Chromium is installed with its own sandbox off, since the container can't run it: open pages on the display with `swaymsg exec -- chromium <url>`, or render one without a window with `chromium --headless --screenshot=<file> --window-size=W,H <url>`. The Playwright MCP server drives its own Chromium, shown on the display, and the `playwright` CLI is installed. Nix talks to the host daemon. Get a missing tool with `nix shell nixpkgs#<package>` or `nix run nixpkgs#<package>`.
 
 All sandboxes share a 20G memory limit; past it the kernel kills the largest process. Run one cargo build or test at a time, including across subagents and separate target dirs. Each one already uses every core, and several at once fill the limit with linkers.
+
+## Unreal Engine
+
+Use Epic's UE 5.8+ Linux installed build. The runtime and helpers are installed;
+the proprietary engine ZIP must be downloaded through the human's Epic account.
+Install it once on the host with
+`agent-sandbox-install-unreal ~/.local/share/unreal-engine/downloads/<filename>.zip`.
+Every sandbox mounts that installation, so it is available immediately on startup.
+`unreal-sandbox install /path/to/Linux.zip` also works inside a sandbox.
+The default root is `~/.local/share/unreal-engine/current`; set `UE_ROOT` inside
+the sandbox to use another extracted build in a shared directory.
+
+- New content project: `unreal-sandbox init ~/projects/MyGame/MyGame.uproject`
+- Existing project: `unreal-sandbox prepare /absolute/path/Game.uproject`
+- Editor: `UnrealEditor /absolute/path/Game.uproject` (keep it running in a terminal)
+- Live check: `unreal-sandbox doctor`, or `unreal-sandbox mcp-check` for only MCP
+- Build/cook/package: `RunUAT BuildCookRun -project=/absolute/path/Game.uproject -platform=Linux -build -cook -stage -pak -package`
+
+Preparation enables `ModelContextProtocol` and `AllToolsets` and persists auto-start
+preferences. The editor wrapper selects Vulkan and the sandbox's Xwayland display,
+starts MCP on `http://127.0.0.1:8000/mcp`, and keeps shader cache and temporary build
+files under `~/.cache/unreal-engine`. The bundled SDK/toolchain is used for C++;
+GCC is not a replacement for Unreal's Linux toolchain.
+
+Claude Code, Codex, OpenCode and ZCode have an `unreal-mcp` connection configured.
+Start the editor before starting the agent, or reconnect MCP after editor startup
+or restart. A configured connection alone does not prove the engine is available:
+require `mcp-check` or a successful read-only `list_toolsets` call. Discover toolsets
+with `list_toolsets`, inspect them with `describe_toolset`, then use `call_tool`.
+Issue Unreal tool calls serially; the editor executes them on the game thread.
+Run one editor per sandbox. MCP stays on container loopback and is not published
+to the host. Host harnesses use their own loopback and need a local editor.
+
+The shared 20G sandbox limit is below Epic's recommended 32G. Avoid simultaneous
+editors and heavy builds; a full source-engine build needs a separately sized
+environment. Preserve the installed engine and reusable shader cache when cleaning
+up a task, and report their size. See `docs/unreal-sandbox.md` in the Nix repo.
 
 ## Disk
 

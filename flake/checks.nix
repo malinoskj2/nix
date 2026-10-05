@@ -45,6 +45,13 @@
         assert lib.assertMsg (
           unexported == [ ]
         ) "pkgs/ packages missing from packages in flake.nix: ${lib.concatStringsSep ", " unexported}";
-        hostChecks // packageChecks // { devshell = self'.devShells.default; };
+        hostChecks
+        // packageChecks
+        // {
+          devshell = self'.devShells.default;
+        }
+        // lib.optionalAttrs (system == "x86_64-linux") {
+          unreal-sandbox = self'.packages.agent-sandbox.unrealTests;
+        };
     };
 }

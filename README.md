@@ -38,3 +38,5 @@ nix run github:malinoskj2/nix#pubip
 
 🖥️ New machine: [`docs/bootstrap.md`](docs/bootstrap.md). 🔄 Updating pinned inputs:
 [`docs/updating.md`](docs/updating.md).
+
+Unreal Engine and agent MCP setup: [`docs/unreal-sandbox.md`](docs/unreal-sandbox.md).

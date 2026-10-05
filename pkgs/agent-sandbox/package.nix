@@ -1,5 +1,6 @@
 {
   bashInteractive,
+  binutils,
   blender,
   buildEnv,
   cacert,
@@ -38,12 +39,14 @@
   makeFontsConf,
   mold,
   nix,
+  nix-ld,
   nodejs,
   opencode,
   openssh,
   playwright-driver,
   playwright-mcp,
   playwright-test,
+  pkgs,
   procps,
   python3,
   ripgrep,
@@ -53,6 +56,7 @@
   systemd,
   tmux,
   unzip,
+  vulkan-tools,
   wayvnc,
   which,
   wl-clipboard,
@@ -67,6 +71,8 @@
 }:
 
 let
+  unreal = import ./unreal.nix { inherit pkgs lib; };
+  unrealMcp = import ./unreal-mcp.nix;
   # cudaSupport enables Cycles' CUDA and OptiX devices. Blender compiles CUDA kernels for every
   # architecture by default; the RTX 5090 only needs sm_120.
   blender' = (blender.override { cudaSupport = true; }).overrideAttrs (old: {
@@ -89,6 +95,10 @@ let
               "--output-dir"
               "/tmp/playwright-mcp"
             ];
+          };
+          mcpServers.unreal-mcp = {
+            type = "http";
+            inherit (unrealMcp) url;
           };
         }
       )
@@ -152,6 +162,7 @@ let
     name = "agent-sandbox-env";
     paths = [
       bashInteractive
+      binutils
       blender'
       chromium'
       claude
@@ -167,6 +178,7 @@ let
       gawk
       gcc
       git
+      glibc.bin
       gnugrep
       gnumake
       gnused
@@ -191,6 +203,8 @@ let
       sway
       tmux
       unzip
+      unreal.package
+      vulkan-tools
       wayvnc
       which
       wl-clipboard
@@ -228,7 +242,7 @@ let
       ln -s ${coreutils}/bin/env usr/bin/env
       ln -s ${orcaCli}/bin/orca-ide usr/bin/orca-ide
       # For prebuilt binaries such as the Claude CLI that Claude Desktop installs over SSH.
-      ln -s ${glibc}/lib/ld-linux-x86-64.so.2 lib64/ld-linux-x86-64.so.2
+      ln -s ${nix-ld}/libexec/nix-ld lib64/ld-linux-x86-64.so.2
       ln -s ${nixConf} etc/nix/nix.conf
       ln -s ${fontconfig.out}/etc/fonts/conf.d etc/fonts/conf.d
       ln -s ${./sway.conf} etc/sway/config
@@ -259,6 +273,20 @@ let
           }
         }"
         "NIX_REMOTE=daemon"
+        "NIX_LD=${glibc}/lib/ld-linux-x86-64.so.2"
+        "NIX_LD_LIBRARY_PATH=${unreal.runtime}"
+        "UNREAL_MCP_URL=${unrealMcp.url}"
+        "OPENCODE_CONFIG_CONTENT=${
+          builtins.toJSON {
+            mcp.unreal-mcp = {
+              type = "remote";
+              inherit (unrealMcp) url;
+              enabled = true;
+              oauth = false;
+              timeout = 120000;
+            };
+          }
+        }"
         "DISABLE_AUTOUPDATER=1"
         "DBUS_SESSION_BUS_CONFIG=${dbus}/share/dbus-1/session.conf"
         "WLR_BACKENDS=headless"
@@ -307,9 +335,12 @@ let
 in
 symlinkJoin {
   name = "agent-sandbox";
+  passthru.unrealTools = unreal.package;
+  passthru.unrealTests = unreal.tests;
   paths = [
     launcher
     ssh
+    unreal.installer
   ];
   meta = {
     description = "Run Claude Code, Codex or ZCode in a Docker sandbox with the GPU and a headless Wayland session";
