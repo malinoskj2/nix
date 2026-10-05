@@ -39,6 +39,7 @@
   liberation_ttf,
   makeFontsConf,
   mold,
+  muse,
   nix,
   nodejs,
   opencode,
@@ -200,10 +201,12 @@ let
       jq
       less
       mold
+      muse
       nestedHyprland
       nix
       nodejs
       opencode
+      openssh
       orcaCli
       playwright-test
       procps
@@ -345,6 +348,17 @@ let
     text = builtins.readFile ./agent-sandbox-ssh.sh;
   };
 
+  killAll = writeShellApplication {
+    name = "agent-sandbox-kill";
+    runtimeInputs = [
+      coreutils
+      gawk
+      procps
+      systemd
+    ];
+    text = builtins.readFile ./agent-sandbox-kill.sh;
+  };
+
   execAgent = writeShellApplication {
     name = "agent-sandbox-exec";
     runtimeInputs = [
@@ -366,9 +380,10 @@ symlinkJoin {
     launcher
     ssh
     execAgent
+    killAll
   ];
   meta = {
-    description = "Run Claude Code, Codex or ZCode in a Docker sandbox with the GPU and a headless Wayland session";
+    description = "Run Claude Code, Codex, ZCode or Muse Code in a Docker sandbox with the GPU and a headless Wayland session";
     mainProgram = "agent-sandbox";
     platforms = lib.platforms.linux;
   };

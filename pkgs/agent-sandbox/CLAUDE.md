@@ -16,6 +16,8 @@ The rest of the home directory belongs to the sandbox, not the host. The NVIDIA 
 
 A headless sway Wayland session runs on `$WAYLAND_DISPLAY` with a single 1280x800 output, `HEADLESS-1`. Xwayland is enabled for X11-only apps. The human can watch it over VNC. `$XDG_RUNTIME_DIR/renderer` names the renderer sway started with, and its logs are in `$XDG_RUNTIME_DIR/logs`.
 
+Work on this sandbox display unless the human explicitly asks you to use the host display.
+
 If the display doesn't work, tell the user straight away instead of working around it: that includes `$XDG_RUNTIME_DIR/renderer` missing, `swaymsg` or `grim` failing, or an app failing to open a window. Also mention it if the renderer is `pixman`, which means the GPU renderer failed and the display is rendered on the CPU. Include the relevant lines from `$XDG_RUNTIME_DIR/logs`.
 
 - Launch an app: `swaymsg exec -- <command>`
@@ -36,13 +38,17 @@ A second headless sway, kept off `$WAYLAND_DISPLAY` and `$SWAYSOCK`, hosts a per
 - Control it with `hyprctl`, which finds the instance on its own: `hyprctl monitors`, `hyprctl dispatch ...`, `hyprctl plugin load <path>`, `hyprctl reload`
 - Its logs are `hyprland.log`, `nested-sway.log` and `wayvnc-hyprland.log` in `$XDG_RUNTIME_DIR/logs`. If it keeps crashing, `hyprland-restarts.log` there grows.
 
+### Host display
+
+The human's desktop Wayland socket is mounted at `$XDG_RUNTIME_DIR/host-wayland-1` when the sandbox started while the desktop was up. `WAYLAND_DISPLAY=host-wayland-1 <command>` puts windows on the human's actual screen, and `WAYLAND_DISPLAY=host-wayland-1 grim /tmp/agent-media/host.png` screenshots it. Windows and input land in the human's live session next to their own apps, so use it only when explicitly asked. If it stops accepting connections, the desktop compositor restarted since the sandbox started; say so instead of retrying.
+
 Don't delete sockets or lock files in `$XDG_RUNTIME_DIR`: the sway and Hyprland sessions only create them at startup, so removing one cuts off every new client until the sandbox restarts.
 
 ## Tools
 
 Orca's CLI is `orca-ide`, which forwards to `~/.orca-relay/bin/orca`, the SSH bridge to the running desktop. If an older sandbox lacks `orca-ide`, use `~/.orca-relay/bin/orca` directly. Do not launch an Orca Electron binary from `/nix/store` for CLI commands. Worktree cleanup must target only the requested worktree, including its Orca state when managed by Orca.
 
-Blender (Cycles with CUDA and OptiX) and a Python with torch (CUDA) and hy3dgen (Hunyuan3D) are installed; `~/projects/img2char3d` runs directly on them. Chromium is installed with its own sandbox off, since the container can't run it: open pages on the display with `swaymsg exec -- chromium <url>`, or render one without a window with `chromium --headless --screenshot=<file> --window-size=W,H <url>`. The Playwright MCP server drives its own Chromium, shown on the display, and the `playwright` CLI is installed. Nix talks to the host daemon. Get a missing tool with `nix shell nixpkgs#<package>` or `nix run nixpkgs#<package>`.
+Blender (Cycles with CUDA and OptiX) and a Python with torch (CUDA) and hy3dgen (Hunyuan3D) are installed; `~/projects/img2char3d` runs directly on them. Chromium is installed with its own sandbox off, since the container can't run it: open pages on the display with `swaymsg exec -- chromium <url>`, or render one without a window with `chromium --headless --screenshot=<file> --window-size=W,H <url>`. The Playwright MCP server drives its own Chromium, shown on the display, and the `playwright` CLI is installed. Nix talks to the host daemon. Get a missing tool with `nix shell nixpkgs#<package>` or `nix run nixpkgs#<package>`. Outbound network is unrestricted, and `ssh` is installed for reaching remote hosts.
 
 All sandboxes share a 20G memory limit; past it the kernel kills the largest process. Run one cargo build or test at a time, including across subagents and separate target dirs. Each one already uses every core, and several at once fill the limit with linkers.
 

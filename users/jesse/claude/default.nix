@@ -39,6 +39,7 @@ in
     rules = {
       media = ./rules/media.md;
       rust = ./rules/rust.md;
+      sandbox-display = ./rules/sandbox-display.md;
       worktrees = ./rules/worktrees.md;
     };
 

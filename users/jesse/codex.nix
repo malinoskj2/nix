@@ -99,6 +99,7 @@ in
     context = lib.concatMapStringsSep "\n" builtins.readFile [
       ./claude/rules/worktrees.md
       ./claude/rules/media.md
+      ./claude/rules/sandbox-display.md
     ];
   };
 

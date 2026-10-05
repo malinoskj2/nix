@@ -10,6 +10,9 @@ agent=claude
 if [[ ${1:-} == --codex ]]; then
   agent=codex
   shift
+elif [[ ${1:-} == --muse ]]; then
+  agent=muse
+  shift
 elif [[ ${1:-} == --opencode ]]; then
   agent=opencode
   shift
@@ -24,6 +27,13 @@ shared=("$HOME/projects" "$HOME/nix" "$HOME/orca/workspaces" "$HOME/.cache/img2c
 screenshots=/tmp/screenshot
 media=/tmp/agent-media
 orca_relay_dir=$runtime/agent-sandbox-orca
+host_wayland=
+for sock in "$runtime"/wayland-*; do
+  if [[ -S $sock ]]; then
+    host_wayland=$sock
+    break
+  fi
+done
 image_ref="agent-sandbox:${AGENT_SANDBOX_TAG#hash-}"
 clipboard_dir=$(mktemp --directory "$runtime/agent-sandbox-clipboard.XXXXXX")
 
@@ -103,6 +113,13 @@ configure_zcode() {
   seed_if_empty "$HOME/.zcode/cli/setting.json" "$sandbox_home/.zcode/cli/setting.json"
 }
 
+configure_muse() {
+  # Keep the Meta login current from either environment. Settings are seeded
+  # once so the sandbox keeps its own saved choices, as with Codex.
+  copy_if_newer "$HOME/.config/muse/auth.json" "$sandbox_home/.config/muse/auth.json"
+  seed_if_empty "$HOME/.config/muse/settings.json" "$sandbox_home/.config/muse/settings.json"
+}
+
 cleanup() {
   trap - EXIT
   if [[ -n ${clipboard_watcher_pid:-} ]]; then
@@ -124,7 +141,7 @@ wl-paste --type image --watch agent-sandbox-clipboard-sync "$clipboard_dir" \
   >/dev/null 2>"$clipboard_dir/watcher.log" &
 clipboard_watcher_pid=$!
 
-mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.zcode/cli" "$sandbox_home/.zcode/v2" "$sandbox_home/.config/git"
+mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.zcode/cli" "$sandbox_home/.zcode/v2" "$sandbox_home/.config/git" "$sandbox_home/.config/muse"
 for dir in "${shared[@]}"; do
   mkdir -p "$dir" "$sandbox_home${dir#"$HOME"}"
 done
@@ -155,6 +172,7 @@ fi
 configure_claude
 configure_codex
 configure_zcode
+configure_muse
 
 workdir=$HOME/projects
 for dir in "${shared[@]}"; do
@@ -222,6 +240,10 @@ args+=(--volume "$orca_relay_dir:$orca_relay_dir")
 args+=(--volume "$clipboard_dir:/run/host-clipboard:ro")
 args+=(--volume "$ssh_dir/host_ed25519:/run/agent-sandbox-ssh/host_ed25519:ro")
 args+=(--volume "$ssh_dir/authorized_keys:/run/agent-sandbox-ssh/authorized_keys:ro")
+# Clients connect() to the socket rather than opening the file, so read-only mounts work.
+if [[ -n $host_wayland ]]; then
+  args+=(--volume "$host_wayland:$runtime/host-wayland-1:ro")
+fi
 
 if [[ -d $HOME/.config/git ]]; then
   mount_readonly "$HOME/.config/git"
@@ -267,10 +289,15 @@ else
 fi
 
 echo "agent-sandbox: VNC on 127.0.0.1:$vnc_port, nested Hyprland on 127.0.0.1:$hyprland_vnc_port" >&2
+if [[ -n $host_wayland ]]; then
+  echo "agent-sandbox: host display on $runtime/host-wayland-1" >&2
+fi
 if [[ $agent == codex ]]; then
   set -- codex --dangerously-bypass-approvals-and-sandbox "$@"
 elif [[ $agent == opencode ]]; then
   set -- opencode "$@"
+elif [[ $agent == muse ]]; then
+  set -- muse "$@"
 elif [[ $agent == zcode ]]; then
   set -- zcode "$@"
 fi
