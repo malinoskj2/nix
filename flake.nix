@@ -2,6 +2,10 @@
   description = "NixOS and Home Manager configurations";
 
   inputs = {
+    j2bar = {
+      url = "git+file:///home/jesse/projects/j2bar?ref=master";
+      inputs.nixpkgs.follows = "nixpkgs-hyprland";
+    };
     apple-fonts = {
       type = "github";
       owner = "Lyndeno";
@@ -48,12 +52,6 @@
       repo = "nixpkgs";
       ref = "nixos-26.05";
     };
-    nixpkgs-darwin = {
-      type = "github";
-      owner = "nixos";
-      repo = "nixpkgs";
-      ref = "nixpkgs-26.05-darwin";
-    };
     nixpkgs-firefox = {
       type = "github";
       owner = "nixos";
@@ -93,7 +91,6 @@
       { lib, mkHost, ... }:
       let
         systems = [
-          "aarch64-darwin"
           "aarch64-linux"
           "x86_64-linux"
         ];
@@ -103,9 +100,6 @@
           "media"
           "pi"
         ];
-        darwinHosts = [
-          "macbook"
-        ];
         packages = [
           "agent-sandbox"
           "ai-usage"
@@ -113,16 +107,26 @@
           "battery"
           "claude-desktop"
           "find-service"
+          "game-background-engine"
+          "game-background-limit"
+          "game-latency-check"
+          "game-workspace-audio"
           "git-commitu"
           "git-open-branch"
           "htop-vim-navigation"
           "hy3dgen"
           "hyprglass"
+          "hyprland-quit"
+          "hyprrecede"
           "hyprsheet"
           "markdown-to-pdf"
+          "muse"
           "orca-ade"
           "pubip"
+          "switch-and-reset-sandboxes"
           "wallpaper-autopause"
+          "wallpaper-outputs"
+          "wallpaper-play"
           "wallpaper-randomize"
           "wallpaper-select"
           "wifi-connect"
@@ -143,7 +147,6 @@
 
         flake = {
           nixosConfigurations = lib.genAttrs nixosHosts mkHost.nixos;
-          homeConfigurations = lib.genAttrs darwinHosts mkHost.darwin;
         };
 
         perSystem =

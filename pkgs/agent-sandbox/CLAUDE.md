@@ -4,9 +4,10 @@ You are running inside a Docker sandbox. You may read anything you can find in t
 
 - `~/projects`, `~/nix` and `~/orca/workspaces` (Orca's worktrees), read-write, at the same paths as on the host
 - `/tmp/screenshot`, read-only: the human's screenshots
-- `~/.cache/img2char3d`, read-write: model weights for `~/projects/img2char3d`
+- `/tmp/agent-media`, read-write: the screenshots and recordings you take, at the same path as on the host
 - `~/.local/share/unreal-engine`, read-write: Epic's Linux Unreal Engine builds
-- `/tmp/agent-media`, read-write, at the same host path: agent screenshots and recordings
+- `~/.cache/img2char3d`, read-write: model weights for `~/projects/img2char3d`
+- `~/.local/share/Steam/steamapps/common`, read-write: installed Steam games, at the same path as on the host
 - `~/.claude/projects`, read-write: auto-memory and session transcripts, shared with the human's sessions outside the sandbox
 - `/nix/store`, read-only, shared with the host
 
@@ -16,10 +17,12 @@ The rest of the home directory belongs to the sandbox, not the host. The NVIDIA 
 
 A headless sway Wayland session runs on `$WAYLAND_DISPLAY` with a single 1280x800 output, `HEADLESS-1`. Xwayland is enabled for X11-only apps. The human can watch it over VNC. `$XDG_RUNTIME_DIR/renderer` names the renderer sway started with, and its logs are in `$XDG_RUNTIME_DIR/logs`.
 
+Work on this sandbox display unless the human explicitly asks you to use the host display.
+
 If the display doesn't work, tell the user straight away instead of working around it: that includes `$XDG_RUNTIME_DIR/renderer` missing, `swaymsg` or `grim` failing, or an app failing to open a window. Also mention it if the renderer is `pixman`, which means the GPU renderer failed and the display is rendered on the CPU. Include the relevant lines from `$XDG_RUNTIME_DIR/logs`.
 
 - Launch an app: `swaymsg exec -- <command>`
-- Screenshot: `mkdir -p /tmp/agent-media; grim /tmp/agent-media/screen.png`, then read the image. Coordinates in the image are output pixels. Give the user the absolute host path for every capture.
+- Screenshot: `grim /tmp/agent-media/screen.png`, then read the image. Coordinates in the image are output pixels.
 - Region screenshot: `grim -g "X,Y WxH" /tmp/agent-media/region.png`
 - Windows and geometry: `swaymsg -t get_tree`
 - Move the pointer: `swaymsg seat - cursor set X Y`
@@ -29,22 +32,30 @@ If the display doesn't work, tell the user straight away instead of working arou
 
 ### Nested Hyprland
 
-A second headless sway, kept off `$WAYLAND_DISPLAY` and `$SWAYSOCK`, hosts a persistent Hyprland: the host desktop's pinned version, restarted whenever it exits. It draws to its own 1280x800 output, `NESTED-1`, and the human can watch and drive it over a second VNC port. Use it to try Hyprland configs, plugins and Noctalia before they reach the host.
+A second headless sway, kept off `$WAYLAND_DISPLAY` and `$SWAYSOCK`, hosts a persistent Hyprland: the host desktop's pinned version, restarted whenever it exits. It draws to its own 1920x1080 output, `NESTED-1`, the size of the desktop's main monitor, and the human can watch and drive it over a second VNC port. It loads the desktop's `look.lua` from `/run/host-hypr`, so blur, layer rules, animations and plugins (hyprfocus, hyprbars, hyprglass) match the desktop's; the display also uses the desktop's fonts, fontconfig settings, desktop entries, icon themes and time zone database. Its cursor hides 0.1 s after the pointer stops, because a headless output draws the cursor into screenshots and the desktop's screenshots never show it. Use it to try Hyprland configs, plugins and j2bar before they reach the host.
 
 - Clients: set `WAYLAND_DISPLAY=hyprland-1`, e.g. `WAYLAND_DISPLAY=hyprland-1 foot &`
 - Screenshot: `WAYLAND_DISPLAY=hyprland-1 grim -o NESTED-1 /tmp/agent-media/hypr.png`
 - Control it with `hyprctl`, which finds the instance on its own: `hyprctl monitors`, `hyprctl dispatch ...`, `hyprctl plugin load <path>`, `hyprctl reload`
 - Its logs are `hyprland.log`, `nested-sway.log` and `wayvnc-hyprland.log` in `$XDG_RUNTIME_DIR/logs`. If it keeps crashing, `hyprland-restarts.log` there grows.
 
+### Host display
+
+The human's desktop Wayland socket is mounted at `$XDG_RUNTIME_DIR/host-wayland-1` when the sandbox started while the desktop was up. `WAYLAND_DISPLAY=host-wayland-1 <command>` puts windows on the human's actual screen, and `WAYLAND_DISPLAY=host-wayland-1 grim /tmp/agent-media/host.png` screenshots it. Windows and input land in the human's live session next to their own apps, so use it only when explicitly asked. If it stops accepting connections, the desktop compositor restarted since the sandbox started; say so instead of retrying.
+
 Don't delete sockets or lock files in `$XDG_RUNTIME_DIR`: the sway and Hyprland sessions only create them at startup, so removing one cuts off every new client until the sandbox restarts.
 
 ## Tools
 
+The sandbox includes the host's Rust toolchain, Clang and LLDB, Nix tooling, media and texture tools (FFmpeg/ffprobe, ImageMagick, MediaInfo, KTX, mpv), document converters, archive utilities, and network and graphics diagnostics. Use commands on `PATH`; there is no need to search `/nix/store` for these executables. `mpvpaper` and `swaybg` are available for testing wallpapers on the sandbox display. GCC remains the default C compiler; invoke `clang` explicitly when needed.
+
 Orca's CLI is `orca-ide`, which forwards to `~/.orca-relay/bin/orca`, the SSH bridge to the running desktop. If an older sandbox lacks `orca-ide`, use `~/.orca-relay/bin/orca` directly. Do not launch an Orca Electron binary from `/nix/store` for CLI commands. Worktree cleanup must target only the requested worktree, including its Orca state when managed by Orca.
 
-Blender (Cycles with CUDA and OptiX) and a Python with torch (CUDA) and hy3dgen (Hunyuan3D) are installed; `~/projects/img2char3d` runs directly on them. Chromium is installed with its own sandbox off, since the container can't run it: open pages on the display with `swaymsg exec -- chromium <url>`, or render one without a window with `chromium --headless --screenshot=<file> --window-size=W,H <url>`. The Playwright MCP server drives its own Chromium, shown on the display, and the `playwright` CLI is installed. Nix talks to the host daemon. Get a missing tool with `nix shell nixpkgs#<package>` or `nix run nixpkgs#<package>`.
+Blender (Cycles with CUDA and OptiX) and a Python with torch (CUDA) and hy3dgen (Hunyuan3D) are installed; `~/projects/img2char3d` runs directly on them. Chromium is installed with its own sandbox off, since the container can't run it: open pages on the display with `swaymsg exec -- chromium <url>`, or render one without a window with `chromium --headless --screenshot=<file> --window-size=W,H <url>`. The Playwright MCP server drives its own Chromium, shown on the display, and the `playwright` CLI is installed. Nix talks to the host daemon. Get a missing tool with `nix shell nixpkgs#<package>` or `nix run nixpkgs#<package>`. Outbound network is unrestricted, and `ssh` is installed for reaching remote hosts.
 
 All sandboxes share a 20G memory limit; past it the kernel kills the largest process. Run one cargo build or test at a time, including across subagents and separate target dirs. Each one already uses every core, and several at once fill the limit with linkers.
+
+Cargo compiles through sccache, whose cache at `~/.cache/sccache` every sandbox shares, so a new worktree reuses the dependency crates another one already built. Don't delete it as scratch.
 
 ## Unreal Engine
 

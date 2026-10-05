@@ -1,11 +1,10 @@
 { pkgs }:
 let
-  # The hosts install agent CLIs and noctalia from pkgs.unstable; wrappers use those builds.
+  # The hosts install agent CLIs from pkgs.unstable; wrappers use those builds.
   callPackage = pkgs.newScope {
     inherit (pkgs.unstable)
       claude-code
       codex
-      noctalia
       opencode
       ;
   };

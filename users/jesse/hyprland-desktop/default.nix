@@ -2,7 +2,7 @@
   imports = [
     ./file-chooser
     ./hyprland
-    ./noctalia
+    ./j2bar.nix
     ./wallpaper.nix
   ];
 }

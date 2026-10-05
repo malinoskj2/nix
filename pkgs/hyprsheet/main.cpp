@@ -12,7 +12,7 @@
 
 #include <hyprland/src/includes.hpp>
 
-#define private public
+#define private   public
 #define protected public
 #include <hyprland/src/Compositor.hpp>
 #include <hyprland/src/animation/AnimationManager.hpp>
@@ -64,6 +64,12 @@ struct SPendingChooser {
     bool                isChooser = false;
 };
 
+enum class ESheetPhase {
+    Opening,
+    Open,
+    Closing
+};
+
 // An open chooser and the window drawn scaled into it. `progress` runs from 0, the parent in its own
 // box, to 1, the parent inside `into`, the chooser's box. While it opens and closes, both windows are
 // drawn in the same box between the two, crossfading. In between, the parent is hidden and the
@@ -79,15 +85,49 @@ struct SSheet {
     CSheetTransformer*          parentTransformer  = nullptr;
     CSheetTransformer*          chooserTransformer = nullptr;
     WP<Desktop::CWindowFadeout> chooserFadeout;
-    bool                        closing      = false;
+    ESheetPhase                 phase        = ESheetPhase::Opening;
     bool                        parentHidden = false;
     bool                        settling     = false;
-    bool                        opened       = false;
     float                       lastProgress = 0.F;
+    WP<SSheet>                  self;
+
+    bool                        isClosing() const {
+        return phase == ESheetPhase::Closing;
+    }
+    bool isOpen() const {
+        return phase == ESheetPhase::Open;
+    }
+
+    // Animation and deferred callbacks observe the same lifetime. A removed
+    // sheet cannot be mistaken for a new one allocated at the same address.
+    template <class Callback>
+    auto callback(Callback fn) {
+        return [weak = self, fn](auto&&...) {
+            if (const auto sheet = weak.lock())
+                fn(*sheet);
+        };
+    }
+
+    template <class Callback>
+    void defer(Callback fn) {
+        g_pEventLoopManager->doLater(callback(fn));
+    }
+
+    static SP<SSheet> create(const PHLWINDOW& chooser, const PHLWINDOW& parent);
+    void              open(const PHLWINDOW& chooser, const PHLWINDOW& parent);
+    void              hideParent();
+    void              showParent();
+    void              damageChooser();
+    void              damage();
+    void              settleIfStill(float progress);
+    void              onProgressUpdate();
+    void              onProgressEnd();
+    void              close(const PHLWINDOW& window);
+    void              cleanup();
 };
 
 static std::vector<UP<SPendingChooser>> pendingChoosers;
-static std::vector<UP<SSheet>>          sheets;
+static std::vector<SP<SSheet>>          sheets;
 static std::vector<CHyprSignalListener> listeners;
 static CFunctionHook*                   fadeoutCreateHook = nullptr;
 
@@ -107,10 +147,6 @@ static SSheet* sheetFor(const PHLWINDOW& w, bool asParent) {
     return IT == sheets.end() ? nullptr : IT->get();
 }
 
-static bool alive(SSheet* sheet) {
-    return std::ranges::any_of(sheets, [sheet](const auto& s) { return s.get() == sheet; });
-}
-
 static CBox lerpBox(const CBox& a, const CBox& b, float t) {
     return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.w + (b.w - a.w) * t, a.h + (b.h - a.h) * t};
 }
@@ -120,7 +156,7 @@ static CBox lerpBox(const CBox& a, const CBox& b, float t) {
 // and the fading is done well before the spring settles.
 constexpr float FADE_SPAN = 0.35F;
 
-static float incomingAlpha(float travelled) {
+static float    incomingAlpha(float travelled) {
     return std::clamp(travelled / FADE_SPAN, 0.F, 1.F);
 }
 
@@ -136,7 +172,7 @@ static CBox currentBox(const PHLWINDOW& w) {
 // moved or resized since it mapped, or where it was when it closed.
 static CBox targetBox(const SSheet* sheet) {
     const auto CHOOSER = sheet->chooser.lock();
-    return CHOOSER && !sheet->closing ? currentBox(CHOOSER) : sheet->into;
+    return CHOOSER && !sheet->isClosing() ? currentBox(CHOOSER) : sheet->into;
 }
 
 // Draws a window's already rendered frame again, scaled from its own box into the sheet's current box
@@ -170,16 +206,16 @@ class CSheetTransformer : public Render::IWindowTransformer {
         glClear(GL_COLOR_BUFFER_BIT);
 
         const float PROGRESS  = std::clamp(m_sheet->progress->value(), 0.F, 1.F);
-        const float TRAVELLED = m_sheet->closing ? 1.F - PROGRESS : PROGRESS;
-        const float ALPHA     = m_isParent == m_sheet->closing ? incomingAlpha(TRAVELLED) : outgoingAlpha(TRAVELLED);
+        const float TRAVELLED = m_sheet->isClosing() ? 1.F - PROGRESS : PROGRESS;
+        const float ALPHA     = m_isParent == m_sheet->isClosing() ? incomingAlpha(TRAVELLED) : outgoingAlpha(TRAVELLED);
         if (ALPHA <= 0.F)
             return OUT;
 
         const auto WORKSPACE = WINDOW->m_workspace;
         const auto OFFSET    = (WINDOW->m_pinned || !WORKSPACE ? Vector2D{} : WORKSPACE->m_renderOffset->value()) + WINDOW->m_floatingOffset - MONITOR->m_position;
         const auto FROM      = OWN.copy().translate(OFFSET).scale(MONITOR->m_scale);
-        auto       to        = m_sheet->opened && !m_sheet->closing ? FROM.copy().scaleFromCenter(m_sheet->dip->value()) :
-                                                                       lerpBox(currentBox(PARENT), targetBox(m_sheet), PROGRESS).translate(OFFSET).scale(MONITOR->m_scale);
+        auto       to        = m_sheet->isOpen() ? FROM.copy().scaleFromCenter(m_sheet->dip->value()) :
+                                                   lerpBox(currentBox(PARENT), targetBox(m_sheet), PROGRESS).translate(OFFSET).scale(MONITOR->m_scale);
 
         // Within two pixels of the window's own size it's drawn at that size on whole pixels, so it isn't
         // resampled as it comes to rest and looks the same once the sheet ends.
@@ -226,119 +262,172 @@ static void detach(const PHLWINDOWREF& w, CSheetTransformer*& slot) {
 // move-from-workspace alpha is left alone while the window stays mapped on one workspace; groups and
 // monocle layouts set the layout alpha themselves. A hidden parent also can't take focus: the pointer
 // passing over it would otherwise focus it, unseen, and restyle the chooser as unfocused.
-static void hideParent(SSheet* sheet) {
-    const auto PARENT = sheet->parent.lock();
-    if (!PARENT || sheet->parentHidden)
+void SSheet::hideParent() {
+    const auto PARENT = parent.lock();
+    if (!PARENT || parentHidden)
         return;
 
-    detach(sheet->parent, sheet->parentTransformer);
+    detach(parent, parentTransformer);
     PARENT->alpha(Desktop::View::WINDOW_ALPHA_MOVE_FROM_WORKSPACE)->setValueAndWarp(0.F);
     PARENT->m_ruleApplicator->noFocus().set(true, Desktop::Types::PRIORITY_SET_PROP);
-    sheet->parentHidden = true;
+    parentHidden = true;
 }
 
-static void showParent(SSheet* sheet) {
-    if (!sheet->parentHidden)
+void SSheet::showParent() {
+    if (!parentHidden)
         return;
 
-    sheet->parentHidden = false;
-    if (const auto PARENT = sheet->parent.lock()) {
+    parentHidden = false;
+    if (const auto PARENT = parent.lock()) {
         PARENT->alpha(Desktop::View::WINDOW_ALPHA_MOVE_FROM_WORKSPACE)->setValueAndWarp(1.F);
         PARENT->m_ruleApplicator->noFocus().unset(Desktop::Types::PRIORITY_SET_PROP);
     }
 }
 
-static void damageChooser(SSheet* sheet) {
-    if (const auto CHOOSER = sheet->chooser.lock())
+void SSheet::damageChooser() {
+    if (const auto CHOOSER = chooser.lock())
         g_pHyprRenderer->damageWindow(CHOOSER, true);
 }
 
-static void damageSheet(SSheet* sheet) {
-    if (const auto PARENT = sheet->parent.lock())
+void SSheet::damage() {
+    if (const auto PARENT = parent.lock())
         g_pHyprRenderer->damageWindow(PARENT, true);
 
-    g_pHyprRenderer->damageBox(sheet->into.copy().expand(4));
+    g_pHyprRenderer->damageBox(into.copy().expand(4));
 }
 
 // A spring spends its last stretch moving the scaled windows by fractions of a pixel, which only
 // makes their text and the blur's grain shimmer. The sheet ends as soon as the box reaches where
 // it's going, or is within half a pixel of it and moving less than that a frame, and the windows
 // draw themselves from there.
-static void settleIfStill(SSheet* sheet, float progress) {
-    const auto  PARENT  = sheet->parent.lock();
+void SSheet::settleIfStill(float currentProgress) {
+    const auto  PARENT  = parent.lock();
     const auto  MONITOR = PARENT ? PARENT->m_monitor.lock() : nullptr;
-    const float LAST    = std::exchange(sheet->lastProgress, progress);
-    if (!MONITOR || sheet->settling)
+    const float LAST    = std::exchange(lastProgress, currentProgress);
+    if (!MONITOR || settling)
         return;
 
-    const auto   FROM   = currentBox(PARENT);
-    const auto&  TO     = sheet->into;
-    const double TRAVEL = MONITOR->m_scale *
-        std::max({std::abs(TO.x - FROM.x), std::abs(TO.y - FROM.y), std::abs(TO.x + TO.w - FROM.x - FROM.w), std::abs(TO.y + TO.h - FROM.y - FROM.h)});
-    const float  GOAL   = sheet->closing ? 0.F : 1.F;
-    const bool   ARRIVED = sheet->closing ? progress <= GOAL : progress >= GOAL;
-    if (!ARRIVED && (std::abs(GOAL - progress) * TRAVEL >= 0.5 || std::abs(progress - LAST) * TRAVEL >= 0.5))
+    const auto   FROM = currentBox(PARENT);
+    const auto&  TO   = into;
+    const double TRAVEL =
+        MONITOR->m_scale * std::max({std::abs(TO.x - FROM.x), std::abs(TO.y - FROM.y), std::abs(TO.x + TO.w - FROM.x - FROM.w), std::abs(TO.y + TO.h - FROM.y - FROM.h)});
+    const float GOAL    = isClosing() ? 0.F : 1.F;
+    const bool  ARRIVED = isClosing() ? currentProgress <= GOAL : currentProgress >= GOAL;
+    if (!ARRIVED && (std::abs(GOAL - currentProgress) * TRAVEL >= 0.5 || std::abs(currentProgress - LAST) * TRAVEL >= 0.5))
         return;
 
     // Warping a variable from inside its own update callback isn't safe, so this waits for the event loop.
-    sheet->settling = true;
-    g_pEventLoopManager->doLater([sheet] {
-        if (!alive(sheet))
-            return;
-
-        sheet->settling = false;
-        if (sheet->progress->isBeingAnimated())
-            sheet->progress->warp();
+    settling = true;
+    defer([](SSheet& sheet) {
+        sheet.settling = false;
+        if (sheet.progress->isBeingAnimated())
+            sheet.progress->warp();
     });
 }
 
 // The closing chooser's snapshot follows the sheet's progress rather than its own fade, so it stays
 // opaque until the parent has faded back in under it.
-static void onProgressUpdate(SSheet* sheet) {
-    const float PROGRESS = sheet->progress->value();
-    if (const auto FADEOUT = sheet->chooserFadeout.lock())
+void SSheet::onProgressUpdate() {
+    const float PROGRESS = progress->value();
+    if (const auto FADEOUT = chooserFadeout.lock())
         FADEOUT->m_alpha->setValueAndWarp(outgoingAlpha(1.F - PROGRESS));
 
-    damageSheet(sheet);
-    settleIfStill(sheet, PROGRESS);
+    damage();
+    settleIfStill(PROGRESS);
 
     // Once the parent has faded out it's hidden straight away, while the chooser is still moving, so
     // the chooser doesn't change under it after it has come to rest.
-    if (!sheet->closing && !sheet->parentHidden && outgoingAlpha(PROGRESS) <= 0.F)
-        g_pEventLoopManager->doLater([sheet] {
-            if (alive(sheet) && !sheet->closing)
-                hideParent(sheet);
+    if (!isClosing() && !parentHidden && outgoingAlpha(PROGRESS) <= 0.F)
+        defer([](SSheet& sheet) {
+            if (!sheet.isClosing())
+                sheet.hideParent();
         });
 }
 
-static void removeSheet(SSheet* sheet) {
+void SSheet::cleanup() {
+    progress->resetAllCallbacks();
+    dip->resetAllCallbacks();
     // A snapshot left at rest above 0 would never finish.
-    if (const auto FADEOUT = sheet->chooserFadeout.lock())
+    if (const auto FADEOUT = chooserFadeout.lock())
         *FADEOUT->m_alpha = 0.F;
 
-    damageSheet(sheet);
-    detach(sheet->chooser, sheet->chooserTransformer);
-    detach(sheet->parent, sheet->parentTransformer);
-    showParent(sheet);
+    damage();
+    detach(chooser, chooserTransformer);
+    detach(parent, parentTransformer);
+    showParent();
+}
 
+static void removeSheet(SSheet* sheet) {
+    sheet->cleanup();
     std::erase_if(sheets, [sheet](const auto& s) { return s.get() == sheet; });
 }
 
 // Once the chooser has opened the parent is hidden; once it has closed the sheet is done. Animation
 // callbacks can't free the variable that runs them, so this waits for the event loop.
-static void onProgressEnd(SSheet* sheet) {
-    g_pEventLoopManager->doLater([sheet] {
-        if (!alive(sheet))
-            return;
-
-        if (sheet->closing)
-            removeSheet(sheet);
+void SSheet::onProgressEnd() {
+    defer([](SSheet& sheet) {
+        if (sheet.isClosing())
+            removeSheet(&sheet);
         else {
-            sheet->opened = true;
-            damageSheet(sheet);
-            hideParent(sheet);
+            sheet.phase = ESheetPhase::Open;
+            sheet.damage();
+            sheet.hideParent();
         }
     });
+}
+
+SP<SSheet> SSheet::create(const PHLWINDOW& chooser, const PHLWINDOW& parent) {
+    auto sheet  = makeShared<SSheet>();
+    sheet->self = sheet;
+    sheet->open(chooser, parent);
+    return sheet;
+}
+
+void SSheet::open(const PHLWINDOW& window, const PHLWINDOW& parentWindow) {
+    chooser = window;
+    parent  = parentWindow;
+    into    = {window->position(IGeometric::GEOMETRIC_GOAL), window->size(IGeometric::GEOMETRIC_GOAL)};
+
+    Animation::mgr()->createAnimation(0.F, progress, Config::animationTree()->getAnimationPropertyConfig("hyprsheetIn"), AVARDAMAGE_NONE);
+    progress->setUpdateCallback(callback([](SSheet& s) { s.onProgressUpdate(); }));
+    Animation::mgr()->createAnimation(1.F, dip, Config::animationTree()->getAnimationPropertyConfig("hyprsheetIn"), AVARDAMAGE_NONE);
+    dip->setUpdateCallback(callback([](SSheet& s) { s.damageChooser(); }));
+
+    attach(this, parentWindow, parentTransformer, true);
+    attach(this, window, chooserTransformer, false);
+
+    window->positionAnimation()->warp();
+    window->sizeAnimation()->warp();
+    window->alpha(Desktop::View::WINDOW_ALPHA_FADE)->warp();
+
+    // An end callback set on a variable at rest runs straight away, so it goes on once this has started.
+    *progress = 1.F;
+    progress->setCallbackOnEnd(callback([](SSheet& s) { s.onProgressEnd(); }), false);
+}
+
+void SSheet::close(const PHLWINDOW& window) {
+    if (parent.get() == window.get()) {
+        // Hyprland snapshots the parent after this, still hidden or through its
+        // transformer, so a hidden parent also closes hidden.
+        phase = ESheetPhase::Closing;
+        onProgressEnd();
+        return;
+    }
+    if (isClosing())
+        return;
+
+    detach(chooser, chooserTransformer);
+    if (parentHidden) {
+        if (const auto PARENT = parent.lock())
+            attach(this, PARENT, parentTransformer, true);
+        showParent();
+    }
+
+    phase        = ESheetPhase::Closing;
+    lastProgress = progress->value();
+    into         = currentBox(window);
+    progress->setConfig(Config::animationTree()->getAnimationPropertyConfig("hyprsheetOut"));
+    *progress = 0.F;
 }
 
 static std::optional<Vector2D> chooserSizeFor(const PHLWINDOW& parent) {
@@ -426,12 +515,11 @@ static void onWindowOpen(PHLWINDOW w) {
     if (!PARENT || !MONITOR || !sheetable(w, PARENT))
         return;
 
-    const auto AREA   = MONITOR->logicalBoxMinusReserved();
-    const auto SIZE   = w->size(IGeometric::GEOMETRIC_GOAL);
-    const auto CENTER = PARENT->position(IGeometric::GEOMETRIC_GOAL) + PARENT->size(IGeometric::GEOMETRIC_GOAL) / 2.F;
-    const auto POS    = (CENTER - SIZE / 2.F).round();
-    const auto CLAMPED =
-        Vector2D{std::max(AREA.x, std::min(POS.x, AREA.x + AREA.w - SIZE.x)), std::max(AREA.y, std::min(POS.y, AREA.y + AREA.h - SIZE.y))};
+    const auto AREA    = MONITOR->logicalBoxMinusReserved();
+    const auto SIZE    = w->size(IGeometric::GEOMETRIC_GOAL);
+    const auto CENTER  = PARENT->position(IGeometric::GEOMETRIC_GOAL) + PARENT->size(IGeometric::GEOMETRIC_GOAL) / 2.F;
+    const auto POS     = (CENTER - SIZE / 2.F).round();
+    const auto CLAMPED = Vector2D{std::max(AREA.x, std::min(POS.x, AREA.x + AREA.w - SIZE.x)), std::max(AREA.y, std::min(POS.y, AREA.y + AREA.h - SIZE.y))};
 
     g_layoutManager->moveTarget(CLAMPED - w->position(IGeometric::GEOMETRIC_GOAL), w->layoutTarget());
 }
@@ -449,55 +537,15 @@ static void onWindowOpenLate(PHLWINDOW w) {
     if (!PARENT || !sheetable(w, PARENT))
         return;
 
-    auto  sheet    = makeUnique<SSheet>();
-    auto* raw      = sheet.get();
-    sheet->chooser = w;
-    sheet->parent  = PARENT;
-    sheet->into    = {w->position(IGeometric::GEOMETRIC_GOAL), w->size(IGeometric::GEOMETRIC_GOAL)};
-
-    Animation::mgr()->createAnimation(0.F, sheet->progress, Config::animationTree()->getAnimationPropertyConfig("hyprsheetIn"), AVARDAMAGE_NONE);
-    sheet->progress->setUpdateCallback([raw](auto) { onProgressUpdate(raw); });
-    Animation::mgr()->createAnimation(1.F, sheet->dip, Config::animationTree()->getAnimationPropertyConfig("hyprsheetIn"), AVARDAMAGE_NONE);
-    sheet->dip->setUpdateCallback([raw](auto) { damageChooser(raw); });
-
-    attach(raw, PARENT, sheet->parentTransformer, true);
-    attach(raw, w, sheet->chooserTransformer, false);
-
-    w->positionAnimation()->warp();
-    w->sizeAnimation()->warp();
-    w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->warp();
-
-    // An end callback set on a variable at rest runs straight away, so it goes on once this has started.
-    *sheet->progress = 1.F;
-    sheet->progress->setCallbackOnEnd([raw](auto) { onProgressEnd(raw); }, false);
-    sheets.emplace_back(std::move(sheet));
+    sheets.emplace_back(SSheet::create(w, PARENT));
 }
 
 static void onWindowClose(PHLWINDOW w) {
-    if (auto* sheet = sheetFor(w, true)) {
-        // Hyprland snapshots the parent after this, still hidden or through its transformer, so a
-        // hidden parent also closes hidden.
-        sheet->closing = true;
-        onProgressEnd(sheet);
-        return;
-    }
-
-    auto* sheet = sheetFor(w, false);
-    if (!sheet || sheet->closing)
-        return;
-
-    detach(sheet->chooser, sheet->chooserTransformer);
-    if (sheet->parentHidden) {
-        if (const auto PARENT = sheet->parent.lock())
-            attach(sheet, PARENT, sheet->parentTransformer, true);
-        showParent(sheet);
-    }
-
-    sheet->closing      = true;
-    sheet->lastProgress = sheet->progress->value();
-    sheet->into         = currentBox(w);
-    sheet->progress->setConfig(Config::animationTree()->getAnimationPropertyConfig("hyprsheetOut"));
-    *sheet->progress = 0.F;
+    auto* sheet = sheetFor(w, true);
+    if (!sheet)
+        sheet = sheetFor(w, false);
+    if (sheet)
+        sheet->close(w);
 }
 
 typedef SP<Desktop::CWindowFadeout> (*origFadeoutCreate)(PHLWINDOW, SP<Render::IFramebuffer>, float);
@@ -505,10 +553,10 @@ typedef SP<Desktop::CWindowFadeout> (*origFadeoutCreate)(PHLWINDOW, SP<Render::I
 // The closing chooser's snapshot grows back out into the parent's box on the curve the parent grows
 // back on.
 static SP<Desktop::CWindowFadeout> hkFadeoutCreate(PHLWINDOW window, SP<Render::IFramebuffer> snapshot, float sourceAlpha) {
-    auto fadeout = ((origFadeoutCreate)fadeoutCreateHook->m_original)(window, snapshot, sourceAlpha);
+    auto  fadeout = ((origFadeoutCreate)fadeoutCreateHook->m_original)(window, snapshot, sourceAlpha);
 
     auto* SHEET = window ? sheetFor(window, false) : nullptr;
-    if (!fadeout || !SHEET || !SHEET->closing)
+    if (!fadeout || !SHEET || !SHEET->isClosing())
         return fadeout;
 
     const auto PARENT = SHEET->parent.lock();
@@ -532,7 +580,6 @@ static SP<Desktop::CWindowFadeout> hkFadeoutCreate(PHLWINDOW window, SP<Render::
     return fadeout;
 }
 
-// A chooser that is gone without closing would leave its parent hidden.
 // hyprfocus dips a focused window by resizing it and back, which has a chooser lay itself out again
 // at each size, so its buttons visibly change size. The chooser is kept out of hyprfocus, and once
 // its sheet has opened it dips here instead, with hyprfocus's animations, by scaling its finished
@@ -548,7 +595,7 @@ static void onWindowActive(PHLWINDOW w, Desktop::eFocusReason reason) {
         return;
 
     auto* sheet = sheetFor(w, false);
-    if (!sheet || !sheet->opened || sheet->closing || sheet->dip->isBeingAnimated())
+    if (!sheet || !sheet->isOpen() || sheet->dip->isBeingAnimated())
         return;
 
     const auto& TREE = Config::animationTree();
@@ -557,21 +604,19 @@ static void onWindowActive(PHLWINDOW w, Desktop::eFocusReason reason) {
 
     sheet->dip->setConfig(TREE->getAnimationPropertyConfig("hyprfocusIn"));
     *sheet->dip = configValues.dip->value();
-    sheet->dip->setCallbackOnEnd([sheet](auto) {
-        if (!alive(sheet))
-            return;
-
-        sheet->dip->setConfig(Config::animationTree()->getAnimationPropertyConfig("hyprfocusOut"));
-        *sheet->dip = 1.F;
-    });
+    sheet->dip->setCallbackOnEnd(sheet->callback([](SSheet& s) {
+        s.dip->setConfig(Config::animationTree()->getAnimationPropertyConfig("hyprfocusOut"));
+        *s.dip = 1.F;
+    }));
 }
 
+// A chooser that is gone without closing would leave its parent hidden.
 static void onWindowDestroy() {
     std::erase_if(pendingChoosers, [](const auto& p) { return !p->chooser; });
 
     std::vector<SSheet*> orphaned;
     for (const auto& s : sheets) {
-        if (!s->parent || (!s->chooser && !s->closing))
+        if (!s->parent || (!s->chooser && !s->isClosing()))
             orphaned.emplace_back(s.get());
     }
 
@@ -615,11 +660,11 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     }
 
     configValues.windowClass = makeShared<Config::Values::CStringValue>("plugin:hyprsheet:class", "regex for the class of chooser windows", "^(xdg-desktop-portal-gtk)$");
-    configValues.parentShare =
-        makeShared<Config::Values::CFloatValue>("plugin:hyprsheet:parent_share", "share of the parent's size a chooser takes", 0.75F, Config::Values::SFloatValueOptions{.min = 0.1F, .max = 1.F});
-    configValues.minSize = makeShared<Config::Values::CVec2Value>("plugin:hyprsheet:min_size", "smallest size a chooser takes", Config::VEC2{700, 450});
-    configValues.dip     = makeShared<Config::Values::CFloatValue>("plugin:hyprsheet:dip", "scale an open chooser dips to when focused, with hyprfocus's animations", 0.99F,
-                                                                   Config::Values::SFloatValueOptions{.min = 0.F, .max = 1.F});
+    configValues.parentShare = makeShared<Config::Values::CFloatValue>("plugin:hyprsheet:parent_share", "share of the parent's size a chooser takes", 0.75F,
+                                                                       Config::Values::SFloatValueOptions{.min = 0.1F, .max = 1.F});
+    configValues.minSize     = makeShared<Config::Values::CVec2Value>("plugin:hyprsheet:min_size", "smallest size a chooser takes", Config::VEC2{700, 450});
+    configValues.dip         = makeShared<Config::Values::CFloatValue>("plugin:hyprsheet:dip", "scale an open chooser dips to when focused, with hyprfocus's animations", 0.99F,
+                                                                       Config::Values::SFloatValueOptions{.min = 0.F, .max = 1.F});
 
     HyprlandAPI::addConfigValueV2(PHANDLE, configValues.windowClass);
     HyprlandAPI::addConfigValueV2(PHANDLE, configValues.parentShare);

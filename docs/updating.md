@@ -23,8 +23,8 @@ opens a pull request only when every check passes.
 
 ### The release
 
-`nixpkgs`, `home-manager`, `catppuccin` and `nixpkgs-darwin` all follow
-branches for the same NixOS release. To change release, move all four to the new
+`nixpkgs`, `home-manager` and `catppuccin` all follow
+branches for the same NixOS release. To change release, move all three to the new
 release's branches in one commit. A new release can also break the hy3dgen and
 Eisvogel pins in [Pins outside `flake.lock`](#pins-outside-flakelock), which
 depend on its Python and TeX Live.
@@ -42,20 +42,31 @@ set, patched by the `pins` overlay in
 set: [`pkgs/hyprglass/`](../pkgs/hyprglass) builds one hyprglass release
 against the pinned Hyprland and patches its layer glass.
 [`pkgs/hyprsheet/`](../pkgs/hyprsheet) is a local plugin built against the
-pinned Hyprland that draws a file chooser's parent scaled into the chooser.
-Four assertions check the Hyprland version: `supportedHyprlandVersions` in that
-overlay, in `pkgs/hyprglass/package.nix` and in `pkgs/hyprsheet/package.nix`,
-and `supportedHyprland` in
+pinned Hyprland that draws a file chooser's parent scaled into the chooser, and
+[`pkgs/hyprrecede/`](../pkgs/hyprrecede) is one that tilts and blurs the
+windows behind j2bar's launcher.
+Five assertions check the Hyprland version: `supportedHyprlandVersions` in that
+overlay, in `pkgs/hyprglass/package.nix`, in `pkgs/hyprsheet/package.nix` and
+in `pkgs/hyprrecede/package.nix`, and `supportedHyprland` in
 [`users/jesse/hyprland-desktop/hyprland/default.nix`](../users/jesse/hyprland-desktop/hyprland/default.nix).
 
 To upgrade:
 
 1. Point `nixpkgs-hyprland` at a nixpkgs commit with the new Hyprland.
 2. Rebase each patch in
+   [`hosts/home/tearing-first-frame.patch`](../hosts/home/tearing-first-frame.patch),
    [`overlays/patches/hyprbars/`](../overlays/patches/hyprbars) and
    [`overlays/patches/hyprfocus/`](../overlays/patches/hyprfocus). They hook
    Hyprland internals, so a clean apply isn't enough. Read them against the new
-   source. One hyprbars patch drops the plugin's event listeners when it
+   source. The Hyprland tearing patch checks first-frame eligibility without
+   requiring that frame to already be marked torn; remove it if upstream fixes
+   that check, and verify fullscreen tearing and direct scanout with `hyprctl monitors`.
+   Check the visible-cursor path separately: the
+   [cursor/tearing investigation](../users/jesse/claude/skills/game-latency/references/cursor-tearing.md)
+   records the Linux/NVIDIA/Aquamarine restrictions behind Hyprland's software
+   cursor policy. Async flip capability alone does not justify removing its
+   cursor guards. Re-check the matching kernel, driver and backend on upgrades.
+   One hyprbars patch drops the plugin's event listeners when it
    unloads, so check that upstream hasn't added a listener it misses. The
    other adds the bar through the renderer's current pass, so a window
    transformer scales and fades it with its window.
@@ -88,16 +99,45 @@ To upgrade:
    without its buttons changing size. Moving the pointer onto it shouldn't
    dip it. Do the same from Alacritty: its title bar should shrink
    with it, not stay behind until the chooser has opened.
-5. Rebase
+5. Read [`pkgs/hyprrecede/main.cpp`](../pkgs/hyprrecede/main.cpp) against the
+   new source. It draws windows through Hyprland's private window
+   transformers with its own shader, relies on Hyprland passing a transformed
+   window's blur matte through the same transformers right after its frame,
+   adds a blur rect at the `RENDER_POST_WINDOWS` stage, and widens the
+   monitor's private damage ring in `render.pre`. Open j2bar's launcher over
+   a browser and an Alacritty: both should lean back about the bottom centre
+   of the screen, darken from the top and blur together with the wallpaper,
+   and spring back as soon as Escape is pressed. While it's open, scroll the
+   browser: the page should redraw where it is drawn, tilted, with no
+   untilted strips left behind. Do the same over a fullscreen window and with
+   a window on the other monitor, which should stay as it is.
+6. Rebase
    [`aquamarine-nested.patch`](../pkgs/agent-sandbox/aquamarine-nested.patch)
    onto that commit's Aquamarine, then start a sandbox and check that
    `hyprctl monitors` inside it lists `NESTED-1`.
-6. Confirm that commit's hyprbars still supports what
+7. Confirm that commit's hyprbars still supports what
    [`hyprland.lua`](../users/jesse/hyprland-desktop/hyprland/hyprland.lua)
    uses: `bar_part_of_window`, `bar_precedence_over_border`, `bar_title_enabled`,
    `on_double_click`, and the `hyprbars:no_bar` window rule.
-7. Update all four version assertions.
-8. Build `home`.
+8. Update all version assertions, including the desktop tearing patch in `hosts/home/gaming.nix`.
+9. Build `home`.
+
+### j2bar
+
+`j2bar` is the shell of the `home` desktop and is managed manually while it is
+in development. This flake does not fetch, build or install its binary. Desktop
+bindings and wallpaper tools use `~/projects/j2bar/target/release/j2bar`, selected
+by `J2BAR_BIN`. Build it in the bar's own repository; `nix flake update` does not
+update it. Wallpaper tools also accept a `J2BAR_BIN` override, falling back to
+`j2bar` on `PATH` when it is unset.
+
+After a Hyprland upgrade, run j2bar's golden test and check its surfaces against
+[`look.lua`](../users/jesse/hyprland-desktop/hyprland/look.lua), whose layer
+rules and hyprglass layers name j2bar's namespaces.
+
+Bar settings live in the regular `~/.config/j2bar/config.toml` file and are edited directly.
+A Nix switch does not generate or place that file. Hyprland's bindings and layer
+rules, the PAM lock service, fonts and wallpaper tools remain declared in this flake.
 
 ### Firefox
 
@@ -141,34 +181,38 @@ Treat a bump as a hardware change and test it on the device.
   instead of the version in `nixpkgs-unstable`. To move it, replace that file
   with `https://downloads.claude.ai/claude-code-releases/<version>/manifest.zst.json`.
   Drop the override once `nixpkgs-unstable` catches up.
+- **Codex.** The `unstable` overlay builds Codex from a newer `rust-v<version>`
+  tag than `nixpkgs-unstable` has, because OpenAI doesn't offer its newest
+  models to older clients. It carries nixpkgs' own patch and `postPatch` for
+  that version, with the patch in
+  [`overlays/patches/codex/`](../overlays/patches/codex). To move it, change
+  `version`, then refresh the source hash and the cargo vendor hash, and copy
+  any new patch or `postPatch` line from nixpkgs' `pkgs/by-name/co/codex/`.
+  Drop the override once `nixpkgs-unstable` catches up.
 - **htop.** [`pkgs/htop-vim-navigation/`](../pkgs/htop-vim-navigation) asserts
   the htop versions its patch was checked against. If a nixpkgs update trips
   it, re-check the patch next to it and add the new version.
-- **Noctalia.** The `unstable` overlay in
-  [`overlays/default.nix`](../overlays/default.nix) patches Noctalia so floating
-  panels skip its clip reveal and Hyprland scales them in instead, so a bar
-  widget's panel centers under the widget, so a plugin panel can set its own
-  padding and resize to fit its content, so plugin sliders can be styled, so
-  notification toasts are laid out like macOS 27's banners and slide in and
-  out across the screen edge, so a desktop widget's panel opens under the
-  widget and plugin rows take a right click, and so a bar widget can turn off
-  its hover tooltip. It asserts the version the patches
-  were checked against. When `nixpkgs-unstable` moves Noctalia, re-check
-  [`overlays/patches/noctalia/`](../overlays/patches/noctalia) against the new
-  source, then:
-  - click the clock (the calendar should open centered under it);
-  - hover the volume icon (no tooltip should appear), then click it (the sound
-    menu should open centered under it, with a thin peach slider);
-  - hover the network icon (no tooltip should appear), then click it (the
-    network menu should scale in at its final size, then grow when Other
-    Networks expands);
-  - click the snowflake button (the system menu should open below the bar with
-    its left edge under the button's), then right-click it (the control center
-    should open);
-  - open the control center;
-  - send a few notifications with `notify-send` (each banner should slide in
-    from the right with its own rounded glass, and slide back out when it
-    expires).
+- **Steam GameMode.** [`hosts/home/gaming.nix`](../hosts/home/gaming.nix)
+  patches Steam's 32-bit and 64-bit GameMode libraries with
+  [`steam-gamemode.patch`](../hosts/home/steam-gamemode.patch). It gates automatic
+  registration on a nonzero Steam game ID, prevents forked children from
+  unregistering their parent, and handles disconnected D-Bus calls without
+  aborting. Review the patch and its version assertion when updating GameMode;
+  check Steam startup and automatic registration for native and Proton games.
+  The preload uses a store-path directory selected by the loader's literal
+  `${PLATFORM}` token for 32-bit/64-bit libraries; verify it inside Steam's
+  pressure-vessel container, where `/run/host/lib` symlinks can resolve into
+  the inner runtime instead. The automatic loader's RUNPATH must include its
+  companion `libgamemode.so` directory because Steam replaces LD_LIBRARY_PATH.
+  Test an actual automatic registration request for each architecture, not just
+  whether `libgamemodeauto` appears in process mappings. After activation, check
+  that the user daemon is running the new binary; its security-wrapper ExecStart
+  path stays constant, so the unit has an explicit package restart trigger.
+  The desktop daemon also carries
+  [`gamemode-ioprio.patch`](../hosts/home/gamemode-ioprio.patch): unset I/O
+  priority must be interpreted from CPU niceness, distinct from explicit
+  best-effort priority zero. Check boost/restore across threads and preservation
+  of custom priorities when updating the 1.8.2 version assertion.
 - **Claude Desktop.** [`pkgs/claude-desktop/`](../pkgs/claude-desktop) fetches
   one `.deb` from Anthropic's APT repository. To move it, copy the newest
   `Version` and `SHA256` from
@@ -249,13 +293,26 @@ Treat a bump as a hardware change and test it on the device.
   appends them to `pnpm-workspace.yaml`; if upstream moves or drops them, drop
   the patch. Then run `zcode --version` and `zcode doctor`.
 
-## Darwin
+## Background game FPS limiting
 
-The Mac's nixpkgs gets only the `additions` and `unstable` overlays. The
-Linux-only `pins` overlay and the `apple-fonts` overlay never reach Darwin, so
-don't add either to the `darwin` arguments in
-[`flake/nixpkgs.nix`](../flake/nixpkgs.nix). A Hyprland, Firefox or Apple fonts
-bump therefore never changes the Mac.
+[`game-background-engine`](../pkgs/game-background-engine/) is a local standalone
+Vulkan/GLX/EGL limiter, with narrow MIT-licensed MangoHud adaptations documented
+in its [source notes](../pkgs/game-background-engine/SOURCES.md). It does not
+link or load MangoHud. [`game-background-limit`](../pkgs/game-background-limit/)
+provides the physical Hyprland event controller and manual launcher; the home
+Steam profile injects both engine architectures automatically.
+
+After graphics loader/header, Steam runtime, libc or Hyprland updates, build the
+engine/controller checks and the home host. Verify both pointer widths through
+Steam's actual pressure-vessel runtime, including loader chains, proc-address
+presentation routes, focus loss/regain, and uncapping after compositor or
+controller failure. Keep the focused atomic bypass free of clocks, config reads,
+pacing locks and sleeps, and keep background waits interruptible. Review helper
+names if Steam changes its launch chain. Preserve the included upstream MIT
+notice. Runtime compatibility and focused overhead still need representative
+game checks; an isolated software renderer does not establish AION performance.
+See [game latency](game-latency.md#background-frame-limit) for activation and
+per-game opt-out instructions.
 
 ## Things an update never touches
 

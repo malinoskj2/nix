@@ -1,0 +1,55 @@
+--- a/lib/client_loader.c
++++ b/lib/client_loader.c
+@@ -29,7 +29,34 @@
+ 
+  */
+ 
+-// Simply include the header with GAMEMODE_AUTO set
+-// This will ensure it calls the functions when it's loaded
+-#define GAMEMODE_AUTO
++#include <stdlib.h>
++#include <unistd.h>
+ #include "gamemode_client.h"
++
++/* Steam and its startup tools inherit LD_PRELOAD, but only games get an app ID.
++ * SteamGameId also covers non-Steam shortcuts whose SteamAppId may be zero. */
++static bool is_game_id(const char *id)
++{
++	return id && *id && strspn(id, "0123456789") == strlen(id) &&
++	       strspn(id, "0") != strlen(id);
++}
++
++static pid_t registered_pid;
++
++__attribute__((constructor)) static void steam_game_start(void)
++{
++	if (!is_game_id(getenv("SteamAppId")) && !is_game_id(getenv("SteamGameId")))
++		return;
++
++	if (gamemode_request_start() == 0)
++		registered_pid = getpid();
++	else
++		fprintf(stderr, "gamemodeauto: %s\n", gamemode_error_string());
++}
++
++__attribute__((destructor)) static void steam_game_end(void)
++{
++	/* A forked child did not register and must not reuse its parent's D-Bus state. */
++	if (registered_pid && registered_pid == getpid() && gamemode_request_end() < 0)
++		fprintf(stderr, "gamemodeauto: %s\n", gamemode_error_string());
++}
+--- a/lib/client_impl.c
++++ b/lib/client_impl.c
+@@ -260,7 +260,11 @@
+ 		dbus_message_iter_append_basic(&iter, type, &p);
+ 	}
+ 
+-	dbus_connection_send_with_reply(bus, msg, &call, -1);
++	/* A disconnected bus may return success with no pending call. */
++	if (!dbus_connection_send_with_reply(bus, msg, &call, -1) || call == NULL) {
++		dbus_set_error_const(error, DBUS_ERROR_FAILED, "Could not send D-Bus request");
++		return -1;
++	}
+ 	dbus_connection_flush(bus);
+ 	dbus_message_unref(msg);
+ 	msg = NULL;

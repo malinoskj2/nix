@@ -21,31 +21,11 @@ local CHROME_WEBGPU = table.concat({
   "--disable-gpu-sandbox",
 }, " ")
 
--- This gray stays outside the palette because Catppuccin's neutrals carry a blue tint.
-local SHADOW = "rgba(00000059)"
-
 local FILE_CHOOSER_APP = "xdg-desktop-portal-gtk"
 local FILE_CHOOSER_CLASS = "^(" .. FILE_CHOOSER_APP .. ")$"
 
--- These Noctalia layer namespaces omit the `noctalia-` prefix, which `noctalia_layers` adds.
-local GLASS_LAYERS = { "bar-.+" }
-local TRANSLUCENT_LAYERS = { "dock", "osd", "window-switcher" }
-
--- ("rrggbb", "aa") -> "rgba(rrggbbaa)"
-local function rgba(color, alpha)
-  return "rgba(" .. color .. alpha .. ")"
-end
-
-local function noctalia_msg(command)
-  return hl.dsp.exec_cmd(nix.noctalia .. " msg " .. command)
-end
-
-local function noctalia_layers(...)
-  local names = {}
-  for _, group in ipairs({ ... }) do
-    table.move(group, 1, #group, #names + 1, names)
-  end
-  return "^noctalia-(" .. table.concat(names, "|") .. ")$"
+local function j2bar_msg(command)
+  return hl.dsp.exec_cmd(nix.j2bar .. " msg " .. command)
 end
 
 -- The side monitor stands portrait on the left, so the main monitor starts at its rotated width.
@@ -63,6 +43,16 @@ hl.monitor({
   position = "1080x0",
   scale = 1,
 })
+
+-- Wine otherwise picks the portrait display at (0, 0) as primary. AION's fullscreen
+-- rendering then gets pillarboxed even when its outer window is on the main display.
+local function set_xwayland_primary()
+  hl.exec_cmd(nix.xrandr .. " --output " .. nix.monitors.main .. " --primary")
+end
+
+hl.on("hyprland.start", set_xwayland_primary)
+hl.on("config.reloaded", set_xwayland_primary)
+hl.on("monitor.layout_changed", set_xwayland_primary)
 
 -- The side monitor gets a named workspace of its own, so it never takes a numbered one.
 hl.workspace_rule({
@@ -83,28 +73,6 @@ for id = nix.workspaces.first, nix.workspaces.last do
 end
 
 hl.config({
-  cursor = {
-    enable_hyprcursor = false,
-  },
-  decoration = {
-    -- Blur is strong and vibrant because Noctalia's glass surfaces rely on what shows through them.
-    blur = {
-      noise = 0.02,
-      passes = 3,
-      vibrancy = 0.2,
-    },
-    rounding = 10,
-    shadow = {
-      color = SHADOW,
-      range = 32,
-    },
-  },
-  general = {
-    allow_tearing = true,
-    border_size = 0,
-    layout = "master",
-    resize_on_border = true,
-  },
   input = {
     accel_profile = "flat",
     follow_mouse = 0,
@@ -112,169 +80,17 @@ hl.config({
     repeat_rate = 24,
   },
   misc = {
-    disable_hyprland_logo = true,
-    force_default_wallpaper = 0,
-  },
-  render = {
-    direct_scanout = 2,
-    expand_undersized_textures = false,
+    -- If j2bar's locker dies, the next one takes the lock over instead of the session staying
+    -- on Hyprland's dead-lock screen.
+    allow_session_lock_restore = true,
   },
 })
 
--- Noctalia draws glass, so its layers need blur; `ignore_alpha` keeps it off transparent margins.
-hl.layer_rule({
-  match = { namespace = noctalia_layers(GLASS_LAYERS, TRANSLUCENT_LAYERS) },
-  blur = true,
-  blur_popups = true,
-  no_anim = true,
-})
-
-hl.layer_rule({ match = { namespace = noctalia_layers(TRANSLUCENT_LAYERS) }, ignore_alpha = 0.5 })
-hl.layer_rule({ match = { namespace = noctalia_layers(GLASS_LAYERS) }, ignore_alpha = 0.02 })
-hl.layer_rule({ match = { namespace = noctalia_layers(GLASS_LAYERS) }, xray = true })
-
--- Floating panels scale in and out like windows; attached panels grow out of the bar through
--- Noctalia's own reveal instead.
-hl.layer_rule({ match = { namespace = noctalia_layers({ "panel" }) }, animation = "popin 80%" })
-hl.layer_rule({ match = { namespace = noctalia_layers({ "attached-panel" }) }, no_anim = true })
-
--- One layer holds every notification banner, so each slides in and out through Noctalia instead.
-hl.layer_rule({ match = { namespace = noctalia_layers({ "notification" }) }, no_anim = true })
-
-hl.layer_rule({
-  match = { namespace = "^noctalia-desktop-widget-" .. nix.control_button_id .. ":.+$" },
-  blur = true,
-  ignore_alpha = 0.05,
-})
-
--- Springs keep their velocity when retargeted mid-animation. Overshoot is 14% for `pop` and 8%
--- for `snap`. `sway` is damped just short of critical, like a macOS Space switch: it eases in
--- with no visible bounce. `glide` is critically damped so closing windows never bounce. Springs
--- ignore `speed`.
-hl.curve("pop", { type = "spring", stiffness = 600, dampening = 26, mass = 1 })
-hl.curve("snap", { type = "spring", stiffness = 600, dampening = 31, mass = 1 })
-hl.curve("sway", { type = "spring", stiffness = 840, dampening = 55, mass = 1 })
-hl.curve("glide", { type = "spring", stiffness = 900, dampening = 60, mass = 1 })
-hl.animation({ leaf = "windows", enabled = true, speed = 7, spring = "snap" })
-hl.animation({ leaf = "windowsIn", enabled = true, speed = 7, spring = "pop" })
-hl.animation({ leaf = "windowsOut", enabled = true, speed = 7, spring = "glide", style = "popin 80%" })
-hl.animation({ leaf = "layersIn", enabled = true, speed = 7, spring = "pop" })
-hl.animation({ leaf = "layersOut", enabled = true, speed = 7, spring = "glide" })
--- A border color fade redraws the window for a second after every focus change, which wakes the GPU
--- for no visible gain on borderless windows.
-hl.animation({ leaf = "border", enabled = false })
-hl.animation({ leaf = "borderangle", enabled = false })
--- `fadeOut` is off because the `windowsOut` popin already animates closing windows.
-hl.animation({ leaf = "fadeOut", enabled = false })
-hl.animation({ leaf = "fadeSwitch", enabled = true, speed = 3, bezier = "linear" })
-hl.animation({ leaf = "workspaces", enabled = true, speed = 6, spring = "sway" })
-
--- Windows are borderless, so hyprfocus dips the focused one to make focus changes visible.
-hl.plugin.load(nix.hyprfocus)
-
-hl.config({
-  plugin = {
-    hyprfocus = {
-      keyboard_focus_animation = "shrink",
-      mouse_focus_animation = "shrink",
-      shrink_percentage = 0.99,
-      -- The file chooser dips through hyprsheet instead, which scales its frame rather than
-      -- resizing it, so its buttons don't lay out again at each size.
-      class = "^(?!xdg-desktop-portal-gtk$).*$",
-    },
-  },
-})
-
-hl.curve("hyprfocusDip", { type = "bezier", points = { { 0.25, 1 }, { 0.5, 1 } } })
-hl.animation({ leaf = "hyprfocusIn", enabled = true, speed = 1.5, bezier = "hyprfocusDip" })
-hl.animation({ leaf = "hyprfocusOut", enabled = true, speed = 4, bezier = "hyprfocusDip" })
-
--- Alacritty and mpv have no title bar of their own, so hyprbars gives them a thin one to grab and
--- double-click.
-hl.plugin.load(nix.hyprbars)
-
-hl.config({
-  plugin = {
-    hyprbars = {
-      bar_blur = false,
-      bar_color = rgba(nix.palette.crust, nix.alpha.chrome),
-      bar_height = 12,
-      bar_part_of_window = true,
-      bar_precedence_over_border = true,
-      bar_title_enabled = false,
-      -- Under a Lua config, `hyprctl dispatch` takes an `hl.dsp` expression.
-      on_double_click = nix.hyprctl .. [[ dispatch 'hl.dsp.window.fullscreen({ mode = "maximized" })']],
-    },
-  },
-})
-
--- hyprglass draws Noctalia's panels as refractive glass in the compositor, the only place that can
--- see what lies behind a layer. Windows stay as they are.
-hl.plugin.load(nix.hyprglass)
-
-local glass = hl.plugin.hyprglass
-glass.config({ enabled = false, default_theme = "dark", layers = { enabled = true } })
-
--- Fitted to macOS 27's Clear widget glass: it darkens and saturates what's behind it and refracts
--- almost nothing, so the panels' own Catppuccin fill still sets the tone.
-glass.preset("panel", {
-  adaptive_boost = 0.0,
-  adaptive_dim = 0.0,
-  brightness = 0.91,
-  chromatic_aberration = 0.0,
-  contrast = 1.0,
-  edge_thickness = 0.01,
-  fresnel_strength = 0.0,
-  lens_distortion = 0.0,
-  refraction_strength = 0.05,
-  saturation = 1.33,
-  specular_strength = 0.0,
-  tint_color = 0x00000000,
-  vibrancy = 0.0,
-})
-
--- Every floating panel shares this namespace, so these settings apply to all of them; the blur
--- region Noctalia sends marks where each one is. `corner_radius` must match Noctalia's panel radius.
-glass.layer("noctalia-panel", {
-  preset = "panel",
-  mask_mode = "region",
-  corner_radius = 12,
-  rounding_power = 2.0,
-  rim_light = 2.6,
-  rim_shadow = 2.7,
-  gleam_colors = {
-    nix.palette.peach,
-    nix.palette.yellow,
-    nix.palette.teal,
-    nix.palette.lavender,
-    nix.palette.mauve,
-    nix.palette.pink,
-  },
-  gleam_strength = 1.0,
-  gleam_width = 1.2,
-  gleam_length = 0.6,
-  gleam_duration = 1.2,
-  gleam_delay = 0.1,
-  gleam_rest = 0.3,
-})
-
--- Each notification banner is its own piece of the blur region, so each gets its own glass. Banners
--- come and go too often for a gleam. `corner_radius` must match Noctalia's banner radius.
-glass.layer("noctalia-notification", {
-  preset = "panel",
-  mask_mode = "region",
-  corner_radius = 20,
-  rounding_power = 2.0,
-  rim_light = 2.6,
-  rim_shadow = 2.7,
-})
-
--- Attached panels flare into the bar, so their glass follows the region alone, without a rim.
-glass.layer("noctalia-attached-panel", { preset = "panel", mask_mode = "region" })
+-- agent-sandbox's nested Hyprland loads the same file, so both draw surfaces alike.
+require("look")
 
 -- While a file chooser is open, hyprsheet draws the app that opened it scaled into the chooser and
 -- faded out, so a tiled app keeps its layout and never re-lays out for a size it only appears at.
-hl.plugin.load(nix.hyprsheet)
 
 hl.config({
   plugin = {
@@ -297,11 +113,6 @@ hl.curve("land", { type = "spring", stiffness = 625, dampening = 42.5, mass = 1 
 hl.animation({ leaf = "hyprsheetIn", enabled = true, speed = 7, spring = "land" })
 hl.animation({ leaf = "hyprsheetOut", enabled = true, speed = 7, spring = "land" })
 
--- Noctalia reads its mpvpaper wallpaper assignments only at startup, so they're randomized first.
-hl.on("hyprland.start", function()
-  hl.exec_cmd(nix.wallpaper_randomize .. "; exec " .. nix.noctalia)
-end)
-
 -- Letters are mnemonic for the application; SHIFT picks a variant.
 hl.bind(MAIN_MOD .. " + Return", hl.dsp.exec_cmd(TERMINAL))
 hl.bind(MAIN_MOD .. " + F", hl.dsp.exec_cmd(BROWSER))
@@ -315,15 +126,14 @@ hl.bind(MAIN_MOD .. " + E", hl.dsp.exec_cmd(EDITOR))
 hl.bind(MAIN_MOD .. " + Q", actions.close_and_quit({ [FILE_CHOOSER_APP] = true }))
 hl.bind(MAIN_MOD .. " + V", actions.toggle_floating())
 
--- Noctalia owns the shell, so these binds go through its IPC.
-hl.bind(MAIN_MOD .. " + P", noctalia_msg("screenshot-region"))
-hl.bind(MAIN_MOD .. " + Escape", noctalia_msg("session lock"))
-hl.bind(MAIN_MOD .. " + Space", noctalia_msg("panel-toggle launcher"))
-hl.bind(MAIN_MOD .. " + S", noctalia_msg("panel-toggle control-center"))
-hl.bind(MAIN_MOD .. " + comma", noctalia_msg("settings-toggle"))
-hl.bind("XF86AudioRaiseVolume", noctalia_msg("volume-up"), { locked = true, repeating = true })
-hl.bind("XF86AudioLowerVolume", noctalia_msg("volume-down"), { locked = true, repeating = true })
-hl.bind("XF86AudioMute", noctalia_msg("volume-mute"), { locked = true })
+-- j2bar is the shell, so these binds go through its commands.
+hl.bind(MAIN_MOD .. " + P", j2bar_msg("screenshot-region"))
+hl.bind(MAIN_MOD .. " + Escape", j2bar_msg("session lock"))
+hl.bind(MAIN_MOD .. " + Space", j2bar_msg("panel-toggle launcher"))
+hl.bind(MAIN_MOD .. " + S", j2bar_msg("panel-toggle control-center"))
+hl.bind("XF86AudioRaiseVolume", j2bar_msg("volume-up"), { locked = true, repeating = true })
+hl.bind("XF86AudioLowerVolume", j2bar_msg("volume-down"), { locked = true, repeating = true })
+hl.bind("XF86AudioMute", j2bar_msg("volume-mute"), { locked = true })
 
 -- H, J, K and L follow vim's directions to move focus, swap with SHIFT and resize with ALT.
 hl.bind(MAIN_MOD .. " + H", hl.dsp.focus({ direction = "left" }))
@@ -374,8 +184,29 @@ hl.window_rule({
 hl.window_rule({ match = { class = "^(firefox)$" }, immediate = true })
 hl.window_rule({ match = { class = "^(jetbrains-datagrip)$" }, immediate = true })
 
+-- Proton windows identify their Steam app but may supply neither a tearing hint nor a game
+-- content type. Gamescope is also a game surface, so both get automatic direct scanout.
+hl.window_rule({
+  name = "steam-games-low-latency",
+  match = { class = "^(steam_app_[0-9]+|gamescope)$" },
+  immediate = true,
+  content = "game",
+})
+
+-- X11 position requests can put a floating Steam game on the side workspace while it renders
+-- on the main monitor. Keep Steam games here, including before they enter fullscreen.
+hl.window_rule({
+  name = "steam-games-placement",
+  match = { class = "^steam_app_[0-9]+$" },
+  monitor = nix.monitors.main,
+  workspace = "5",
+  suppress_event = "x11configurerequest",
+})
+
+-- Native games that advertise their content type need no class-specific rule.
+hl.window_rule({ name = "game-content-low-latency", match = { content = "^game$" }, immediate = true })
+
 -- Dialog-like windows float rather than disturb the tiled layout.
-hl.window_rule({ match = { class = "^(dev\\.noctalia\\.Noctalia)$" }, float = true, size = { 1080, 920 } })
 hl.window_rule({ match = { class = "^(mpv)$" }, float = true, center = true, keep_aspect_ratio = true })
 -- The file chooser's GTK theme draws its own frame and shadow; Hyprland caps rounding at 20.
 hl.window_rule({
@@ -384,3 +215,64 @@ hl.window_rule({
   rounding = 20,
   no_shadow = true,
 })
+
+-- Dolphin works like the dialogs above, and the class matches both its Wayland app_id and its
+-- XWayland class.
+hl.window_rule({ match = { class = "^(org.kde.dolphin|dolphin)$" }, float = true })
+
+-- Workspace 5 floats every window until it leaves. Tags keep its previous state across reloads
+-- and disappear with the window, so closing one needs no separate bookkeeping.
+do
+  local WORKSPACE = 5
+  local WAS_TILED = "workspace-5-was-tiled"
+  local WAS_FLOATING = "workspace-5-was-floating"
+
+  local function sync_floating(window)
+    if window == nil or not window.mapped or window.workspace == nil then
+      return
+    end
+
+    local previous
+    for _, tag in ipairs(window.tags) do
+      if tag == WAS_TILED or tag == WAS_FLOATING then
+        previous = tag
+        break
+      end
+    end
+
+    local floating
+    if window.workspace.id == WORKSPACE then
+      if previous == nil then
+        previous = window.floating and WAS_FLOATING or WAS_TILED
+        hl.dispatch(hl.dsp.window.tag({ tag = "+" .. previous, window = window }))
+      end
+      floating = true
+    elseif previous ~= nil then
+      hl.dispatch(hl.dsp.window.tag({ tag = "-" .. previous, window = window }))
+      floating = previous == WAS_FLOATING
+    else
+      return
+    end
+
+    if window.floating ~= floating then
+      hl.dispatch(hl.dsp.window.float({ action = floating and "on" or "off", window = window }))
+    end
+  end
+
+  -- Move callbacks run before Hyprland finishes relocating the layout target. Wait a tick before
+  -- changing its floating state, and re-read the window in case it moved again or closed meanwhile.
+  local function schedule(window)
+    hl.timer(function()
+      sync_floating(window)
+    end, { timeout = 1, type = "oneshot" })
+  end
+
+  hl.on("window.open", schedule)
+  hl.on("window.move_to_workspace", schedule)
+  hl.on("window.update_rules", schedule)
+  hl.on("config.reloaded", function()
+    for _, window in ipairs(hl.get_windows()) do
+      schedule(window)
+    end
+  end)
+end

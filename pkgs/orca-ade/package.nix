@@ -11,6 +11,7 @@
   gtk3,
   python3,
   unstable,
+  appearanceSettings ? { },
 }:
 
 let
@@ -32,13 +33,13 @@ let
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "orca-ade";
-  version = "1.4.212";
+  version = "1.4.220";
 
   src = fetchFromGitHub {
     owner = "stablyai";
     repo = "orca";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-gUj0REuVXpAB1DnxllrIFrTqI54geC8XkZAmwItTtzc=";
+    hash = "sha256-1UP7svWbm9f9Af004weRc2QScPO/AF+YqQEZ5yjJuug=";
   };
 
   patches = [
@@ -51,6 +52,23 @@ stdenv.mkDerivation (finalAttrs: {
 
   # The glibc floor guards Ubuntu 20.04 users of the upstream AppImage.
   postPatch = ''
+    # Apply declarative appearance to new and existing profiles at startup,
+    # without replacing Orca's mutable workspace/session state.
+    cat > src/shared/nix-appearance-settings.ts <<'EOF'
+    import type { GlobalSettings } from './global-settings-types'
+    export const nixAppearanceSettings = ${builtins.toJSON appearanceSettings} satisfies Partial<GlobalSettings>
+    EOF
+    sed -i "1i import { nixAppearanceSettings } from './nix-appearance-settings'" \
+      src/shared/default-global-settings.ts
+    # Keep the declarative overrides after the defaults without TS2783's duplicate-key error
+    # for overrides also named explicitly in the defaults object.
+    sed -i 's/^  return {$/  return Object.assign<GlobalSettings, Partial<GlobalSettings>>({/; s/^  }$/  }, nixAppearanceSettings)/' \
+      src/shared/default-global-settings.ts
+    sed -i "1i import { nixAppearanceSettings } from '../../../shared/nix-appearance-settings'" \
+      src/main/persistence/loading-store/normalize-loaded-global-settings.ts
+    substituteInPlace src/main/persistence/loading-store/normalize-loaded-global-settings.ts \
+      --replace-fail '...stripRetiredGlobalSettings(parsed.settings),' \
+        '...stripRetiredGlobalSettings(parsed.settings), ...nixAppearanceSettings,'
     substituteInPlace config/electron-builder.config.cjs \
       --replace-fail "const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')" \
         "const verifyLinuxGlibcFloor = () => {}"
@@ -69,7 +87,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit (finalAttrs) pname version src;
     inherit pnpm;
     fetcherVersion = 4;
-    hash = "sha256-3n2ZdT+NxA6Ht1AvDnqAYMwFzS1Z+USWpvBP9sfOJcw=";
+    hash = "sha256-b/d+Ma2G6xj0QgG1PzcD0sPXMkVrhwvoYC8PnpW3dc4=";
   };
 
   mobilePnpmDeps = fetchPnpmDeps {
@@ -78,7 +96,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     sourceRoot = "${finalAttrs.src.name}/mobile";
     fetcherVersion = 4;
-    hash = "sha256-fSC+EpPI00AnulrQcPurEGU6bwSXhc2wrX+Kg94BZPg=";
+    hash = "sha256-ixAfqcaKslNjHg5Kxa6gBmLJWOh8htSsCUH2uVUe4aE=";
   };
 
   postConfigure = ''

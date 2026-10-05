@@ -2,14 +2,12 @@
 
 ## Repository overview
 
-This flake builds four NixOS hosts and one standalone Home Manager host:
+This flake builds four NixOS hosts:
 
 - `home`: primary desktop, with Hyprland, NVIDIA and Home Manager.
 - `katana`: ThinkPad, with Hyprland and Home Manager.
 - `pi`: aarch64 server with its own `pi` user and no Home Manager.
 - `media`: media server with Docker and NVIDIA transcoding.
-- `macbook`: Apple-silicon Mac with only a conservative Home Manager profile,
-  exported as `homeConfigurations.macbook`.
 
 ### Flake
 
@@ -20,8 +18,7 @@ the exported package list, and imports the single-concern modules in `flake/`:
   list), used by both the hosts and `perSystem` pkgs, and the exported
   overlays.
 - `hosts.nix`: `mkHost.nixos`, which builds a NixOS host with the Linux nixpkgs
-  arguments and the configuration revision, and `mkHost.darwin`, which builds a
-  standalone Home Manager profile with the aarch64-darwin `perSystem` pkgs.
+  arguments and the configuration revision.
 - `checks.nix`: `host-<name>` for each host on its system, `package-<name>` for
   the local packages those hosts install directly, and `devshell`. Evaluation
   fails if a package in `pkgs/` is missing from `flake.nix`'s `packages`.
@@ -55,7 +52,7 @@ the `media` user they run as and the open ports.
 
 ### Home Manager
 
-The Home Manager hosts (`home`, `katana`, `macbook`) each have a profile at
+The Home Manager hosts (`home`, `katana`) each have a profile at
 `users/jesse/profiles/<name>.nix`. It declares that host's `home.stateVersion`
 and imports `users/jesse/global/` (palette, session and the core program
 modules) plus opt-in `users/jesse/features/`: `admin`, `cli`, `desktop`, `dev`,
@@ -63,22 +60,21 @@ modules) plus opt-in `users/jesse/features/`: `admin`, `cli`, `desktop`, `dev`,
 (mold linker). Single
 programs are flat modules at `users/jesse/<program>.nix` or
 `users/jesse/<program>/`, imported by `global/`, a feature or a profile.
-On NixOS, identity comes from the OS account; the `macbook` profile sets
-`home.username` and `home.homeDirectory` itself. `users/jesse/hyprland-desktop/` is the
-Hyprland and Noctalia desktop, imported only by the `home` profile.
+Identity comes from the NixOS account. `users/jesse/hyprland-desktop/` is the
+Hyprland and j2bar desktop, imported only by the `home` profile.
 
 ### Packages, overlays and patches
 
 Each `pkgs/<name>/package.nix` is a local package. `pkgs/default.nix` picks up
 every directory, and the `additions` overlay exposes them as `pkgs.<name>`. A
 new package also goes in the `packages` list in `flake.nix`. Its `callPackage` supplies
-claude-code, codex and noctalia from `pkgs.unstable`. Install local packages by
+claude-code and codex from `pkgs.unstable`. Install local packages by
 name. Linux-only packages set `meta.platforms`. `git-open-branch` installs the
 `git-open` command.
 
 `overlays/default.nix` holds `additions`, `unstable` and `pins`. `unstable` is
 `pkgs.unstable`, with claude-code built from the manifest in
-`overlays/claude-code/` and Noctalia patched. `pins` takes Firefox, Hyprland,
+`overlays/claude-code/` and local Codex patches. `pins` takes Firefox, Hyprland,
 the Hyprland plugins and the Hyprland portal from exact nixpkgs revisions, and
 patches hyprbars and hyprfocus. The `apple-fonts` input's overlay adds `pkgs.sf-pro`,
 `sf-compact`, `sf-mono` and `ny`.
@@ -113,7 +109,7 @@ to the desktop, and update it when the language changes.
 @docs/updating.md
 
 That file is the single source for update rules (coupled and commit-pinned
-inputs, manual pins, Darwin overlays, stateVersion). Edit it rather than
+inputs, manual pins, stateVersion). Edit it rather than
 restating rules here. On top of it, for agents:
 
 - Build the affected host (`nix flake check`, or
@@ -123,6 +119,6 @@ restating rules here. On top of it, for agents:
 - `git add` new files before evaluating; flakes only see tracked files.
 - Never bump `system.stateVersion` or `home.stateVersion`, and never hand-edit
   `hardware-configuration.nix`.
-- The `home` Hyprland and Noctalia desktop is fully declared under
+- The `home` Hyprland and j2bar desktop is fully declared under
   `users/jesse/hyprland-desktop/` and must not gain a dependency on the old
   `~/env` dotfiles checkout.
