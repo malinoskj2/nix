@@ -71,6 +71,7 @@
 
   environment.systemPackages = with pkgs; [
     agent-sandbox
+    switch-and-reset-sandboxes
     libva-utils
 
     # Pulls in the full .NET SDK, so only this host installs it.

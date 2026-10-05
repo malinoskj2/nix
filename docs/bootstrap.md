@@ -96,3 +96,9 @@ Include config.d/*
 
 Then `ssh sandbox-<name>` starts the `agent-sandbox@sandbox-<name>` user unit
 and connects to its container.
+
+Nix rebuilds leave running sandbox services alone, including when the sandbox
+package changes. Updated launchers and images apply the next time a sandbox
+starts. The installed `switch-and-reset-sandboxes` command also preserves
+running sandboxes by default; pass `--reset-sandboxes` to explicitly refresh
+active sandbox services after rebuilding.

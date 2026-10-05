@@ -123,6 +123,7 @@
           "muse"
           "orca-ade"
           "pubip"
+          "switch-and-reset-sandboxes"
           "wallpaper-autopause"
           "wallpaper-outputs"
           "wallpaper-play"
