@@ -106,6 +106,7 @@
           "ata-devs"
           "battery"
           "claude-desktop"
+          "deepsec"
           "find-service"
           "game-background-engine"
           "game-background-limit"
