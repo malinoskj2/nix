@@ -75,8 +75,8 @@ name. Linux-only packages set `meta.platforms`. `git-open-branch` installs the
 `overlays/default.nix` holds `additions`, `unstable` and `pins`. `unstable` is
 `pkgs.unstable`, with claude-code built from the manifest in
 `overlays/claude-code/` and local Codex patches. `pins` takes Firefox, Hyprland,
-the Hyprland plugins and the Hyprland portal from exact nixpkgs revisions, and
-patches hyprbars and hyprfocus. The `apple-fonts` input's overlay adds `pkgs.sf-pro`,
+the Hyprland portal from exact nixpkgs revisions. The j2bar input supplies the
+single compositor plugin, built against the host Hyprland package. The `apple-fonts` input's overlay adds `pkgs.sf-pro`,
 `sf-compact`, `sf-mono` and `ny`.
 
 Patches sit next to what applies them: a `pkgs/` package keeps its patch in its

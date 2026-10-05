@@ -23,7 +23,7 @@ let
       side = "DP-1";
     };
     j2bar = config.home.sessionVariables.J2BAR_BIN;
-    j2barPlugin = "${config.programs.j2bar.hyprlandPlugin.package}/lib/libj2bar-hyprland.so";
+    j2barPlugin = "${osConfig.programs.j2bar.hyprlandPlugin.package}/lib/libj2bar-hyprland.so";
     workspaces = {
       first = 1;
       last = 5;
