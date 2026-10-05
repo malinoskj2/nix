@@ -8,6 +8,7 @@
   imports = [ ./unreal-mcp.nix ];
 
   home.packages = with pkgs; [
+    deepsec
     gnumake
     muse
     nil
