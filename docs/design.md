@@ -71,13 +71,17 @@ imitate (the calendar's month is "September", bold, like "Network").
 
 ## Glass
 
+Compositor effects and authored motion are configured through the native
+`programs.j2bar.settings.effects` policy. Hyprland Lua retains input, output
+topology and window/session rules, with one bundled plugin load declaration.
+
 - **Hyprland blur** is strong (3 passes, vibrancy 0.2), because the shell's glass
   relies on what shows through it.
-- **hyprglass** applies macOS 27's Clear widget glass to j2bar layers:
+- **The bundled j2bar glass effect** applies macOS 27's Clear widget glass to layers:
   almost no refraction, a directional rim, and a gleam in the lambda colors
   across a floating panel's top rim once when it opens. Its corner radii must
-  match the surface: 12 for the on-screen display and polkit prompt,
-  20 for notification banners and 36 for the launcher container.
+  match the surface: 22 for the on-screen display, 18 for panels, polkit prompts
+  and notification banners, and 36 for the launcher container.
 - **The bar** is 8% glass with a 30% white 1px outline and no shadow.
 - **Notification banners** are 55% glass, with no outline or app name.
 - **The file chooser** draws its own frame: radius 20, a crust `chrome` body

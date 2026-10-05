@@ -34,110 +34,52 @@ the few packages that need something newer.
 
 ### Hyprland
 
-`nixpkgs-hyprland` is an exact nixpkgs commit. Hyprland, `hyprlandPlugins` and
-`xdg-desktop-portal-hyprland` all come from it, so the compositor and its
-plugins always share one ABI. hyprbars and hyprfocus come from that plugin
-set, patched by the `pins` overlay in
-[`overlays/default.nix`](../overlays/default.nix). hyprglass isn't in that
-set: [`pkgs/hyprglass/`](../pkgs/hyprglass) builds one hyprglass release
-against the pinned Hyprland and patches its layer glass.
-[`pkgs/hyprsheet/`](../pkgs/hyprsheet) is a local plugin built against the
-pinned Hyprland that draws a file chooser's parent scaled into the chooser, and
-[`pkgs/hyprrecede/`](../pkgs/hyprrecede) is one that tilts and blurs the
-windows behind j2bar's launcher.
-Five assertions check the Hyprland version: `supportedHyprlandVersions` in that
-overlay, in `pkgs/hyprglass/package.nix`, in `pkgs/hyprsheet/package.nix` and
-in `pkgs/hyprrecede/package.nix`, and `supportedHyprland` in
-[`users/jesse/hyprland-desktop/hyprland/default.nix`](../users/jesse/hyprland-desktop/hyprland/default.nix).
+`nixpkgs-hyprland` pins the compositor and portal together. The j2bar input builds
+its bundled focus/bar/glass/sheet/recede plugin against the exact host Hyprland
+package; standalone effect packages and overlay patches are no longer installed. Their
+retired sources remain in this repository pending packaged live desktop acceptance.
+The desktop assertion in `users/jesse/hyprland-desktop/hyprland/default.nix` and
+first-frame tearing patch assertion in `hosts/home/gaming.nix` require 0.56.2.
 
-To upgrade:
-
-1. Point `nixpkgs-hyprland` at a nixpkgs commit with the new Hyprland.
-2. Rebase each patch in
-   [`hosts/home/tearing-first-frame.patch`](../hosts/home/tearing-first-frame.patch),
-   [`overlays/patches/hyprbars/`](../overlays/patches/hyprbars) and
-   [`overlays/patches/hyprfocus/`](../overlays/patches/hyprfocus). They hook
-   Hyprland internals, so a clean apply isn't enough. Read them against the new
-   source. The Hyprland tearing patch checks first-frame eligibility without
-   requiring that frame to already be marked torn; remove it if upstream fixes
-   that check, and verify fullscreen tearing and direct scanout with `hyprctl monitors`.
-   Check the visible-cursor path separately: the
-   [cursor/tearing investigation](../users/jesse/claude/skills/game-latency/references/cursor-tearing.md)
-   records the Linux/NVIDIA/Aquamarine restrictions behind Hyprland's software
-   cursor policy. Async flip capability alone does not justify removing its
-   cursor guards. Re-check the matching kernel, driver and backend on upgrades.
-   One hyprbars patch drops the plugin's event listeners when it
-   unloads, so check that upstream hasn't added a listener it misses. The
-   other adds the bar through the renderer's current pass, so a window
-   transformer scales and fades it with its window.
-3. Move hyprglass to the release that its `hyprpm.toml` pairs with the new
-   Hyprland, and rebase
-   [`layer-shape.patch`](../pkgs/hyprglass/layer-shape.patch) onto it. hyprglass
-   hooks Hyprland's private `renderLayer`, so open a floating panel (the clock's
-   calendar) and an attached one (the control center) and check their glass,
-   not just the build. The floating panel's top rim should gleam once as it
-   opens, and its edges shouldn't flicker dark while it scales in; the
-   attached one shouldn't gleam. Then send two notifications: each banner
-   should have its own rounded glass, even while one slides in or out.
-4. Read [`pkgs/hyprsheet/main.cpp`](../pkgs/hyprsheet/main.cpp) against the
-   new source. It uses Hyprland's private window transformers, xdg-foreign
-   parents, window fadeouts and layout moves, hooks `CWindowFadeout::create`,
-   hides the parent through its move-from-workspace alpha and its no-focus
-   rule, and relies on
-   Hyprland passing a transformed window's blur matte through its
-   transformers, so a clean build isn't enough. Check that Hyprland still
-   skips drawing a window at alpha 0 and sends it no frame callbacks, and still
-   sets that alpha only when a window maps, unmaps or changes workspace. Open a
-   file chooser from Firefox and check that Firefox shrinks into the chooser
-   and fades out as it opens, and grows back out of it as it closes, without
-   Firefox re-laying out its page. Its translucent toolbar should keep its blur
-   as it fades, not lose it on the first frame, the wallpaper shouldn't flash
-   through either way, and the snowflake widget in the top-left corner should
-   stay whole. Once the chooser has come to rest its text and glass shouldn't
-   change or shimmer. Focus another window, then focus the chooser again by
-   keyboard: it should dip like any window, with hyprfocus's animations,
-   without its buttons changing size. Moving the pointer onto it shouldn't
-   dip it. Do the same from Alacritty: its title bar should shrink
-   with it, not stay behind until the chooser has opened.
-5. Read [`pkgs/hyprrecede/main.cpp`](../pkgs/hyprrecede/main.cpp) against the
-   new source. It draws windows through Hyprland's private window
-   transformers with its own shader, relies on Hyprland passing a transformed
-   window's blur matte through the same transformers right after its frame,
-   adds a blur rect at the `RENDER_POST_WINDOWS` stage, and widens the
-   monitor's private damage ring in `render.pre`. Open j2bar's launcher over
-   a browser and an Alacritty: both should lean back about the bottom centre
-   of the screen, darken from the top and blur together with the wallpaper,
-   and spring back as soon as Escape is pressed. While it's open, scroll the
-   browser: the page should redraw where it is drawn, tilted, with no
-   untilted strips left behind. Do the same over a fullscreen window and with
-   a window on the other monitor, which should stay as it is.
-6. Rebase
-   [`aquamarine-nested.patch`](../pkgs/agent-sandbox/aquamarine-nested.patch)
-   onto that commit's Aquamarine, then start a sandbox and check that
-   `hyprctl monitors` inside it lists `NESTED-1`.
-7. Confirm that commit's hyprbars still supports what
-   [`hyprland.lua`](../users/jesse/hyprland-desktop/hyprland/hyprland.lua)
-   uses: `bar_part_of_window`, `bar_precedence_over_border`, `bar_title_enabled`,
-   `on_double_click`, and the `hyprbars:no_bar` window rule.
-8. Update all version assertions, including the desktop tearing patch in `hosts/home/gaming.nix`.
-9. Build `home`.
+To upgrade, review/rebase `hosts/home/tearing-first-frame.patch` against the new
+compositor, including cursor/DRM restrictions. Review the bundled native plugin
+in the j2bar repository against the same pinned headers; a successful compile
+alone does not establish compatibility. Check chooser opening/closing from
+Firefox on both normal and rotated monitors, title-bar maximize/unload, live
+panel glass and launcher recession without damage artifacts. Rebase
+`pkgs/agent-sandbox/aquamarine-nested.patch` against the coupled backend, verify
+`NESTED-1`, update version assertions, and build `home` before activation.
 
 ### j2bar
 
-`j2bar` is the shell of the `home` desktop and is managed manually while it is
-in development. This flake does not fetch, build or install its binary. Desktop
-bindings and wallpaper tools use `~/projects/j2bar/target/release/j2bar`, selected
-by `J2BAR_BIN`. Build it in the bar's own repository; `nix flake update` does not
-update it. Wallpaper tools also accept a `J2BAR_BIN` override, falling back to
-`j2bar` on `PATH` when it is unset.
+The pinned `j2bar` flake input supplies the Rust shell, bundled compositor plugin
+and both game-engine architectures. Update that input only after its complete
+Rust/native/private-GUI gates pass, then build this host. NixOS owns the sole
+`j2bar.service`, admin policy, PAM service, runtime PATH and `/etc/xdg/j2bar/config.toml`.
+Home Manager supplies the matching compositor library and key bindings; it does
+not generate a second user config or duplicate shell service.
 
-After a Hyprland upgrade, run j2bar's golden test and check its surfaces against
-[`look.lua`](../users/jesse/hyprland-desktop/hyprland/look.lua), whose layer
-rules and hyprglass layers name j2bar's namespaces.
+Exact glass, focus, title-bar, chooser and recession settings formerly in Lua
+now live in `hosts/common/optional/j2bar.nix` under `settings.effects`. Lua retains
+plugin loading, monitor topology, input and low-latency game/window policy.
+Super+A opens the Assistant; other existing bindings stay the same.
 
-Bar settings live in the regular `~/.config/j2bar/config.toml` file and are edited directly.
-A Nix switch does not generate or place that file. Hyprland's bindings and layer
-rules, the PAM lock service, fonts and wallpaper tools remain declared in this flake.
+A preexisting `~/.config/j2bar/config.toml` takes precedence over `/etc/xdg`.
+Before eventual cutover, inspect and back it up or merge its intended overrides;
+this repository does not delete personal state or config. Wallpaper assignments
+remain at `$XDG_STATE_HOME/wallpaper/assignments.json`; the native player reuses
+that schema. The workspace audio restoration journal remains at
+`$XDG_STATE_HOME/game-workspace-audio/mute.json` and is retained. Stop the old
+wallpaper and audio services before native workers start, while game playback
+streams still exist so recorded mute state can be restored. No service or
+running Steam process was changed while preparing these declarations.
+
+The native limiter is opt-in per game: set Steam launch options to
+`j2bar game-run -- %command%` (or `j2bar game-run -- GAME [ARGS...]` outside Steam).
+The old global Steam engine injection is disabled; the independent
+GameMode CPU policy/preload and first-frame tearing patch remain. Restart games
+after eventual activation. Do not infer physical game latency from nested EGL
+or software-renderer acceptance.
 
 ### Firefox
 
@@ -295,24 +237,14 @@ Treat a bump as a hardware change and test it on the device.
 
 ## Background game FPS limiting
 
-[`game-background-engine`](../pkgs/game-background-engine/) is a local standalone
-Vulkan/GLX/EGL limiter, with narrow MIT-licensed MangoHud adaptations documented
-in its [source notes](../pkgs/game-background-engine/SOURCES.md). It does not
-link or load MangoHud. [`game-background-limit`](../pkgs/game-background-limit/)
-provides the physical Hyprland event controller and manual launcher; the home
-Steam profile injects both engine architectures automatically.
-
-After graphics loader/header, Steam runtime, libc or Hyprland updates, build the
-engine/controller checks and the home host. Verify both pointer widths through
-Steam's actual pressure-vessel runtime, including loader chains, proc-address
-presentation routes, focus loss/regain, and uncapping after compositor or
-controller failure. Keep the focused atomic bypass free of clocks, config reads,
-pacing locks and sleeps, and keep background waits interruptible. Review helper
-names if Steam changes its launch chain. Preserve the included upstream MIT
-notice. Runtime compatibility and focused overhead still need representative
-game checks; an isolated software renderer does not establish AION performance.
-See [game latency](game-latency.md#background-frame-limit) for activation and
-per-game opt-out instructions.
+The j2bar input owns the native Vulkan/GLX/EGL engine and source/license notes.
+Enable it per game with `j2bar game-run -- %command%`; the shell owns focus
+tracking and workspace-5 audio restoration. The old standalone controller,
+audio daemon and global Steam loader injection are absent. Preserve GameMode
+and the compositor tearing patch when updating. Verify both engine architectures
+inside Steam's actual pressure-vessel runtime, controller loss/focus recovery
+and representative games before claiming latency or overhead results. Historical
+standalone measurements remain history, not proof of the new launch route.
 
 ## Things an update never touches
 

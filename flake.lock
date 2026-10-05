@@ -147,11 +147,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1791097244,
-        "narHash": "sha256-L3W0G41mlw/H3jfz8bSg7vypFWiFUBA/wKxBcnpUO1I=",
+        "lastModified": 1791211290,
+        "narHash": "sha256-VVm3DJB4e9qo0I1CCTzAmCrmCbtKvKWSYOgLk7KZzOY=",
         "ref": "master",
-        "rev": "e578ffc7f0290ca071314a5768e3373840bdd6f5",
-        "revCount": 395,
+        "rev": "dc0d31193449f390f98d6d7d40ad46233b9c6254",
+        "revCount": 599,
         "type": "git",
         "url": "file:///home/jesse/projects/j2bar"
       },

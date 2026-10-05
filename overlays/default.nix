@@ -52,43 +52,13 @@ in
   pins =
     final: _prev:
     let
-      inherit (final) lib;
       inherit (importNixpkgs inputs.nixpkgs-firefox final) firefox;
       inherit (importNixpkgs inputs.nixpkgs-hyprland final)
         hyprland
-        hyprlandPlugins
         xdg-desktop-portal-hyprland
         ;
-      supportedHyprlandVersions = [ "0.56.2" ];
-      # The patches hook Hyprland internals, so a clean apply to a new version proves nothing.
-      patchPlugin =
-        name: patches:
-        assert lib.assertMsg (lib.elem hyprland.version supportedHyprlandVersions) (
-          "${name} patches were written for Hyprland "
-          + "${lib.concatStringsSep ", " supportedHyprlandVersions}, not ${hyprland.version}; "
-          + "re-check them and update this assertion."
-        );
-        hyprlandPlugins.${name}.overrideAttrs (old: {
-          version = "${old.version}-patched";
-          __intentionallyOverridingVersion = true;
-          patches = (old.patches or [ ]) ++ patches;
-          meta = old.meta // {
-            description = "${old.meta.description}, with local patches";
-          };
-        });
     in
     {
       inherit firefox hyprland xdg-desktop-portal-hyprland;
-      hyprlandPlugins = hyprlandPlugins // {
-        hyprbars = patchPlugin "hyprbars" [
-          ./patches/hyprbars/transformed-pass.patch
-          ./patches/hyprbars/unload-listeners.patch
-        ];
-        hyprfocus = patchPlugin "hyprfocus" [
-          ./patches/hyprfocus/class-filter.patch
-          ./patches/hyprfocus/combined-modes.patch
-          ./patches/hyprfocus/render-shrink.patch
-        ];
-      };
     };
 }

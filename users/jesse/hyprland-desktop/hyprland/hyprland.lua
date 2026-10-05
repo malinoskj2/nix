@@ -89,30 +89,6 @@ hl.config({
 -- agent-sandbox's nested Hyprland loads the same file, so both draw surfaces alike.
 require("look")
 
--- While a file chooser is open, hyprsheet draws the app that opened it scaled into the chooser and
--- faded out, so a tiled app keeps its layout and never re-lays out for a size it only appears at.
-
-hl.config({
-  plugin = {
-    hyprsheet = {
-      class = FILE_CHOOSER_CLASS,
-      -- The chooser takes this share of the app that opened it, but stays usable over small ones.
-      parent_share = 0.75,
-      min_size = { 700, 450 },
-      -- hyprfocus's shrink_percentage.
-      dip = 0.99,
-    },
-  },
-})
-
--- A critically damped spring spends its last stretch creeping through the final pixels, and the
--- chooser's text shimmers while it's resampled at nearly its own size. `land` is damped just under
--- critical, so it reaches the chooser's size at a small speed, and hyprsheet stops it the moment it
--- gets there.
-hl.curve("land", { type = "spring", stiffness = 625, dampening = 42.5, mass = 1 })
-hl.animation({ leaf = "hyprsheetIn", enabled = true, speed = 7, spring = "land" })
-hl.animation({ leaf = "hyprsheetOut", enabled = true, speed = 7, spring = "land" })
-
 -- Letters are mnemonic for the application; SHIFT picks a variant.
 hl.bind(MAIN_MOD .. " + Return", hl.dsp.exec_cmd(TERMINAL))
 hl.bind(MAIN_MOD .. " + F", hl.dsp.exec_cmd(BROWSER))
@@ -131,6 +107,7 @@ hl.bind(MAIN_MOD .. " + P", j2bar_msg("screenshot-region"))
 hl.bind(MAIN_MOD .. " + Escape", j2bar_msg("session lock"))
 hl.bind(MAIN_MOD .. " + Space", j2bar_msg("panel-toggle launcher"))
 hl.bind(MAIN_MOD .. " + S", j2bar_msg("panel-toggle control-center"))
+hl.bind(MAIN_MOD .. " + A", j2bar_msg("panel-toggle assistant"))
 hl.bind("XF86AudioRaiseVolume", j2bar_msg("volume-up"), { locked = true, repeating = true })
 hl.bind("XF86AudioLowerVolume", j2bar_msg("volume-down"), { locked = true, repeating = true })
 hl.bind("XF86AudioMute", j2bar_msg("volume-mute"), { locked = true })
@@ -172,12 +149,6 @@ hl.window_rule({
   match = { class = "^(Alacritty)$" },
   immediate = true,
   opacity = "1.0 override 0.85 override",
-})
-
-hl.window_rule({
-  name = "hide-hyprbars-outside-alacritty-and-mpv",
-  match = { class = "negative:^(Alacritty|mpv)$" },
-  ["hyprbars:no_bar"] = true,
 })
 
 -- `immediate` allows tearing where input latency matters.
