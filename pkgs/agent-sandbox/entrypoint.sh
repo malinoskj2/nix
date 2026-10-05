@@ -34,6 +34,11 @@ EOF
 
 dbus-daemon --config-file="$DBUS_SESSION_BUS_CONFIG" --address="$DBUS_SESSION_BUS_ADDRESS" --fork --nopidfile
 
+# Refresh only the managed MCP entry in persistent, writable harness configs.
+if ! unreal-sandbox sync-harnesses; then
+  echo "agent-sandbox: Unreal MCP config refresh failed; fix the reported config and run unreal-sandbox sync-harnesses" >&2
+fi
+
 start_sway() {
   local renderer=$1
   env -u WAYLAND_DISPLAY WLR_RENDERER="$renderer" sway >"$log_dir/sway-$renderer.log" 2>&1 &

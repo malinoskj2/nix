@@ -20,7 +20,7 @@ fi
 
 data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
 sandbox_home=$data/home
-shared=("$HOME/projects" "$HOME/nix" "$HOME/orca/workspaces" "$HOME/.cache/img2char3d")
+shared=("$HOME/projects" "$HOME/nix" "$HOME/orca/workspaces" "$HOME/.cache/img2char3d" "$HOME/.local/share/unreal-engine")
 screenshots=/tmp/screenshot
 image_ref="agent-sandbox:${AGENT_SANDBOX_TAG#hash-}"
 clipboard_dir=$(mktemp --directory "$runtime/agent-sandbox-clipboard.XXXXXX")
@@ -51,6 +51,7 @@ for dir in "${shared[@]}"; do
   mkdir -p "$dir" "$sandbox_home${dir#"$HOME"}"
 done
 mkdir -p "$screenshots"
+mkdir -p /tmp/agent-media
 
 # Keys for serving SSH sessions from the container (agent-sandbox-ssh). Only the
 # host key and the client's public key go into the container.
@@ -133,12 +134,17 @@ for dir in "${shared[@]}"; do
   args+=(--volume "$dir:$dir")
 done
 args+=(--volume "$screenshots:$screenshots:ro")
+args+=(--volume /tmp/agent-media:/tmp/agent-media)
 args+=(--volume "$clipboard_dir:/run/host-clipboard:ro")
 args+=(--volume "$ssh_dir/host_ed25519:/run/agent-sandbox-ssh/host_ed25519:ro")
 args+=(--volume "$ssh_dir/authorized_keys:/run/agent-sandbox-ssh/authorized_keys:ro")
 
 if [[ -d $HOME/.config/git ]]; then
   args+=(--volume "$HOME/.config/git:$HOME/.config/git:ro")
+fi
+if [[ -d $HOME/.config/opencode ]]; then
+  mkdir -p "$sandbox_home/.config/opencode"
+  args+=(--volume "$HOME/.config/opencode:$HOME/.config/opencode:ro")
 fi
 
 for name in CLAUDE.md settings.json skills hooks agents commands output-styles plugins rules; do
@@ -199,6 +205,11 @@ for name in v2/provider_config.json v2/credentials.json; do
     cp "$src" "$dst"
   fi
 done
+
+if [[ -f $HOME/.zcode/cli/config.json && ! -s $sandbox_home/.zcode/cli/config.json ]]; then
+  cp "$HOME/.zcode/cli/config.json" "$sandbox_home/.zcode/cli/config.json"
+  chmod u+w "$sandbox_home/.zcode/cli/config.json"
+fi
 
 # The CLI settings file is seeded once so ZCode can persist theme and tool
 # permissions without later host edits clobbering them.

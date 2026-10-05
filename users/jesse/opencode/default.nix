@@ -10,7 +10,18 @@ _: {
 
     "opencode/opencode.jsonc".text = ''
       {
-        "$schema": "https://opencode.ai/config.json"
+        "$schema": "https://opencode.ai/config.json",
+        "mcp": ${
+          builtins.toJSON {
+            unreal-mcp = {
+              type = "remote";
+              inherit (import ../../../pkgs/agent-sandbox/unreal-mcp.nix) url;
+              enabled = true;
+              oauth = false;
+              timeout = 120000;
+            };
+          }
+        }
       }
     '';
 

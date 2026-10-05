@@ -5,6 +5,8 @@
   ...
 }:
 {
+  imports = [ ./unreal-mcp.nix ];
+
   home.packages = with pkgs; [
     gnumake
     nil
