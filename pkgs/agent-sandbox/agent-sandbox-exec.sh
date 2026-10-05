@@ -7,20 +7,30 @@ set -euo pipefail
 # as its harness, the last harness to quit stops the sandbox, and the next
 # launch starts from a fresh container. Only state mapped from the host (the
 # persistent sandbox home, the shared directories) carries over.
-if [[ $# -lt 2 ]]; then
-  echo 'usage: agent-sandbox-exec <sandbox alias> <claude|codex|muse|zcode> [agent arguments...]' >&2
+if [[ $# -lt 1 ]]; then
+  echo 'usage: agent-sandbox-exec <claude|codex|muse|zcode> [agent arguments...]' >&2
   exit 2
 fi
 
-alias=$1
-agent=$2
-shift 2
-if [[ ! $alias =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
-  echo "agent-sandbox-exec: invalid sandbox alias: $alias" >&2
-  exit 2
-fi
+agent=$1
+shift
 if [[ $agent != claude && $agent != codex && $agent != muse && $agent != zcode ]]; then
   echo "agent-sandbox-exec: unsupported agent: $agent" >&2
+  exit 2
+fi
+
+if ! repo_root=$(git rev-parse --show-toplevel 2>/dev/null); then
+  echo 'agent-sandbox-exec: run this command inside a Git repository' >&2
+  exit 2
+fi
+# Linked worktrees use the main repository's name, regardless of their directory.
+git_common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+if [[ $(basename "$git_common_dir") == .git ]]; then
+  repo_root=$(dirname "$git_common_dir")
+fi
+alias=sandbox-$(basename "$repo_root")
+if [[ ! $alias =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+  echo "agent-sandbox-exec: invalid sandbox alias: $alias" >&2
   exit 2
 fi
 
