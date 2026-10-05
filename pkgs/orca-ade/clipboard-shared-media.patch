@@ -1,0 +1,24 @@
+diff --git a/src/main/window/clipboard-image-temp-file.ts b/src/main/window/clipboard-image-temp-file.ts
+--- a/src/main/window/clipboard-image-temp-file.ts
++++ b/src/main/window/clipboard-image-temp-file.ts
+@@ -2,7 +2,6 @@
+ import path from 'node:path'
+ import { randomUUID } from 'node:crypto'
+
+-import { getAppEnvironment } from '../../shared/app-environment'
+ import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+ import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+ import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboard-image'
+@@ -40,7 +39,11 @@
+     return remotePath
+   }
+
+-  const tempPath = path.join(getAppEnvironment().getPath('temp'), fileName)
++  // Local agents may run in containers with a private /tmp. This directory
++  // is shared with agent sandboxes at the same absolute path.
++  const tempDir = '/tmp/agent-media'
++  await fs.mkdir(tempDir, { recursive: true })
++  const tempPath = path.join(tempDir, fileName)
+   await fs.writeFile(tempPath, buffer)
+   // Why: the OS temp dir is outside every allowed root, so without this the
+   // composer's own thumbnail/preview read of the file it just wrote is denied.

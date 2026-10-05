@@ -48,6 +48,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./claude-hooks.patch
     ./open-video-externally.patch
     ./nix-syntax.patch
+    ./clipboard-shared-media.patch
   ];
 
   # The glibc floor guards Ubuntu 20.04 users of the upstream AppImage.

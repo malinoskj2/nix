@@ -29,6 +29,13 @@ when it stops. Orca's pane, worktree, terminal, launch-token, and hook
 environment travels with the agent process. Further arguments go to the
 selected agent.
 
+Orca saves local clipboard image pastes under `/tmp/agent-media`, which is
+shared with the sandbox at the same path. The sandbox's private `/tmp` cannot
+read host files saved directly there. This is separate from the host image
+clipboard mirror, which makes image data available to Wayland clients inside
+the sandbox. After updating Orca, restart the desktop app for the paste path
+change to take effect; existing sandboxes already mount the media directory.
+
 The sandbox image uses the desktop `orca-ide` CLI. A read-only bind of
 `~/.config/orca` gives it the live runtime metadata and Unix socket, so Orca
 commands can reach the desktop without the SSH relay.
