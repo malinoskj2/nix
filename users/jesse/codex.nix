@@ -103,7 +103,9 @@ in
     ];
   };
 
-  home.file = lib.mapAttrs' mkAgent agents;
+  home.file = lib.mapAttrs' mkAgent agents // {
+    ".codex/config.toml".enable = lib.mkForce false;
+  };
 
   home.activation.codexSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
     run mkdir -p "$HOME/.codex"
