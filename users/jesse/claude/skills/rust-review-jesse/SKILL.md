@@ -78,6 +78,11 @@ repository-wide reorganization.
 
 ## Module ownership
 
+Avoid heavily nested logic within functions: use guard clauses where they clarify
+control flow, split work at cohesive responsibility boundaries, and consider
+whether deep nesting signals a missing domain abstraction that should own the
+rules or state. Introduce an abstraction when it clarifies those responsibilities.
+
 - **Organize by responsibility.** Keep parsing, transport and lifecycle details
   under their owning feature. Split files when responsibilities separate.
 - **Keep definitions near their behavior.** Types, errors, constants and helpers
@@ -131,6 +136,10 @@ Review against these structure and error-handling requirements. Report violation
 in the reviewed scope without applying fixes or demanding unrelated restructuring.
 
 ## Formatting
+
+Within functions, use a single blank line to separate meaningful logical steps
+(such as validation, preparation, effects and results), keeping tightly related
+statements together and short cohesive functions compact.
 
 Require exactly one empty line between Rust items, including between free
 functions and between methods in an `impl` block. Function or method definitions
