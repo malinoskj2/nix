@@ -541,6 +541,6 @@ symlinkJoin {
   meta = {
     description = "Run Claude Code, Codex, ZCode or Muse Code in a Docker sandbox with the GPU and a headless Wayland session";
     mainProgram = "agent-sandbox";
-    platforms = lib.platforms.linux;
+    platforms = [ "x86_64-linux" ];
   };
 }

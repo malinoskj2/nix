@@ -69,11 +69,8 @@ select choice in "${networks[@]}"; do
 done
 ssid="${choice% (*}"
 
-printf 'Passphrase for %s (blank if open): ' "$ssid"
-stty -echo
-read -r passphrase || true
-stty echo
-echo
+read -rs -p "Passphrase for $ssid (blank if open): " passphrase || true
+printf '\n'
 
 mkdir -p "$conf_dir"
 chmod 700 "$conf_dir"
