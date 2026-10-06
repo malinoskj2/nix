@@ -88,6 +88,33 @@ rules or state. Introduce an abstraction when it clarifies those responsibilitie
 - **Align state with resource lifetimes.** A connection owns its parser, partial
   input and schedule. Reconnects explicitly reset other cached observations.
 
+## Conditional checks
+
+Every conditional should select meaningful behavior, enforce an invariant or
+handle a possible failure. Avoid checks already guaranteed by a parser,
+validated type, preceding branch or resource ownership unless that guarantee
+can change before use. Trace callers and state transitions before declaring a
+check redundant; include error, restart and shutdown paths in that reasoning.
+Preserve input validation, overflow and capacity checks, deadlines and cleanup
+guards where their invariant is not otherwise guaranteed. Simplify within the
+requested scope; never replace a necessary check with `unwrap` or `expect`, or
+add an abstraction merely to eliminate an `if`.
+
+## Fixed strings
+
+Prefer named `const &str` values for long fixed text and repeated semantic
+identifiers such as filenames, registry values and protocol names. Keep them
+with their owning feature; use a small text module when UI copy obscures behavior.
+Keep obvious one-off labels and typed error messages beside their variants when
+that is clearer. Keep changeable configuration separate from fixed text and
+avoid a catch-all global constants file or extracting every literal.
+
+Prefer `const` when only the value matters; use `static` when a stable object
+address, shared state or large stored data justifies it. For interpolated
+messages, use a small formatting function when extraction helps readability:
+`format!` requires a literal template. Do not introduce runtime template parsing,
+string replacement or lazy allocation solely to centralize fixed text.
+
 ## Dependency choices
 
 When choosing among dependencies for equivalent purposes, prefer these crates
