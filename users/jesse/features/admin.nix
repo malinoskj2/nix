@@ -13,5 +13,6 @@
 
     dig
     killall
+    smartmontools
   ];
 }
