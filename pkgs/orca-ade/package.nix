@@ -23,7 +23,7 @@ let
     pnpm_11
     ;
   electron = electron_43;
-  pnpm = pnpm_11.override { nodejs = nodejs_24; };
+  pnpm = pnpm_11.override { nodejs-slim = nodejs_24; };
   vscode-nix-ide = fetchFromGitHub {
     owner = "nix-community";
     repo = "vscode-nix-ide";

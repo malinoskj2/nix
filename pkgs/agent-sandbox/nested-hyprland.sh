@@ -75,14 +75,14 @@ while true; do
   rm -f "$link"
   sweep_leftovers
 
-  if (( $(date +%s) - start < 60 )); then
+  if (($(date +%s) - start < 60)); then
     failures=$((failures + 1))
-    if (( failures >= max_failures )); then
+    if ((failures >= max_failures)); then
       echo "$(date -Is) Hyprland exited $failures times in a row without staying up (last status $status); giving up" \
         >>"$log_dir/hyprland-restarts.log"
       exit 1
     fi
-    delay=$(( 2 ** failures > 30 ? 30 : 2 ** failures ))
+    delay=$((2 ** failures > 30 ? 30 : 2 ** failures))
     echo "$(date -Is) Hyprland exited with status $status; restart $failures of $max_failures in ${delay}s" \
       >>"$log_dir/hyprland-restarts.log"
     sleep "$delay"

@@ -12,7 +12,10 @@ purge=
 case ${1:-} in
   '') ;;
   --purge) purge=1 ;;
-  *) echo 'usage: agent-sandbox-kill [--purge]' >&2; exit 2 ;;
+  *)
+    echo 'usage: agent-sandbox-kill [--purge]' >&2
+    exit 2
+    ;;
 esac
 
 runtime=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
@@ -20,14 +23,14 @@ data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
 
 # Units before containers: agent-sandbox-ssh starts a stopped unit on
 # demand, so a unit left active can bring its container right back.
-while read -r unit; do
+while read -r unit _; do
   systemctl --user stop "$unit"
-done < <(systemctl --user list-units --all --no-legend 'agent-sandbox@*')
+done < <(systemctl --user list-units --all --plain --no-legend 'agent-sandbox@*')
 
 containers=()
 ids=$(docker ps -aq --filter name=^agent-sandbox-)
 if [[ -n $ids ]]; then
-  read -ra containers <<<"$ids"
+  mapfile -t containers <<<"$ids"
   # -f stops running containers: 10 s grace, then SIGKILL into the cgroup,
   # which takes the nested sway, Hyprland and every leaked helper with it.
   docker rm -f "${containers[@]}" >/dev/null

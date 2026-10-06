@@ -64,6 +64,6 @@ stdenvNoCC.mkDerivation {
   meta = {
     description = "Limit unfocused Steam games to 10 FPS without an overlay";
     mainProgram = "game-background-limit";
-    platforms = lib.platforms.linux;
+    platforms = [ "x86_64-linux" ];
   };
 }
