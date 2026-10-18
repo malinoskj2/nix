@@ -17,4 +17,6 @@
     RUSTC_WRAPPER = "sccache";
     SCCACHE_CACHE_SIZE = "50G";
   };
+
+  programs.claude-code.settings.enabledPlugins."rust-analyzer-lsp@claude-plugins-official" = true;
 }
