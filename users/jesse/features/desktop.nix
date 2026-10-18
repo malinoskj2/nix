@@ -18,12 +18,14 @@
     ktx-tools
     mediainfo
     (orca-ade.override {
-      appearanceSettings = {
+      globalSettings = {
         theme = "dark";
         appFontFamily = "Geist";
         editorFontFamily = "FiraCode Nerd Font Mono";
         terminalFontFamily = "FiraCode Nerd Font Mono";
         terminalThemeDark = "Catppuccin Mocha";
+        # Orca otherwise uses its launcher's SHELL, which a dev shell sets to bash.
+        terminalDefaultShell = "/run/current-system/sw/bin/zsh";
       };
     })
     pwvucontrol
