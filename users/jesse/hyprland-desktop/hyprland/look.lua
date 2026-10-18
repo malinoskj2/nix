@@ -5,6 +5,7 @@ hl.config({
   cursor = { enable_hyprcursor = false },
   general = {
     allow_tearing = true,
+    gaps_out = 18,
     layout = "master",
     resize_on_border = true,
   },
