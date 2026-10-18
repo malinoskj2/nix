@@ -200,6 +200,10 @@ args=(
   --user "$uid:$gid"
   --cap-drop ALL
   --security-opt no-new-privileges
+  # Steam's FHS wrapper and Proton's pressure-vessel run bubblewrap, which needs
+  # unprivileged user namespaces and an unmasked /proc to mount a fresh one.
+  --security-opt seccomp=unconfined
+  --security-opt systempaths=unconfined
   --pids-limit 8192
   # Memory limits come from the slice, which reclaims before it kills.
   --cgroup-parent agent-sandbox.slice
@@ -256,6 +260,10 @@ args+=(--volume "$orca_relay_dir:$orca_relay_dir")
 args+=(--volume "$clipboard_dir:/run/host-clipboard:ro")
 args+=(--volume "$ssh_dir/host_ed25519:/run/agent-sandbox-ssh/host_ed25519:ro")
 args+=(--volume "$ssh_dir/authorized_keys:/run/agent-sandbox-ssh/authorized_keys:ro")
+# The NVIDIA CDI spec mounts only the 64-bit driver; Steam's 32-bit client needs the other half.
+if [[ -e /run/opengl-driver-32 ]]; then
+  args+=(--volume /run/opengl-driver-32:/run/opengl-driver-32:ro)
+fi
 # Clients connect() to the socket rather than opening the file, so read-only mounts work.
 if [[ -n $host_wayland ]]; then
   args+=(--volume "$host_wayland:$runtime/host-wayland-1:ro")
