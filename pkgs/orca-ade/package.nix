@@ -15,7 +15,7 @@
   python3,
   wayland,
   unstable,
-  appearanceSettings ? { },
+  globalSettings ? { },
 }:
 
 let
@@ -59,23 +59,30 @@ stdenv.mkDerivation (finalAttrs: {
 
   # The glibc floor guards Ubuntu 20.04 users of the upstream AppImage.
   postPatch = ''
-    # Apply declarative appearance to new and existing profiles at startup,
+    # Apply declarative settings to new and existing profiles at startup,
     # without replacing Orca's mutable workspace/session state.
-    cat > src/shared/nix-appearance-settings.ts <<'EOF'
+    cat > src/shared/nix-global-settings.ts <<'EOF'
     import type { GlobalSettings } from './global-settings-types'
-    export const nixAppearanceSettings = ${builtins.toJSON appearanceSettings} satisfies Partial<GlobalSettings>
+    export const nixGlobalSettings = ${builtins.toJSON globalSettings} satisfies Partial<GlobalSettings>
     EOF
-    sed -i "1i import { nixAppearanceSettings } from './nix-appearance-settings'" \
+    sed -i "1i import { nixGlobalSettings } from './nix-global-settings'" \
       src/shared/default-global-settings.ts
     # Keep the declarative overrides after the defaults without TS2783's duplicate-key error
     # for overrides also named explicitly in the defaults object.
-    sed -i 's/^  return {$/  return Object.assign<GlobalSettings, Partial<GlobalSettings>>({/; s/^  }$/  }, nixAppearanceSettings)/' \
+    sed -i 's/^  return {$/  return Object.assign<GlobalSettings, Partial<GlobalSettings>>({/; s/^  }$/  }, nixGlobalSettings)/' \
       src/shared/default-global-settings.ts
-    sed -i "1i import { nixAppearanceSettings } from '../../../shared/nix-appearance-settings'" \
+    # Loading re-normalizes some saved fields after spreading them, so the overrides wrap the result.
+    sed -i "1i import { nixGlobalSettings } from '../../../shared/nix-global-settings'" \
       src/main/persistence/loading-store/normalize-loaded-global-settings.ts
     substituteInPlace src/main/persistence/loading-store/normalize-loaded-global-settings.ts \
-      --replace-fail '...stripRetiredGlobalSettings(parsed.settings),' \
-        '...stripRetiredGlobalSettings(parsed.settings), ...nixAppearanceSettings,'
+      --replace-fail 'export function normalizeLoadedGlobalSettings(' 'function normalizeLoadedGlobalSettingsUpstream('
+    cat >> src/main/persistence/loading-store/normalize-loaded-global-settings.ts <<'EOF'
+    export function normalizeLoadedGlobalSettings(
+      ...args: Parameters<typeof normalizeLoadedGlobalSettingsUpstream>
+    ): PersistedState['settings'] {
+      return { ...normalizeLoadedGlobalSettingsUpstream(...args), ...nixGlobalSettings }
+    }
+    EOF
     # Official skill installs pin to the tag's commit, which upstream reads from a git checkout.
     substituteInPlace config/scripts/build-source-commit.mjs \
       --replace-fail "execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()" "'${sourceCommit}'"
