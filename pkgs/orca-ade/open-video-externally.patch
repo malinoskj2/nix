@@ -1,8 +1,8 @@
 diff --git a/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts b/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts
-index 21bb89d3..4c03c9e8 100644
+index c751cbee..1a506edc 100644
 --- a/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts
 +++ b/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts
-@@ -44,6 +44,10 @@ export function isHtmlFilePath(filePath: string): boolean {
+@@ -60,6 +60,10 @@ export function isHtmlFilePath(filePath: string): boolean {
    return /\.html?$/i.test(filePath)
  }
  
@@ -10,19 +10,22 @@ index 21bb89d3..4c03c9e8 100644
 +  return /\.(?:avi|m4v|mkv|mov|mp4|ogv|webm)$/i.test(filePath)
 +}
 +
- function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
+ function openHtmlFileInBrowser(filePath: string, worktreeId: string, clientLocal: boolean): void {
    const store = useAppStore.getState()
    if (worktreeId) {
-@@ -151,6 +155,12 @@ export function openDetectedFilePath(
+@@ -129,6 +133,15 @@ export function openDetectedFilePath(
    cancelPendingEditorRevealFrames()
  
    void (async () => {
 +    // Orca can't play video. An SSH workspace's path can exist here too, and the main
 +    // process only opens paths that exist locally.
-+    if (isVideoFilePath(mappedFilePath) && (await window.api.shell.openFilePath(mappedFilePath))) {
++    if (
++      isVideoFilePath(mappedFilePath) &&
++      (await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID))
++    ) {
 +      return
 +    }
 +
      let statResult
-     const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
-     const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
+     let fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+     let hostWorkspaceFile: HostWorkspaceFile | null = null

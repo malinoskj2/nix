@@ -164,7 +164,14 @@ Treat a bump as a hardware change and test it on the device.
 - **Orca.** [`pkgs/orca-ade/`](../pkgs/orca-ade) builds one stablyai/orca
   release tag from source against `pkgs.unstable`'s Electron 43, Node 24 and
   pnpm 11. To move it, change `version`, then refresh the source hash and both
-  pnpm dependency hashes (the root and `mobile/` lockfiles). Keep `electron_43`
+  pnpm dependency hashes (the root and `mobile/` lockfiles). Set
+  `sourceCommit` to the commit the tag points at (`git ls-remote
+  https://github.com/stablyai/orca 'refs/tags/v<version>^{}'`): the build pins
+  official skill installs to it and upstream reads it from a git checkout.
+  Since 1.4.225 every SSH and WSL host runs orcad from a deployment template
+  with prebuilt addons for each remote target, which only upstream's release
+  pipeline builds, so `passthru.orcadTemplate` extracts it from the release's
+  amd64 `.deb`; refresh that hash too. Keep `electron_43`
   and `nodejs_24` on the majors the release's `package.json` names in
   `electron` and `engines.node`. Its `packageManager` is pnpm 12, which
   `nixpkgs-unstable` doesn't have yet, so `pnpm_11` builds it until `pnpm_12`
@@ -172,23 +179,34 @@ Treat a bump as a hardware change and test it on the device.
   [`catppuccin.patch`](../pkgs/orca-ade/catppuccin.patch), which maps Orca's
   dark application tokens and every Monaco editor surface to Catppuccin Mocha.
   Upstream may add new dark-mode variables or Monaco call sites, so search for
-  both the `.dark` token block and `vs-dark` when rebasing it. Rebase
+  the `.dark` token block, the shared `.dark,
+  .native-chat-appearance[data-native-chat-scheme='dark']` status and diff
+  block, and `vs-dark` when rebasing it. Rebase
   [`glass-titlebar.patch`](../pkgs/orca-ade/glass-titlebar.patch) when Orca
   changes its Electron window options or top-bar layout, then confirm only the
   36px titlebar band shows compositor blur. Rebase
   [`claude-hooks.patch`](../pkgs/orca-ade/claude-hooks.patch): it keeps Orca out
   of the read-only `~/.claude/settings.json` by writing its hooks to
   `~/.orca/agent-hooks/claude-settings.json` and passing that file with
-  `--settings`. Over SSH it writes the same file on the remote, which the agent
-  sandbox's `claude` wrapper loads. Upstream Claude launches move often, so
-  check every one still gets the flag, not just the build. Also rebase
+  `--settings`. Claude account profiles, each with its own
+  `CLAUDE_CONFIG_DIR`, share that file. Over SSH it writes the same file on the
+  remote, which the agent sandbox's `claude` wrapper loads; the remote's orcad
+  comes unpatched from the template, so it doesn't add the flag itself.
+  Upstream Claude launches move often, so check every one still gets the flag,
+  not just the build. Also rebase
   [`open-video-externally.patch`](../pkgs/orca-ade/open-video-externally.patch),
   which opens a clicked video path with the system default (mpv) instead of
   Orca's editor. The `postPatch` also edits upstream source in place: it drops
-  the AppImage's glibc floor check, turns on keeping the computer awake while
-  agents run, and makes the SSH relay writable after it's extracted on the
+  the AppImage's glibc floor check and its downloaded Node runtime, skips the
+  Docker build of the Wayland clipboard helper, which `buildPhase` compiles
+  instead, turns on keeping the computer awake while agents run, and makes
+  directories it uploads over SSH writable after they're extracted on the
   remote. Each uses `--replace-fail`, so a moved line fails the build; find
   where the new release does the same thing. Then, in Orca:
+  - connect a sandbox workspace over SSH and check that orcad deploys and its
+    terminals open;
+  - copy text from a terminal and the editor and paste it into another
+    application, which goes through the Wayland clipboard helper;
   - check that a `claude` typed into an Orca terminal and one Orca launches
     both show working and done in the sidebar, with the running tool, locally
     and in a sandbox workspace over SSH;

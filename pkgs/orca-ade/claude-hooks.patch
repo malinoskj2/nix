@@ -1,26 +1,26 @@
 diff --git a/src/main/claude/claude-agent-sdk-process-spawn.ts b/src/main/claude/claude-agent-sdk-process-spawn.ts
-index bbb4b295..0028398f 100644
+index a48b3e8a..f773e7e5 100644
 --- a/src/main/claude/claude-agent-sdk-process-spawn.ts
 +++ b/src/main/claude/claude-agent-sdk-process-spawn.ts
-@@ -1,6 +1,7 @@
- import type { SpawnOptions as ClaudeAgentSdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
- import { spawnProcess } from '../../shared/child-process/run-process'
- import { createProviderSpawnSpec } from '../codex/codex-app-server-posix-supervisor'
+@@ -6,6 +6,7 @@ import {
+   type ManagedProviderProcess
+ } from '../provider-process/managed-provider-process'
+ import { claudeChildClosePolicy, claudeChildCloseProven } from './claude-child-exit-proof-ladder'
 +import { claudeSessionSettingsArgs } from './session-settings'
  
- /** Derived rather than imported: only src/shared/child-process may name node:child_process. */
- type ClaudeCodeChild = ReturnType<typeof spawnProcess>
+ export type ClaudeCodeProcessSpawn = {
+   /** Pass as the SDK's `spawnClaudeCodeProcess`; the SDK never learns the pid because it never owns it. */
 @@ -54,7 +55,7 @@ export function createClaudeCodeProcessSpawn(
-       const spec = createProviderSpawnSpec(
+       managed = spawnManagedProviderProcess(
          {
            command: options.command,
 -          args: [...options.args],
 +          args: [...options.args, ...claudeSessionSettingsArgs()],
            ...(options.cwd === undefined ? {} : { cwd: options.cwd })
          },
-         definedEnv(options.env),
+         {
 diff --git a/src/main/claude/hook-service.ts b/src/main/claude/hook-service.ts
-index 0031d841..43dd4970 100644
+index 1bda76cb..d724cad1 100644
 --- a/src/main/claude/hook-service.ts
 +++ b/src/main/claude/hook-service.ts
 @@ -16,6 +16,7 @@ import {
@@ -29,9 +29,9 @@ index 0031d841..43dd4970 100644
  import { getManagedScript } from './hook-script'
 +import { getClaudeSessionSettingsPath } from './session-settings'
  import {
+   getWindowsClaudeHookExecutablePath,
    getWindowsClaudeHookFileStatus,
-   installWindowsClaudeHookFiles,
-@@ -81,6 +82,17 @@ export class ClaudeHookService {
+@@ -88,6 +89,18 @@ export class ClaudeHookService {
      return process.platform === 'win32' && this.options.agent === 'claude'
    }
  
@@ -40,30 +40,31 @@ index 0031d841..43dd4970 100644
 +    return this.options.agent === 'claude' && process.platform !== 'win32'
 +  }
 +
-+  private getInstallConfigPath(): string {
++  // Why: account profiles share the session file too; every Orca launch passes it with --settings.
++  private getInstallConfigPath(configDir?: string): string {
 +    return this.usesSessionSettings
 +      ? getClaudeSessionSettingsPath()
-+      : getConfigPath(this.options.settings)
++      : getConfigPath(this.options.settings, configDir)
 +  }
 +
    private managedScript(target: 'local' | 'posix' = 'local'): string {
      return getManagedScript(target, {
        source: this.options.source,
-@@ -98,7 +110,7 @@ export class ClaudeHookService {
-   }
-
-   getStatus(options: ClaudeHookInstallOptions = {}): AgentHookInstallStatus {
--    const configPath = getConfigPath(this.options.settings)
-+    const configPath = this.getInstallConfigPath()
+@@ -109,7 +122,7 @@ export class ClaudeHookService {
+     if (refused) {
+       return refused
+     }
+-    const configPath = getConfigPath(this.options.settings, options.configDir)
++    const configPath = this.getInstallConfigPath(options.configDir)
      const scriptPath = getManagedScriptPath(this.options.settings)
      const config = readHooksJson(configPath)
      if (!config) {
-@@ -159,9 +171,11 @@ export class ClaudeHookService {
-   }
- 
-   install(options: ClaudeHookInstallOptions = {}): AgentHookInstallStatus {
--    const configPath = getConfigPath(this.options.settings)
-+    const configPath = this.getInstallConfigPath()
+@@ -169,9 +182,11 @@ export class ClaudeHookService {
+     if (refused) {
+       return refused
+     }
+-    const configPath = getConfigPath(this.options.settings, options.configDir)
++    const configPath = this.getInstallConfigPath(options.configDir)
      const scriptPath = getManagedScriptPath(this.options.settings)
 -    const config = readHooksJson(configPath)
 +    // Why: the session settings file starts empty rather than inheriting ~/.claude/settings.json,
@@ -72,18 +73,19 @@ index 0031d841..43dd4970 100644
      if (!config) {
        return {
          agent: this.options.agent,
-@@ -186,7 +200,9 @@ export class ClaudeHookService {
+@@ -196,8 +211,9 @@ export class ClaudeHookService {
      } else {
        writeManagedScript(scriptPath, payload)
      }
--    if (plan.statusLine === 'install') {
+-    // Why: a profile's statusLine arrives with the settings copy from the default home.
+-    if (options.configDir === undefined && plan.statusLine === 'install') {
 +    if (this.usesSessionSettings) {
 +      nextConfig = this.installSessionStatusLine(nextConfig)
-+    } else if (plan.statusLine === 'install') {
++    } else if (options.configDir === undefined && plan.statusLine === 'install') {
        nextConfig = this.installManagedStatusLine(nextConfig)
-     } else if (plan.statusLine === 'retire') {
+     } else if (options.configDir === undefined && plan.statusLine === 'retire') {
        nextConfig = this.retireManagedStatusLine(nextConfig)
-@@ -195,6 +211,18 @@ export class ClaudeHookService {
+@@ -206,6 +222,22 @@ export class ClaudeHookService {
      return this.getStatus(options)
    }
  
@@ -96,13 +98,17 @@ index 0031d841..43dd4970 100644
 +    }
 +    const statusLineScriptPath = getStatusLineScriptPath(this.options.settings)
 +    writeManagedScript(statusLineScriptPath, getManagedStatusLineScript('local'))
-+    return applyManagedStatusLine(config, getManagedCommand(statusLineScriptPath), scriptFileName)
++    return applyManagedStatusLine(
++      config,
++      getManagedStatusLineCommand(statusLineScriptPath),
++      scriptFileName
++    )
 +  }
 +
    // Why: the statusline feed is opportunistic (usage display, not agent status); a user who deleted the
    // managed entry has opted out, and the marker distinguishes that deletion from a first install.
    private installManagedStatusLine(config: HooksConfig): HooksConfig {
-@@ -243,12 +271,18 @@ export class ClaudeHookService {
+@@ -254,12 +286,18 @@ export class ClaudeHookService {
      options: ClaudeHookInstallOptions = {}
    ): Promise<AgentHookInstallStatus> {
      // Why: remote Windows is unsupported; local process.platform cannot identify the remote OS.
@@ -124,7 +130,7 @@ index 0031d841..43dd4970 100644
        if (!config) {
          return {
            agent: this.options.agent,
-@@ -295,6 +329,10 @@ export class ClaudeHookService {
+@@ -306,6 +344,10 @@ export class ClaudeHookService {
    }
  
    remove(): AgentHookInstallStatus {
@@ -194,31 +200,31 @@ index 00000000..9378cd71
 +}
 \ No newline at end of file
 diff --git a/src/main/ipc/pty/host-env/assembly.ts b/src/main/ipc/pty/host-env/assembly.ts
-index 324dbe60..594760a1 100644
+index 25538cd8..dd2d960e 100644
 --- a/src/main/ipc/pty/host-env/assembly.ts
 +++ b/src/main/ipc/pty/host-env/assembly.ts
 @@ -1,3 +1,4 @@
 +import { delimiter } from 'node:path'
+ import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
  import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
- import { selectOpenCodeHookAgent } from '../../../../shared/opencode-launch-command'
  import {
-@@ -15,6 +16,7 @@ import { agentHookServer } from '../../../agent-hooks/server'
- import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager'
+@@ -12,6 +13,7 @@ import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager
+ import { wslInteropHealthMonitor } from '../../../wsl/wsl-interop-health'
  import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
  import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
 +import { ensureClaudeSessionShimDir } from '../../../claude/session-settings'
  import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl-managed-cli'
  import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-dir'
  import { mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
-@@ -34,6 +36,7 @@ import {
-   restoreOrStripOverlayEnv
- } from './pi-agent'
- import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
+@@ -34,6 +36,7 @@ import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
+ import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
+ import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
+ import { applyCodexRemoteViewerClipboardEnv } from './codex-terminal-clipboard'
 +import { readInheritedPath } from './path'
  
  /**
   * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
-@@ -328,6 +331,14 @@ export function buildPtyHostEnv(
+@@ -298,6 +301,14 @@ export function buildPtyHostEnv(
      resourcesPath: opts.resourcesPath
    })
  

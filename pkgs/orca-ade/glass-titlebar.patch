@@ -1,8 +1,8 @@
 diff --git a/src/main/window/createMainWindow.ts b/src/main/window/createMainWindow.ts
-index 41d84d1a..610878f9 100644
+index 201ef12e..8290333f 100644
 --- a/src/main/window/createMainWindow.ts
 +++ b/src/main/window/createMainWindow.ts
-@@ -108,7 +108,14 @@ export function createMainWindow(
+@@ -111,7 +111,14 @@ export function createMainWindow(
      acceptFirstMouse: true,
      // Why: auto-hide the Windows/Linux menu bar to save a row (Alt reveals it); macOS uses the system menu bar anyway.
      autoHideMenuBar: true,
@@ -18,7 +18,7 @@ index 41d84d1a..610878f9 100644
      // Why: macOS 'hiddenInset' keeps native traffic lights in our custom titlebar; Windows 'hidden' removes the OS title bar so it doesn't double up.
      titleBarStyle:
        process.platform === 'darwin'
-@@ -117,7 +124,7 @@ export function createMainWindow(
+@@ -120,7 +127,7 @@ export function createMainWindow(
            ? 'hidden'
            : undefined,
      // Why: Linux ignores titleBarStyle 'hidden'; frame:false drops the native frame so we don't get a double title bar (renderer draws its own).
@@ -28,10 +28,10 @@ index 41d84d1a..610878f9 100644
      ...(process.platform === 'darwin'
        ? {
 diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index 94339d52..554edde3 100644
+index 0be17b34..2492f598 100644
 --- a/src/renderer/src/assets/main.css
 +++ b/src/renderer/src/assets/main.css
-@@ -780,6 +780,16 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
+@@ -937,6 +937,16 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
    overflow: hidden;
  }
  
@@ -48,7 +48,7 @@ index 94339d52..554edde3 100644
  /* Why: native windows have a stable content box and need no wake-time viewport reflow. */
  html.native-shell,
  html.native-shell body,
-@@ -897,6 +907,21 @@ html.native-shell .app-layout {
+@@ -1054,6 +1064,21 @@ html.native-shell .app-layout {
    background: var(--bg-titlebar, var(--card));
  }
  
@@ -124,24 +124,24 @@ index bfb04337..e8211dd2 100644
            <TooltipProvider delayDuration={400}>
              <ContextMenuTrigger asChild>
 diff --git a/src/renderer/src/components/tab-group/TabGroupPanel.tsx b/src/renderer/src/components/tab-group/TabGroupPanel.tsx
-index f6ad4b04..a10dddd3 100644
+index 5835d8e6..d15cad4e 100644
 --- a/src/renderer/src/components/tab-group/TabGroupPanel.tsx
 +++ b/src/renderer/src/components/tab-group/TabGroupPanel.tsx
-@@ -261,7 +261,7 @@ export default function TabGroupPanel({
-       {/* Why: each split group needs its own tab row because multiple groups can show at once but the titlebar has only one shared center slot. */}
-       {/* Why: macOS hiddenInset titleBarStyle makes -webkit-app-region: drag the only way to move the window from this tab row. */}
-       <div
--        className="h-[32px] shrink-0 border-b border-border bg-card"
-+        className="orca-titlebar-glass h-[32px] shrink-0 border-b border-border"
-         data-tab-group-strip-id={groupId}
-         data-terminal-focus-release-surface="true"
-         data-worktree-id={worktreeId}
+@@ -278,7 +278,7 @@ export default function TabGroupPanel({
+           strip, and a mounted second strip would register duplicate sortables in the drag scope. */}
+       {tabStrip !== 'attached' ? null : (
+         <div
+-          className="h-[32px] shrink-0 border-b border-border bg-card"
++          className="orca-titlebar-glass h-[32px] shrink-0 border-b border-border"
+           data-tab-group-strip-id={groupId}
+           data-terminal-focus-release-surface="true"
+           data-worktree-id={worktreeId}
 diff --git a/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx b/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx
-index 77f04fb3..e34416b8 100644
+index 2f0a182d..6d682118 100644
 --- a/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx
 +++ b/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx
-@@ -316,7 +316,10 @@ export default function TabGroupSplitLayout({
-           ref={dragSplit.setDragRootNode}
+@@ -38,7 +38,10 @@ export default function TabGroupSplitLayout({
+           ref={setDragRootNode}
            className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border"
          >
 -          <div className="h-[4px] shrink-0 bg-card" data-terminal-focus-release-surface="true" />
@@ -150,5 +150,5 @@ index 77f04fb3..e34416b8 100644
 +            data-terminal-focus-release-surface="true"
 +          />
            <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
-             <SplitNode
-               node={layout}
+             <TabGroupSplitNodeTree
+               layout={layout}
