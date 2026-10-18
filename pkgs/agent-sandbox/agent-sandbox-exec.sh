@@ -47,6 +47,8 @@ if [[ -n ${ORCA_PANE_KEY:-} && -n ${ORCA_AGENT_HOOK_PORT:-} && -n ${ORCA_AGENT_H
   sandbox_home=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox/home
   "$AGENT_SANDBOX_PREPARE_ORCA_HOOKS" "$HOME" "$sandbox_home"
 
+  mkdir -p "$relay_root"
+  chmod 700 "$relay_root"
   relay_dir=$(mktemp -d "$relay_root/session.XXXXXXXX")
   chmod 700 "$relay_dir"
   proxy_socket=$relay_dir/hook.sock
