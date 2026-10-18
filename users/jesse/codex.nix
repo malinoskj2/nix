@@ -1,4 +1,9 @@
-{ lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   tomlFormat = pkgs.formats.toml { };
   claudeAgents = ./claude/agents;
@@ -51,9 +56,7 @@ let
         }
       );
     };
-  settings = tomlFormat.generate "codex-settings.toml" {
-    tui.alternate_screen = "never";
-  };
+  settings = tomlFormat.generate "codex-settings.toml" config.programs.codex.settings;
   # Codex saves folder trust and model choices to its own config.toml, so it
   # has to be a writable file with these settings merged in, not a store link.
   mergeSettings =
@@ -96,6 +99,7 @@ in
     enable = true;
     package = null;
     skills = ./claude/skills;
+    settings.tui.alternate_screen = "never";
     context = lib.concatMapStringsSep "\n" builtins.readFile [
       ./claude/rules/worktrees.md
       ./claude/rules/media.md

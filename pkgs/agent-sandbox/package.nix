@@ -92,6 +92,7 @@
   playwright-test,
   pkgs,
   procps,
+  pyghidra-mcp,
   python3,
   ripgrep,
   runCommand,
@@ -137,6 +138,7 @@
 let
   unreal = import ./unreal.nix { inherit pkgs lib; };
   unrealMcp = import ./unreal-mcp.nix;
+  ghidraMcp = import ./ghidra-mcp.nix;
   # cudaSupport enables Cycles' CUDA and OptiX devices. Blender compiles CUDA kernels for every
   # architecture by default; the RTX 5090 only needs sm_120.
   blender' = (blender.override { cudaSupport = true; }).overrideAttrs (old: {
@@ -164,6 +166,7 @@ let
             type = "http";
             inherit (unrealMcp) url;
           };
+          mcpServers.ghidra.command = lib.getExe pyghidra-mcp;
         }
       )
     } $out/.mcp.json
@@ -180,8 +183,16 @@ let
 
   # The sandbox keeps a separate writable Codex home so project trust can persist,
   # which means later host config changes do not reach an existing SSH sandbox.
+  # MCP servers go in as -c overrides, which apply over that writable config on every launch.
   codex' = writeShellScriptBin "codex" ''
-    exec ${lib.getExe codex} --no-alt-screen "$@"
+    exec ${lib.getExe codex} --no-alt-screen ${
+      lib.escapeShellArgs (
+        lib.concatMap (setting: [
+          "-c"
+          "mcp_servers.ghidra.${setting.name}=${builtins.toJSON setting.value}"
+        ]) (lib.attrsToList (ghidraMcp // { command = lib.getExe pyghidra-mcp; }))
+      )
+    } "$@"
   '';
 
   # The desktop CLI connects to its Unix runtime socket through the read-only

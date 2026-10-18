@@ -1,0 +1,65 @@
+--- a/src/pyghidra_mcp/server.py
++++ b/src/pyghidra_mcp/server.py
+@@ -8,14 +8,17 @@
+ import threading
+ from collections.abc import AsyncIterator, Callable
+ from contextlib import asynccontextmanager
++from io import TextIOWrapper
+ from pathlib import Path
+ 
++import anyio
+ import click
+ import pyghidra
+ from click_option_group import optgroup
+ from mcp.server import Server
+ from mcp.server.fastmcp import FastMCP
+ from mcp.server.fastmcp.server import Settings as FastMCPSettings
++from mcp.server.stdio import stdio_server
+ 
+ from pyghidra_mcp import __version__, mcp_tools
+ from pyghidra_mcp.context import PyGhidraContext
+@@ -279,9 +282,32 @@
+     return mcp
+ 
+ 
++def isolate_stdio_protocol() -> TextIOWrapper:
++    """Give the MCP stream a private copy of stdout and point fd 1 at stderr.
++
++    ghidrecomp and Ghidra print progress to stdout, which would corrupt JSON-RPC framing.
++    """
++    sys.stdout.flush()
++    protocol = TextIOWrapper(os.fdopen(os.dup(1), "wb"), encoding="utf-8")
++    os.dup2(2, 1)
++    return protocol
++
++
++_stdio_protocol: TextIOWrapper | None = None
++
++
++async def run_stdio_server(mcp: FastMCP) -> None:
++    async with stdio_server(stdout=anyio.wrap_file(_stdio_protocol)) as (read_stream, write_stream):
++        await mcp._mcp_server.run(
++            read_stream,
++            write_stream,
++            mcp._mcp_server.create_initialization_options(),
++        )
++
++
+ def run_mcp_server(mcp: FastMCP, transport: str) -> None:
+     if transport == "stdio":
+-        mcp.run(transport="stdio")
++        anyio.run(run_stdio_server, mcp)
+     elif transport in ["streamable-http", "http"]:
+         mcp.run(transport="streamable-http")
+     elif transport == "sse":
+@@ -615,6 +641,10 @@
+         )
+         return
+ 
++    if transport == "stdio":
++        global _stdio_protocol
++        _stdio_protocol = isolate_stdio_protocol()
++
+     init_pyghidra_context(
+         mcp=mcp,
+         input_paths=input_paths,

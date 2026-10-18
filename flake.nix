@@ -124,6 +124,7 @@
           "muse"
           "orca-ade"
           "pubip"
+          "pyghidra-mcp"
           "switch-and-reset-sandboxes"
           "wallpaper-autopause"
           "wallpaper-outputs"
