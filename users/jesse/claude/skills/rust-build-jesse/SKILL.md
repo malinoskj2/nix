@@ -72,6 +72,11 @@ tests. Use nested module directories as a domain grows. Apply the chosen pattern
 within the requested scope; do not turn a focused change into an unrelated
 repository-wide reorganization.
 
+Keep platform-specific code behind `cfg` at the OS and driver boundary so domain
+logic, parsers, storage and workers build and test on every development and CI
+platform. Gate whole modules and their `[target.'cfg(...)'.dependencies]` rather
+than scattering `cfg` through shared logic.
+
 ## Module ownership
 
 Avoid heavily nested logic within functions: use guard clauses where they clarify
@@ -155,6 +160,74 @@ string errors or another error framework. Add the dependencies to the crates
 that use them; a library without a report-only boundary does not need artificial
 `anyhow` conversions merely to use both crates.
 
+A `thiserror` variant that carries its cause through `#[from]` or `#[source]`
+must not repeat that cause in its `#[error]` message. The message names the step
+that failed; the cause is printed once when the chain is reported (`{:#}` on
+`anyhow::Error`, or a walk of `source()`). Test the rendered chain where users
+see it.
+
+Outside tests, avoid `unwrap` and `expect` wherever a non-panicking form exists:
+destructuring instead of indexing, `get_or_insert_with`, `try_from` with a
+returned error, checked arithmetic or a value computed in a `const` context.
+Keep `expect` for invariants the types cannot express, with a message stating
+the invariant.
+
+## Enums
+
+Model closed sets of states, outcomes and choices as enums whose variants carry
+only the data valid in that variant.
+
+- Replace a status field plus optional fields that only some states set with an
+  enum such as `Starting(Running)`, `Recording(Running)` and `Paused`, so
+  impossible combinations cannot be built. Give data that several variants
+  share an accessor such as `fn running(&self) -> Option<&Running>`.
+- Return an outcome enum from an operation with several meaningful results, such
+  as `Fresh`, `Unchanged` and `Resized`, instead of a `bool`, a sentinel value or
+  an error used as control flow. Keep `Result` for failures.
+- Use a two-variant enum instead of a `bool` parameter when the call site would
+  otherwise read `f(true)`.
+- Prefer an enum to a trait object when the crate owns a closed set of
+  implementations; use a trait when callers supply them.
+- Match domain enums exhaustively where the match makes a decision, without a
+  wildcard arm, so a new variant forces each dependent decision to be revisited.
+
+## Unsafe code and FFI
+
+Deny `unsafe_code` at the crate level and enable it only in modules that cross an
+FFI or OS boundary, with `#[expect(unsafe_code, reason = "...")]` naming the API
+called. Keep the code above that boundary safe Rust, and prefer maintained safe
+wrappers (`rustix`, `bytemuck` for plain-old-data casts, the platform's wrapper
+crate) to hand-written bindings.
+
+- Each `unsafe` block performs one unsafe operation and carries a `// SAFETY:`
+  comment stating the invariant that makes it sound.
+- Wrap every foreign handle, allocation and registration in an owning type whose
+  `Drop` releases it. Tie function pointers and objects obtained from a loaded
+  library to that library's lifetime, through a borrow or shared ownership, so
+  the library cannot be unloaded first.
+- Encode thread affinity in the type: a guard for a thread-bound context or
+  apartment is `!Send`. Never implement `Send` or `Sync` without a `SAFETY`
+  comment justifying it.
+- Check `#[repr(C)]` layouts and versioned structure sizes against the foreign
+  headers at compile time with `const _: () = assert!(...)`, `size_of` and
+  `offset_of!`.
+- When teardown cannot prove the foreign side or device has finished with a
+  resource, leak it rather than free memory that may still be in use.
+
+## Lints
+
+Follow the repository's lint configuration. When establishing one, use
+`[lints]` in `Cargo.toml`: deny `unsafe_code`; warn on `unreachable_pub`;
+enable Clippy's `pedantic` group at priority -1 together with
+`undocumented_unsafe_blocks`, `multiple_unsafe_ops_per_block` and
+`allow_attributes_without_reason`; and allow only the pedantic lints the project
+deliberately rejects. Suppress a lint locally with
+`#[expect(lint, reason = "...")]` rather than `#[allow]`, so a suppression that
+no longer applies is reported. CI runs `cargo fmt --check`,
+`cargo clippy --locked --all-targets` and `cargo test --locked` with warnings
+denied, and tests the declared `rust-version` in its own job. Do not impose this
+policy on an existing project as unrelated work.
+
 ## Formatting
 
 Within functions, use a single blank line to separate meaningful logical steps
@@ -175,6 +248,10 @@ entry point, domain logic and persistence or external boundary.
 
 - Parse external representations at adapter boundaries and convert them into
   domain values before they spread through the application.
+- Keep persisted formats readable across versions. Reject invalid values while
+  parsing; load older files with defaults for added fields, and newer files with
+  unknown fields tolerated rather than rejected. Test both directions when a
+  stored format changes.
 - Use enums, newtypes and validated constructors for distinctions and invariants
   that should survive refactoring. Preserve missing, stale, unavailable,
   approximate and derived states when they are meaningful; never invent a value
