@@ -1,8 +1,8 @@
 diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index 9f1b84d8..94339d52 100644
+index 19a024ed..0be17b34 100644
 --- a/src/renderer/src/assets/main.css
 +++ b/src/renderer/src/assets/main.css
-@@ -263,86 +263,84 @@
+@@ -292,26 +292,26 @@
  /* ── Dark Mode ───────────────────────────────────────── */
  
  .dark {
@@ -26,28 +26,6 @@ index 9f1b84d8..94339d52 100644
 -  --background: #0a0a0a;
 -  --editor-surface: #1e1e1e;
 -  --foreground: #fafafa;
--  --card: #171717;
--  --card-foreground: #fafafa;
--  --popover: #171717;
--  --popover-foreground: #fafafa;
--  --primary: #e5e5e5;
--  --primary-foreground: #171717;
--  --secondary: #262626;
--  --secondary-foreground: #fafafa;
--  --muted: #262626;
--  --muted-foreground: #a1a1a1;
--  --accent: #404040;
--  --accent-foreground: #fafafa;
--  --destructive: #ff6568;
--  --destructive-foreground: #df2225;
--  --border: rgb(255 255 255 / 0.07);
--  --input: rgb(255 255 255 / 0.15);
--  --ring: #737373;
--  --terminal-pane-locate: var(--color-blue-400);
--  --ai-action-accent: var(--color-violet-400);
--  --agent-question: var(--color-orange-500);
--  --agent-question-text: var(--color-orange-300);
--  --status-success: #86efac;
 +  --orca-security-background: #1e1e2e;
 +  --orca-security-foreground: #cdd6f4;
 +  --orca-security-card: #181825;
@@ -68,34 +46,32 @@ index 9f1b84d8..94339d52 100644
 +  --background: #1e1e2e;
 +  --editor-surface: #1e1e2e;
 +  --foreground: #cdd6f4;
-+  --card: #181825;
-+  --card-foreground: #cdd6f4;
-+  --popover: #181825;
-+  --popover-foreground: #cdd6f4;
-+  --primary: #cba6f7;
-+  --primary-foreground: #11111b;
-+  --secondary: #313244;
-+  --secondary-foreground: #cdd6f4;
-+  --muted: #313244;
-+  --muted-foreground: #a6adc8;
-+  --accent: #45475a;
-+  --accent-foreground: #cdd6f4;
-+  --destructive: #f38ba8;
-+  --destructive-foreground: #11111b;
-+  --border: #313244;
-+  --input: #45475a;
-+  --ring: #cba6f7;
-+  --terminal-pane-locate: #89b4fa;
-+  --ai-action-accent: #cba6f7;
-+  --agent-question: #fab387;
-+  --agent-question-text: #f9e2af;
-+  --status-success: #a6e3a1;
-   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
-   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
--  --status-warning: #eab308;
-+  --status-warning: #f9e2af;
-   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
-   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+   --chat-canvas-mix: 5%;
+   --chat-foreground-mix: 78%;
+   --chat-strong-mix: 90%;
+@@ -327,58 +327,56 @@
+   --chat-composer-base: transparent;
+   --chat-composer-border-mix: 9%;
+   --chat-content-max-width: 46rem;
+-  --card: #171717;
+-  --card-foreground: #fafafa;
+-  --popover: #171717;
+-  --popover-foreground: #fafafa;
+-  --primary: #e5e5e5;
+-  --primary-foreground: #171717;
+-  --secondary: #262626;
+-  --secondary-foreground: #fafafa;
+-  --muted: #262626;
+-  --muted-foreground: #a1a1a1;
+-  --accent: #404040;
+-  --accent-foreground: #fafafa;
+-  --border: rgb(255 255 255 / 0.07);
+-  --input: rgb(255 255 255 / 0.15);
+-  --ring: #737373;
+-  --terminal-pane-locate: var(--color-blue-400);
+-  --ai-action-accent: var(--color-violet-400);
+-  --agent-question: var(--color-orange-500);
+-  --agent-question-text: var(--color-orange-300);
 -  --workspace-status-done: #c7a594;
 -  --workspace-status-review: #16a34a;
 -  --workspace-status-progress: #d4a300;
@@ -129,6 +105,25 @@ index 9f1b84d8..94339d52 100644
 -  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255);
 -  --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
 -  --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
++  --card: #181825;
++  --card-foreground: #cdd6f4;
++  --popover: #181825;
++  --popover-foreground: #cdd6f4;
++  --primary: #cba6f7;
++  --primary-foreground: #11111b;
++  --secondary: #313244;
++  --secondary-foreground: #cdd6f4;
++  --muted: #313244;
++  --muted-foreground: #a6adc8;
++  --accent: #45475a;
++  --accent-foreground: #cdd6f4;
++  --border: #313244;
++  --input: #45475a;
++  --ring: #cba6f7;
++  --terminal-pane-locate: #89b4fa;
++  --ai-action-accent: #cba6f7;
++  --agent-question: #fab387;
++  --agent-question-text: #f9e2af;
 +  --workspace-status-done: #f5e0dc;
 +  --workspace-status-review: #a6e3a1;
 +  --workspace-status-progress: #f9e2af;
@@ -163,28 +158,10 @@ index 9f1b84d8..94339d52 100644
    --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
    --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
    --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
-@@ -350,31 +348,48 @@
+@@ -386,20 +384,28 @@
    --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
    --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
    --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
--  --git-decoration-added: #81b88b;
--  --git-decoration-modified: #e2c08d;
--  --git-decoration-deleted: #c74e39;
--  --git-decoration-renamed: #73c991;
--  --git-decoration-untracked: #73c991;
--  --git-decoration-copied: #73c991;
--  --git-decoration-ignored: #6e6e6e;
-+  --git-decoration-added: #a6e3a1;
-+  --git-decoration-modified: #f9e2af;
-+  --git-decoration-deleted: #f38ba8;
-+  --git-decoration-renamed: #74c7ec;
-+  --git-decoration-untracked: #a6e3a1;
-+  --git-decoration-copied: #94e2d5;
-+  --git-decoration-ignored: #6c7086;
-   --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 16%, transparent);
-   --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 30%, transparent);
-   --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 18%, transparent);
-   --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 32%, transparent);
 -  --git-graph-ref: #3794ff;
 -  --git-graph-remote-ref: #b66dff;
 -  --git-graph-base-ref: #ea5c00;
@@ -220,19 +197,50 @@ index 9f1b84d8..94339d52 100644
 +.dark .titlebar-left {
 +  --worktree-sidebar: #181825 !important;
 +  --sidebar: #181825 !important;
-+}
-+
-+
-+/* The patched palette keeps both workspace sidebars on mantle, even when a
-+   saved left-sidebar appearance would otherwise replace its surface inline. */
-+.dark [data-native-file-drop-target='project-sidebar'],
-+.dark .titlebar-left {
-+  --worktree-sidebar: #181825 !important;
-+  --sidebar: #181825 !important;
  }
-
- .plugin-security-chrome {
-@@ -1245,7 +1260,7 @@ html.native-shell .app-layout {
+ 
+ /* Status and diff colors follow the chat scheme without copying the app palette. */
+@@ -435,26 +441,26 @@
+ 
+ .dark,
+ .native-chat-appearance[data-native-chat-scheme='dark'] {
+-  --destructive: #ff6568;
+-  --destructive-foreground: #df2225;
+-  --status-success: #86efac;
++  --destructive: #f38ba8;
++  --destructive-foreground: #11111b;
++  --status-success: #a6e3a1;
+   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
+   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+-  --status-warning: #eab308;
++  --status-warning: #f9e2af;
+   --jira-priority-high: var(--destructive);
+   --jira-priority-medium: var(--status-warning);
+   --jira-priority-low: var(--callout-note);
+   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+-  --callout-note: #4493f8;
+-  --callout-important: #ab7df8;
+-  --git-decoration-added: #81b88b;
+-  --git-decoration-modified: #e2c08d;
+-  --git-decoration-deleted: #c74e39;
+-  --git-decoration-renamed: #73c991;
+-  --git-decoration-untracked: #73c991;
+-  --git-decoration-copied: #73c991;
+-  --git-decoration-ignored: #6e6e6e;
++  --callout-note: #89b4fa;
++  --callout-important: #cba6f7;
++  --git-decoration-added: #a6e3a1;
++  --git-decoration-modified: #f9e2af;
++  --git-decoration-deleted: #f38ba8;
++  --git-decoration-renamed: #74c7ec;
++  --git-decoration-untracked: #a6e3a1;
++  --git-decoration-copied: #94e2d5;
++  --git-decoration-ignored: #6c7086;
+   --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 16%, transparent);
+   --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 30%, transparent);
+   --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 18%, transparent);
+@@ -1411,7 +1417,7 @@ html.native-shell .app-layout {
  .dark [role='option'].jump-palette-item[data-selected='true'],
  .dark .jump-palette-command [data-slot='command-item'][data-selected='true'],
  .dark .jump-palette-command [role='option'][data-selected='true'] {
@@ -264,10 +272,10 @@ index 2772a6ae..dd0babcf 100644
            onMount={handleMount}
            options={options}
 diff --git a/src/renderer/src/components/editor/DiffSectionBody.tsx b/src/renderer/src/components/editor/DiffSectionBody.tsx
-index 5ac46e17..80caa074 100644
+index 0bf660fa..4116a587 100644
 --- a/src/renderer/src/components/editor/DiffSectionBody.tsx
 +++ b/src/renderer/src/components/editor/DiffSectionBody.tsx
-@@ -2,6 +2,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+@@ -4,6 +4,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
  import { AlertCircle, RefreshCw } from 'lucide-react'
  import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
  import { cn } from '@/lib/utils'
@@ -275,7 +283,7 @@ index 5ac46e17..80caa074 100644
  import { Button } from '@/components/ui/button'
  import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
  import { isCombinedDiffSizeUnknown } from './combined-diff-on-demand-load'
-@@ -157,7 +158,7 @@ export function DiffSectionBody({
+@@ -207,7 +208,7 @@ export function DiffSectionBody({
            language={language}
            original={section.originalContent}
            modified={section.modifiedContent}
@@ -285,7 +293,7 @@ index 5ac46e17..80caa074 100644
            // Why: @monaco-editor/react can dispose models before widget teardown.
            // Keep them through unmount and dispose unattached models next tick.
 diff --git a/src/renderer/src/components/editor/DiffViewer.tsx b/src/renderer/src/components/editor/DiffViewer.tsx
-index a2697069..2ecbfe31 100644
+index 94116d75..810282cc 100644
 --- a/src/renderer/src/components/editor/DiffViewer.tsx
 +++ b/src/renderer/src/components/editor/DiffViewer.tsx
 @@ -3,6 +3,7 @@ import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
@@ -296,7 +304,7 @@ index a2697069..2ecbfe31 100644
  import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
  import { useContextualCopySetup } from './useContextualCopySetup'
  import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
-@@ -295,7 +296,7 @@ export default function DiffViewer({
+@@ -332,7 +333,7 @@ export default function DiffViewer({
              language={language}
              original={originalContent}
              modified={modifiedContent}
@@ -306,7 +314,7 @@ index a2697069..2ecbfe31 100644
              // Why: key models by tab identity and preserve the modified undo stack across Changes-mode HEAD rotations.
              originalModelPath={currentDiffModelPaths.originalModelPath}
 diff --git a/src/renderer/src/components/editor/IpynbCellEditor.tsx b/src/renderer/src/components/editor/IpynbCellEditor.tsx
-index 228bf57f..2a764fb7 100644
+index 4bd32f00..cf342e8b 100644
 --- a/src/renderer/src/components/editor/IpynbCellEditor.tsx
 +++ b/src/renderer/src/components/editor/IpynbCellEditor.tsx
 @@ -1,7 +1,7 @@
@@ -318,15 +326,15 @@ index 228bf57f..2a764fb7 100644
  import { computeEditorFontSize, resolveEditorFontStack } from '@/lib/editor-font-zoom'
  import { useAppStore } from '@/store'
  import { installMonacoEditorFindShortcut } from './editor-shortcuts'
-@@ -157,7 +157,7 @@ function IpynbSourceEditor({
-   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+@@ -165,7 +165,7 @@ function IpynbSourceEditor({
+   }, [onChange, onDeactivate])
  
    useLayoutEffect(() => {
 -    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
 +    monaco.editor.setTheme(resolveMonacoTheme(isDark))
    }, [isDark])
  
-   useLayoutEffect(() => {
+   // Why: created synchronously before paint (not via @monaco-editor/react's async loader), so the
 diff --git a/src/renderer/src/components/editor/MonacoCodeExcerpt.tsx b/src/renderer/src/components/editor/MonacoCodeExcerpt.tsx
 index 1e2b31eb..29d3a2ba 100644
 --- a/src/renderer/src/components/editor/MonacoCodeExcerpt.tsx
@@ -348,7 +356,7 @@ index 1e2b31eb..29d3a2ba 100644
  
    // Why: colorize emits theme-specific token classes, so a theme switch must re-colorize.
 diff --git a/src/renderer/src/components/editor/MonacoEditor.tsx b/src/renderer/src/components/editor/MonacoEditor.tsx
-index 17f65960..21a9c82f 100644
+index b955e01b..761056ee 100644
 --- a/src/renderer/src/components/editor/MonacoEditor.tsx
 +++ b/src/renderer/src/components/editor/MonacoEditor.tsx
 @@ -4,7 +4,7 @@ import Editor from '@monaco-editor/react'
@@ -360,7 +368,7 @@ index 17f65960..21a9c82f 100644
  import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
  
  import { useContextualCopySetup } from './useContextualCopySetup'
-@@ -236,7 +236,7 @@ export default function MonacoEditor({
+@@ -273,7 +273,7 @@ export default function MonacoEditor({
          language={language}
          // Why: defaultValue, not controlled value — Orca owns post-mount content sync; a controlled path would double setValue.
          defaultValue={content}
@@ -370,10 +378,10 @@ index 17f65960..21a9c82f 100644
          onMount={handleMount}
          options={{
 diff --git a/src/renderer/src/lib/monaco-setup.ts b/src/renderer/src/lib/monaco-setup.ts
-index 5c2c69d2..6031c6b5 100644
+index be9b001a..f0029d9f 100644
 --- a/src/renderer/src/lib/monaco-setup.ts
 +++ b/src/renderer/src/lib/monaco-setup.ts
-@@ -21,6 +21,98 @@ import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview
+@@ -22,6 +22,98 @@ import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview
  import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
  import { runMonacoSetupSteps } from './monaco-setup-steps'
  
@@ -472,7 +480,7 @@ index 5c2c69d2..6031c6b5 100644
  globalThis.MonacoEnvironment = {
    getWorker(_workerId, label) {
      switch (label) {
-@@ -79,6 +171,10 @@ monacoTS.javascriptDefaults.setCompilerOptions({
+@@ -80,6 +172,10 @@ monacoTS.javascriptDefaults.setCompilerOptions({
  })
  
  runMonacoSetupSteps([

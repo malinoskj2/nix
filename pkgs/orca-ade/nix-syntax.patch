@@ -1,8 +1,8 @@
 diff --git a/src/renderer/src/lib/language-detect.ts b/src/renderer/src/lib/language-detect.ts
-index b90b5a36..3b2fb814 100644
+index a58c0e8e..231dd32d 100644
 --- a/src/renderer/src/lib/language-detect.ts
 +++ b/src/renderer/src/lib/language-detect.ts
-@@ -107,6 +107,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
+@@ -112,6 +112,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
    '.nim': 'nim',
    '.nims': 'nim',
    '.nimble': 'nim',
@@ -76,7 +76,7 @@ index 00000000..f5e0ff9b
 +  })
 +}
 diff --git a/src/renderer/src/lib/monaco-setup.ts b/src/renderer/src/lib/monaco-setup.ts
-index 6031c6b5..074e0f9a 100644
+index f0029d9f..053ed031 100644
 --- a/src/renderer/src/lib/monaco-setup.ts
 +++ b/src/renderer/src/lib/monaco-setup.ts
 @@ -11,6 +11,7 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
@@ -84,14 +84,14 @@ index 6031c6b5..074e0f9a 100644
  import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
  import { registerNimLanguage } from './monaco-languages/register-nim'
 +import { registerNixLanguage } from './monaco-languages/register-nix'
+ import { registerQuartoLanguage } from './monaco-languages/register-quarto'
  import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
  import { registerSvelteLanguage } from './monaco-languages/register-svelte'
- import { registerTypstLanguage } from './monaco-languages/register-typst'
-@@ -179,6 +180,7 @@ runMonacoSetupSteps([
+@@ -180,6 +181,7 @@ runMonacoSetupSteps([
    ['Svelte language registration', () => registerSvelteLanguage(monaco)],
    ['Astro language registration', () => registerAstroLanguage(monaco)],
    ['Nim language registration', () => registerNimLanguage(monaco)],
 +  ['Nix language registration', () => registerNixLanguage(monaco)],
    ['Typst language registration', () => registerTypstLanguage(monaco)],
    ['JSONL language registration', () => registerJsonlLanguage(monaco)],
-   ['shell Markdown alias registration', () => registerShellMarkdownAliases(monaco)],
+   ['Quarto language registration', () => registerQuartoLanguage(monaco)],

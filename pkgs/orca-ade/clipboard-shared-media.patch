@@ -1,24 +1,29 @@
 diff --git a/src/main/window/clipboard-image-temp-file.ts b/src/main/window/clipboard-image-temp-file.ts
+index 049f98bf..9916d403 100644
 --- a/src/main/window/clipboard-image-temp-file.ts
 +++ b/src/main/window/clipboard-image-temp-file.ts
-@@ -2,7 +2,6 @@
- import path from 'node:path'
+@@ -3,7 +3,6 @@ import path from 'node:path'
  import { randomUUID } from 'node:crypto'
-
+ 
+ import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 -import { getAppEnvironment } from '../../shared/app-environment'
- import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
- import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
  import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboard-image'
-@@ -40,7 +39,11 @@
-     return remotePath
+ import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
+ import { nativeChatPasteFolder } from './native-chat-paste-files'
+@@ -30,12 +29,13 @@ export async function saveClipboardImageBufferAsTempFile(
    }
-
--  const tempPath = path.join(getAppEnvironment().getPath('temp'), fileName)
-+  // Local agents may run in containers with a private /tmp. This directory
-+  // is shared with agent sandboxes at the same absolute path.
-+  const tempDir = '/tmp/agent-media'
-+  await fs.mkdir(tempDir, { recursive: true })
-+  const tempPath = path.join(tempDir, fileName)
+ 
+   // Why only a composer paste goes to the paste folder: its draft can bring it back after a
+-  // restart, while terminal, editor and phone pastes stay in OS temp, as they always have.
+-  let folder = getAppEnvironment().getPath('temp')
++  // restart, while terminal, editor and phone pastes go to a directory shared with agent
++  // sandboxes at the same absolute path, since their private /tmp hides OS temp.
++  let folder = '/tmp/agent-media'
+   if (args?.forNativeChatDraft === true) {
+     folder = nativeChatPasteFolder()
+-    await fs.mkdir(folder, { recursive: true })
+   }
++  await fs.mkdir(folder, { recursive: true })
+   const tempPath = path.join(folder, fileName)
    await fs.writeFile(tempPath, buffer)
-   // Why: the OS temp dir is outside every allowed root, so without this the
-   // composer's own thumbnail/preview read of the file it just wrote is denied.
+   return tempPath
