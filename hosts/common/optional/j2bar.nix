@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ inputs, lib, ... }:
 let
   spring = stiffness: dampening: {
     type = "spring";
@@ -219,6 +219,9 @@ in
       };
     };
   };
+
+  # j2bar is launched by hand from a local build; the unit only supplies its environment.
+  systemd.user.services.j2bar.wantedBy = lib.mkForce [ ];
 
   # Keep the existing TTY recovery path if the native locker cannot start.
   programs.hyprlock.enable = true;
