@@ -17,6 +17,7 @@
     ./hardware-configuration.nix
     ./boot.nix
     ./gaming.nix
+    ./media-share.nix
     ./memory-notifications.nix
     ./nvidia.nix
     ./obs.nix
