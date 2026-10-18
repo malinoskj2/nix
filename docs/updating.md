@@ -234,6 +234,16 @@ Treat a bump as a hardware change and test it on the device.
   `package.json` but still enforces them against the lockfile, so the patch
   appends them to `pnpm-workspace.yaml`; if upstream moves or drops them, drop
   the patch. Then run `zcode --version` and `zcode doctor`.
+- **pyghidra-mcp.** [`pkgs/pyghidra-mcp/`](../pkgs/pyghidra-mcp) is the Ghidra
+  MCP server for Claude Code and Codex on the host and in the agent sandbox,
+  run over stdio by its `ghidra-mcp` launcher. It packages `ghidrecomp`
+  inline. To move either, change `version` and refresh its hash, then rebase
+  [`stdio-stdout.patch`](../pkgs/pyghidra-mcp/stdio-stdout.patch): ghidrecomp
+  and Ghidra print to stdout, so in stdio mode the patch gives the MCP stream
+  its own copy of stdout and points fd 1 at stderr. Check it by importing a
+  binary, decompiling a function and running `gen_callgraph` over stdio, with
+  nothing but JSON-RPC on stdout. LaurieWired's GhidraMCP needs the exact
+  Ghidra version it was built for, which nixpkgs may not have.
 
 ## Background game FPS limiting
 
