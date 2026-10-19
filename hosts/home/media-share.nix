@@ -1,13 +1,14 @@
 {
-  # Mounted on first access, so boot never waits for the media host.
+  # Mounted on first access, so boot never waits for the media host. A soft mount returns
+  # errors instead of hanging programs if it goes away while mounted.
   fileSystems."/mnt/media3" = {
-    device = "//192.168.1.200/media3";
-    fsType = "cifs";
+    device = "192.168.1.200:/mnt/media3";
+    fsType = "nfs";
     options = [
-      "credentials=/secret/media-smb.credentials"
-      "uid=1000"
-      "gid=100"
-      "vers=3.1.1"
+      "nfsvers=4.2"
+      "soft"
+      "timeo=100"
+      "retrans=2"
       "noauto"
       "nofail"
       "_netdev"
