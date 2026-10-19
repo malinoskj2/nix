@@ -34,6 +34,7 @@
   foot,
   gawk,
   gcc,
+  gh,
   ghidra,
   git,
   git-commitu,
@@ -287,6 +288,7 @@ let
       foot
       gawk
       (lib.hiPrio gcc)
+      gh
       ghidra
       git
       glibc.bin
