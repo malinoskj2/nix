@@ -5,7 +5,16 @@
       enable32Bit = true;
       extraPackages = [ pkgs.nvidia-vaapi-driver ];
     };
-    nvidia-container-toolkit.enable = true;
+    nvidia-container-toolkit = {
+      enable = true;
+      # That hook mounts over /proc/driver/nvidia/params, and a mount on a
+      # file stops Proton's pressure-vessel from mounting a fresh /proc in the
+      # agent sandbox.
+      disable-hooks = [
+        "create-symlinks"
+        "disable-device-node-modification"
+      ];
+    };
     nvidia = {
       package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
         version = "615.78.08";
