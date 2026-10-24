@@ -34,6 +34,11 @@ EOF
 
 dbus-daemon --config-file="$DBUS_SESSION_BUS_CONFIG" --address="$DBUS_SESSION_BUS_ADDRESS" --fork --nopidfile
 
+# A null sink, since games under Proton crash in XAudio2 without any audio device.
+pulseaudio -n --daemonize=no --exit-idle-time=-1 \
+  --load=module-native-protocol-unix --load="module-null-sink sink_name=null" --load=module-always-sink \
+  >"$log_dir/pulseaudio.log" 2>&1 &
+
 # Refresh only the managed MCP entry in persistent, writable harness configs.
 if ! unreal-sandbox sync-harnesses; then
   echo "agent-sandbox: Unreal MCP config refresh failed; fix the reported config and run unreal-sandbox sync-harnesses" >&2

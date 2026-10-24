@@ -106,6 +106,17 @@ configure_muse() {
   seed_if_empty "$HOME/.config/muse/settings.json" "$sandbox_home/.config/muse/settings.json"
 }
 
+steam_common=$HOME/.local/share/Steam/steamapps/common
+
+# Proton and the Steam Linux Runtimes a sandbox client installs before launching a game, which
+# the sandbox keeps its own copies of so that it never rewrites the host's.
+is_steam_tool() {
+  case $1 in
+    Proton* | SteamLinuxRuntime* | "Steamworks Shared") return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 steam_running_in_sandbox() {
   local pid
   for pid in $(pgrep -x steam); do
@@ -129,9 +140,17 @@ configure_steam() {
   # steamapps/common is the host's, so a sandbox client left to update in the
   # background would rewrite the host's games and Proton builds behind the
   # host's manifests. Copies update only when the sandbox launches them.
-  local manifest copy
+  local manifest copy installdir
   for manifest in "$root"/steamapps/appmanifest_*.acf; do
+    installdir=$(sed -nE 's/^\s*"installdir"\s+"(.*)"\s*$/\1/p' "$manifest" 2>/dev/null)
     copy=$dst/steamapps/${manifest##*/}
+    if is_steam_tool "$installdir"; then
+      # A manifest copied from the host before the tools were split would claim the empty copy is installed.
+      if [[ -z $(ls -A "$data/steam-tools/$installdir" 2>/dev/null) ]]; then
+        rm -f "$copy"
+      fi
+      continue
+    fi
     if [[ -f $manifest && (! -f $copy || $manifest -nt $copy) ]]; then
       sed -E 's/^(\s*"AutoUpdateBehavior"\s+)"[0-9]+"/\1"1"/' "$manifest" >"$copy"
     fi
@@ -271,6 +290,13 @@ fi
 
 for dir in "${shared[@]}"; do
   args+=(--volume "$dir:$dir")
+done
+for dir in "$steam_common"/*/; do
+  dir=${dir%/}
+  if is_steam_tool "${dir##*/}"; then
+    mkdir -p "$data/steam-tools/${dir##*/}"
+    args+=(--volume "$data/steam-tools/${dir##*/}:$dir")
+  fi
 done
 args+=(--volume "$screenshots:$screenshots:ro")
 args+=(--volume "$media:$media")
