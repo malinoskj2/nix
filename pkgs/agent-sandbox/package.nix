@@ -82,7 +82,6 @@
   nodejs,
   novnc,
   nssTools,
-  opencode,
   openssh,
   orca-ade,
   p7zip,
@@ -131,7 +130,6 @@
   wtype,
   xwayland,
   xz,
-  zcode,
   zip,
   zoxide,
   zsh,
@@ -332,7 +330,6 @@ let
       nodejs
       novnc
       nssTools
-      opencode
       openssh
       orcaCli
       p7zip
@@ -374,7 +371,6 @@ let
       wtype
       xwayland
       xz
-      zcode
       zip
       zoxide
       zsh
@@ -459,23 +455,6 @@ let
         "NIX_LD=${glibc}/lib/ld-linux-x86-64.so.2"
         "NIX_LD_LIBRARY_PATH=${unreal.runtime}"
         "UNREAL_MCP_URL=${unrealMcp.url}"
-        "OPENCODE_CONFIG_CONTENT=${
-          builtins.toJSON {
-            # The wildcard alone leaves these two at their default of asking.
-            permission = {
-              "*" = "allow";
-              doom_loop = "allow";
-              external_directory = "allow";
-            };
-            mcp.unreal-mcp = {
-              type = "remote";
-              inherit (unrealMcp) url;
-              enabled = true;
-              oauth = false;
-              timeout = 120000;
-            };
-          }
-        }"
         "DISABLE_AUTOUPDATER=1"
         "DBUS_SESSION_BUS_CONFIG=${dbus}/share/dbus-1/session.conf"
         "WLR_BACKENDS=headless"
@@ -571,7 +550,7 @@ symlinkJoin {
     killAll
   ];
   meta = {
-    description = "Run Claude Code, Codex, ZCode or Muse Code in a Docker sandbox with the GPU and a headless Wayland session";
+    description = "Run Claude Code, Codex or Muse Code in a Docker sandbox with the GPU and a headless Wayland session";
     mainProgram = "agent-sandbox";
     platforms = [ "x86_64-linux" ];
   };

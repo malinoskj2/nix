@@ -8,13 +8,13 @@ set -euo pipefail
 # launch starts from a fresh container. Only state mapped from the host (the
 # persistent sandbox home, the shared directories) carries over.
 if [[ $# -lt 1 ]]; then
-  echo 'usage: agent-sandbox-exec <claude|codex|muse|zcode> [agent arguments...]' >&2
+  echo 'usage: agent-sandbox-exec <claude|codex|muse> [agent arguments...]' >&2
   exit 2
 fi
 
 agent=$1
 shift
-if [[ $agent != claude && $agent != codex && $agent != muse && $agent != zcode ]]; then
+if [[ $agent != claude && $agent != codex && $agent != muse ]]; then
   echo "agent-sandbox-exec: unsupported agent: $agent" >&2
   exit 2
 fi

@@ -12,12 +12,4 @@ in
     startup_timeout_sec = 30;
     tool_timeout_sec = 120;
   };
-  home.file.".zcode/cli/config.json".text = builtins.toJSON {
-    mcp.servers.unreal-mcp = {
-      type = "http";
-      inherit (mcp) url;
-      enabled = true;
-      timeoutMs = 120000;
-    };
-  };
 }

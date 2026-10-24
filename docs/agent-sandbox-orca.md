@@ -5,7 +5,6 @@ From a repository or a local Orca worktree, launch an agent with:
 ```sh
 agent-sandbox-exec codex
 agent-sandbox-exec claude
-agent-sandbox-exec zcode
 agent-sandbox-exec muse
 ```
 

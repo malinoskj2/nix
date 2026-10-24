@@ -29,22 +29,16 @@ class UnrealSandboxTests(unittest.TestCase):
                 codex,
                 '# personal settings\nmodel = "custom"\n[projects."/project"]\ntrust_level = "trusted"\n[mcp_servers.other]\ncommand = "other"\n[mcp_servers.unreal-mcp]\ncommand = "obsolete"\n',
             )
-            zcode = home / ".zcode/cli/config.json"
-            unreal.write_json(
-                zcode, {"logging": {"level": "debug"}, "mcp": {"servers": {"other": {"command": "other"}}}}
-            )
             unreal.sync_harnesses()
-            first = codex.read_text(), zcode.read_text()
+            first = codex.read_text()
             unreal.sync_harnesses()
-            self.assertEqual(first, (codex.read_text(), zcode.read_text()))
-            data = tomlkit.parse(first[0])
-            self.assertIn("# personal settings", first[0])
+            self.assertEqual(first, codex.read_text())
+            data = tomlkit.parse(first)
+            self.assertIn("# personal settings", first)
             self.assertEqual(data["model"], "custom")
             self.assertEqual(data["projects"]["/project"]["trust_level"], "trusted")
             self.assertEqual(data["mcp_servers"]["other"]["command"], "other")
             self.assertNotIn("command", data["mcp_servers"]["unreal-mcp"])
-            self.assertEqual(json.loads(first[1])["logging"]["level"], "debug")
-            self.assertEqual(json.loads(first[1])["mcp"]["servers"]["unreal-mcp"]["type"], "http")
 
     def test_prepare_preserves_project_and_ini_preferences(self):
         with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):

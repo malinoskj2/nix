@@ -15,12 +15,6 @@ elif [[ ${1:-} == --codex ]]; then
 elif [[ ${1:-} == --muse ]]; then
   agent=muse
   shift
-elif [[ ${1:-} == --opencode ]]; then
-  agent=opencode
-  shift
-elif [[ ${1:-} == --zcode ]]; then
-  agent=zcode
-  shift
 fi
 
 data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
@@ -105,17 +99,6 @@ configure_codex() {
   done
 }
 
-configure_zcode() {
-  # Preserve logins/provider changes from either environment. Settings are
-  # seeded once so later host edits cannot overwrite sandbox tool permissions.
-  local name
-  for name in v2/provider_config.json v2/credentials.json; do
-    copy_if_newer "$HOME/.zcode/$name" "$sandbox_home/.zcode/$name"
-  done
-  seed_if_empty "$HOME/.zcode/cli/config.json" "$sandbox_home/.zcode/cli/config.json"
-  seed_if_empty "$HOME/.zcode/cli/setting.json" "$sandbox_home/.zcode/cli/setting.json"
-}
-
 configure_muse() {
   # Keep the Meta login current from either environment. Settings are seeded
   # once so the sandbox keeps its own saved choices, as with Codex.
@@ -176,7 +159,7 @@ wl-paste --type image --watch agent-sandbox-clipboard-sync "$clipboard_dir" \
   >/dev/null 2>"$clipboard_dir/watcher.log" &
 clipboard_watcher_pid=$!
 
-mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.zcode/cli" "$sandbox_home/.zcode/v2" "$sandbox_home/.config/git" "$sandbox_home/.config/muse"
+mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.config/git" "$sandbox_home/.config/muse"
 for dir in "${shared[@]}"; do
   mkdir -p "$dir" "$sandbox_home${dir#"$HOME"}"
 done
@@ -206,7 +189,6 @@ fi
 
 configure_claude
 configure_codex
-configure_zcode
 configure_muse
 configure_steam
 
@@ -305,10 +287,6 @@ if [[ -n $host_wayland ]]; then
   args+=(--volume "$host_wayland:$runtime/host-wayland-1:ro")
 fi
 
-if [[ -d $HOME/.config/opencode ]]; then
-  mount_readonly "$HOME/.config/opencode"
-fi
-
 if [[ -d $HOME/.config/git ]]; then
   mount_readonly "$HOME/.config/git"
 fi
@@ -354,12 +332,8 @@ fi
 
 if [[ $agent == codex ]]; then
   set -- codex --dangerously-bypass-approvals-and-sandbox "$@"
-elif [[ $agent == opencode ]]; then
-  set -- opencode "$@"
 elif [[ $agent == muse ]]; then
   set -- muse --yolo "$@"
-elif [[ $agent == zcode ]]; then
-  set -- zcode --mode yolo "$@"
 fi
 
 # Serialize port selection with container creation across concurrent
