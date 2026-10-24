@@ -114,6 +114,7 @@ else
   echo "$renderer" >"$XDG_RUNTIME_DIR/renderer"
   sync_host_clipboard >"$log_dir/clipboard.log" 2>&1 &
   wayvnc --log-level=warning 0.0.0.0 5900 >"$log_dir/wayvnc.log" 2>&1 &
+  novnc --listen 6080 --vnc localhost:5900 >"$log_dir/novnc.log" 2>&1 &
   start_nested_hyprland "$renderer" || echo "agent-sandbox: nested sway failed to start; see $log_dir" >&2
 fi
 

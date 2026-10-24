@@ -134,20 +134,14 @@ steam_running_in_sandbox() {
 }
 
 configure_steam() {
-  # The host's saved login works from the sandbox as a copy. Steam rewrites
-  # these files while it runs, so the newer copy wins and nothing syncs while
-  # any sandbox Steam is up, since they all share one home.
+  # Steam rewrites manifests while it runs, and every sandbox shares one home.
   local root
   root=$(readlink -f "$HOME/.steam/root" 2>/dev/null) || return 0
-  if [[ ! -f $root/local.vdf ]] || steam_running_in_sandbox; then
+  if [[ ! -d $root/steamapps ]] || steam_running_in_sandbox; then
     return 0
   fi
   local dst=$sandbox_home/.local/share/Steam
-  mkdir -p "$dst/config" "$dst/steamapps" "$sandbox_home/.steam"
-  copy_if_newer "$root/config/config.vdf" "$dst/config/config.vdf"
-  copy_if_newer "$root/config/loginusers.vdf" "$dst/config/loginusers.vdf"
-  copy_if_newer "$root/local.vdf" "$dst/local.vdf"
-  copy_if_newer "$HOME/.steam/registry.vdf" "$sandbox_home/.steam/registry.vdf"
+  mkdir -p "$dst/steamapps"
 
   # steamapps/common is the host's, so a sandbox client left to update in the
   # background would rewrite the host's games and Proton builds behind the
@@ -378,9 +372,13 @@ for _ in 1 2 3 4 5; do
   flock 9
   vnc_port=$(free_port 5900)
   hyprland_vnc_port=$(free_port $((vnc_port + 1)))
+  novnc_port=$(free_port 6080)
+  novnc_url="http://127.0.0.1:$novnc_port/vnc.html?autoconnect=1&resize=scale"
   publish_args=(
     --publish "127.0.0.1:$vnc_port:5900"
     --publish "127.0.0.1:$hyprland_vnc_port:5901"
+    --publish "127.0.0.1:$novnc_port:6080"
+    --env AGENT_SANDBOX_VNC_URL="$novnc_url"
   )
   if cid=$(docker create "${args[@]}" "${publish_args[@]}" "$image_ref" "$@"); then
     break
@@ -394,6 +392,7 @@ if [[ -z $cid ]]; then
 fi
 
 echo "agent-sandbox: VNC on 127.0.0.1:$vnc_port, nested Hyprland on 127.0.0.1:$hyprland_vnc_port" >&2
+echo "agent-sandbox: VNC in the browser at $novnc_url" >&2
 if [[ -n $host_wayland ]]; then
   echo "agent-sandbox: host display on $runtime/host-wayland-1" >&2
 fi

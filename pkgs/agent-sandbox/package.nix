@@ -80,6 +80,7 @@
   nixfmt,
   nmap,
   nodejs,
+  novnc,
   nssTools,
   opencode,
   openssh,
@@ -329,6 +330,7 @@ let
       nixfmt
       nmap
       nodejs
+      novnc
       nssTools
       opencode
       openssh
