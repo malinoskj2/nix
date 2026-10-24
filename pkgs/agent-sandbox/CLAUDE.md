@@ -7,7 +7,7 @@ You are running inside a Docker sandbox. You may read anything you can find in t
 - `/tmp/agent-media`, read-write: the screenshots and recordings you take, at the same path as on the host
 - `~/.local/share/unreal-engine`, read-write: Epic's Linux Unreal Engine builds
 - `~/.cache/img2char3d`, read-write: model weights for `~/projects/img2char3d`
-- `~/.local/share/Steam/steamapps/common`, read-write: installed Steam games, at the same path as on the host
+- `~/.local/share/Steam/steamapps/common`, read-write: installed Steam games, at the same path as on the host. Its Proton, Steam Linux Runtime and Steamworks Shared folders are the sandbox's own, so updating them leaves the host's untouched
 - `~/.claude/projects`, read-write: auto-memory and session transcripts, shared with the human's sessions outside the sandbox
 - `/nix/store`, read-only, shared with the host
 
@@ -15,7 +15,7 @@ The rest of the home directory belongs to the sandbox, not the host. The NVIDIA 
 
 ## Display
 
-A headless sway Wayland session runs on `$WAYLAND_DISPLAY` with a single 1280x800 output, `HEADLESS-1`. Xwayland is enabled for X11-only apps. The human can watch and drive it over VNC, or in a browser at `$AGENT_SANDBOX_VNC_URL`, a link that opens on the host. `$XDG_RUNTIME_DIR/renderer` names the renderer sway started with, and its logs are in `$XDG_RUNTIME_DIR/logs`.
+A headless sway Wayland session runs on `$WAYLAND_DISPLAY` with a single 1280x800 output, `HEADLESS-1`. Xwayland is enabled for X11-only apps. The human can watch and drive it over VNC, or in a browser at `$AGENT_SANDBOX_VNC_URL`, a link that opens on the host. `$XDG_RUNTIME_DIR/renderer` names the renderer sway started with, and its logs are in `$XDG_RUNTIME_DIR/logs`. A PulseAudio server with only a null sink gives apps an audio device; nothing is audible.
 
 Work on this sandbox display unless the human explicitly asks you to use the host display.
 

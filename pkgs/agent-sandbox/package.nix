@@ -93,6 +93,7 @@
   playwright-test,
   pkgs,
   procps,
+  pulseaudio,
   pyghidra-mcp,
   python3,
   ripgrep,
@@ -338,6 +339,7 @@ let
       pkg-config
       playwright-test
       procps
+      pulseaudio
       (python3.withPackages (ps: [
         hy3dgen
         ps.pygobject3
