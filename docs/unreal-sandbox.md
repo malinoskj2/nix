@@ -54,13 +54,12 @@ RunUAT BuildCookRun -project=/absolute/path/Game.uproject \
 
 ## Agents and verification
 
-Claude Code's sandbox plugin, Codex, OpenCode and ZCode configure `unreal-mcp`
-at `http://127.0.0.1:8000/mcp`. Codex and ZCode's persistent configs refresh the
-managed entry on container startup, preserving other servers and agent settings.
-OpenCode receives the connection through `OPENCODE_CONFIG_CONTENT`, while its
-host config and plugins are mounted read-only when present. Home Manager also
-configures the connection for each host harness; host loopback refers to a host
-editor, not an editor inside Docker. No Unreal port is published from Docker.
+Claude Code's sandbox plugin and Codex configure `unreal-mcp` at
+`http://127.0.0.1:8000/mcp`. Codex's persistent config refreshes the managed
+entry on container startup, preserving other servers and agent settings. Home
+Manager also configures the connection for each host harness; host loopback
+refers to a host editor, not an editor inside Docker. No Unreal port is
+published from Docker.
 
 Start the editor before the agent, or reconnect the agent's MCP after startup.
 Editor restarts require reconnecting existing direct HTTP sessions. One editor

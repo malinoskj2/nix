@@ -84,7 +84,7 @@ starts MCP on `http://127.0.0.1:8000/mcp`, and keeps shader cache and temporary 
 files under `~/.cache/unreal-engine`. The bundled SDK/toolchain is used for C++;
 GCC is not a replacement for Unreal's Linux toolchain.
 
-Claude Code, Codex, OpenCode and ZCode have an `unreal-mcp` connection configured.
+Claude Code and Codex have an `unreal-mcp` connection configured.
 Start the editor before starting the agent, or reconnect MCP after editor startup
 or restart. A configured connection alone does not prove the engine is available:
 require `mcp-check` or a successful read-only `list_toolsets` call. Discover toolsets

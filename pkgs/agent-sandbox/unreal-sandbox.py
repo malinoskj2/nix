@@ -48,15 +48,6 @@ def sync_harnesses():
         "tool_timeout_sec": 120,
     }
     write(path, tomlkit.dumps(config))
-    path = home / ".zcode/cli/config.json"
-    config = load_json(path)
-    config.setdefault("mcp", {}).setdefault("servers", {})["unreal-mcp"] = {
-        "type": "http",
-        "url": URL,
-        "enabled": True,
-        "timeoutMs": 120000,
-    }
-    write_json(path, config)
 
 
 def engine_root():
@@ -216,7 +207,7 @@ async def check_mcp():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("sync-harnesses", help="Refresh the Unreal MCP entry in Codex and ZCode")
+    sub.add_parser("sync-harnesses", help="Refresh the Unreal MCP entry in Codex")
     sub.add_parser("doctor", help="Check the engine, GPU, display and live MCP tools")
     sub.add_parser("mcp-check", help="Make a read-only call to the running editor")
     sub.add_parser("install", help="Extract Epic's Linux installed build").add_argument("archive", type=Path)
