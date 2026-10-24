@@ -2,10 +2,12 @@
 
 ## Repository overview
 
-This flake builds four NixOS hosts:
+This flake builds five NixOS hosts:
 
 - `home`: primary desktop, with Hyprland, NVIDIA and Home Manager.
 - `katana`: ThinkPad, with Hyprland and Home Manager.
+- `mac-vm`: aarch64 VMware Fusion guest on the work Mac, with `home`'s Hyprland
+  and j2bar desktop and Home Manager.
 - `pi`: aarch64 server with its own `pi` user and no Home Manager.
 - `media`: media server with Docker and NVIDIA transcoding.
 
@@ -52,7 +54,7 @@ the `media` user they run as and the open ports.
 
 ### Home Manager
 
-The Home Manager hosts (`home`, `katana`) each have a profile at
+The Home Manager hosts (`home`, `katana`, `mac-vm`) each have a profile at
 `users/jesse/profiles/<name>.nix`. It declares that host's `home.stateVersion`
 and imports `users/jesse/global/` (palette, session and the core program
 modules) plus opt-in `users/jesse/features/`: `admin`, `cli`, `desktop`, `dev`,
@@ -61,7 +63,8 @@ modules) plus opt-in `users/jesse/features/`: `admin`, `cli`, `desktop`, `dev`,
 programs are flat modules at `users/jesse/<program>.nix` or
 `users/jesse/<program>/`, imported by `global/`, a feature or a profile.
 Identity comes from the NixOS account. `users/jesse/hyprland-desktop/` is the
-Hyprland and j2bar desktop, imported only by the `home` profile.
+Hyprland and j2bar desktop, imported by the `home` and `mac-vm` profiles, which
+set their outputs in `desktop.monitors`.
 
 ### Packages, overlays and patches
 

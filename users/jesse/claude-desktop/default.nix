@@ -1,4 +1,9 @@
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   themes = {
     catppuccin = pkgs.callPackage ./catppuccin.nix { inherit (config) palette; };
@@ -14,7 +19,7 @@ let
     cp ${themes.catppuccin}/{title-bar-symbol,code-theme-dark} $out
   '';
 in
-{
+lib.mkIf (lib.meta.availableOn pkgs.stdenv.hostPlatform pkgs.claude-desktop) {
   home.packages = [ (pkgs.claude-desktop.override { inherit theme; }) ];
 
   xdg.mimeApps.defaultApplications."x-scheme-handler/claude" = "com.anthropic.Claude.desktop";

@@ -16,5 +16,20 @@
     ../hyprland-desktop
   ];
 
+  # The side monitor stands portrait on the left, so the main monitor starts at its rotated width.
+  desktop.monitors = {
+    main = {
+      output = "DP-2";
+      mode = "1920x1080@360";
+      position = "1080x0";
+    };
+    side = {
+      output = "DP-1";
+      mode = "1920x1080@144";
+      position = "0x0";
+      transform = 1;
+    };
+  };
+
   home.stateVersion = "25.11";
 }

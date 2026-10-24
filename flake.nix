@@ -97,6 +97,7 @@
         nixosHosts = [
           "home"
           "katana"
+          "mac-vm"
           "media"
           "pi"
         ];

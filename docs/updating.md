@@ -29,6 +29,12 @@ release's branches in one commit. A new release can also break the hy3dgen and
 Eisvogel pins in [Pins outside `flake.lock`](#pins-outside-flakelock), which
 depend on its Python and TeX Live.
 
+Firefox's Catppuccin theme is a copy of the catppuccin port's mocha/mauve
+theme in [`users/jesse/catppuccin-firefox/`](../users/jesse/catppuccin-firefox),
+because the port builds it during evaluation. When a catppuccin bump changes
+the port, regenerate it with
+`jq '{mocha: {mauve: .mocha.mauve}}' "$(nix build --no-link --print-out-paths --impure --expr '(builtins.getFlake (toString ./.)).inputs.catppuccin.packages.x86_64-linux.firefox')/themes.json"`.
+
 `nixpkgs-unstable` doesn't follow the release. It supplies `pkgs.unstable` for
 the few packages that need something newer.
 

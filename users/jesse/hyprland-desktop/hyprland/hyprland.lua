@@ -28,21 +28,9 @@ local function j2bar_msg(command)
   return hl.dsp.exec_cmd(nix.j2bar .. " msg " .. command)
 end
 
--- The side monitor stands portrait on the left, so the main monitor starts at its rotated width.
-hl.monitor({
-  output = nix.monitors.side,
-  mode = "1920x1080@144",
-  position = "0x0",
-  scale = 1,
-  transform = 1,
-})
-
-hl.monitor({
-  output = nix.monitors.main,
-  mode = "1920x1080@360",
-  position = "1080x0",
-  scale = 1,
-})
+for _, output in ipairs(nix.outputs) do
+  hl.monitor(output)
+end
 
 -- Wine otherwise picks the portrait display at (0, 0) as primary. AION's fullscreen
 -- rendering then gets pillarboxed even when its outer window is on the main display.
