@@ -58,6 +58,33 @@ working:
 sudo sh -c 'umask 077; mkpasswd -m yescrypt > /secret/jesse.passwd'
 ```
 
+### `mac-vm`
+
+`mac-vm` is an aarch64 NixOS guest in VMware Fusion on the work Mac. Before
+installing anything there, check that the Mac's management allows Fusion.
+
+Create the VM from the NixOS aarch64 ISO, not an x86_64 one, with UEFI, an
+NVMe disk, 16 GB of memory and fewer vCPUs than the Mac has cores. Turn on
+Settings → Display → Accelerate 3D Graphics.
+
+The checked-in [`hardware-configuration.nix`](../hosts/mac-vm/hardware-configuration.nix)
+mounts the root and EFI partitions by the labels `nixos` and `boot`, so give
+them those labels when partitioning. After installing, replace it with the
+output of `nixos-generate-config --show-hardware-config` from the VM.
+
+The `j2bar` input is the local checkout at `/home/jesse/projects/j2bar`, which
+has no remote. Copy that checkout to the same path in the VM before the first
+`nixos-rebuild switch`; the flake doesn't evaluate without it.
+
+For two monitors, choose View → Use All Displays in Full Screen and then
+View → Full Screen. Fusion names the outputs `Virtual-1`, `Virtual-2` and on,
+and the `desktop.monitors` setting in
+[`profiles/mac-vm.nix`](../users/jesse/profiles/mac-vm.nix) makes `Virtual-1`
+the main monitor and puts `Virtual-2` to its right. To check that Hyprland
+renders on the GPU, look for `SVGA3D` rather than `llvmpipe` in
+`glxinfo -B` and in Hyprland's log. Fusion has no hardware video decoding,
+so mpv decodes on the CPU.
+
 ### `home`: Secure Boot
 
 `home` boots through Limine with Secure Boot, and the Limine installer stops if

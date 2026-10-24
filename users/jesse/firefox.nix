@@ -162,6 +162,10 @@ in
     };
   };
 
+  # The port builds its themes.json during evaluation, which needs a builder for the host's
+  # platform, so x86_64 couldn't evaluate mac-vm. This is that file's mocha/mauve theme.
+  catppuccin.sources.firefox = ./catppuccin-firefox;
+
   catppuccin.firefox = {
     enable = true;
     flavor = "mocha";

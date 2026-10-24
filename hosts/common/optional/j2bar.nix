@@ -11,7 +11,6 @@
   programs.j2bar = {
     enable = true;
     hyprlandPlugin.enable = true;
-    gameEngine.enable = true;
   };
 
   # The video wallpaper runs mpvpaper, which the module only installs for declared settings.

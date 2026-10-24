@@ -11,6 +11,28 @@ let
   hyprland = osConfig.programs.hyprland.package;
   hyprctl = lib.getExe' hyprland "hyprctl";
   palette = config.palette.mocha;
+  inherit (config.desktop) monitors;
+  monitorOption = lib.types.submodule {
+    options = {
+      output = lib.mkOption { type = lib.types.str; };
+      mode = lib.mkOption {
+        type = lib.types.str;
+        default = "preferred";
+      };
+      position = lib.mkOption {
+        type = lib.types.str;
+        default = "auto";
+      };
+      scale = lib.mkOption {
+        type = lib.types.number;
+        default = 1;
+      };
+      transform = lib.mkOption {
+        type = lib.types.ints.between 0 7;
+        default = 0;
+      };
+    };
+  };
   # Prepended to hyprland.lua and look.lua as `nix`.
   vars = {
     inherit hyprctl palette;
@@ -18,10 +40,11 @@ let
     alpha = {
       chrome = alphaHex glass.chrome;
     };
-    monitors = {
-      main = "DP-2";
-      side = "DP-1";
-    };
+    monitors = lib.mapAttrs (_: monitor: monitor.output) monitors;
+    outputs = [
+      monitors.side
+      monitors.main
+    ];
     j2bar = config.home.sessionVariables.J2BAR_BIN;
     j2barPlugin = "${osConfig.programs.j2bar.hyprlandPlugin.package}/lib/libj2bar-hyprland.so";
     workspaces = {
@@ -40,40 +63,53 @@ let
   '';
 in
 {
-  home.packages = [ pkgs.hyprland-quit ];
-
-  assertions = [
-    {
-      assertion = hyprland.version == supportedHyprland;
-      message = "The Hyprland desktop's Lua configuration and plugins are pinned for Hyprland ${supportedHyprland}.";
-    }
-  ];
-
-  wayland.windowManager.hyprland = {
-    enable = true;
-    # The NixOS module installs both.
-    package = null;
-    portalPackage = null;
-    configType = "lua";
-    settings.nix._var = vars;
-    extraConfig = builtins.readFile ./hyprland.lua;
+  options.desktop.monitors = {
+    main = lib.mkOption {
+      type = monitorOption;
+      description = "The monitor with the numbered workspaces.";
+    };
+    side = lib.mkOption {
+      type = monitorOption;
+      description = "The monitor with the side workspace.";
+    };
   };
 
-  xdg.configFile = {
-    "hypr/hyprland.lua".onChange = reload;
-    # The Home Manager module writes this only when it owns the Hyprland package.
-    "hypr/.luarc.json".text = builtins.toJSON {
-      diagnostics.globals = [ "hl" ];
-      workspace.library = [ "${hyprland}/share/hypr/stubs" ];
+  config = {
+    home.packages = [ pkgs.hyprland-quit ];
+
+    assertions = [
+      {
+        assertion = hyprland.version == supportedHyprland;
+        message = "The Hyprland desktop's Lua configuration and plugins are pinned for Hyprland ${supportedHyprland}.";
+      }
+    ];
+
+    wayland.windowManager.hyprland = {
+      enable = true;
+      # The NixOS module installs both.
+      package = null;
+      portalPackage = null;
+      configType = "lua";
+      settings.nix._var = vars;
+      extraConfig = builtins.readFile ./hyprland.lua;
     };
-    # agent-sandbox's nested Hyprland loads this without hyprland.lua, so it carries its own `nix`.
-    "hypr/look.lua" = {
-      text = "local nix = ${lib.generators.toLua { } vars}\n\n${builtins.readFile ./look.lua}";
-      onChange = reload;
-    };
-    "hypr/actions.lua" = {
-      source = ./actions.lua;
-      onChange = reload;
+
+    xdg.configFile = {
+      "hypr/hyprland.lua".onChange = reload;
+      # The Home Manager module writes this only when it owns the Hyprland package.
+      "hypr/.luarc.json".text = builtins.toJSON {
+        diagnostics.globals = [ "hl" ];
+        workspace.library = [ "${hyprland}/share/hypr/stubs" ];
+      };
+      # agent-sandbox's nested Hyprland loads this without hyprland.lua, so it carries its own `nix`.
+      "hypr/look.lua" = {
+        text = "local nix = ${lib.generators.toLua { } vars}\n\n${builtins.readFile ./look.lua}";
+        onChange = reload;
+      };
+      "hypr/actions.lua" = {
+        source = ./actions.lua;
+        onChange = reload;
+      };
     };
   };
 }

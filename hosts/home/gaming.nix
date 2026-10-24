@@ -51,6 +51,8 @@ in
   # does not make systemd notice that the running user daemon needs replacing.
   systemd.user.services.gamemoded.restartTriggers = [ pkgs.gamemode ];
   programs = {
+    j2bar.gameEngine.enable = true;
+
     # Check tearing eligibility before the first frame has been marked torn.
     # Keep this on the physical desktop; nested agent compositors do not use DRM.
     hyprland.package =
