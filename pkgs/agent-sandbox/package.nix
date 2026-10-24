@@ -216,6 +216,10 @@ let
     exec ${lib.getExe python3} ${./prepare-orca-hooks.py} "$@"
   '';
 
+  sandboxSteam = writeShellScriptBin "sandbox-steam" ''
+    exec ${python3.withPackages (ps: [ ps.vdf ])}/bin/python ${./sandbox-steam.py} "$@"
+  '';
+
   # The container PATH an agent with an Orca hook bridge runs with: the curl
   # shim leads, so hook URLs route through the private relay socket.
   orcaPath = "${orcaCurl}/bin:${env}/bin:/usr/bin";
@@ -348,6 +352,7 @@ let
       rust-analyzer
       rustc
       rustfmt
+      sandboxSteam
       sccache
       sops
       source2viewer-cli
