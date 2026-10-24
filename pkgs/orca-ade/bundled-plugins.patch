@@ -1,0 +1,58 @@
+diff --git a/src/main/plugins/plugin-bundled-bootstrap.ts b/src/main/plugins/plugin-bundled-bootstrap.ts
+index a7cfbbc1..5376194c 100644
+--- a/src/main/plugins/plugin-bundled-bootstrap.ts
++++ b/src/main/plugins/plugin-bundled-bootstrap.ts
+@@ -3,7 +3,6 @@ import { isAbsolute, join, relative, sep } from 'node:path'
+ import { z } from 'zod'
+ import { isQualifiedPluginKey } from '../../shared/plugins/plugin-manifest'
+ import { pluginRelativeDirectorySchema } from '../../shared/plugins/plugin-manifest-fields'
+-import { isOfficialPluginIdentity } from '../../shared/plugins/plugin-marketplace'
+ import { getUserPluginsDir } from './plugin-discovery'
+ import { installBundledPlugin, readPluginLockfile } from './plugin-install'
+ import { inspectPluginInstallTree } from './plugin-install-staging'
+@@ -22,8 +21,7 @@ const bundledPluginIndexSchema = z
+           .object({
+             pluginKey: z
+               .string()
+-              .refine(isQualifiedPluginKey, 'invalid qualified plugin identity')
+-              .refine(isOfficialPluginIdentity, 'bundled plugins must use an official identity'),
++              .refine(isQualifiedPluginKey, 'invalid qualified plugin identity'),
+             path: pluginRelativeDirectorySchema,
+             contentHash: z.string().regex(/^[0-9a-f]{64}$/)
+           })
+diff --git a/src/main/plugins/plugin-install-trust.ts b/src/main/plugins/plugin-install-trust.ts
+index 33b46614..b57014be 100644
+--- a/src/main/plugins/plugin-install-trust.ts
++++ b/src/main/plugins/plugin-install-trust.ts
+@@ -1,7 +1,6 @@
+ import type { PluginInstallSource } from '../../shared/plugins/plugin-install-lockfile'
+ import {
+   isOfficialOrganizationGitSource,
+-  isOfficialPluginIdentity,
+   isReservedPluginIdentity
+ } from '../../shared/plugins/plugin-marketplace'
+ 
+@@ -10,9 +9,7 @@ export function pluginInstallTrustError(
+   source: PluginInstallSource
+ ): string | null {
+   if (source.kind === 'bundled') {
+-    return source.bundleId === pluginKey && isOfficialPluginIdentity(pluginKey)
+-      ? null
+-      : 'bundled plugins must use an official stablyai.orca-* identity'
++    return source.bundleId === pluginKey ? null : 'bundled plugin identity must match its bundle'
+   }
+   if (!isReservedPluginIdentity(pluginKey)) {
+     return null
+diff --git a/src/main/plugins/plugin-list-projection.ts b/src/main/plugins/plugin-list-projection.ts
+index 16d44935..182ef6a6 100644
+--- a/src/main/plugins/plugin-list-projection.ts
++++ b/src/main/plugins/plugin-list-projection.ts
+@@ -147,7 +147,7 @@ export async function buildPluginList(
+           : undefined
+       const bundled = lockEntry?.source.kind === 'bundled'
+       const official =
+-        bundled ||
++        (bundled && isOfficialPluginIdentity(plugin.pluginKey)) ||
+         (lockEntry?.source.kind === 'marketplace' &&
+           isOfficialPluginIdentity(plugin.pluginKey) &&
+           isOfficialMarketplaceGitSource(lockEntry.source.marketplace.url) &&
