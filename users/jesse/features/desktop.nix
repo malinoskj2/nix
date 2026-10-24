@@ -30,14 +30,11 @@
         pluginSystemEnabled = true;
       };
       approvedPlugins = [ "chron0.discord-presence" ];
+      # Only "Working in Orca" and the agent-state badge, which the plugin always attaches.
       discordPresenceSettings = {
-        detailLevel = "full";
-        showBranch = true;
-        showTerminals = true;
-        showMachine = true;
-        showAgentCount = true;
-        openUrl = "https://github.com/stablyai/orca";
-        showOpenButton = true;
+        detailLevel = "generic";
+        showAgentState = false;
+        showElapsed = false;
       };
     })
     pwvucontrol
