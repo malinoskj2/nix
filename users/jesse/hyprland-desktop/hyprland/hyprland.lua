@@ -92,7 +92,8 @@ hl.bind(MAIN_MOD .. " + V", actions.toggle_floating())
 
 -- j2bar is the shell, so these binds go through its commands.
 hl.bind(MAIN_MOD .. " + P", j2bar_msg("screenshot-region"))
-hl.bind(MAIN_MOD .. " + Escape", j2bar_msg("session lock"))
+hl.bind(MAIN_MOD .. " + Escape", j2bar_msg("panel-toggle menu"))
+hl.bind(MAIN_MOD .. " + SHIFT + Escape", j2bar_msg("session lock"))
 hl.bind(MAIN_MOD .. " + Space", j2bar_msg("panel-toggle launcher"))
 hl.bind(MAIN_MOD .. " + S", j2bar_msg("panel-toggle control-center"))
 hl.bind(MAIN_MOD .. " + A", j2bar_msg("panel-toggle assistant"))
