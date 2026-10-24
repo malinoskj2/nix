@@ -1,13 +1,77 @@
 #!/usr/bin/env python3
 """Forward one private Unix socket to Orca's current loopback hook port."""
 
+import json
 import os
 import re
 import select
 import socket
 import socketserver
+import struct
 import sys
 import threading
+
+MAX_HEAD = 65536
+
+
+def peer_pid(sock: socket.socket) -> int:
+    creds = sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
+    return struct.unpack("3i", creds)[0]
+
+
+def proc_status(pid: int) -> dict[str, str]:
+    with open(f"/proc/{pid}/status", encoding="utf-8", errors="replace") as status:
+        return dict(line.rstrip("\n").split(":\t", 1) for line in status if ":\t" in line)
+
+
+def host_pid(peer: int, container_pid: int) -> int | None:
+    """Find the hook client's ancestor whose container pid is container_pid."""
+    pid = peer
+    for _ in range(64):
+        try:
+            status = proc_status(pid)
+        except OSError:
+            return None
+        ids = status.get("NSpid", "").split()
+        if len(ids) < 2:
+            return None
+        if int(ids[-1]) == container_pid:
+            return int(ids[0])
+        pid = int(status.get("PPid", "0"))
+    return None
+
+
+def translate_agent_process(head: bytes, peer: int) -> bytes:
+    # Orca checks the agent's pid on the host to tell whether it has exited, but
+    # the hook reports the container's pid for it. Untranslatable means unknown.
+    lines = head.split(b"\r\n")
+    for index, line in enumerate(lines):
+        name, sep, value = line.partition(b":")
+        if not sep or name.strip().lower() != b"x-orca-agent-process":
+            continue
+        translated = b""
+        try:
+            process = json.loads(value)
+            pid = host_pid(peer, int(process["pid"]))
+            if pid is not None:
+                process["pid"] = pid
+                translated = json.dumps(process, separators=(",", ":")).encode()
+        except (ValueError, TypeError, KeyError):
+            pass
+        lines[index] = b"X-Orca-Agent-Process: " + translated
+    return b"\r\n".join(lines)
+
+
+def read_head(sock: socket.socket) -> bytes | None:
+    data = b""
+    while b"\r\n\r\n" not in data:
+        if len(data) > MAX_HEAD:
+            return None
+        chunk = sock.recv(65536)
+        if not chunk:
+            return None
+        data += chunk
+    return data
 
 
 class HookServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
@@ -53,10 +117,21 @@ class HookHandler(socketserver.BaseRequestHandler):
     def handle(self):
         server: HookServer = self.server
         try:
+            self.request.settimeout(5)
+            data = read_head(self.request)
+            if data is None:
+                return
+            head, _, body = data.partition(b"\r\n\r\n")
+            data = translate_agent_process(head, peer_pid(self.request)) + b"\r\n\r\n" + body
+            self.request.settimeout(None)
             upstream = socket.create_connection(("127.0.0.1", server.current_port()), timeout=2)
         except OSError:
             return
         with upstream:
+            try:
+                upstream.sendall(data)
+            except OSError:
+                return
             sockets = [self.request, upstream]
             while sockets:
                 readable, _, _ = select.select(sockets, [], [], 5)
