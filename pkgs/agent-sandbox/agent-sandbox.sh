@@ -357,9 +357,9 @@ if [[ $agent == codex ]]; then
 elif [[ $agent == opencode ]]; then
   set -- opencode "$@"
 elif [[ $agent == muse ]]; then
-  set -- muse "$@"
+  set -- muse --yolo "$@"
 elif [[ $agent == zcode ]]; then
-  set -- zcode "$@"
+  set -- zcode --mode yolo "$@"
 fi
 
 # Serialize port selection with container creation across concurrent

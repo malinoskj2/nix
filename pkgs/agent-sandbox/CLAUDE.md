@@ -102,5 +102,7 @@ up a task, and report their size. See `docs/unreal-sandbox.md` in the Nix repo.
 
 `~/projects` is on the host's disk, so anything you leave behind stays there.
 
+Agents here run without permission prompts, but Claude Code still asks before an `rm` or `rmdir` that targets the working directory, one of its parents, `$HOME`, a top-level directory or a glob such as `dir/*`. Name the files or subdirectories to delete instead, for example `rm -rf target build` rather than `rm -rf ./*`.
+
 - When a task finishes, delete the target dirs, worktrees, venvs, databases and other scratch you created for it. Leave only what the human needs to keep working.
 - Before finishing, check what you added with `du -sh` and report anything over a few GB that you kept.

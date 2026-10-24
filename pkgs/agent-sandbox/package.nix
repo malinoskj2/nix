@@ -429,6 +429,11 @@ let
         "PATH=${env}/bin:/usr/bin"
         "LANG=C.UTF-8"
         "CLAUDE_CODE_SANDBOXED=1"
+        # Claude Code reads these only from its launch environment. They drop the rm prompts it
+        # can skip; removing the working directory, its parents or $HOME still prompts.
+        "CLAUDE_CODE_DISABLE_SUBSTITUTION_RM_PROMPT=1"
+        "CLAUDE_CODE_DISABLE_INLINE_SHELL_RM_PROMPT=1"
+        "CLAUDE_CODE_DISABLE_MOUNTED_DRIVE_RM_PROMPT=1"
         "ORCA_CLI_COMMAND=orca-ide"
         "GI_TYPELIB_PATH=${
           lib.makeSearchPath "lib/girepository-1.0" [
@@ -456,6 +461,12 @@ let
         "UNREAL_MCP_URL=${unrealMcp.url}"
         "OPENCODE_CONFIG_CONTENT=${
           builtins.toJSON {
+            # The wildcard alone leaves these two at their default of asking.
+            permission = {
+              "*" = "allow";
+              doom_loop = "allow";
+              external_directory = "allow";
+            };
             mcp.unreal-mcp = {
               type = "remote";
               inherit (unrealMcp) url;
