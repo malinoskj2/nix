@@ -1,6 +1,7 @@
 { lib, pkgs, ... }:
 {
   imports = [
+    ../arrpc
     ../claude-desktop
     ../dolphin
     ../firefox.nix
@@ -26,6 +27,17 @@
         terminalThemeDark = "Catppuccin Mocha";
         # Orca otherwise uses its launcher's SHELL, which a dev shell sets to bash.
         terminalDefaultShell = "/run/current-system/sw/bin/zsh";
+        pluginSystemEnabled = true;
+      };
+      approvedPlugins = [ "chron0.discord-presence" ];
+      discordPresenceSettings = {
+        detailLevel = "full";
+        showBranch = true;
+        showTerminals = true;
+        showMachine = true;
+        showAgentCount = true;
+        openUrl = "https://github.com/stablyai/orca";
+        showOpenButton = true;
       };
     })
     pwvucontrol

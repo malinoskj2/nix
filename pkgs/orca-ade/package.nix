@@ -16,6 +16,8 @@
   wayland,
   unstable,
   globalSettings ? { },
+  approvedPlugins ? [ ],
+  discordPresenceSettings ? { },
 }:
 
 let
@@ -33,6 +35,12 @@ let
     repo = "vscode-nix-ide";
     rev = "065fcba88075f682cdd4db7738f13d2c9e2d5c6a";
     hash = "sha256-GLVWBO0JrsK4dxZ7F2xeXltAFgBV4bkfiPQcb7EuFHU=";
+  };
+  discord-presence = fetchFromGitHub {
+    owner = "jondmarien";
+    repo = "orca-discord-presence";
+    rev = "cd0630bbcc2c830765a51fc023fe736dfe7f0f06";
+    hash = "sha256-z7r3qtsJxwz0AcHXNY811Irz2mzBGLpFZcjc9vSfaJ8=";
   };
   sourceCommit = "a0cd1644f320f1327f7495650a816111b495f3cd";
   arch = stdenv.hostPlatform.node.arch;
@@ -55,6 +63,8 @@ stdenv.mkDerivation (finalAttrs: {
     ./open-video-externally.patch
     ./nix-syntax.patch
     ./clipboard-shared-media.patch
+    ./bundled-plugins.patch
+    ./approved-plugins.patch
   ];
 
   # The glibc floor guards Ubuntu 20.04 users of the upstream AppImage.
@@ -83,6 +93,10 @@ stdenv.mkDerivation (finalAttrs: {
       return { ...normalizeLoadedGlobalSettingsUpstream(...args), ...nixGlobalSettings }
     }
     EOF
+    # Declared plugins run without the consent prompt; disabling one still sticks.
+    cat > src/shared/plugins/nix-approved-plugins.ts <<'EOF'
+    export const nixApprovedPlugins: readonly string[] = ${builtins.toJSON approvedPlugins}
+    EOF
     # Official skill installs pin to the tag's commit, which upstream reads from a git checkout.
     substituteInPlace config/scripts/build-source-commit.mjs \
       --replace-fail "execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()" "'${sourceCommit}'"
@@ -101,6 +115,34 @@ stdenv.mkDerivation (finalAttrs: {
     substituteInPlace src/main/ssh/system-ssh-file-transfer.ts \
       --replace-fail 'tar -xzf - -C ''${shellEscape(remoteDir)}`' \
         'tar -xzf - -C ''${shellEscape(remoteDir)} && chmod -R u+w ''${shellEscape(remoteDir)}`'
+    # Bundled, so Orca installs and updates it from the package like its own launch plugins.
+    plugin=resources/plugins/launch/chron0.discord-presence
+    mkdir $plugin
+    cp -r ${discord-presence}/{orca-plugin.json,README.md,dist,panel} $plugin
+    chmod -R u+w $plugin
+    # Saved settings still win over these defaults. The worker would otherwise rewrite its panel
+    # inside the hash-addressed install, which Orca then rejects as corrupted.
+    substituteInPlace $plugin/dist/main.js \
+      --replace-fail 'var BOOLEAN_FIELDS = ' ${lib.escapeShellArg "DEFAULT_SETTINGS = Object.freeze({ ...DEFAULT_SETTINGS, ...${builtins.toJSON discordPresenceSettings} }); var BOOLEAN_FIELDS = "} \
+      --replace-fail 'normalizeOpenUrl(source.openUrl);' 'normalizeOpenUrl(source.openUrl ?? DEFAULT_SETTINGS.openUrl);' \
+      --replace-fail 'normalizeBridgeUrl(source.bridgeUrl);' 'normalizeBridgeUrl(source.bridgeUrl ?? DEFAULT_SETTINGS.bridgeUrl);' \
+      --replace-fail 'normalizeBridgeToken(source.bridgeToken);' 'normalizeBridgeToken(source.bridgeToken ?? DEFAULT_SETTINGS.bridgeToken);' \
+      --replace-fail 'const skip = env[PANEL_WRITE_SKIP_ENV];' 'const skip = "1";'
+    substituteInPlace config/scripts/verify-packaged-plugin-resources.cjs \
+      --replace-fail 'module.exports = { verifyPackagedPluginResources }' \
+        'module.exports = { verifyPackagedPluginResources, hashPackagedPluginTree }'
+    node -e '
+      const { readFileSync, writeFileSync } = require("node:fs")
+      const { hashPackagedPluginTree } = require("./config/scripts/verify-packaged-plugin-resources.cjs")
+      const [indexPath, plugin] = process.argv.slice(1)
+      const index = JSON.parse(readFileSync(indexPath, "utf8"))
+      index.plugins.push({
+        pluginKey: "chron0.discord-presence",
+        path: "chron0.discord-presence",
+        contentHash: hashPackagedPluginTree(plugin)
+      })
+      writeFileSync(indexPath, JSON.stringify(index, null, 2))
+    ' resources/plugins/launch/bundled-plugins.json $plugin
     grammars=src/renderer/src/lib/monaco-languages/textmate-grammars
     cp ${vscode-nix-ide}/dist/nix.tmLanguage.json $grammars/nix.tmLanguage.json
     cp ${vscode-nix-ide}/LICENSE $grammars/nix-LICENSE.txt

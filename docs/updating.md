@@ -90,6 +90,16 @@ on: the Nova setting, the imported WaveFox CSS, the cascade-layer order and the
 transparent chrome. A Firefox or WaveFox UI change can break any of them
 without a build error.
 
+[`users/jesse/arrpc/`](../users/jesse/arrpc) also adds an AutoConfig file to
+Firefox that registers a window actor on discord.com, which runs arRPC's bridge
+mod from one pinned arRPC commit in the page. With arRPC running, open
+discord.com and check that `journalctl --user -u arRPC` logs `web connected`
+once, without a Local Network Access prompt, and that an RPC client's activity
+shows on your profile. Firefox changes to AutoConfig, `registerWindowActor`
+(including `safeForUntrustedWebProcess`) or the `LocalNetworkAccess` policy
+fail silently. To move the bridge mod, change the commit in its URL and refresh
+its hash.
+
 ## Inputs pinned to a commit
 
 ### `apple-fonts`
@@ -196,7 +206,17 @@ Treat a bump as a hardware change and test it on the device.
   not just the build. Also rebase
   [`open-video-externally.patch`](../pkgs/orca-ade/open-video-externally.patch),
   which opens a clicked video path with the system default (mpv) instead of
-  Orca's editor. The `postPatch` also edits upstream source in place: it drops
+  Orca's editor, and
+  [`bundled-plugins.patch`](../pkgs/orca-ade/bundled-plugins.patch), which lets
+  Orca's launch-plugin index carry a third-party plugin without marking it
+  official, and [`approved-plugins.patch`](../pkgs/orca-ade/approved-plugins.patch),
+  which treats the plugins in `approvedPlugins` as consented. The build adds
+  jondmarien/orca-discord-presence to that index from
+  one pinned commit; to move it, change `rev` and refresh its hash. The
+  `postPatch` merges `discordPresenceSettings` into the plugin's compiled
+  defaults, lets its URL and token settings fall back to them (upstream reads
+  those only from saved settings) and turns off its panel rewrite, all with
+  `--replace-fail` against `dist/main.js`. The `postPatch` also edits upstream source in place: it drops
   the AppImage's glibc floor check and its downloaded Node runtime, skips the
   Docker build of the Wayland clipboard helper, which `buildPhase` compiles
   instead, turns on keeping the computer awake while agents run, and makes
@@ -220,6 +240,9 @@ Treat a bump as a hardware change and test it on the device.
     sandbox workspace, and check that it opens in a floating mpv;
   - check that `~/.claude/settings.json` is unchanged and that a plain
     `claude` outside Orca has no Orca hooks;
+  - check that Settings → Plugins lists Discord Rich Presence as Bundled and
+    enabled without a consent prompt, and that Discord Presence: Show Status
+    reports `connected=true` against arRPC with `detail=full`;
   - check that Getting started shows Enable Orca CLI as done. It only looks
     for the `orca-cli`, `computer-use` and `orchestration` skills, which
     [`features/desktop.nix`](../users/jesse/features/desktop.nix) links from
