@@ -123,6 +123,44 @@ configure_muse() {
   seed_if_empty "$HOME/.config/muse/settings.json" "$sandbox_home/.config/muse/settings.json"
 }
 
+steam_running_in_sandbox() {
+  local pid
+  for pid in $(pgrep -x steam); do
+    if grep -q /agent-sandbox.slice/ "/proc/$pid/cgroup" 2>/dev/null; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+configure_steam() {
+  # The host's saved login works from the sandbox as a copy. Steam rewrites
+  # these files while it runs, so the newer copy wins and nothing syncs while
+  # any sandbox Steam is up, since they all share one home.
+  local root
+  root=$(readlink -f "$HOME/.steam/root" 2>/dev/null) || return 0
+  if [[ ! -f $root/local.vdf ]] || steam_running_in_sandbox; then
+    return 0
+  fi
+  local dst=$sandbox_home/.local/share/Steam
+  mkdir -p "$dst/config" "$dst/steamapps" "$sandbox_home/.steam"
+  copy_if_newer "$root/config/config.vdf" "$dst/config/config.vdf"
+  copy_if_newer "$root/config/loginusers.vdf" "$dst/config/loginusers.vdf"
+  copy_if_newer "$root/local.vdf" "$dst/local.vdf"
+  copy_if_newer "$HOME/.steam/registry.vdf" "$sandbox_home/.steam/registry.vdf"
+
+  # steamapps/common is the host's, so a sandbox client left to update in the
+  # background would rewrite the host's games and Proton builds behind the
+  # host's manifests. Copies update only when the sandbox launches them.
+  local manifest copy
+  for manifest in "$root"/steamapps/appmanifest_*.acf; do
+    copy=$dst/steamapps/${manifest##*/}
+    if [[ -f $manifest && (! -f $copy || $manifest -nt $copy) ]]; then
+      sed -E 's/^(\s*"AutoUpdateBehavior"\s+)"[0-9]+"/\1"1"/' "$manifest" >"$copy"
+    fi
+  done
+}
+
 cleanup() {
   trap - EXIT
   if [[ -n ${clipboard_watcher_pid:-} ]]; then
@@ -176,6 +214,7 @@ configure_claude
 configure_codex
 configure_zcode
 configure_muse
+configure_steam
 
 workdir=$HOME/projects
 for dir in "${shared[@]}"; do
@@ -204,6 +243,9 @@ args=(
   # unprivileged user namespaces and an unmasked /proc to mount a fresh one.
   --security-opt seccomp=unconfined
   --security-opt systempaths=unconfined
+  # Steam's crash reporter would upload sandbox client dumps to Valve.
+  --add-host crash.steampowered.com:0.0.0.0
+  --add-host crash.steampowered.com:::
   --pids-limit 8192
   # Memory limits come from the slice, which reclaims before it kills.
   --cgroup-parent agent-sandbox.slice

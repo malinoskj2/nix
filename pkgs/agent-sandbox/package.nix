@@ -399,7 +399,7 @@ let
     name = "agent-sandbox";
     includeStorePaths = false;
     extraCommands = ''
-      mkdir -p bin usr/bin lib64 etc/nix etc/claude-code etc/sway etc/fonts tmp
+      mkdir -p bin usr/bin lib64 etc/nix etc/claude-code etc/sway etc/fonts etc/ssl/certs tmp
       ln -s ${bashInteractive}/bin/bash bin/sh
       ln -s ${bashInteractive}/bin/bash bin/bash
       ln -s ${coreutils}/bin/env usr/bin/env
@@ -409,6 +409,9 @@ let
       ln -s ${nixConf} etc/nix/nix.conf
       ln -s ${fontconfig.out}/etc/fonts/conf.d etc/fonts/conf.d
       ln -s ${tzdata}/share/zoneinfo etc/zoneinfo
+      # Steam's bundled libcurl ignores SSL_CERT_FILE and reads Debian's bundle path.
+      ln -s ${cacert}/etc/ssl/certs/ca-bundle.crt etc/ssl/certs/ca-bundle.crt
+      ln -s ${cacert}/etc/ssl/certs/ca-bundle.crt etc/ssl/certs/ca-certificates.crt
       ln -s ${./sway.conf} etc/sway/config
       ln -s ${./nested-sway.conf} etc/sway/nested
       ln -s ${./CLAUDE.md} etc/claude-code/CLAUDE.md
@@ -488,7 +491,10 @@ let
     runtimeInputs = [
       clipboardSync
       coreutils
+      gnugrep
+      gnused
       openssh
+      procps
       systemd
       wl-clipboard
     ];
