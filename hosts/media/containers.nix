@@ -16,7 +16,6 @@
       flags = [ "--all" ];
     };
     daemon.settings = {
-      live-restore = true;
       no-new-privileges = true;
       # Networks stay out of 192.168.0.0/16, which Caddy's lan_only trusts.
       default-address-pools = [
