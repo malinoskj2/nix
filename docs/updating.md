@@ -248,7 +248,7 @@ Treat a bump as a hardware change and test it on the device.
     `claude` outside Orca has no Orca hooks;
   - check that Settings → Plugins lists Discord Rich Presence as Bundled and
     enabled without a consent prompt, and that Discord Presence: Show Status
-    reports `connected=true` against arRPC with `detail=full`;
+    reports `connected=true` against arRPC with `detail=generic`;
   - check that Getting started shows Enable Orca CLI as done. It only looks
     for the `orca-cli`, `computer-use` and `orchestration` skills, which
     [`features/desktop.nix`](../users/jesse/features/desktop.nix) links from
