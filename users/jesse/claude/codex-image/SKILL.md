@@ -11,7 +11,12 @@ Generating an image takes about a minute. Batch related images into one call whe
 
 ```sh
 out=$(mktemp -d)
+no_mcp=()
+while read -r name; do
+  no_mcp+=(-c "mcp_servers.$name.enabled=false")
+done < <(codex mcp list --json | jq -r '.[].name')
 codex exec \
+  "${no_mcp[@]}" \
   -m gpt-6-astra \
   -c model_reasoning_effort=high \
   -s read-only \
@@ -24,6 +29,7 @@ cat "$out/last.txt"
 ```
 
 - Run it with a Bash timeout of 600000 ms.
+- Keep the MCP servers disabled. Image generation never uses them, and each `codex exec` would otherwise start its own copy of every server.
 - Keep `-s read-only` and the no-shell instruction. Codex's own sandbox can't start in some containers, so Codex only generates and you copy the file.
 - Images land under `~/.codex/generated_images/<thread>/`. Copy them to where the task needs them; never link to that directory from a project.
 - For edits or style references, attach the images with `-i a.png,b.png` and say in the prompt what to change and what to keep.
