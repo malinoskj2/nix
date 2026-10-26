@@ -1,5 +1,5 @@
 diff --git a/src/main/claude/claude-agent-sdk-process-spawn.ts b/src/main/claude/claude-agent-sdk-process-spawn.ts
-index a48b3e8a..f773e7e5 100644
+index a3590072..843227ba 100644
 --- a/src/main/claude/claude-agent-sdk-process-spawn.ts
 +++ b/src/main/claude/claude-agent-sdk-process-spawn.ts
 @@ -6,6 +6,7 @@ import {
@@ -9,8 +9,8 @@ index a48b3e8a..f773e7e5 100644
 +import { claudeSessionSettingsArgs } from './session-settings'
  
  export type ClaudeCodeProcessSpawn = {
-   /** Pass as the SDK's `spawnClaudeCodeProcess`; the SDK never learns the pid because it never owns it. */
-@@ -54,7 +55,7 @@ export function createClaudeCodeProcessSpawn(
+   /** SDK spawn hook; Orca retains process ownership. */
+@@ -41,7 +42,7 @@ export function createClaudeCodeProcessSpawn(
        managed = spawnManagedProviderProcess(
          {
            command: options.command,
@@ -20,7 +20,7 @@ index a48b3e8a..f773e7e5 100644
          },
          {
 diff --git a/src/main/claude/hook-service.ts b/src/main/claude/hook-service.ts
-index 1bda76cb..d724cad1 100644
+index f86cf426..aaf9b26d 100644
 --- a/src/main/claude/hook-service.ts
 +++ b/src/main/claude/hook-service.ts
 @@ -16,6 +16,7 @@ import {
@@ -31,7 +31,7 @@ index 1bda76cb..d724cad1 100644
  import {
    getWindowsClaudeHookExecutablePath,
    getWindowsClaudeHookFileStatus,
-@@ -88,6 +89,18 @@ export class ClaudeHookService {
+@@ -87,6 +88,18 @@ export class ClaudeHookService {
      return process.platform === 'win32' && this.options.agent === 'claude'
    }
  
@@ -50,7 +50,7 @@ index 1bda76cb..d724cad1 100644
    private managedScript(target: 'local' | 'posix' = 'local'): string {
      return getManagedScript(target, {
        source: this.options.source,
-@@ -109,7 +122,7 @@ export class ClaudeHookService {
+@@ -108,7 +121,7 @@ export class ClaudeHookService {
      if (refused) {
        return refused
      }
@@ -59,7 +59,7 @@ index 1bda76cb..d724cad1 100644
      const scriptPath = getManagedScriptPath(this.options.settings)
      const config = readHooksJson(configPath)
      if (!config) {
-@@ -169,9 +182,11 @@ export class ClaudeHookService {
+@@ -168,9 +181,11 @@ export class ClaudeHookService {
      if (refused) {
        return refused
      }
@@ -73,11 +73,10 @@ index 1bda76cb..d724cad1 100644
      if (!config) {
        return {
          agent: this.options.agent,
-@@ -196,8 +211,9 @@ export class ClaudeHookService {
-     } else {
+@@ -198,7 +213,9 @@ export class ClaudeHookService {
        writeManagedScript(scriptPath, payload)
      }
--    // Why: a profile's statusLine arrives with the settings copy from the default home.
+     // Profiles inherit statusLine from the default-home settings copy.
 -    if (options.configDir === undefined && plan.statusLine === 'install') {
 +    if (this.usesSessionSettings) {
 +      nextConfig = this.installSessionStatusLine(nextConfig)
@@ -85,7 +84,7 @@ index 1bda76cb..d724cad1 100644
        nextConfig = this.installManagedStatusLine(nextConfig)
      } else if (options.configDir === undefined && plan.statusLine === 'retire') {
        nextConfig = this.retireManagedStatusLine(nextConfig)
-@@ -206,6 +222,22 @@ export class ClaudeHookService {
+@@ -207,6 +224,22 @@ export class ClaudeHookService {
      return this.getStatus(options)
    }
  
@@ -105,13 +104,13 @@ index 1bda76cb..d724cad1 100644
 +    )
 +  }
 +
-   // Why: the statusline feed is opportunistic (usage display, not agent status); a user who deleted the
-   // managed entry has opted out, and the marker distinguishes that deletion from a first install.
+   // The marker distinguishes a user-deleted statusline from a first install.
    private installManagedStatusLine(config: HooksConfig): HooksConfig {
-@@ -254,12 +286,18 @@ export class ClaudeHookService {
+     const scriptFileName = getStatusLineScriptFileName(this.options.settings)
+@@ -252,11 +285,17 @@ export class ClaudeHookService {
      options: ClaudeHookInstallOptions = {}
    ): Promise<AgentHookInstallStatus> {
-     // Why: remote Windows is unsupported; local process.platform cannot identify the remote OS.
+     // Remote hook installation targets POSIX hosts regardless of the client platform.
 -    const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
 +    const remoteHooksDir = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks`
 +    // Why: as locally, the remote ~/.claude/settings.json may be read-only, so Claude's hooks
@@ -123,14 +122,13 @@ index 1bda76cb..d724cad1 100644
      const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
 -    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
 +    const remoteScriptPath = `${remoteHooksDir}/${remoteScriptFileName}`
-     // Why: surface fallible SFTP installs as structured errors.
      try {
 -      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
 +      const config = usesSessionSettings ? {} : await readHooksJsonRemote(sftp, remoteConfigPath)
        if (!config) {
          return {
            agent: this.options.agent,
-@@ -306,6 +344,10 @@ export class ClaudeHookService {
+@@ -300,6 +339,10 @@ export class ClaudeHookService {
    }
  
    remove(): AgentHookInstallStatus {
@@ -143,14 +141,14 @@ index 1bda76cb..d724cad1 100644
      if (!config) {
 diff --git a/src/main/claude/session-settings.ts b/src/main/claude/session-settings.ts
 new file mode 100644
-index 00000000..9378cd71
+index 00000000..fc319cdb
 --- /dev/null
 +++ b/src/main/claude/session-settings.ts
 @@ -0,0 +1,51 @@
 +import { existsSync } from 'node:fs'
 +import { dirname, join } from 'node:path'
 +import { getSharedManagedScriptPath, writeManagedScript } from '../agent-hooks/installer-utils'
-+import { quoteShell } from '../cli/cli-install-path-format'
++import { quotePosixShell } from '../../shared/shell-argument-quoting'
 +
 +// Why: ~/.claude/settings.json may be read-only (e.g. a Nix store symlink), so Orca's
 +// hooks live in their own file and reach only the Claude sessions Orca starts.
@@ -168,7 +166,7 @@ index 00000000..9378cd71
 +function buildClaudeShimScript(settingsPath: string): string {
 +  return `#!/usr/bin/env bash
 +self_dir=$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd -P)
-+settings=${quoteShell(settingsPath)}
++settings=${quotePosixShell(settingsPath)}
 +IFS=: read -r -a entries <<< "$PATH"
 +for dir in "\${entries[@]}"; do
 +  [[ -n $dir && -f $dir/claude && -x $dir/claude ]] || continue
@@ -200,7 +198,7 @@ index 00000000..9378cd71
 +}
 \ No newline at end of file
 diff --git a/src/main/ipc/pty/host-env/assembly.ts b/src/main/ipc/pty/host-env/assembly.ts
-index 25538cd8..dd2d960e 100644
+index 9f6f8ade..9f654b3a 100644
 --- a/src/main/ipc/pty/host-env/assembly.ts
 +++ b/src/main/ipc/pty/host-env/assembly.ts
 @@ -1,3 +1,4 @@
@@ -222,9 +220,9 @@ index 25538cd8..dd2d960e 100644
  import { applyCodexRemoteViewerClipboardEnv } from './codex-terminal-clipboard'
 +import { readInheritedPath } from './path'
  
- /**
-  * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
-@@ -298,6 +301,14 @@ export function buildPtyHostEnv(
+ /** Mutate host-local PTY environment only for local execution; SSH cannot use these loopback endpoints or filesystem paths. */
+ export function buildPtyHostEnv(
+@@ -289,6 +292,14 @@ export function buildPtyHostEnv(
      resourcesPath: opts.resourcesPath
    })
  

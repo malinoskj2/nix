@@ -1,20 +1,20 @@
 diff --git a/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts b/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts
-index c751cbee..1a506edc 100644
+index b76a70b5..41f6660c 100644
 --- a/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts
 +++ b/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts
-@@ -60,6 +60,10 @@ export function isHtmlFilePath(filePath: string): boolean {
-   return /\.html?$/i.test(filePath)
+@@ -75,6 +75,10 @@ type TerminalFileOpenDeps = {
+   openInSourceGroupSurface?: 'internal' | 'browser'
  }
  
 +function isVideoFilePath(filePath: string): boolean {
 +  return /\.(?:avi|m4v|mkv|mov|mp4|ogv|webm)$/i.test(filePath)
 +}
 +
- function openHtmlFileInBrowser(filePath: string, worktreeId: string, clientLocal: boolean): void {
-   const store = useAppStore.getState()
-   if (worktreeId) {
-@@ -129,6 +133,15 @@ export function openDetectedFilePath(
-   cancelPendingEditorRevealFrames()
+ export function openDetectedFilePath(
+   filePath: string,
+   line: number | null,
+@@ -107,6 +111,15 @@ export function openDetectedFilePath(
+   }
  
    void (async () => {
 +    // Orca can't play video. An SSH workspace's path can exist here too, and the main
@@ -28,4 +28,4 @@ index c751cbee..1a506edc 100644
 +
      let statResult
      let fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
-     let hostWorkspaceFile: HostWorkspaceFile | null = null
+     const sourceFileHostId =
