@@ -42,18 +42,18 @@ let
     rev = "cd0630bbcc2c830765a51fc023fe736dfe7f0f06";
     hash = "sha256-z7r3qtsJxwz0AcHXNY811Irz2mzBGLpFZcjc9vSfaJ8=";
   };
-  sourceCommit = "a0cd1644f320f1327f7495650a816111b495f3cd";
+  sourceCommit = "041baf356b368d773f333e76375ce860fba2481b";
   arch = stdenv.hostPlatform.node.arch;
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "orca-ade";
-  version = "1.4.229";
+  version = "1.4.241";
 
   src = fetchFromGitHub {
     owner = "stablyai";
     repo = "orca";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-iaid1L+v0ME7IPB4oDxyUe7CtpOOL6cMQjQHpqtIdEI=";
+    hash = "sha256-d1MUZyFp6+d7DlHba1Z1jPBlCXkwZW9qXWQ5msz6akU=";
   };
 
   patches = [
@@ -112,9 +112,9 @@ stdenv.mkDerivation (finalAttrs: {
     substituteInPlace src/shared/default-global-settings.ts \
       --replace-fail "keepComputerAwakeWhileAgentsRun: false," "keepComputerAwakeWhileAgentsRun: true,"
     # Uploaded bundles come from the read-only store, and Orca writes into them after extracting.
-    substituteInPlace src/main/ssh/system-ssh-file-transfer.ts \
-      --replace-fail 'tar -xzf - -C ''${shellEscape(remoteDir)}`' \
-        'tar -xzf - -C ''${shellEscape(remoteDir)} && chmod -R u+w ''${shellEscape(remoteDir)}`'
+    substituteInPlace src/main/ssh/system-transport/system-ssh-file-transfer.ts \
+      --replace-fail 'tar -xzf - -C ''${quotePosixShell(remoteDir)}`' \
+        'tar -xzf - -C ''${quotePosixShell(remoteDir)} && chmod -R u+w ''${quotePosixShell(remoteDir)}`'
     # Bundled, so Orca installs and updates it from the package like its own launch plugins.
     plugin=resources/plugins/launch/chron0.discord-presence
     mkdir $plugin
@@ -151,8 +151,9 @@ stdenv.mkDerivation (finalAttrs: {
   pnpmDeps = fetchPnpmDeps {
     inherit (finalAttrs) pname version src;
     inherit pnpm;
+    inherit (finalAttrs) env;
     fetcherVersion = 4;
-    hash = "sha256-0dIkyKpNvTvp0p2LTWLD85qWYeis0I1ttNMwF3J6zS4=";
+    hash = "sha256-LxurNr4qbCn70ZSBjt7Wn/upAe8mlju1rVc2SUAHyLg=";
   };
 
   mobilePnpmDeps = fetchPnpmDeps {
@@ -161,7 +162,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     sourceRoot = "${finalAttrs.src.name}/mobile";
     fetcherVersion = 4;
-    hash = "sha256-6xqV7XBncnUoMOH2wU3eleC5YIqXgh5dnCrJRVodwAE=";
+    hash = "sha256-mwtdTz+pMicDUnm7lsv/uMHsidcIaERCScjve4NLlu0=";
   };
 
   postConfigure = ''
@@ -192,6 +193,8 @@ stdenv.mkDerivation (finalAttrs: {
     ELECTRON_SKIP_BINARY_DOWNLOAD = "1";
     npm_config_manage_package_manager_versions = "false";
     pnpm_config_verify_deps_before_run = "false";
+    # Upstream's pnpmfile otherwise links node_modules into a global store outside the build.
+    ORCA_PNPM_GLOBAL_VIRTUAL_STORE = "0";
   };
 
   buildPhase = ''
@@ -266,7 +269,7 @@ stdenv.mkDerivation (finalAttrs: {
       {
         src = fetchurl {
           url = "https://github.com/stablyai/orca/releases/download/v${finalAttrs.version}/orca-ide_${finalAttrs.version}_amd64.deb";
-          hash = "sha256-7TNqh4iWW1mHkIITcPUOC40C8sqJrdOGZt8F6A5jKOQ=";
+          hash = "sha256-vZMu70/O64p83gRPKl9zAcRL5SJVfYUj2/s1VxNNBR0=";
         };
         nativeBuildInputs = [ dpkg ];
       }

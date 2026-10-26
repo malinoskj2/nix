@@ -1,14 +1,14 @@
 diff --git a/src/shared/plugins/plugin-consent-state.ts b/src/shared/plugins/plugin-consent-state.ts
-index 4fd4c2f2..a21b348d 100644
+index 0ad20fff..c5653c61 100644
 --- a/src/shared/plugins/plugin-consent-state.ts
 +++ b/src/shared/plugins/plugin-consent-state.ts
 @@ -1,4 +1,5 @@
  import { isQualifiedPluginKey } from './plugin-manifest'
 +import { nixApprovedPlugins } from './nix-approved-plugins'
  
- /**
-  * Consent + enablement state derivation. Consent is recorded against the
-@@ -23,6 +24,9 @@ export function getPluginActivationState(
+ /** Consent binds qualified key and fingerprint (capabilities plus trusted worker tier); either trust change requires reapproval. */
+ 
+@@ -18,6 +19,9 @@ export function getPluginActivationState(
    if (lists.disabledPlugins.includes(qualifiedKey)) {
      return 'disabled'
    }
@@ -18,7 +18,7 @@ index 4fd4c2f2..a21b348d 100644
    return lists.pluginConsents[qualifiedKey] === currentConsentFingerprint ? 'approved' : 'pending'
  }
  
-@@ -34,7 +38,11 @@ export function needsReconsent(
+@@ -28,7 +32,11 @@ export function needsReconsent(
    lists: PluginConsentLists
  ): boolean {
    const recorded = lists.pluginConsents[qualifiedKey]
