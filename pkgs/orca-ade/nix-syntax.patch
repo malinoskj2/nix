@@ -1,17 +1,16 @@
 diff --git a/src/renderer/src/lib/monaco-languages/register-nix.ts b/src/renderer/src/lib/monaco-languages/register-nix.ts
 new file mode 100644
-index 00000000..f5e0ff9b
+index 00000000..e301af6f
 --- /dev/null
 +++ b/src/renderer/src/lib/monaco-languages/register-nix.ts
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,56 @@
 +import type * as Monaco from 'monaco-editor'
-+import type { IRawGrammar } from 'vscode-textmate'
++import type { LanguageRegistration } from 'shiki/core'
 +import { registerTextMateLanguage } from './textmate-language-registration'
 +
-+type MonacoModule = typeof Monaco
++type MonacoModule = Pick<typeof Monaco, 'languages'>
 +
 +export const NIX_LANGUAGE_ID = 'nix'
-+export const NIX_TEXTMATE_SCOPE = 'source.nix'
 +
 +export const nixLanguageConfiguration: Monaco.languages.LanguageConfiguration = {
 +  comments: {
@@ -40,15 +39,14 @@ index 00000000..f5e0ff9b
 +  ]
 +}
 +
-+export async function loadNixTextMateGrammar(scopeName: string): Promise<IRawGrammar | null> {
-+  if (scopeName !== NIX_TEXTMATE_SCOPE) {
-+    return null
++export async function loadNixTextMateGrammar(): Promise<LanguageRegistration> {
++  const { default: grammars } = await import('shiki/langs/nix.mjs')
++  const grammar = grammars.find((entry) => entry.name === NIX_LANGUAGE_ID)
++  if (!grammar) {
++    throw new Error('Shiki bundle is missing the Nix grammar')
 +  }
-+
-+  // Why: Nix highlighting uses the TextMate grammar from nix-community/vscode-nix-ide
-+  // (MIT; see textmate-grammars/nix-LICENSE.txt).
-+  const grammarModule = await import('./textmate-grammars/nix.tmLanguage.json')
-+  return grammarModule.default as unknown as IRawGrammar
++  // Why: markdown-nix only highlights Nix fences inside Markdown, and Shiki refuses an unloaded embed.
++  return { ...grammar, embeddedLangs: [] }
 +}
 +
 +export function registerNixLanguage(monaco: MonacoModule): void {
@@ -59,35 +57,34 @@ index 00000000..f5e0ff9b
 +      aliases: ['Nix', 'nix']
 +    },
 +    configuration: nixLanguageConfiguration,
-+    scopeName: NIX_TEXTMATE_SCOPE,
 +    loadGrammar: loadNixTextMateGrammar
 +  })
 +}
 diff --git a/src/renderer/src/lib/monaco-setup.ts b/src/renderer/src/lib/monaco-setup.ts
-index 4b462b8f..4a8b2efd 100644
+index 631d9248..69135ef0 100644
 --- a/src/renderer/src/lib/monaco-setup.ts
 +++ b/src/renderer/src/lib/monaco-setup.ts
-@@ -12,6 +12,7 @@ import { registerAstroLanguage } from './monaco-languages/register-astro'
- import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
+@@ -18,6 +18,7 @@ import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
  import { registerLeanLanguage } from './monaco-languages/register-lean'
+ import { registerMarkdownLanguage } from './monaco-languages/register-markdown'
  import { registerNimLanguage } from './monaco-languages/register-nim'
 +import { registerNixLanguage } from './monaco-languages/register-nix'
  import { registerQuartoLanguage } from './monaco-languages/register-quarto'
  import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
  import { registerSvelteLanguage } from './monaco-languages/register-svelte'
-@@ -167,6 +168,7 @@ runMonacoSetupSteps([
-   ['Astro language registration', () => registerAstroLanguage(monaco)],
+@@ -88,6 +89,7 @@ runMonacoSetupSteps([
+   ['CUDA language registration', () => registerCudaLanguage(monaco)],
    ['Nim language registration', () => registerNimLanguage(monaco)],
    ['Lean language registration', () => registerLeanLanguage(monaco)],
 +  ['Nix language registration', () => registerNixLanguage(monaco)],
    ['Typst language registration', () => registerTypstLanguage(monaco)],
    ['Zig language registration', () => registerZigLanguage(monaco)],
-   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
+   ['Groovy language registration', () => registerGroovyLanguage(monaco)],
 diff --git a/src/shared/editor-language/editor-language-detect.ts b/src/shared/editor-language/editor-language-detect.ts
-index b8480080..3c5174ce 100644
+index a6adacf3..43ebc52e 100644
 --- a/src/shared/editor-language/editor-language-detect.ts
 +++ b/src/shared/editor-language/editor-language-detect.ts
-@@ -106,6 +106,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
+@@ -122,6 +122,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
    '.nim': 'nim',
    '.nims': 'nim',
    '.nimble': 'nim',

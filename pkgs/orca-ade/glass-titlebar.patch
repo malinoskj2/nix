@@ -1,8 +1,8 @@
 diff --git a/src/main/window/createMainWindow.ts b/src/main/window/createMainWindow.ts
-index 7fef8acf..a3acbc8e 100644
+index ebec2fb1..93a35946 100644
 --- a/src/main/window/createMainWindow.ts
 +++ b/src/main/window/createMainWindow.ts
-@@ -109,7 +109,14 @@ export function createMainWindow(
+@@ -116,7 +116,14 @@ export function createMainWindow(
      acceptFirstMouse: true,
      // Save menu-bar space on Windows/Linux; Alt reveals it and macOS uses the system menu.
      autoHideMenuBar: true,
@@ -18,7 +18,7 @@ index 7fef8acf..a3acbc8e 100644
      // Keep macOS traffic lights inset; hide Windows native chrome to avoid duplicate titlebars.
      titleBarStyle:
        process.platform === 'darwin'
-@@ -118,7 +125,7 @@ export function createMainWindow(
+@@ -125,7 +132,7 @@ export function createMainWindow(
            ? 'hidden'
            : undefined,
      // Linux ignores hidden titleBarStyle; remove its native frame to avoid duplicate titlebars.
@@ -28,11 +28,11 @@ index 7fef8acf..a3acbc8e 100644
      ...(process.platform === 'darwin'
        ? {
 diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index 660911a2..601bbc83 100644
+index a3fd16b9..32d2815d 100644
 --- a/src/renderer/src/assets/main.css
 +++ b/src/renderer/src/assets/main.css
-@@ -873,6 +873,16 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay'])
-   overflow: hidden;
+@@ -912,6 +912,16 @@ body
+   filter: blur(2px);
  }
  
 +/* The native Linux window is alpha-capable. Keep only the titlebar band translucent;
@@ -48,7 +48,7 @@ index 660911a2..601bbc83 100644
  /* Why: native windows have a stable content box and need no wake-time viewport reflow. */
  html.native-shell,
  html.native-shell body,
-@@ -978,6 +988,21 @@ html.native-shell .app-layout {
+@@ -1017,6 +1027,21 @@ html.native-shell .app-layout {
    background: var(--bg-titlebar, var(--card));
  }
  
@@ -71,10 +71,10 @@ index 660911a2..601bbc83 100644
    width: calc(80px / var(--ui-zoom-factor, 1));
    flex-shrink: 0;
 diff --git a/src/renderer/src/components/right-sidebar/index.tsx b/src/renderer/src/components/right-sidebar/index.tsx
-index 72bb89c1..4f55901c 100644
+index fe24e790..761f12fd 100644
 --- a/src/renderer/src/components/right-sidebar/index.tsx
 +++ b/src/renderer/src/components/right-sidebar/index.tsx
-@@ -79,7 +79,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -81,7 +81,7 @@ function RightSidebarInner(): React.JSX.Element {
    const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
  
    const panelContent = rightSidebarOpen ? (
@@ -83,7 +83,7 @@ index 72bb89c1..4f55901c 100644
        {/* Keep panels mounted across worktree switches; remounts caused Windows IPC storms and multi-second freezes. */}
        <RightSidebarPanelContent effectiveTab={effectiveTab} rightSidebarOpen={rightSidebarOpen} />
      </div>
-@@ -136,7 +136,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -138,7 +138,7 @@ function RightSidebarInner(): React.JSX.Element {
        )}
      >
        <div
@@ -92,7 +92,7 @@ index 72bb89c1..4f55901c 100644
          style={{
            borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
          }}
-@@ -155,7 +155,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -157,7 +157,7 @@ function RightSidebarInner(): React.JSX.Element {
            />
          ) : (
            /* The 40px activity bar absorbs part of the 138px window-control overlay; inset the header by the remaining 98px. */
@@ -101,7 +101,7 @@ index 72bb89c1..4f55901c 100644
              <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
                {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
              </span>
-@@ -176,7 +176,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -178,7 +178,7 @@ function RightSidebarInner(): React.JSX.Element {
        {activityBarPosition === 'side' && (
          <ContextMenu>
            <ContextMenuTrigger asChild>
@@ -124,10 +124,10 @@ index 643a9a5e..453c31f1 100644
            <TooltipProvider delayDuration={400}>
              <ContextMenuTrigger asChild>
 diff --git a/src/renderer/src/components/tab-group/TabGroupPanel.tsx b/src/renderer/src/components/tab-group/TabGroupPanel.tsx
-index 6d3ae017..30504888 100644
+index 95df5973..90a73a50 100644
 --- a/src/renderer/src/components/tab-group/TabGroupPanel.tsx
 +++ b/src/renderer/src/components/tab-group/TabGroupPanel.tsx
-@@ -269,7 +269,7 @@ export default function TabGroupPanel({
+@@ -270,7 +270,7 @@ export default function TabGroupPanel({
        {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
        {tabStrip !== 'attached' ? null : (
          <div

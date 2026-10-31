@@ -30,30 +30,24 @@ let
     ;
   electron = electron_43;
   pnpm = pnpm_11.override { nodejs-slim = nodejs_24; };
-  vscode-nix-ide = fetchFromGitHub {
-    owner = "nix-community";
-    repo = "vscode-nix-ide";
-    rev = "065fcba88075f682cdd4db7738f13d2c9e2d5c6a";
-    hash = "sha256-GLVWBO0JrsK4dxZ7F2xeXltAFgBV4bkfiPQcb7EuFHU=";
-  };
   discord-presence = fetchFromGitHub {
     owner = "jondmarien";
     repo = "orca-discord-presence";
     rev = "cd0630bbcc2c830765a51fc023fe736dfe7f0f06";
     hash = "sha256-z7r3qtsJxwz0AcHXNY811Irz2mzBGLpFZcjc9vSfaJ8=";
   };
-  sourceCommit = "041baf356b368d773f333e76375ce860fba2481b";
+  sourceCommit = "1c6ac8c3c4d2c3dec2cb5966d225ca2a0e0471d3";
   arch = stdenv.hostPlatform.node.arch;
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "orca-ade";
-  version = "1.4.241";
+  version = "1.4.245";
 
   src = fetchFromGitHub {
     owner = "stablyai";
     repo = "orca";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-d1MUZyFp6+d7DlHba1Z1jPBlCXkwZW9qXWQ5msz6akU=";
+    hash = "sha256-2wZAkV5Q5ZLaeKs9dxK5LoxiCxJk5IdSneJc90fUQ9Y=";
   };
 
   patches = [
@@ -67,7 +61,6 @@ stdenv.mkDerivation (finalAttrs: {
     ./approved-plugins.patch
   ];
 
-  # The glibc floor guards Ubuntu 20.04 users of the upstream AppImage.
   postPatch = ''
     # Apply declarative settings to new and existing profiles at startup,
     # without replacing Orca's mutable workspace/session state.
@@ -75,11 +68,12 @@ stdenv.mkDerivation (finalAttrs: {
     import type { GlobalSettings } from './global-settings-types'
     export const nixGlobalSettings = ${builtins.toJSON globalSettings} satisfies Partial<GlobalSettings>
     EOF
-    sed -i "1i import { nixGlobalSettings } from './nix-global-settings'" \
-      src/shared/default-global-settings.ts
     # Keep the declarative overrides after the defaults without TS2783's duplicate-key error
     # for overrides also named explicitly in the defaults object.
-    sed -i 's/^  return {$/  return Object.assign<GlobalSettings, Partial<GlobalSettings>>({/; s/^  }$/  }, nixGlobalSettings)/' \
+    sed -i \
+      -e "1i import { nixGlobalSettings } from './nix-global-settings'" \
+      -e 's/^  return {$/  return Object.assign<GlobalSettings, Partial<GlobalSettings>>({/' \
+      -e 's/^  }$/  }, nixGlobalSettings)/' \
       src/shared/default-global-settings.ts
     # Loading re-normalizes some saved fields after spreading them, so the overrides wrap the result.
     sed -i "1i import { nixGlobalSettings } from '../../../shared/nix-global-settings'" \
@@ -93,28 +87,15 @@ stdenv.mkDerivation (finalAttrs: {
       return { ...normalizeLoadedGlobalSettingsUpstream(...args), ...nixGlobalSettings }
     }
     EOF
-    # Declared plugins run without the consent prompt; disabling one still sticks.
-    cat > src/shared/plugins/nix-approved-plugins.ts <<'EOF'
-    export const nixApprovedPlugins: readonly string[] = ${builtins.toJSON approvedPlugins}
-    EOF
-    # Official skill installs pin to the tag's commit, which upstream reads from a git checkout.
-    substituteInPlace config/scripts/build-source-commit.mjs \
-      --replace-fail "execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()" "'${sourceCommit}'"
-    substituteInPlace config/electron-builder.config.cjs \
-      --replace-fail "const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')" \
-        "const verifyLinuxGlibcFloor = () => {}"
-    # Only the AppImage ships the downloaded Node; the deb and rpm drop it again.
-    substituteInPlace config/electron-builder.config.cjs \
-      --replace-fail "appImageNodeRuntime = await placeAppImageNodeRuntime(resourcesDir, targetArch)" ""
-    # Upstream builds the Wayland clipboard helper in Docker; buildPhase compiles it instead.
-    substituteInPlace config/wayland-clipboard-resources.cjs \
-      --replace-fail "[join(root, 'config', 'scripts', 'build-wayland-clipboard.mjs'), '--arch', arch]" "['-e', \"\"]"
+
     substituteInPlace src/shared/default-global-settings.ts \
       --replace-fail "keepComputerAwakeWhileAgentsRun: false," "keepComputerAwakeWhileAgentsRun: true,"
-    # Uploaded bundles come from the read-only store, and Orca writes into them after extracting.
-    substituteInPlace src/main/ssh/system-transport/system-ssh-file-transfer.ts \
-      --replace-fail 'tar -xzf - -C ''${quotePosixShell(remoteDir)}`' \
-        'tar -xzf - -C ''${quotePosixShell(remoteDir)} && chmod -R u+w ''${quotePosixShell(remoteDir)}`'
+
+    # Declared plugins run without the consent prompt; disabling one still sticks.
+    cat > src/shared/plugins/approval/nix-approved-plugins.ts <<'EOF'
+    export const nixApprovedPlugins: readonly string[] = ${builtins.toJSON approvedPlugins}
+    EOF
+
     # Bundled, so Orca installs and updates it from the package like its own launch plugins.
     plugin=resources/plugins/launch/chron0.discord-presence
     mkdir $plugin
@@ -128,9 +109,6 @@ stdenv.mkDerivation (finalAttrs: {
       --replace-fail 'normalizeBridgeUrl(source.bridgeUrl);' 'normalizeBridgeUrl(source.bridgeUrl ?? DEFAULT_SETTINGS.bridgeUrl);' \
       --replace-fail 'normalizeBridgeToken(source.bridgeToken);' 'normalizeBridgeToken(source.bridgeToken ?? DEFAULT_SETTINGS.bridgeToken);' \
       --replace-fail 'const skip = env[PANEL_WRITE_SKIP_ENV];' 'const skip = "1";'
-    substituteInPlace config/scripts/verify-packaged-plugin-resources.cjs \
-      --replace-fail 'module.exports = { verifyPackagedPluginResources }' \
-        'module.exports = { verifyPackagedPluginResources, hashPackagedPluginTree }'
     node -e '
       const { readFileSync, writeFileSync } = require("node:fs")
       const { hashPackagedPluginTree } = require("./config/scripts/verify-packaged-plugin-resources.cjs")
@@ -143,9 +121,24 @@ stdenv.mkDerivation (finalAttrs: {
       })
       writeFileSync(indexPath, JSON.stringify(index, null, 2))
     ' resources/plugins/launch/bundled-plugins.json $plugin
-    grammars=src/renderer/src/lib/monaco-languages/textmate-grammars
-    cp ${vscode-nix-ide}/dist/nix.tmLanguage.json $grammars/nix.tmLanguage.json
-    cp ${vscode-nix-ide}/LICENSE $grammars/nix-LICENSE.txt
+
+    # Official skill installs pin to the tag's commit, which upstream reads from a git checkout.
+    substituteInPlace config/scripts/build-source-commit.mjs \
+      --replace-fail "execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()" "'${sourceCommit}'"
+    # Both concern only the upstream AppImage: the glibc floor guards its Ubuntu 20.04 users,
+    # and only the AppImage ships the downloaded Node, which the deb and rpm drop again.
+    substituteInPlace config/electron-builder.config.cjs \
+      --replace-fail "const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')" \
+        "const verifyLinuxGlibcFloor = () => {}" \
+      --replace-fail "appImageNodeRuntime = await placeAppImageNodeRuntime(resourcesDir, targetArch)" ""
+    # Upstream builds the Wayland clipboard helper in Docker; buildPhase compiles it instead.
+    substituteInPlace config/wayland-clipboard-resources.cjs \
+      --replace-fail "[join(root, 'config', 'scripts', 'build-wayland-clipboard.mjs'), '--arch', arch]" "['-e', \"\"]"
+
+    # Uploaded bundles come from the read-only store, and Orca writes into them after extracting.
+    substituteInPlace src/main/ssh/system-transport/system-ssh-file-transfer.ts \
+      --replace-fail 'tar -xzf - -C ''${quotePosixShell(remoteDir)}`' \
+        'tar -xzf - -C ''${quotePosixShell(remoteDir)} && chmod -R u+w ''${quotePosixShell(remoteDir)}`'
   '';
 
   pnpmDeps = fetchPnpmDeps {
@@ -153,7 +146,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     inherit (finalAttrs) env;
     fetcherVersion = 4;
-    hash = "sha256-LxurNr4qbCn70ZSBjt7Wn/upAe8mlju1rVc2SUAHyLg=";
+    hash = "sha256-HcZJazyaf65VsZU16r/H9+p0be2fBtJY8n05/uEl9oY=";
   };
 
   mobilePnpmDeps = fetchPnpmDeps {
@@ -162,13 +155,8 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     sourceRoot = "${finalAttrs.src.name}/mobile";
     fetcherVersion = 4;
-    hash = "sha256-mwtdTz+pMicDUnm7lsv/uMHsidcIaERCScjve4NLlu0=";
+    hash = "sha256-BNjHtUF7TK7/IBE4LcxjbkgJISw0xECXg9AriqTB+LE=";
   };
-
-  postConfigure = ''
-    pnpmDeps=$mobilePnpmDeps pnpmRoot=mobile pnpmConfigHook
-    (cd mobile && pnpm run postinstall)
-  '';
 
   nativeBuildInputs = [
     autoPatchelfHook
@@ -196,6 +184,11 @@ stdenv.mkDerivation (finalAttrs: {
     # Upstream's pnpmfile otherwise links node_modules into a global store outside the build.
     ORCA_PNPM_GLOBAL_VIRTUAL_STORE = "0";
   };
+
+  postConfigure = ''
+    pnpmDeps=$mobilePnpmDeps pnpmRoot=mobile pnpmConfigHook
+    (cd mobile && pnpm run postinstall)
+  '';
 
   buildPhase = ''
     runHook preBuild
@@ -269,7 +262,7 @@ stdenv.mkDerivation (finalAttrs: {
       {
         src = fetchurl {
           url = "https://github.com/stablyai/orca/releases/download/v${finalAttrs.version}/orca-ide_${finalAttrs.version}_amd64.deb";
-          hash = "sha256-vZMu70/O64p83gRPKl9zAcRL5SJVfYUj2/s1VxNNBR0=";
+          hash = "sha256-VEIOItSd2p32btTpQ7YoRMlV1P2dXBBZv493ArdgvIk=";
         };
         nativeBuildInputs = [ dpkg ];
       }

@@ -197,7 +197,9 @@ Treat a bump as a hardware change and test it on the device.
   Upstream may add new dark-mode variables or Monaco call sites, so search for
   the `.dark` token block, the shared `.dark,
   .native-chat-appearance[data-native-chat-scheme='dark']` status and diff
-  block, and `vs-dark` when rebasing it. Rebase
+  block, and `vs-dark` when rebasing it. Editors pick their theme in
+  `useMonacoTheme`, and the Markdown TextMate tokens redefine each theme with
+  Shiki's rules, so the patch adds Shiki's `catppuccin-mocha` rules there. Rebase
   [`glass-titlebar.patch`](../pkgs/orca-ade/glass-titlebar.patch) when Orca
   changes its Electron window options or top-bar layout, then confirm only the
   36px titlebar band shows compositor blur. Rebase
