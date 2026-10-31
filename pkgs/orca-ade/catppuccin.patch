@@ -1,8 +1,8 @@
 diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index 8ff08f81..660911a2 100644
+index d6780be0..a3fd16b9 100644
 --- a/src/renderer/src/assets/main.css
 +++ b/src/renderer/src/assets/main.css
-@@ -284,26 +284,26 @@
+@@ -296,26 +296,26 @@
  }
  
  .dark {
@@ -49,7 +49,7 @@ index 8ff08f81..660911a2 100644
    --chat-canvas-mix: 5%;
    --chat-foreground-mix: 78%;
    --chat-strong-mix: 90%;
-@@ -319,57 +319,57 @@
+@@ -331,59 +331,59 @@
    --chat-composer-base: transparent;
    --chat-composer-border-mix: 9%;
    --chat-content-max-width: 46rem;
@@ -57,6 +57,8 @@ index 8ff08f81..660911a2 100644
 -  --card-foreground: #fafafa;
 -  --popover: #171717;
 -  --popover-foreground: #fafafa;
+-  --floating-surface: rgba(0, 0, 0, 0.72);
+-  --dialog-surface: rgba(23, 23, 23, 0.96);
 -  --primary: #e5e5e5;
 -  --primary-foreground: #171717;
 -  --secondary: #262626;
@@ -108,6 +110,8 @@ index 8ff08f81..660911a2 100644
 +  --card-foreground: #cdd6f4;
 +  --popover: #181825;
 +  --popover-foreground: #cdd6f4;
++  --floating-surface: rgb(17 17 27 / 0.72);
++  --dialog-surface: rgb(24 24 37 / 0.96);
 +  --primary: #cba6f7;
 +  --primary-foreground: #11111b;
 +  --secondary: #313244;
@@ -158,7 +162,7 @@ index 8ff08f81..660911a2 100644
    --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
    --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
    --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
-@@ -377,20 +377,28 @@
+@@ -391,20 +391,28 @@
    --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
    --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
    --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
@@ -200,7 +204,7 @@ index 8ff08f81..660911a2 100644
  }
  
  /* Status and diff colors follow the chat scheme without copying the app palette. */
-@@ -426,26 +434,26 @@
+@@ -442,27 +450,27 @@
  
  .dark,
  .native-chat-appearance[data-native-chat-scheme='dark'] {
@@ -214,6 +218,7 @@ index 8ff08f81..660911a2 100644
    --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
 -  --status-warning: #eab308;
 +  --status-warning: #f9e2af;
+   --status-warning-text: var(--status-warning);
    --jira-priority-high: var(--destructive);
    --jira-priority-medium: var(--status-warning);
    --jira-priority-low: var(--callout-note);
@@ -240,149 +245,40 @@ index 8ff08f81..660911a2 100644
    --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 16%, transparent);
    --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 30%, transparent);
    --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 18%, transparent);
-diff --git a/src/renderer/src/components/automations/AutomationEditorPromptEditor.tsx b/src/renderer/src/components/automations/AutomationEditorPromptEditor.tsx
-index dbcf3ee7..5a20902b 100644
---- a/src/renderer/src/components/automations/AutomationEditorPromptEditor.tsx
-+++ b/src/renderer/src/components/automations/AutomationEditorPromptEditor.tsx
-@@ -6,7 +6,7 @@ import { syncContentOnMount, syncContentUpdate } from '@/components/editor/monac
- import { isMonacoFindWidgetOpen } from '@/components/editor/monaco-find-widget'
- import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+diff --git a/src/renderer/src/hooks/use-monaco-theme.ts b/src/renderer/src/hooks/use-monaco-theme.ts
+index b22e8a58..2e452b74 100644
+--- a/src/renderer/src/hooks/use-monaco-theme.ts
++++ b/src/renderer/src/hooks/use-monaco-theme.ts
+@@ -1,6 +1,7 @@
+ import { useEffect, useState } from 'react'
  import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
--import '@/lib/monaco-setup'
-+import { resolveMonacoTheme } from '@/lib/monaco-setup'
- import { useAppStore } from '@/store'
- import { cn } from '@/lib/utils'
- import { buildAutomationPromptEditorOptions } from './automation-editor-prompt-options'
-@@ -151,7 +151,7 @@ export function AutomationEditorPromptEditor({
-           defaultLanguage="plaintext"
-           // Own post-mount syncing; a controlled value would wipe Monaco’s undo stack.
-           defaultValue={value}
--          theme={isDark ? 'vs-dark' : 'vs'}
-+          theme={resolveMonacoTheme(isDark)}
-           onChange={handleChange}
-           onMount={handleMount}
-           options={options}
-diff --git a/src/renderer/src/components/editor/DiffSectionBody.tsx b/src/renderer/src/components/editor/DiffSectionBody.tsx
-index dbab300f..8184e442 100644
---- a/src/renderer/src/components/editor/DiffSectionBody.tsx
-+++ b/src/renderer/src/components/editor/DiffSectionBody.tsx
-@@ -4,6 +4,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
- import { AlertCircle, RefreshCw } from 'lucide-react'
- import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
- import { cn } from '@/lib/utils'
-+import { resolveMonacoTheme } from '@/lib/monaco-setup'
- import { Button } from '@/components/ui/button'
- import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
- import { isCombinedDiffSizeUnknown } from './combined-diff-on-demand-load'
-@@ -207,7 +208,7 @@ export function DiffSectionBody({
-           language={language}
-           original={section.originalContent}
-           modified={section.modifiedContent}
--          theme={isDark ? 'vs-dark' : 'vs'}
-+          theme={resolveMonacoTheme(isDark)}
-           onMount={handleEditorMount}
-           // The React wrapper may dispose models before widgets; retain them through teardown and dispose unattached models next tick.
-           originalModelPath={`${modelPathBase}:original`}
-diff --git a/src/renderer/src/components/editor/DiffViewer.tsx b/src/renderer/src/components/editor/DiffViewer.tsx
-index 9a2f19ca..5fbae6c1 100644
---- a/src/renderer/src/components/editor/DiffViewer.tsx
-+++ b/src/renderer/src/components/editor/DiffViewer.tsx
-@@ -3,6 +3,7 @@ import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
- import type { editor } from 'monaco-editor'
- import { useAppStore } from '@/store'
- import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
-+import { resolveMonacoTheme } from '@/lib/monaco-setup'
- import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
- import { useContextualCopySetup } from './useContextualCopySetup'
- import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
-@@ -330,7 +331,7 @@ export default function DiffViewer({
-             language={language}
-             original={originalContent}
-             modified={modifiedContent}
--            theme={isDark ? 'vs-dark' : 'vs'}
-+            theme={resolveMonacoTheme(isDark)}
-             onMount={handleMount}
-             // Tab-owned models preserve modified undo across Changes-mode HEAD rotations.
-             originalModelPath={currentDiffModelPaths.originalModelPath}
-diff --git a/src/renderer/src/components/editor/IpynbCellEditor.tsx b/src/renderer/src/components/editor/IpynbCellEditor.tsx
-index 8758ca37..153ebef2 100644
---- a/src/renderer/src/components/editor/IpynbCellEditor.tsx
-+++ b/src/renderer/src/components/editor/IpynbCellEditor.tsx
-@@ -1,7 +1,7 @@
- import { useLayoutEffect, useMemo, useRef, useState } from 'react'
- import type { Components } from 'react-markdown'
- import type { editor } from 'monaco-editor'
--import { monaco } from '@/lib/monaco-setup'
-+import { monaco, resolveMonacoTheme } from '@/lib/monaco-setup'
- import { computeEditorFontSize, resolveEditorFontStack } from '@/lib/editor-font-zoom'
- import { useAppStore } from '@/store'
- import { installMonacoEditorFindShortcut } from './editor-shortcuts'
-@@ -162,7 +162,7 @@ function IpynbSourceEditor({
-   }, [onChange, onDeactivate])
+ import { usePluginMonacoThemeStore } from '@/store/plugin-monaco-theme'
++import { CATPPUCCIN_MOCHA_MONACO_THEME } from '@/lib/monaco-catppuccin-mocha-theme'
  
-   useLayoutEffect(() => {
--    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
-+    monaco.editor.setTheme(resolveMonacoTheme(isDark))
-   }, [isDark])
+ const definedThemes = new Set<string>()
  
-   // Create before paint to avoid placeholders and guessed caret geometry; retain the model and undo history across external reloads.
-diff --git a/src/renderer/src/components/editor/MonacoCodeExcerpt.tsx b/src/renderer/src/components/editor/MonacoCodeExcerpt.tsx
-index 7341d7d4..6f6afc5c 100644
---- a/src/renderer/src/components/editor/MonacoCodeExcerpt.tsx
-+++ b/src/renderer/src/components/editor/MonacoCodeExcerpt.tsx
-@@ -1,5 +1,5 @@
- import React, { useEffect, useMemo, useState } from 'react'
--import { monaco } from '@/lib/monaco-setup'
-+import { monaco, resolveMonacoTheme } from '@/lib/monaco-setup'
- import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
- import { useAppStore } from '@/store'
- import { cn } from '@/lib/utils'
-@@ -36,7 +36,7 @@ export function useMonacoColorizedLines(lines: string[], language: string): stri
-   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
+@@ -31,5 +32,9 @@ export function useMonacoTheme(isDarkOverride?: boolean): string {
+   }, [pluginTheme])
  
-   useEffect(() => {
--    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
-+    monaco.editor.setTheme(resolveMonacoTheme(isDark))
-   }, [isDark])
- 
-   // Why: colorize emits theme-specific token classes, so a theme switch must re-colorize.
-diff --git a/src/renderer/src/components/editor/MonacoEditor.tsx b/src/renderer/src/components/editor/MonacoEditor.tsx
-index 8aaad260..ab858e06 100644
---- a/src/renderer/src/components/editor/MonacoEditor.tsx
-+++ b/src/renderer/src/components/editor/MonacoEditor.tsx
-@@ -3,7 +3,7 @@ import Editor from '@monaco-editor/react'
- import type { editor } from 'monaco-editor'
- import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
- import { useAppStore } from '@/store'
--import '@/lib/monaco-setup'
-+import { resolveMonacoTheme } from '@/lib/monaco-setup'
- import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
- 
- import { useContextualCopySetup } from './useContextualCopySetup'
-@@ -273,7 +273,7 @@ export default function MonacoEditor({
-         language={language}
-         // Use defaultValue because Orca owns later content sync; controlled values would duplicate setValue.
-         defaultValue={content}
--        theme={isDark ? 'vs-dark' : 'vs'}
-+        theme={resolveMonacoTheme(isDark)}
-         onChange={contentSync.handleChange}
-         onMount={handleMount}
-         options={{
-diff --git a/src/renderer/src/lib/monaco-setup.ts b/src/renderer/src/lib/monaco-setup.ts
-index c2758408..4b462b8f 100644
---- a/src/renderer/src/lib/monaco-setup.ts
-+++ b/src/renderer/src/lib/monaco-setup.ts
-@@ -24,6 +24,98 @@ import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview
- import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
- import { runMonacoSetupSteps } from './monaco-setup-steps'
- 
+   // Why the built-in until defined: Monaco silently ignores a theme name it doesn't know yet.
+-  return pluginTheme && defined.has(pluginTheme.name) ? pluginTheme.name : isDark ? 'vs-dark' : 'vs'
++  return pluginTheme && defined.has(pluginTheme.name)
++    ? pluginTheme.name
++    : isDark
++      ? CATPPUCCIN_MOCHA_MONACO_THEME
++      : 'vs'
+ }
+diff --git a/src/renderer/src/lib/monaco-catppuccin-mocha-theme.ts b/src/renderer/src/lib/monaco-catppuccin-mocha-theme.ts
+new file mode 100644
+index 00000000..aab65429
+--- /dev/null
++++ b/src/renderer/src/lib/monaco-catppuccin-mocha-theme.ts
+@@ -0,0 +1,89 @@
++import type * as Monaco from 'monaco-editor'
++
 +export const CATPPUCCIN_MOCHA_MONACO_THEME = 'catppuccin-mocha'
 +
-+export function resolveMonacoTheme(isDark: boolean): string {
-+  return isDark ? CATPPUCCIN_MOCHA_MONACO_THEME : 'vs'
-+}
-+
-+const catppuccinMochaTheme: monaco.editor.IStandaloneThemeData = {
++export const catppuccinMochaTheme: Monaco.editor.IStandaloneThemeData = {
 +  base: 'vs-dark',
 +  inherit: true,
 +  rules: [
@@ -467,11 +363,77 @@ index c2758408..4b462b8f 100644
 +    'diffEditor.diagonalFill': '#313244'
 +  }
 +}
-+
+diff --git a/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts b/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts
+index 0f37936e..9eb05ac2 100644
+--- a/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts
++++ b/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts
+@@ -4,6 +4,10 @@ import type { IToken } from 'shiki/textmate'
+ import type { BundledLanguageInfo } from 'shiki/types'
+ import { COLD_GRAMMAR_LINE_ATTEMPTS } from '../syntax-highlighting/textmate-core'
+ import { createTokensProvider, loadEditorCore } from './textmate-token-provider'
++import {
++  CATPPUCCIN_MOCHA_MONACO_THEME,
++  catppuccinMochaTheme
++} from '../monaco-catppuccin-mocha-theme'
+ 
+ type MonacoModule = {
+   editor: Pick<typeof Monaco.editor, 'defineTheme'>
+@@ -80,18 +84,20 @@ function fenceLanguagesByLabel(
+ export async function createMarkdownTokensProvider(
+   monaco: MonacoModule
+ ): Promise<Monaco.languages.TokensProvider> {
+-  const [editorCore, { default: markdownGrammars }, { bundledLanguagesInfo }, dark, light] =
++  const [editorCore, { default: markdownGrammars }, { bundledLanguagesInfo }, dark, light, mocha] =
+     await Promise.all([
+       loadEditorCore(),
+       import('shiki/langs/markdown.mjs'),
+       import('shiki/langs'),
+       import('shiki/themes/dark-plus.mjs'),
+-      import('shiki/themes/light-plus.mjs')
++      import('shiki/themes/light-plus.mjs'),
++      import('shiki/themes/catppuccin-mocha.mjs')
+     ])
+   await editorCore.core.loadLanguage(...markdownGrammars)
+ 
+   const darkRules = markdownThemeRules(dark.default)
+   const lightRules = markdownThemeRules(light.default)
++  const mochaRules = markdownThemeRules(mocha.default)
+   // Why: Orca's editors all use the built-in theme names; redefining them keeps every setTheme caller unchanged.
+   monaco.editor.defineTheme('vs-dark', {
+     base: 'vs-dark',
+@@ -100,9 +106,15 @@ export async function createMarkdownTokensProvider(
+     colors: {}
+   })
+   monaco.editor.defineTheme('vs', { base: 'vs', inherit: true, rules: lightRules, colors: {} })
++  monaco.editor.defineTheme(CATPPUCCIN_MOCHA_MONACO_THEME, {
++    ...catppuccinMochaTheme,
++    rules: [...catppuccinMochaTheme.rules, ...mochaRules]
++  })
+   const mapScopes = createScopeMapper(
+     new Set(
+-      [...darkRules, ...lightRules].map((rule) => rule.token.slice(MARKDOWN_TOKEN_PREFIX.length))
++      [...darkRules, ...lightRules, ...mochaRules].map((rule) =>
++        rule.token.slice(MARKDOWN_TOKEN_PREFIX.length)
++      )
+     )
+   )
+ 
+diff --git a/src/renderer/src/lib/monaco-setup.ts b/src/renderer/src/lib/monaco-setup.ts
+index 6f719ad0..631d9248 100644
+--- a/src/renderer/src/lib/monaco-setup.ts
++++ b/src/renderer/src/lib/monaco-setup.ts
+@@ -29,6 +29,10 @@ import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-dispo
+ import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
+ import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
+ import { runMonacoSetupSteps } from './monaco-setup-steps'
++import {
++  CATPPUCCIN_MOCHA_MONACO_THEME,
++  catppuccinMochaTheme
++} from './monaco-catppuccin-mocha-theme'
+ import { installMonacoTsWorkerIdleStop } from './monaco-ts-worker-idle-stop'
+ 
  globalThis.MonacoEnvironment = {
-   getWorker(_workerId, label) {
-     switch (label) {
-@@ -66,6 +158,10 @@ monacoTS.javascriptDefaults.setCompilerOptions({
+@@ -73,6 +77,10 @@ monacoTS.javascriptDefaults.setCompilerOptions({
  })
  
  runMonacoSetupSteps([

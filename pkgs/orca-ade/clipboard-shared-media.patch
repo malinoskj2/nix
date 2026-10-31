@@ -1,5 +1,5 @@
 diff --git a/src/main/window/clipboard-image-temp-file.ts b/src/main/window/clipboard-image-temp-file.ts
-index 92146ad3..1eb13c74 100644
+index ba118401..2915833e 100644
 --- a/src/main/window/clipboard-image-temp-file.ts
 +++ b/src/main/window/clipboard-image-temp-file.ts
 @@ -3,7 +3,6 @@ import path from 'node:path'
@@ -8,9 +8,9 @@ index 92146ad3..1eb13c74 100644
  import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 -import { getAppEnvironment } from '../../shared/app-environment'
  import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboard-image'
- import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
- import { nativeChatPasteFolder } from './native-chat-paste-files'
-@@ -31,12 +30,13 @@ export async function saveClipboardImageBufferAsTempFile(
+ import {
+   agentSessionPastedImageName,
+@@ -40,19 +39,17 @@ export async function saveClipboardImageBufferAsTempFile(
      throw new SshHostNotServedError(args.connectionId)
    }
  
@@ -23,7 +23,14 @@ index 92146ad3..1eb13c74 100644
      folder = nativeChatPasteFolder()
 -    await fs.mkdir(folder, { recursive: true })
    }
-+  await fs.mkdir(folder, { recursive: true })
-   const tempPath = path.join(folder, fileName)
+   // A picked file keeps its own name, so the paste gets a folder to stay unique.
+   const tempPath = args?.fileName
+     ? path.join(folder, `orca-paste-${randomUUID()}`, shellInertFileName(args.fileName))
+     : path.join(folder, agentSessionPastedImageName(Date.now(), randomUUID()))
+-  if (args?.fileName) {
+-    await fs.mkdir(path.dirname(tempPath), { recursive: true })
+-  }
++  await fs.mkdir(path.dirname(tempPath), { recursive: true })
    await fs.writeFile(tempPath, buffer)
    return tempPath
+ }

@@ -1,14 +1,14 @@
-diff --git a/src/shared/plugins/plugin-consent-state.ts b/src/shared/plugins/plugin-consent-state.ts
-index 0ad20fff..c5653c61 100644
---- a/src/shared/plugins/plugin-consent-state.ts
-+++ b/src/shared/plugins/plugin-consent-state.ts
+diff --git a/src/shared/plugins/approval/plugin-consent-state.ts b/src/shared/plugins/approval/plugin-consent-state.ts
+index dec39ff0..3b3a38cd 100644
+--- a/src/shared/plugins/approval/plugin-consent-state.ts
++++ b/src/shared/plugins/approval/plugin-consent-state.ts
 @@ -1,4 +1,5 @@
- import { isQualifiedPluginKey } from './plugin-manifest'
+ import { isQualifiedPluginKey } from '../manifest/plugin-manifest'
 +import { nixApprovedPlugins } from './nix-approved-plugins'
  
- /** Consent binds qualified key and fingerprint (capabilities plus trusted worker tier); either trust change requires reapproval. */
- 
-@@ -18,6 +19,9 @@ export function getPluginActivationState(
+ /**
+  * Consent + enablement state derivation. Consent is recorded against the
+@@ -23,6 +24,9 @@ export function getPluginActivationState(
    if (lists.disabledPlugins.includes(qualifiedKey)) {
      return 'disabled'
    }
@@ -18,7 +18,7 @@ index 0ad20fff..c5653c61 100644
    return lists.pluginConsents[qualifiedKey] === currentConsentFingerprint ? 'approved' : 'pending'
  }
  
-@@ -28,7 +32,11 @@ export function needsReconsent(
+@@ -33,7 +37,11 @@ export function needsReconsent(
    lists: PluginConsentLists
  ): boolean {
    const recorded = lists.pluginConsents[qualifiedKey]
