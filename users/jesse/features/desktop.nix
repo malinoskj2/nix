@@ -1,4 +1,9 @@
-{ lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   orca-ade = pkgs.orca-ade.override {
     globalSettings = {
@@ -16,6 +21,7 @@ let
     approvedPlugins = [ "chron0.discord-presence" ];
     # Generic keeps workspace, branch and machine names out of the activity.
     discordPresenceSettings.detailLevel = "generic";
+    inherit (config.orca) agentResumeWrapper;
   };
   orcaSkills = [
     "computer-use"
@@ -41,26 +47,34 @@ in
     ../pointer-cursor.nix
   ];
 
-  home.packages = with pkgs; [
-    blender
-    chromium
-    ffmpeg
-    glib
-    google-chrome
-    imagemagick
-    ktx-tools
-    mediainfo
-    orca-ade
-    pwvucontrol
-    vulkan-tools
-    wl-clipboard
-  ];
-
-  home.file = skillsFor "claude" // skillsFor "codex";
-
-  home.sessionVariables = {
-    DOWNLOAD = "/media/scratch/download";
+  options.orca.agentResumeWrapper = lib.mkOption {
+    type = lib.types.nullOr lib.types.str;
+    default = null;
+    description = "Command that Orca's automatic Claude, Codex and Muse resumes in local workspaces run through.";
   };
 
-  xdg.mimeApps.enable = true;
+  config = {
+    home.packages = with pkgs; [
+      blender
+      chromium
+      ffmpeg
+      glib
+      google-chrome
+      imagemagick
+      ktx-tools
+      mediainfo
+      orca-ade
+      pwvucontrol
+      vulkan-tools
+      wl-clipboard
+    ];
+
+    home.file = skillsFor "claude" // skillsFor "codex";
+
+    home.sessionVariables = {
+      DOWNLOAD = "/media/scratch/download";
+    };
+
+    xdg.mimeApps.enable = true;
+  };
 }

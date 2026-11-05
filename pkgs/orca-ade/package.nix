@@ -18,6 +18,9 @@
   globalSettings ? { },
   approvedPlugins ? [ ],
   discordPresenceSettings ? { },
+  # Command that automatic Claude, Codex and Muse resumes in local workspaces run through, as
+  # `<command> <agent> ...`.
+  agentResumeWrapper ? null,
 }:
 
 let
@@ -59,6 +62,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./clipboard-shared-media.patch
     ./bundled-plugins.patch
     ./approved-plugins.patch
+    ./agent-resume-wrapper.patch
   ];
 
   postPatch = ''
@@ -67,6 +71,9 @@ stdenv.mkDerivation (finalAttrs: {
     cat > src/shared/nix-global-settings.ts <<'EOF'
     import type { GlobalSettings } from './global-settings-types'
     export const nixGlobalSettings = ${builtins.toJSON globalSettings} satisfies Partial<GlobalSettings>
+    EOF
+    cat > src/shared/nix-agent-resume-wrapper.ts <<'EOF'
+    export const nixAgentResumeWrapper: string | null = ${builtins.toJSON agentResumeWrapper}
     EOF
     # Keep the declarative overrides after the defaults without TS2783's duplicate-key error
     # for overrides also named explicitly in the defaults object.

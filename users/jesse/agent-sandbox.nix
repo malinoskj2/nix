@@ -8,6 +8,9 @@ let
   ssh = "${config.xdg.dataHome}/agent-sandbox/ssh";
 in
 {
+  # Orca resumes agents when it reopens; this resumes the ones `sandbox` started in a sandbox again.
+  orca.agentResumeWrapper = "agent-sandbox-resume";
+
   systemd.user.services."agent-sandbox@" = {
     Unit = {
       Description = "Agent sandbox %i";
