@@ -199,8 +199,9 @@ Treat a bump as a hardware change and test it on the device.
   [`glass-titlebar.patch`](../pkgs/orca-ade/glass-titlebar.patch) when Orca
   changes its top-bar layout. It relies on the `windowMaterial = "translucent"`
   setting in [`features/desktop.nix`](../users/jesse/features/desktop.nix) for
-  an alpha-capable window; confirm only the 36px titlebar band shows compositor
-  blur. Rebase
+  an alpha-capable window, and keeps that material on for Linux in
+  `resolveWindowMaterial`, which upstream turns off unless terminals are
+  translucent; confirm only the 36px titlebar band shows compositor blur. Rebase
   [`claude-hooks.patch`](../pkgs/orca-ade/claude-hooks.patch): it keeps Orca out
   of the read-only `~/.claude/settings.json` by writing its hooks to
   `~/.orca/agent-hooks/claude-settings.json` and passing that file with
