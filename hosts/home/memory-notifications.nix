@@ -6,8 +6,8 @@ let
   } (builtins.readFile ./memory-notifications.py);
 in
 {
-  # Jesse already belongs to systemd-journal. Watch the host journal, where
-  # the kernel reports both global OOMs and container memory-limit kills.
+  # The kernel reports both global OOMs and container memory-limit kills to the host
+  # journal, which jesse's systemd-journal membership lets this user service read.
   home-manager.users.jesse.systemd.user.services.memory-notifications = {
     Unit = {
       Description = "Desktop alerts for high RAM usage and OOM kills";

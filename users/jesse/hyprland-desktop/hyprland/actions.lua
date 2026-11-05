@@ -1,4 +1,5 @@
--- A window toggled to floating takes this share of its monitor's logical size.
+-- A window toggled to floating takes this share of its monitor's logical size, as its tiled size
+-- rarely fits.
 local FLOATING_WIDTH_SHARE = 0.70
 local FLOATING_HEIGHT_SHARE = 0.65
 
@@ -8,17 +9,18 @@ return function(nix)
   -- Only the main monitor has numbered workspaces, so this is nil anywhere else.
   local function wrapped_workspace(delta)
     local monitor = hl.get_active_monitor()
-    if monitor == nil or monitor.name ~= nix.monitors.main then
+    if monitor == nil or monitor.name ~= nix.outputs.main then
       return nil
     end
 
+    local first, last = nix.workspaces.first, nix.workspaces.last
     local workspace = monitor.active_workspace
-    if workspace == nil or workspace.id < nix.workspaces.first or workspace.id > nix.workspaces.last then
+    if workspace == nil or workspace.id < first or workspace.id > last then
       return nil
     end
 
-    local count = nix.workspaces.last - nix.workspaces.first + 1
-    return ((workspace.id - nix.workspaces.first + delta) % count) + nix.workspaces.first
+    local count = last - first + 1
+    return ((workspace.id - first + delta) % count) + first
   end
 
   function actions.focus_workspace(delta)
@@ -67,7 +69,8 @@ return function(nix)
         return
       end
 
-      if window.pid ~= nil and window.pid > 0 and not keep_running[window.class] and not owns_other_surface(window) then
+      local has_process = window.pid ~= nil and window.pid > 0
+      if has_process and not keep_running[window.class] and not owns_other_surface(window) then
         hl.dispatch(hl.dsp.window.signal({ signal = 15, window = window }))
       end
       hl.dispatch(hl.dsp.window.close({ window = window }))
@@ -75,37 +78,35 @@ return function(nix)
   end
 
   function actions.toggle_floating()
-    return function()
-      local window = hl.get_active_window()
-      if window == nil then
-        return
-      end
-
-      if window.floating then
-        hl.dispatch(hl.dsp.window.float({ action = "off", window = window }))
-        return
-      end
-
-      local monitor = window.monitor or hl.get_active_monitor()
-      if monitor == nil then
-        return
-      end
-
-      -- The monitor's width and height are its unrotated mode size; resize takes logical pixels.
-      local width, height = monitor.width, monitor.height
-      if monitor.transform % 2 == 1 then
-        width, height = height, width
-      end
-
-      hl.dispatch(hl.dsp.window.float({ action = "on", window = window }))
-      hl.dispatch(hl.dsp.window.resize({
-        x = math.floor(width / monitor.scale * FLOATING_WIDTH_SHARE),
-        y = math.floor(height / monitor.scale * FLOATING_HEIGHT_SHARE),
-        relative = false,
-        window = window,
-      }))
-      hl.dispatch(hl.dsp.window.center({ window = window }))
+    local window = hl.get_active_window()
+    if window == nil then
+      return
     end
+
+    if window.floating then
+      hl.dispatch(hl.dsp.window.float({ action = "off", window = window }))
+      return
+    end
+
+    local monitor = window.monitor or hl.get_active_monitor()
+    if monitor == nil then
+      return
+    end
+
+    -- The monitor's width and height are its unrotated mode size; resize takes logical pixels.
+    local width, height = monitor.width, monitor.height
+    if monitor.transform % 2 == 1 then
+      width, height = height, width
+    end
+
+    hl.dispatch(hl.dsp.window.float({ action = "on", window = window }))
+    hl.dispatch(hl.dsp.window.resize({
+      x = math.floor(width / monitor.scale * FLOATING_WIDTH_SHARE),
+      y = math.floor(height / monitor.scale * FLOATING_HEIGHT_SHARE),
+      relative = false,
+      window = window,
+    }))
+    hl.dispatch(hl.dsp.window.center({ window = window }))
   end
 
   return actions

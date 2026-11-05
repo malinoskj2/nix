@@ -59,6 +59,7 @@ python3Packages.buildPythonApplication rec {
     "--prefix PATH : ${lib.makeBinPath [ openjdk21 ]}"
   ];
 
+  # patchShebangs takes the launcher's bash from here.
   buildInputs = [ bash ];
 
   postInstall = ''

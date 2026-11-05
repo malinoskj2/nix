@@ -1,9 +1,3 @@
-# One-time setup, before enabling Secure Boot in firmware:
-#   1. Put Secure Boot into Setup Mode (clear the enrolled keys).
-#   2. Run `sudo sbctl create-keys`.
-#   3. Run `sudo sbctl enroll-keys -m -f`; -m keeps Microsoft's CAs so Windows still boots.
-#   4. Run `nh os switch`, then check with `sudo sbctl verify`.
-#   5. Enable Secure Boot in firmware.
 { pkgs, ... }:
 {
   boot.loader = {

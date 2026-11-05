@@ -1,4 +1,3 @@
-# Keep legacy paths stable while their data lives on the appropriate disks.
 let
   mkDisk = uuid: {
     device = "/dev/disk/by-uuid/${uuid}";
@@ -24,6 +23,7 @@ in
     "/mnt/media3" = mkDisk "da01f4dd-a667-4b50-9558-5a60e3015f0a";
     "/mnt/media4" = mkDisk "8eb80012-a38b-4b82-9c63-eb0e17cfb490";
 
+    # Keep legacy paths stable while their data lives on the appropriate disks.
     "/media/storage/media/legacy_media" = mkBind "/mnt/media2/legacy_media";
     "/media/storage/media/movies" = mkBind "/media/data/media/movies";
     "/media/storage/media/tv" = mkBind "/mnt/media2/tv";

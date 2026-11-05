@@ -12,10 +12,17 @@ import time
 
 GIB = 1024**3
 POLL_SECONDS = 30
+ALERT_GIB = 28
+REARM_GIB = 26
+ALERT_EXPIRE_MS = 10_000
+NEVER_EXPIRE = 0
+CONTEXT_SECONDS = 30
+MAX_CONTEXTS = 128
+MAX_QUEUED_EVENTS = 128
 
 
-def in_sandbox(cgroup):
-    return "agent-sandbox.slice" in cgroup.split("/")
+def scope_of(cgroup):
+    return "sandbox" if "agent-sandbox.slice" in cgroup.split("/") else "host"
 
 
 def read_memory(path=Path("/proc/meminfo")):
@@ -32,50 +39,61 @@ class MemoryAlert:
 
     def check(self, fields, notify):
         used = fields["MemTotal"] - fields["MemAvailable"]
-        if used <= 26 * GIB:
+        if used <= REARM_GIB * GIB:
             self.active = False
-        if used > 28 * GIB and not self.active:
+        if used > ALERT_GIB * GIB and not self.active:
             swap = fields["SwapTotal"] - fields["SwapFree"]
             body = (
                 f"RAM: {used / GIB:.1f} / "
                 f"{fields['MemTotal'] / GIB:.1f} GiB used.\n"
                 f"Swap: {swap / GIB:.1f} GiB used.\n"
-                "Another RAM alert is enabled after usage falls to 26 GiB."
+                f"Another RAM alert is enabled after usage falls to {REARM_GIB} GiB."
             )
-            self.active = notify("Memory usage above 28 GiB", body, 10000)
+            self.active = notify(f"Memory usage above {ALERT_GIB} GiB", body, ALERT_EXPIRE_MS)
+
+
+def oomd_alert(message):
+    killed = re.match(r"Killed (/\S+) due to ", message)
+    if killed:
+        return f"OOM killed a {scope_of(killed[1])} cgroup", message
+    return None
 
 
 class OomAlerts:
     def __init__(self):
+        # Kernel context by victim PID, so overlapping OOMs do not borrow each
+        # other's cgroup. Kept bounded even if a kill line is lost.
         self.contexts = {}
 
     def feed(self, entry, now):
         message = entry.get("MESSAGE", "")
         if not isinstance(message, str):
             return None
-
         if entry.get("_SYSTEMD_UNIT") == "systemd-oomd.service":
-            killed = re.match(r"Killed (/\S+) due to ", message)
-            if killed:
-                scope = "sandbox" if in_sandbox(killed[1]) else "host"
-                return f"OOM killed a {scope} cgroup", message
-            return None
-
+            return oomd_alert(message)
         if entry.get("_TRANSPORT") != "kernel":
             return None
 
-        # Match context to the victim PID, so overlapping OOMs do not borrow
-        # each other's cgroup. Keep this bounded even if a kill line is lost.
-        self.contexts = {pid: context for pid, context in self.contexts.items() if now - context[0] < 30}
+        self.expire(now)
         if message.startswith("oom-kill:"):
-            fields = dict(re.findall(r"(?:^|,)(\w+)=([^,]+)", message[9:]))
-            pid = fields.get("pid")
-            if pid:
-                if len(self.contexts) >= 128:
-                    self.contexts.pop(next(iter(self.contexts)))
-                self.contexts[pid] = now, fields
+            self.remember(message, now)
             return None
+        return self.victim_alert(message)
 
+    def expire(self, now):
+        self.contexts = {
+            pid: (seen, fields) for pid, (seen, fields) in self.contexts.items() if now - seen < CONTEXT_SECONDS
+        }
+
+    def remember(self, message, now):
+        fields = dict(re.findall(r"(?:^|,)(\w+)=([^,]+)", message.removeprefix("oom-kill:")))
+        pid = fields.get("pid")
+        if pid:
+            if len(self.contexts) >= MAX_CONTEXTS:
+                self.contexts.pop(next(iter(self.contexts)))
+            self.contexts[pid] = now, fields
+
+    def victim_alert(self, message):
         victim = re.match(
             r"(Out of memory|Memory cgroup out of memory): "
             r"Killed process (\d+) \((.*)\) total-vm:",
@@ -85,13 +103,14 @@ class OomAlerts:
             return None
 
         reason, pid, name = victim.groups()
-        _, fields = self.contexts.pop(pid, (now, {}))
+        _, fields = self.contexts.pop(pid, (None, {}))
         cgroup = fields.get("task_memcg") or fields.get("oom_memcg")
+        cgroup_limit = reason.startswith("Memory cgroup")
         if cgroup:
-            scope = "sandbox" if in_sandbox(cgroup) else "host"
+            scope = scope_of(cgroup)
         else:
-            scope = "cgroup" if reason.startswith("Memory cgroup") else "host"
-        cause = "Cgroup memory limit" if reason.startswith("Memory cgroup") else "Host out of memory"
+            scope = "cgroup" if cgroup_limit else "host"
+        cause = "Cgroup memory limit" if cgroup_limit else "Host out of memory"
         body = f"{name} (PID {pid}) was killed.\nCause: {cause}."
         if cgroup:
             body += f"\nCgroup: {cgroup}"
@@ -132,19 +151,11 @@ def read_journal(process, events):
     events.put(None)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="RAM and OOM desktop alerts")
-    parser.add_argument("--journalctl", required=True)
-    parser.add_argument("--notify-send", required=True)
-    args = parser.parse_args()
-
-    def notify(title, body, expire_ms):
-        return send_notification(args.notify_send, title, body, expire_ms)
-
-    events = queue.Queue(maxsize=128)
+def follow_journal(journalctl):
+    events = queue.Queue(maxsize=MAX_QUEUED_EVENTS)
     journal = subprocess.Popen(
         [
-            args.journalctl,
+            journalctl,
             "--boot",
             "--follow",
             "--lines=0",
@@ -158,13 +169,34 @@ def main():
         text=True,
     )
     threading.Thread(target=read_journal, args=(journal, events), daemon=True).start()
+    return journal, events
+
+
+def stop(process):
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="RAM and OOM desktop alerts")
+    parser.add_argument("--journalctl", required=True)
+    parser.add_argument("--notify-send", required=True)
+    args = parser.parse_args()
+
+    def notify(title, body, expire_ms):
+        return send_notification(args.notify_send, title, body, expire_ms)
+
+    journal, events = follow_journal(args.journalctl)
     memory = MemoryAlert()
     oom = OomAlerts()
     next_check = 0
     try:
         while True:
-            now = time.monotonic()
-            if now >= next_check:
+            if time.monotonic() >= next_check:
                 memory.check(read_memory(), notify)
                 next_check = time.monotonic() + POLL_SECONDS
             try:
@@ -175,14 +207,10 @@ def main():
                 raise RuntimeError("Host journal follower stopped")
             alert = oom.feed(entry, time.monotonic())
             if alert:
-                notify(*alert, 0)
+                title, body = alert
+                notify(title, body, NEVER_EXPIRE)
     finally:
-        journal.terminate()
-        try:
-            journal.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            journal.kill()
-            journal.wait()
+        stop(journal)
 
 
 if __name__ == "__main__":

@@ -36,18 +36,18 @@ let
     rev = "cd0630bbcc2c830765a51fc023fe736dfe7f0f06";
     hash = "sha256-z7r3qtsJxwz0AcHXNY811Irz2mzBGLpFZcjc9vSfaJ8=";
   };
-  sourceCommit = "1c6ac8c3c4d2c3dec2cb5966d225ca2a0e0471d3";
+  sourceCommit = "965978bc78bf03a6a43187c1ed28fcffe0e01bb5";
   arch = stdenv.hostPlatform.node.arch;
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "orca-ade";
-  version = "1.4.245";
+  version = "1.4.248";
 
   src = fetchFromGitHub {
     owner = "stablyai";
     repo = "orca";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-2wZAkV5Q5ZLaeKs9dxK5LoxiCxJk5IdSneJc90fUQ9Y=";
+    hash = "sha256-sxvoCG+0nPBnr9Z+WnFlrO/5hbInl79zQylPaod+og4=";
   };
 
   patches = [
@@ -108,7 +108,8 @@ stdenv.mkDerivation (finalAttrs: {
       --replace-fail 'normalizeOpenUrl(source.openUrl);' 'normalizeOpenUrl(source.openUrl ?? DEFAULT_SETTINGS.openUrl);' \
       --replace-fail 'normalizeBridgeUrl(source.bridgeUrl);' 'normalizeBridgeUrl(source.bridgeUrl ?? DEFAULT_SETTINGS.bridgeUrl);' \
       --replace-fail 'normalizeBridgeToken(source.bridgeToken);' 'normalizeBridgeToken(source.bridgeToken ?? DEFAULT_SETTINGS.bridgeToken);' \
-      --replace-fail 'const skip = env[PANEL_WRITE_SKIP_ENV];' 'const skip = "1";'
+      --replace-fail 'const skip = env[PANEL_WRITE_SKIP_ENV];' 'const skip = "1";' \
+      --replace-fail 'return "Working in Orca";' 'return "Working in Orca ADE";'
     node -e '
       const { readFileSync, writeFileSync } = require("node:fs")
       const { hashPackagedPluginTree } = require("./config/scripts/verify-packaged-plugin-resources.cjs")
@@ -146,7 +147,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     inherit (finalAttrs) env;
     fetcherVersion = 4;
-    hash = "sha256-HcZJazyaf65VsZU16r/H9+p0be2fBtJY8n05/uEl9oY=";
+    hash = "sha256-ZwOio8FOFoffZDl2237uTtTmTMbe54liu0hDGTiTreI=";
   };
 
   mobilePnpmDeps = fetchPnpmDeps {
@@ -155,7 +156,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     sourceRoot = "${finalAttrs.src.name}/mobile";
     fetcherVersion = 4;
-    hash = "sha256-BNjHtUF7TK7/IBE4LcxjbkgJISw0xECXg9AriqTB+LE=";
+    hash = "sha256-QIvI+BPgoEnuhIj/Jr1W9TLTo6ppW9Z7GZJMh4tyifk=";
   };
 
   nativeBuildInputs = [
@@ -262,7 +263,7 @@ stdenv.mkDerivation (finalAttrs: {
       {
         src = fetchurl {
           url = "https://github.com/stablyai/orca/releases/download/v${finalAttrs.version}/orca-ide_${finalAttrs.version}_amd64.deb";
-          hash = "sha256-VEIOItSd2p32btTpQ7YoRMlV1P2dXBBZv493ArdgvIk=";
+          hash = "sha256-Pe4bfVl7WikUU53Jldnk4VR+O6+x5nkpXViE9DnLQII=";
         };
         nativeBuildInputs = [ dpkg ];
       }

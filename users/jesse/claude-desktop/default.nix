@@ -5,18 +5,13 @@
   ...
 }:
 let
-  themes = {
-    catppuccin = pkgs.callPackage ./catppuccin.nix { inherit (config) palette; };
-    light = pkgs.callPackage ./light.nix { inherit (config) palette; };
-  };
-  # Each theme's CSS is scoped to its own color scheme, so the app's appearance setting picks one.
-  theme = pkgs.runCommand "claude-desktop-theme" { } ''
-    mkdir $out
-    for css in claude.css shell.css; do
-      cat ${themes.light}/$css ${themes.catppuccin}/$css > $out/$css
-    done
-    cp ${themes.light}/{claude.js,title-bar-symbol-light} $out
-    cp ${themes.catppuccin}/{title-bar-symbol,code-theme-dark} $out
+  inherit (config) palette;
+  theme = pkgs.runCommand "claude-desktop-theme" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+    python3 ${./theme}/main.py \
+      ${lib.escapeShellArg (builtins.toJSON palette.mocha)} \
+      ${lib.escapeShellArg (palette.withAlpha palette.mocha.crust palette.glass.chrome)} \
+      $out
+    cp ${./claude.js} $out/claude.js
   '';
 in
 lib.mkIf (lib.meta.availableOn pkgs.stdenv.hostPlatform pkgs.claude-desktop) {

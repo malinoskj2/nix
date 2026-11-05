@@ -1,5 +1,5 @@
 diff --git a/src/main/claude/claude-agent-sdk-process-spawn.ts b/src/main/claude/claude-agent-sdk-process-spawn.ts
-index 34c9f808..6308eee3 100644
+index d04cd9e2..94dd9f32 100644
 --- a/src/main/claude/claude-agent-sdk-process-spawn.ts
 +++ b/src/main/claude/claude-agent-sdk-process-spawn.ts
 @@ -6,6 +6,7 @@ import {
@@ -10,7 +10,7 @@ index 34c9f808..6308eee3 100644
  
  export type ClaudeCodeProcessSpawn = {
    /** SDK spawn hook; Orca retains process ownership. */
-@@ -38,7 +39,7 @@ export function createClaudeCodeProcessSpawn(
+@@ -55,7 +56,7 @@ export function createClaudeCodeProcessSpawn(
    let managed: ManagedProviderProcess | null = null
    return {
      spawn: (options) => {
@@ -20,7 +20,7 @@ index 34c9f808..6308eee3 100644
        const script = launch && /\.(?:js|mjs|ts|tsx|jsx)$/.test(launch.pathToClaudeCodeExecutable)
        args.splice(script ? 1 : 0, 0, ...(launch?.prefixArgs ?? []))
 diff --git a/src/main/claude/hook-service.ts b/src/main/claude/hook-service.ts
-index 4d4f2283..e664473b 100644
+index 4ea32a1b..192b213c 100644
 --- a/src/main/claude/hook-service.ts
 +++ b/src/main/claude/hook-service.ts
 @@ -20,6 +20,7 @@ import {
@@ -44,7 +44,7 @@ index 4d4f2283..e664473b 100644
  import { refuseProfileAtDefaultHome } from './claude-profile-hook-target'
  import {
    applyManagedHooks,
-@@ -104,6 +109,18 @@ export class ClaudeHookService {
+@@ -105,6 +110,18 @@ export class ClaudeHookService {
      })
    }
  
@@ -63,7 +63,7 @@ index 4d4f2283..e664473b 100644
    // Claude version-gates hook events; compatible CLIs use their own fixed plans.
    private managedHookPlan(options: ClaudeHookInstallOptions): ClaudeManagedHookPlan {
      return this.options.agent === 'claude'
-@@ -116,7 +133,7 @@ export class ClaudeHookService {
+@@ -117,7 +134,7 @@ export class ClaudeHookService {
      if (refused) {
        return refused
      }
@@ -72,7 +72,7 @@ index 4d4f2283..e664473b 100644
      const scriptPath = getManagedScriptPath(this.options.settings)
      const config = readHooksJson(configPath)
      if (!config) {
-@@ -186,9 +203,11 @@ export class ClaudeHookService {
+@@ -187,9 +204,11 @@ export class ClaudeHookService {
      if (refused) {
        return refused
      }
@@ -86,7 +86,7 @@ index 4d4f2283..e664473b 100644
      if (!config) {
        return {
          agent: this.options.agent,
-@@ -216,7 +235,9 @@ export class ClaudeHookService {
+@@ -217,7 +236,9 @@ export class ClaudeHookService {
        writeManagedScript(scriptPath, payload)
      }
      // Profiles inherit statusLine from the default-home settings copy.
@@ -97,7 +97,7 @@ index 4d4f2283..e664473b 100644
        nextConfig = installClaudeManagedStatusLine(nextConfig, this.options.settings)
      } else if (options.configDir === undefined && plan.statusLine === 'retire') {
        nextConfig = retireClaudeManagedStatusLine(nextConfig, this.options.settings)
-@@ -231,11 +252,17 @@ export class ClaudeHookService {
+@@ -232,11 +253,17 @@ export class ClaudeHookService {
      options: ClaudeHookInstallOptions = {}
    ): Promise<AgentHookInstallStatus> {
      // Remote hook installation targets POSIX hosts regardless of the client platform.
@@ -118,7 +118,7 @@ index 4d4f2283..e664473b 100644
        if (!config) {
          return {
            agent: this.options.agent,
-@@ -260,7 +287,10 @@ export class ClaudeHookService {
+@@ -261,7 +288,10 @@ export class ClaudeHookService {
        // Remote relays lack the statusline route, and remote account usage cannot be attributed locally.
        await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
        if (this.options.agent === 'claude') {
@@ -130,7 +130,7 @@ index 4d4f2283..e664473b 100644
            console.warn('[agent-hooks] Remote Claude agent view migration failed', error)
          })
        }
-@@ -284,6 +314,9 @@ export class ClaudeHookService {
+@@ -285,6 +315,9 @@ export class ClaudeHookService {
    }
  
    remove(): AgentHookInstallStatus {
@@ -236,7 +236,7 @@ index bb4f6ed1..606be340 100644
  export function retireClaudeManagedStatusLine(
    config: HooksConfig,
 diff --git a/src/main/ipc/pty/host-env/assembly.ts b/src/main/ipc/pty/host-env/assembly.ts
-index 8101caf8..041dfbd0 100644
+index 83f4e3a5..db8c7fa4 100644
 --- a/src/main/ipc/pty/host-env/assembly.ts
 +++ b/src/main/ipc/pty/host-env/assembly.ts
 @@ -1,3 +1,4 @@
@@ -245,13 +245,13 @@ index 8101caf8..041dfbd0 100644
  import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
  import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
 @@ -13,6 +14,7 @@ import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager
- import { wslInteropHealthMonitor } from '../../../wsl/wsl-interop-health'
+ import { wslInteropHealthMonitor } from '../../../wsl/execution/wsl-interop-health'
  import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
  import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
 +import { ensureClaudeSessionShimDir } from '../../../claude/session-settings'
  import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl-managed-cli'
- import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-dir'
- import { mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
+ import { stripLegacyTerminalShimEnv } from '../../../pty/shell-startup/legacy-terminal-shim-dir'
+ import { mergePersistedWindowsPath } from '../../../pty/environment/windows-environment-path'
 @@ -35,6 +37,7 @@ import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
  import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
  import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'

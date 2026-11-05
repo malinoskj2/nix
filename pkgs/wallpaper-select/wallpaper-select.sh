@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# The video is loaded straight into the running mpv, and recorded as the monitor's assignment so a
-# restarted mpvpaper keeps it. The next session assigns a new one.
 
 readonly video_dir="$HOME/.wallpapers/video"
 readonly state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/wallpaper"
@@ -75,10 +73,9 @@ esac
 monitor="${1:-$(hyprctl -j monitors | jq -r '.[] | select(.focused) | .name')}"
 socket="$state_dir/ipc-$monitor.sock"
 
-if ! query_video_path "$socket" | jq -e '.error == "success"' >/dev/null; then
-  die "no running video wallpaper on $monitor"
-fi
-current="$(query_video_path "$socket" | jq -r '.data')"
+reply="$(query_video_path "$socket")" || true
+jq -e '.error == "success"' <<<"$reply" >/dev/null || die "no running video wallpaper on $monitor"
+current="$(jq -r '.data' <<<"$reply")"
 
 choice="$(list_videos "$current" | "$j2bar" dmenu -p "Wallpaper ($monitor)")" || true
 choice="${choice%%$'\t'*}"
@@ -89,6 +86,8 @@ target="$video_dir/$choice"
 [[ "$choice" != */* && -f "$target" ]] || die "not a video in $video_dir: $choice"
 [[ "$target" != "$current" ]] || exit 0
 
+# The video is loaded straight into the running mpv, and recorded as the monitor's assignment so a
+# restarted mpvpaper keeps it until the next session assigns a new one.
 jq -nc --arg target "$target" '{command: ["loadfile", $target, "replace"]}' |
   send_to_mpv "$socket" >/dev/null
 assign "$monitor" "$target"

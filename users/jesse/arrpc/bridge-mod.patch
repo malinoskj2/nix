@@ -1,0 +1,18 @@
+--- a/bridge_mod.js
++++ b/bridge_mod.js
+@@ -101,11 +101,10 @@
+     if (!Dispatcher) {
+       const wpRequire = getWebpackRequire();
+ 
+-      Dispatcher = findInCache(wpRequire, candidate =>
+-        candidate &&
+-        typeof candidate.dispatch === 'function' &&
+-        typeof candidate.subscribe === 'function'
+-      );
++      Dispatcher = findInCache(wpRequire, candidate => {
++        const proto = candidate && Object.getPrototypeOf(candidate);
++        return !!proto && ['dispatch', 'subscribe', 'isDispatching'].every(key => Object.hasOwn(proto, key));
++      });
+ 
+       const assetMod = findModule(wpRequire, 'getAssetImage: size must === [');
+       eachCandidate(assetMod, candidate => {

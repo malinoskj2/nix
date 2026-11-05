@@ -6,32 +6,29 @@
 }:
 
 let
-  # Each hyprglass release targets one Hyprland release, and the patch touches its layer hook.
+  # Each hyprglass release targets one Hyprland release, and a patch touches its layer hook.
   supportedHyprlandVersions = [ "0.56.2" ];
 in
 assert lib.assertMsg (lib.elem hyprland.version supportedHyprlandVersions) (
-  "hyprglass and layer-shape.patch were checked against Hyprland "
+  "hyprglass and its patches were checked against Hyprland "
   + "${lib.concatStringsSep ", " supportedHyprlandVersions}, not ${hyprland.version}; "
-  + "move to the matching hyprglass release, re-check the patch and update this assertion."
+  + "move to the matching hyprglass release, re-check the patches and update this assertion."
 );
-hyprlandPlugins.mkHyprlandPlugin {
+hyprlandPlugins.mkHyprlandPlugin (finalAttrs: {
   pluginName = "hyprglass";
   version = "0.8.1";
 
   src = fetchFromGitHub {
     owner = "hyprnux";
     repo = "hyprglass";
-    tag = "v0.8.1";
+    tag = "v${finalAttrs.version}";
     hash = "sha256-yUU0gKu1CXqpUQBtyb3IWNBYZ1bCAm99mfTUV7ceJyg=";
   };
 
-  # Shapes layer glass to each separate piece of the requested blur region, scaled with the layer
-  # without rounding so its rim stays on the content's edge while the layer scales in, raises the
-  # region's rect limit, and adds per-layer corner_radius, rounding_power, rim_light, rim_shadow
-  # and the gleam_* options to hg.layer. The gleam sweeps the top rim once when a layer maps,
-  # redrawing only the rim until then, and layer glass is drawn only inside the frame's damage.
-  # The panel contrast patch reports the sampled background's bright coverage to j2bar so its
-  # glass and ink can adapt together without including the panel itself in the sample.
+  # layer-shape.patch shapes layer glass to each piece of the requested blur region and adds the
+  # per-layer corner_radius, rounding_power, rim_light, rim_shadow and gleam_* options to hg.layer.
+  # panel-contrast.patch reports how bright the background behind the panel is to j2bar, so the
+  # panel's glass and ink adapt together.
   patches = [
     ./layer-shape.patch
     ./panel-contrast.patch
@@ -55,4 +52,4 @@ hyprlandPlugins.mkHyprlandPlugin {
     license = lib.licenses.bsd3;
     platforms = lib.platforms.linux;
   };
-}
+})

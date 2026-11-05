@@ -2,10 +2,6 @@
   description = "NixOS and Home Manager configurations";
 
   inputs = {
-    j2bar = {
-      url = "git+file:///home/jesse/projects/j2bar?ref=master";
-      inputs.nixpkgs.follows = "nixpkgs-hyprland";
-    };
     apple-fonts = {
       type = "github";
       owner = "Lyndeno";
@@ -32,6 +28,10 @@
       repo = "home-manager";
       ref = "release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+    j2bar = {
+      url = "git+file:///home/jesse/projects/j2bar?ref=master";
+      inputs.nixpkgs.follows = "nixpkgs-hyprland";
     };
     nix-index-database = {
       type = "github";
@@ -101,7 +101,7 @@
           "media"
           "pi"
         ];
-        packages = [
+        exportedPackages = [
           "agent-sandbox"
           "ai-usage"
           "ata-devs"
@@ -147,15 +147,13 @@
           ./flake/nixpkgs.nix
         ];
 
-        flake = {
-          nixosConfigurations = lib.genAttrs nixosHosts mkHost.nixos;
-        };
+        flake.nixosConfigurations = lib.genAttrs nixosHosts mkHost.nixos;
 
         perSystem =
           { pkgs, ... }:
           {
             packages = lib.filterAttrs (_: lib.meta.availableOn pkgs.stdenv.hostPlatform) (
-              lib.getAttrs packages pkgs
+              lib.getAttrs exportedPackages pkgs
             );
           };
       }

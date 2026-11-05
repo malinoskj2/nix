@@ -61,7 +61,7 @@ index 00000000..e301af6f
 +  })
 +}
 diff --git a/src/renderer/src/lib/monaco-setup.ts b/src/renderer/src/lib/monaco-setup.ts
-index 631d9248..69135ef0 100644
+index 6f719ad0..008ebdd7 100644
 --- a/src/renderer/src/lib/monaco-setup.ts
 +++ b/src/renderer/src/lib/monaco-setup.ts
 @@ -18,6 +18,7 @@ import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
@@ -72,7 +72,7 @@ index 631d9248..69135ef0 100644
  import { registerQuartoLanguage } from './monaco-languages/register-quarto'
  import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
  import { registerSvelteLanguage } from './monaco-languages/register-svelte'
-@@ -88,6 +89,7 @@ runMonacoSetupSteps([
+@@ -80,6 +81,7 @@ runMonacoSetupSteps([
    ['CUDA language registration', () => registerCudaLanguage(monaco)],
    ['Nim language registration', () => registerNimLanguage(monaco)],
    ['Lean language registration', () => registerLeanLanguage(monaco)],

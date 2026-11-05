@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
-# SSH remotes are rewritten to HTTPS on the same host and path. A detached HEAD opens the
-# repository root. The page opens with $BROWSER when set, otherwise open or xdg-open.
 
-url="$(git remote get-url origin)" || exit 1
-
-case "$url" in
-  git@*) url="https://$(printf '%s' "${url#git@}" | sed 's|:|/|')" ;;
-  ssh://*) url="https://$(printf '%s' "${url#ssh://}" | sed 's|^[^@]*@||; s|:[0-9]*/|/|')" ;;
-  https://*@*) url="https://${url#https://*@}" ;;
-esac
-url="${url%.git}"
+url="$(
+  git remote get-url origin |
+    sed -E '
+      s|^git@([^:]+):|https://\1/|
+      s|^ssh://([^@/]*@)?([^:/]+)(:[0-9]*)?/|https://\2/|
+      s|^https://[^@/]*@|https://|
+      s|\.git$||
+    '
+)" || exit 1
 
 branch="$(git branch --show-current)"
 case "$url" in

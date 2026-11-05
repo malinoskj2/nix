@@ -1,10 +1,66 @@
-{ pkgs, lib }:
+{
+  alsa-lib,
+  at-spi2-atk,
+  at-spi2-core,
+  atk,
+  cacert,
+  cairo,
+  coreutils,
+  cups,
+  dbus,
+  expat,
+  fontconfig,
+  freetype,
+  glib,
+  glibc,
+  gtk3,
+  icu,
+  krb5,
+  lib,
+  libdrm,
+  libGL,
+  libglvnd,
+  libice,
+  libpulseaudio,
+  libsm,
+  libuuid,
+  libx11,
+  libxcb,
+  libxcomposite,
+  libxcursor,
+  libxdamage,
+  libxext,
+  libxfixes,
+  libxi,
+  libxinerama,
+  libxkbcommon,
+  libxrandr,
+  libxrender,
+  libxscrnsaver,
+  libxtst,
+  mesa,
+  ncurses,
+  nspr,
+  nss,
+  openssl,
+  pango,
+  python3,
+  runCommand,
+  stdenv,
+  symlinkJoin,
+  systemd,
+  unzip,
+  vulkan-loader,
+  wayland,
+  writeShellScriptBin,
+  zlib,
+}:
 let
-  python = pkgs.python3.withPackages (p: [
+  python = python3.withPackages (p: [
     p.mcp
     p.tomlkit
   ]);
-  libraries = with pkgs; [
+  libraries = [
     alsa-lib
     atk
     at-spi2-atk
@@ -37,6 +93,8 @@ let
     vulkan-loader
     wayland
     zlib
+  ];
+  x11Libraries = [
     libice
     libsm
     libx11
@@ -53,48 +111,40 @@ let
     libxscrnsaver
     libxtst
   ];
-  runtime = lib.makeLibraryPath libraries + ":/run/opengl-driver/lib";
-  tool = pkgs.writeShellScriptBin "unreal-sandbox" ''
-    export UNREAL_RUNTIME_LIBRARY_PATH=${lib.escapeShellArg runtime}
+  libraryPath = lib.makeLibraryPath (libraries ++ x11Libraries) + ":/run/opengl-driver/lib";
+  tool = writeShellScriptBin "unreal-sandbox" ''
+    export UNREAL_RUNTIME_LIBRARY_PATH=${lib.escapeShellArg libraryPath}
     export PATH=${
       lib.makeBinPath [
-        pkgs.unzip
-        pkgs.coreutils
+        coreutils
+        unzip
       ]
     }:"$PATH"
-    exec ${python}/bin/python ${./unreal-sandbox.py} "$@"
+    exec ${lib.getExe python} ${./unreal-sandbox.py} "$@"
   '';
-  editor = pkgs.writeShellScriptBin "UnrealEditor" ''
-    exec ${tool}/bin/unreal-sandbox editor "$@"
-  '';
-  uat = pkgs.writeShellScriptBin "RunUAT" ''
-    exec ${tool}/bin/unreal-sandbox uat "$@"
-  '';
+  subcommand =
+    name: command:
+    writeShellScriptBin name ''
+      exec ${lib.getExe tool} ${command} "$@"
+    '';
 in
 {
-  inherit runtime;
-  installer = pkgs.writeShellScriptBin "agent-sandbox-install-unreal" ''
-    exec ${tool}/bin/unreal-sandbox install "$@"
-  '';
+  inherit libraryPath;
+  installer = subcommand "agent-sandbox-install-unreal" "install";
   tests =
-    pkgs.runCommand "unreal-sandbox-tests"
-      {
-        SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-      }
+    runCommand "unreal-sandbox-tests" { SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt"; }
       ''
-        mkdir source
-        cp ${./unreal-sandbox.py} source/unreal-sandbox.py
-        cp ${./test-unreal-sandbox.py} source/test-unreal-sandbox.py
-        cd source
-        ${python}/bin/python test-unreal-sandbox.py -v
+        cp ${./unreal-sandbox.py} unreal-sandbox.py
+        cp ${./test-unreal-sandbox.py} test-unreal-sandbox.py
+        ${lib.getExe python} test-unreal-sandbox.py -v
         touch $out
       '';
-  package = pkgs.symlinkJoin {
+  tools = symlinkJoin {
     name = "unreal-sandbox-tools";
     paths = [
       tool
-      editor
-      uat
+      (subcommand "UnrealEditor" "editor")
+      (subcommand "RunUAT" "uat")
     ];
   };
 }

@@ -1,7 +1,7 @@
 let
   lanInterface = "enp4s0";
   client = "192.168.1.131";
-  nfsRule = "${lanInterface} -s ${client} -p tcp --dport 2049 -j nixos-fw-accept";
+  nfsRule = "-i ${lanInterface} -s ${client} -p tcp --dport 2049 -j nixos-fw-accept";
 in
 {
   services.nfs = {
@@ -22,7 +22,7 @@ in
   systemd.services.nfs-server.unitConfig.RequiresMountsFor = [ "/mnt/media3" ];
 
   networking.firewall = {
-    extraCommands = "iptables -A nixos-fw -i ${nfsRule}";
-    extraStopCommands = "iptables -D nixos-fw -i ${nfsRule} || true";
+    extraCommands = "iptables -A nixos-fw ${nfsRule}";
+    extraStopCommands = "iptables -D nixos-fw ${nfsRule} || true";
   };
 }

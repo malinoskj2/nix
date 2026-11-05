@@ -1,5 +1,4 @@
 {
-  coreutils,
   jq,
   lib,
   mpvpaper,
@@ -10,7 +9,6 @@
 writeShellApplication {
   name = "wallpaper-play";
   runtimeInputs = [
-    coreutils
     jq
     mpvpaper
     wallpaper-randomize

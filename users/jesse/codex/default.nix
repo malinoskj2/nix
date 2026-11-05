@@ -6,7 +6,7 @@
 }:
 let
   tomlFormat = pkgs.formats.toml { };
-  claudeAgents = ./claude/agents;
+  claudeAgents = ../claude/agents;
   agents = {
     laravel-builder = {
       description = "Implements Laravel/PHP features, fixes and requested refactors using Jesse's architecture, abstraction and aesthetics standards.";
@@ -40,70 +40,41 @@ let
     name: agent:
     lib.nameValuePair ".codex/agents/${name}.toml" {
       source = tomlFormat.generate "codex-agent-${name}.toml" (
-        {
+        removeAttrs agent [
+          "skill"
+          "source"
+        ]
+        // {
           inherit name;
-          inherit (agent) description;
           developer_instructions = ''
-            Load and follow the `${"$"}${agent.skill}` skill before doing the assigned work.
+            Load and follow the `''$${agent.skill}` skill before doing the assigned work.
             The shared definition below includes Claude Code YAML front matter. Treat
             that front matter as metadata and follow the Markdown instructions.
 
             ${builtins.readFile agent.source}
           '';
         }
-        // lib.optionalAttrs (agent ? sandbox_mode) {
-          inherit (agent) sandbox_mode;
-        }
       );
     };
   settings = tomlFormat.generate "codex-settings.toml" config.programs.codex.settings;
   # Codex saves folder trust and model choices to its own config.toml, so it
   # has to be a writable file with these settings merged in, not a store link.
-  mergeSettings =
-    pkgs.writers.writePython3 "codex-merge-settings"
-      {
-        libraries = [ pkgs.python3Packages.tomlkit ];
-      }
-      ''
-        import sys
-        from collections.abc import MutableMapping
-        from pathlib import Path
-
-        import tomlkit
-
-
-        def merge(dst, src):
-            for key, value in src.items():
-                old = dst.get(key)
-                if isinstance(old, MutableMapping) and isinstance(
-                    value, MutableMapping
-                ):
-                    merge(old, value)
-                else:
-                    dst[key] = value
-
-
-        settings = tomlkit.parse(Path(sys.argv[1]).read_text())
-        target = Path(sys.argv[2])
-        if target.exists():
-            config = tomlkit.parse(target.read_text())
-        else:
-            config = tomlkit.document()
-        merge(config, settings)
-        target.unlink(missing_ok=True)
-        target.write_text(tomlkit.dumps(config))
-      '';
+  mergeSettings = pkgs.writers.writePython3 "codex-merge-settings" {
+    libraries = [ pkgs.python3Packages.tomlkit ];
+    # Ruff formats this repository at 120 columns; retain the other checks.
+    flakeIgnore = [ "E501" ];
+  } (builtins.readFile ./merge-settings.py);
 in
 {
   programs.codex = {
     enable = true;
-    package = null;
-    skills = ./claude/skills;
+    package = pkgs.unstable.codex;
+    skills = ../claude/skills;
     settings.tui.alternate_screen = "never";
     context = lib.concatMapStringsSep "\n" builtins.readFile [
-      ./claude/rules/worktrees.md
-      ./claude/rules/media.md
-      ./claude/rules/sandbox-display.md
+      ../claude/rules/worktrees.md
+      ../claude/rules/media.md
+      ../claude/rules/sandbox-display.md
     ];
   };
 

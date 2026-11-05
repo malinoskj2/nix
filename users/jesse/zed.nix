@@ -10,6 +10,9 @@ let
   darkTheme = "Catppuccin Mocha";
   transparent = "#00000000";
   noParameterHints.inlay_hints.show_parameter_hints = false;
+  agentServer =
+    options:
+    { type = "registry"; } // lib.optionalAttrs (!isDarwin) { default_config_options = options; };
   ollamaModel = {
     name = "devstral-small-2:24b";
     display_name = "Devstral Small 2 24B";
@@ -38,24 +41,14 @@ in
     ];
     userSettings = {
       agent_servers = {
-        claude-acp = {
-          type = "registry";
-        }
-        // lib.optionalAttrs (!isDarwin) {
-          default_config_options = {
-            model = "haiku";
-            mode = "auto";
-            effort = "max";
-          };
+        claude-acp = agentServer {
+          model = "haiku";
+          mode = "auto";
+          effort = "max";
         };
-        codex-acp = {
-          type = "registry";
-        }
-        // lib.optionalAttrs (!isDarwin) {
-          default_config_options = {
-            reasoning_effort = "medium";
-            mode = "agent-full-access";
-          };
+        codex-acp = agentServer {
+          reasoning_effort = "medium";
+          mode = "agent-full-access";
         };
       };
 

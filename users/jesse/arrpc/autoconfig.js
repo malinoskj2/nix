@@ -1,4 +1,3 @@
-
 Services.io
   .getProtocolHandler("resource")
   .QueryInterface(Ci.nsIResProtocolHandler)

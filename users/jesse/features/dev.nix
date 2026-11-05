@@ -18,8 +18,6 @@
     pkg-config
     playwright-test
     python3
-
-    unstable.codex
   ];
 
   home.sessionVariables = {

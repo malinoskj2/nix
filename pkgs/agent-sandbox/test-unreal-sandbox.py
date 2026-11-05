@@ -19,6 +19,16 @@ spec = importlib.util.spec_from_file_location("unreal", Path(__file__).with_name
 unreal = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(unreal)
 
+MCP_FIXTURE = """
+import sys
+from mcp.server.fastmcp import FastMCP
+server = FastMCP("test-unreal", host="127.0.0.1", port=int(sys.argv[1]))
+@server.tool()
+def list_toolsets() -> list[str]:
+    return ["ActorTools", "SceneTools"]
+server.run(transport="streamable-http")
+"""
+
 
 class UnrealSandboxTests(unittest.TestCase):
     def test_refresh_preserves_config_and_is_idempotent(self):
@@ -27,7 +37,14 @@ class UnrealSandboxTests(unittest.TestCase):
             codex = home / ".codex/config.toml"
             unreal.write(
                 codex,
-                '# personal settings\nmodel = "custom"\n[projects."/project"]\ntrust_level = "trusted"\n[mcp_servers.other]\ncommand = "other"\n[mcp_servers.unreal-mcp]\ncommand = "obsolete"\n',
+                "# personal settings\n"
+                'model = "custom"\n'
+                '[projects."/project"]\n'
+                'trust_level = "trusted"\n'
+                "[mcp_servers.other]\n"
+                'command = "other"\n'
+                "[mcp_servers.unreal-mcp]\n"
+                'command = "obsolete"\n',
             )
             unreal.sync_harnesses()
             first = codex.read_text()
@@ -53,7 +70,13 @@ class UnrealSandboxTests(unittest.TestCase):
             ini = project.parent / "Saved/Config/LinuxEditor/EditorPerProjectUserSettings.ini"
             unreal.write(
                 ini,
-                "[Other]\nOption=Keep\n[/Script/ModelContextProtocolEngine.ModelContextProtocolSettings]\nbAutoStartServer=False\nUnrelated=Keep\n[After]\nOption=Keep\n",
+                "[Other]\n"
+                "Option=Keep\n"
+                "[/Script/ModelContextProtocolEngine.ModelContextProtocolSettings]\n"
+                "bAutoStartServer=False\n"
+                "Unrelated=Keep\n"
+                "[After]\n"
+                "Option=Keep\n",
             )
             unreal.prepare(project)
             first = project.read_text(), ini.read_text()
@@ -85,16 +108,8 @@ class UnrealSandboxTests(unittest.TestCase):
         with socket.socket() as reservation:
             reservation.bind(("127.0.0.1", 0))
             port = reservation.getsockname()[1]
-        code = f"""
-from mcp.server.fastmcp import FastMCP
-server = FastMCP("test-unreal", host="127.0.0.1", port={port})
-@server.tool()
-def list_toolsets() -> list[str]:
-    return ["ActorTools", "SceneTools"]
-server.run(transport="streamable-http")
-"""
         with subprocess.Popen(
-            [sys.executable, "-c", code], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            [sys.executable, "-c", MCP_FIXTURE, str(port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         ) as server:
             try:
                 for _ in range(100):

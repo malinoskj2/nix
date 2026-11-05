@@ -1,6 +1,5 @@
 {
   coreutils,
-  dbus,
   glib,
   hyprland,
   jq,
@@ -14,7 +13,6 @@ writeShellApplication {
   name = "wallpaper-autopause";
   runtimeInputs = [
     coreutils
-    dbus
     glib
     hyprland
     jq

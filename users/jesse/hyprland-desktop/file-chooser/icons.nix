@@ -1,9 +1,10 @@
 {
   catppuccin-papirus-folders,
   lib,
+  mocha,
   name,
-  palette,
   runCommand,
+  writeText,
 }:
 
 let
@@ -41,51 +42,44 @@ let
     "16x16@2x/places" = "32x32";
   };
 
-  linkFolders =
+  places =
     dir: size:
-    lib.concatLines (
-      lib.mapAttrsToList (
-        icon: accent:
-        "ln -s ${source}/${size}/places/folder-cat-mocha-${accent}.svg $theme/${dir}/${icon}.svg"
-      ) folders
-    );
-  greyTrash =
-    dir: size:
-    lib.concatMapStrings (icon: ''
-      sed -e 's/#89B4FA/#${palette.overlay1}/I' -e 's/#75A0E6/#${palette.overlay0}/I' \
-        ${source}/${size}/places/folder-cat-mocha-blue.svg > $theme/${dir}/${icon}.svg
-    '') trash;
+    let
+      folder = accent: "${source}/${size}/places/folder-cat-mocha-${accent}.svg";
+    in
+    [ "mkdir -p $theme/${dir}" ]
+    ++ lib.mapAttrsToList (icon: accent: "ln -s ${folder accent} $theme/${dir}/${icon}.svg") folders
+    # The trash is the blue folder with its two shades turned gray.
+    ++ map (
+      icon:
+      "sed -e 's/#89B4FA/#${mocha.overlay1}/I' -e 's/#75A0E6/#${mocha.overlay0}/I' ${folder "blue"} > $theme/${dir}/${icon}.svg"
+    ) trash;
+
+  index = writeText "index.theme" ''
+    [Icon Theme]
+    Name=${name}
+    Inherits=${parent},hicolor
+    Directories=16x16/places,16x16@2x/places
+
+    [16x16/places]
+    Size=16
+    Context=Places
+    Type=Fixed
+
+    [16x16@2x/places]
+    Size=16
+    Scale=2
+    Context=Places
+    Type=Fixed
+  '';
 in
 runCommand name { } ''
   mkdir -p $out/share/icons/${parent}
-  for entry in ${source}/*; do
-    [ "''${entry##*/}" = index.theme ] || ln -s "$entry" $out/share/icons/${parent}/
-  done
+  ln -s ${source}/* $out/share/icons/${parent}/
+  rm $out/share/icons/${parent}/index.theme
   sed 's/^Name=.*/Name=${parent}/' ${source}/index.theme > $out/share/icons/${parent}/index.theme
 
   theme=$out/share/icons/${name}
-  ${lib.concatLines (
-    lib.mapAttrsToList (dir: size: ''
-      mkdir -p $theme/${dir}
-      ${linkFolders dir size}
-      ${greyTrash dir size}
-    '') sizes
-  )}
-  cat > $theme/index.theme <<EOF
-  [Icon Theme]
-  Name=${name}
-  Inherits=${parent},hicolor
-  Directories=16x16/places,16x16@2x/places
-
-  [16x16/places]
-  Size=16
-  Context=Places
-  Type=Fixed
-
-  [16x16@2x/places]
-  Size=16
-  Scale=2
-  Context=Places
-  Type=Fixed
-  EOF
+  ${lib.concatLines (lib.concatLists (lib.mapAttrsToList places sizes))}
+  cp ${index} $theme/index.theme
 ''

@@ -33,4 +33,10 @@
     whois
     zip
   ];
+
+  services.gpg-agent = {
+    enable = true;
+    defaultCacheTtl = 50400;
+    maxCacheTtl = 50400;
+  };
 }

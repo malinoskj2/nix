@@ -1,12 +1,12 @@
 {
-  lib,
-  stdenvNoCC,
-  python3,
-  makeWrapper,
-  hyprland,
   game-background-engine,
-  pkgsi686Linux,
+  hyprland,
+  lib,
   linkFarm,
+  makeWrapper,
+  pkgsi686Linux,
+  python3,
+  stdenvNoCC,
 }:
 let
   bits = toString stdenvNoCC.hostPlatform.parsed.cpu.bits;
@@ -33,6 +33,8 @@ let
       path = "${engine32}/share/vulkan/implicit_layer.d/background-32.json";
     }
   );
+  # The dynamic loader expands $PLATFORM to x86_64 or i686, so one LD_PRELOAD
+  # entry serves both 64-bit and 32-bit game processes.
   library =
     if stdenvNoCC.hostPlatform.isx86_64 then
       "${preload}/\${PLATFORM}/libgame-background.so"
@@ -48,9 +50,12 @@ stdenvNoCC.mkDerivation {
   dontBuild = true;
   doCheck = true;
   checkPhase = ''
+    runHook preCheck
     python -m unittest discover -s tests -v
+    runHook postCheck
   '';
   installPhase = ''
+    runHook preInstall
     install -Dm644 game_background_limit.py $out/lib/game_background_limit.py
     install -Dm644 automatic.py $out/lib/automatic.py
     ln -s ${manifests} $out/share
@@ -60,6 +65,7 @@ stdenvNoCC.mkDerivation {
       --set GAME_BACKGROUND_LIB '${library}' \
       --set GAME_BACKGROUND_DATA ${manifests} \
       --set GAME_BACKGROUND_HYPRCTL ${hyprland}/bin/hyprctl
+    runHook postInstall
   '';
   meta = {
     description = "Limit unfocused Steam games to 10 FPS without an overlay";

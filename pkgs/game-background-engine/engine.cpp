@@ -19,17 +19,22 @@
 #define EXPORT extern "C" __attribute__((visibility("default")))
 
 namespace {
+constexpr int64_t nanos_per_second = 1000000000;
+constexpr int64_t background_frame_period = nanos_per_second / 10;
+constexpr size_t token_length = 32;
+
 std::atomic<bool> capped{false};
 pthread_mutex_t pace_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t pace_changed;
 int64_t next_frame = 0;
 
 pthread_once_t prepare_once = PTHREAD_ONCE_INIT;
+pthread_once_t control_once = PTHREAD_ONCE_INIT;
+std::atomic<bool> graphics_ready{false};
 bool eligible = false;
-char token[33];
+char token[token_length + 1];
 char socket_path[sizeof(sockaddr_un::sun_path)];
 
-// Process eligibility and controller identity.
 bool game_id(const char *value) {
     return value && *value && strspn(value, "0123456789") == strlen(value) &&
            strspn(value, "0") != strlen(value);
@@ -44,56 +49,56 @@ bool is_helper() {
     path[length] = 0;
     const char *name = strrchr(path, '/');
     name = name ? name + 1 : path;
-    const char *names[] = {"steam",
-                           "steamwebhelper",
-                           "steamservice",
-                           "steam_monitor",
-                           "steam-runtime-launcher-service",
-                           "steam-runtime-supervisor",
-                           "steam-runtime-input-monitor",
-                           "bwrap",
-                           "pressure-vessel-wrap",
-                           "pv-adverb",
-                           "srt-logger",
-                           nullptr};
-    for (auto candidate : names) {
-        if (!candidate) {
-            break;
-        }
-        if (!strcmp(name, candidate)) {
+    const char *helpers[] = {"steam",
+                             "steamwebhelper",
+                             "steamservice",
+                             "steam_monitor",
+                             "steam-runtime-launcher-service",
+                             "steam-runtime-supervisor",
+                             "steam-runtime-input-monitor",
+                             "bwrap",
+                             "pressure-vessel-wrap",
+                             "pv-adverb",
+                             "srt-logger"};
+    for (auto helper : helpers) {
+        if (!strcmp(name, helper)) {
             return true;
         }
     }
     return strstr(name, "-srt-launcher-service") != nullptr;
 }
 
-void prepare_body() {
+bool requested() {
     const char *off = getenv("GAME_BACKGROUND_LIMIT");
     if (off && !strcmp(off, "0")) {
-        return;
+        return false;
     }
     const char *manual = getenv("GAME_BACKGROUND_FORCE");
     const char *automatic = getenv("GAME_BACKGROUND_LIMIT_AUTO");
-    eligible = (manual && !strcmp(manual, "1")) ||
-               (automatic && !strcmp(automatic, "1") &&
-                (game_id(getenv("SteamAppId")) || game_id(getenv("SteamGameId"))) && !is_helper());
-    if (!eligible) {
-        return;
-    }
+    return (manual && !strcmp(manual, "1")) ||
+           (automatic && !strcmp(automatic, "1") &&
+            (game_id(getenv("SteamAppId")) || game_id(getenv("SteamGameId"))) && !is_helper());
+}
+
+bool load_token() {
     const char *inherited = getenv("GAME_BACKGROUND_LIMIT_ID");
-    if (inherited && strlen(inherited) == 32 && strspn(inherited, "0123456789abcdef") == 32) {
-        memcpy(token, inherited, 33);
-    } else {
-        unsigned char random[16];
-        if (getrandom(random, sizeof(random), 0) != sizeof(random)) {
-            eligible = false;
-            return;
-        }
-        for (size_t i = 0; i < sizeof(random); ++i) {
-            snprintf(token + 2 * i, 3, "%02x", random[i]);
-        }
-        setenv("GAME_BACKGROUND_LIMIT_ID", token, 1);
+    if (inherited && strlen(inherited) == token_length &&
+        strspn(inherited, "0123456789abcdef") == token_length) {
+        memcpy(token, inherited, sizeof(token));
+        return true;
     }
+    unsigned char random[token_length / 2];
+    if (getrandom(random, sizeof(random), 0) != sizeof(random)) {
+        return false;
+    }
+    for (size_t i = 0; i < sizeof(random); ++i) {
+        snprintf(token + 2 * i, 3, "%02x", random[i]);
+    }
+    setenv("GAME_BACKGROUND_LIMIT_ID", token, 1);
+    return true;
+}
+
+bool load_socket_path() {
     const char *override_path = getenv("GAME_BACKGROUND_LIMIT_SOCKET");
     const char *cache = getenv("XDG_CACHE_HOME");
     const char *home = getenv("HOME");
@@ -106,9 +111,11 @@ void prepare_body() {
         size =
             snprintf(socket_path, sizeof(socket_path), "%s/.cache/game-background-limit/control.sock", home);
     }
-    if (size < 0 || size >= int(sizeof(socket_path))) {
-        eligible = false;
-    }
+    return size >= 0 && size < int(sizeof(socket_path));
+}
+
+void prepare_body() {
+    eligible = requested() && load_token() && load_socket_path();
 }
 
 void fork_child() {
@@ -122,11 +129,10 @@ __attribute__((constructor)) void prepare() {
     pthread_once(&prepare_once, prepare_body);
 }
 
-// Background pacing. Focused presentation bypasses this state.
 int64_t nanos() {
     timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    return int64_t(now.tv_sec) * 1000000000 + now.tv_nsec;
+    return int64_t(now.tv_sec) * nanos_per_second + now.tv_nsec;
 }
 
 void set_cap(bool enabled) {
@@ -148,15 +154,15 @@ void wait_if_capped() {
     if (capped.load(std::memory_order_relaxed)) {
         int64_t now = nanos();
         if (!next_frame) {
-            next_frame = now + 100000000;
+            next_frame = now + background_frame_period;
         } else {
-            next_frame += 100000000;
+            next_frame += background_frame_period;
             if (next_frame < now) {
                 next_frame = now;
             }
         }
         const int64_t target = next_frame;
-        const timespec deadline{time_t(target / 1000000000), long(target % 1000000000)};
+        const timespec deadline{time_t(target / nanos_per_second), long(target % nanos_per_second)};
         while (capped.load(std::memory_order_relaxed) && nanos() < target) {
             if (pthread_cond_timedwait(&pace_changed, &pace_mutex, &deadline) == ETIMEDOUT) {
                 break;
@@ -166,7 +172,6 @@ void wait_if_capped() {
     pthread_mutex_unlock(&pace_mutex);
 }
 
-// Controller transport runs only on the detached receiver thread.
 bool connect_controller(int fd) {
     if (fd < 0) {
         return false;
@@ -223,9 +228,6 @@ void *receive_control(void *) {
     return nullptr;
 }
 
-pthread_once_t control_once = PTHREAD_ONCE_INIT;
-std::atomic<bool> graphics_ready{false};
-
 void start_control() {
     prepare();
     pthread_atfork(nullptr, nullptr, fork_child);
@@ -274,39 +276,6 @@ Function cached_function(std::atomic<Function> &cache, Lookup lookup) {
     return real;
 }
 
-} // namespace
-
-EXPORT void glXSwapBuffers(void *display, unsigned long drawable) {
-    using Function = void (*)(void *, unsigned long);
-    static std::atomic<Function> cache{nullptr};
-    auto real = cached_function(cache, [] { return gl_function<Function>("glXSwapBuffers", "libGL.so.1"); });
-    if (real) {
-        real(display, drawable);
-    }
-    wait_if_capped();
-}
-
-EXPORT int64_t glXSwapBuffersMscOML(void *display, unsigned long drawable, int64_t target, int64_t divisor,
-                                    int64_t remainder) {
-    using Function = int64_t (*)(void *, unsigned long, int64_t, int64_t, int64_t);
-    static std::atomic<Function> cache{nullptr};
-    auto real =
-        cached_function(cache, [] { return gl_function<Function>("glXSwapBuffersMscOML", "libGL.so.1"); });
-    auto result = real ? real(display, drawable, target, divisor, remainder) : 0;
-    wait_if_capped();
-    return result;
-}
-
-EXPORT unsigned int eglSwapBuffers(void *display, void *surface) {
-    using Function = unsigned int (*)(void *, void *);
-    static std::atomic<Function> cache{nullptr};
-    auto real = cached_function(cache, [] { return gl_function<Function>("eglSwapBuffers", "libEGL.so.1"); });
-    auto result = real ? real(display, surface) : 0;
-    wait_if_capped();
-    return result;
-}
-
-namespace {
 using DamageSwap = unsigned int (*)(void *, void *, const int *, int);
 DamageSwap damage_function(const char *name) {
     auto real = gl_function<DamageSwap>(name, "libEGL.so.1");
@@ -318,102 +287,15 @@ DamageSwap damage_function(const char *name) {
     }
     return real;
 }
-} // namespace
 
-EXPORT unsigned int eglSwapBuffersWithDamageKHR(void *display, void *surface, const int *rectangles,
-                                                int count) {
-    static std::atomic<DamageSwap> cache{nullptr};
-    auto real = cached_function(cache, [] { return damage_function("eglSwapBuffersWithDamageKHR"); });
+unsigned int swap_with_damage(std::atomic<DamageSwap> &cache, const char *name, void *display, void *surface,
+                              const int *rectangles, int count) {
+    auto real = cached_function(cache, [name] { return damage_function(name); });
     auto result = real ? real(display, surface, rectangles, count) : 0;
     wait_if_capped();
     return result;
 }
 
-EXPORT unsigned int eglSwapBuffersWithDamageEXT(void *display, void *surface, const int *rectangles,
-                                                int count) {
-    static std::atomic<DamageSwap> cache{nullptr};
-    auto real = cached_function(cache, [] { return damage_function("eglSwapBuffersWithDamageEXT"); });
-    auto result = real ? real(display, surface, rectangles, count) : 0;
-    wait_if_capped();
-    return result;
-}
-
-EXPORT Proc glXGetProcAddress(const unsigned char *name);
-EXPORT Proc glXGetProcAddressARB(const unsigned char *name);
-EXPORT Proc eglGetProcAddress(const char *name);
-namespace {
-Proc gl_hook(const char *name) {
-    if (!strcmp(name, "glXSwapBuffers")) {
-        return reinterpret_cast<Proc>(glXSwapBuffers);
-    }
-    if (!strcmp(name, "glXSwapBuffersMscOML")) {
-        return reinterpret_cast<Proc>(glXSwapBuffersMscOML);
-    }
-    if (!strcmp(name, "eglSwapBuffers")) {
-        return reinterpret_cast<Proc>(eglSwapBuffers);
-    }
-    if (!strcmp(name, "eglSwapBuffersWithDamageKHR")) {
-        return reinterpret_cast<Proc>(eglSwapBuffersWithDamageKHR);
-    }
-    if (!strcmp(name, "eglSwapBuffersWithDamageEXT")) {
-        return reinterpret_cast<Proc>(eglSwapBuffersWithDamageEXT);
-    }
-    if (!strcmp(name, "glXGetProcAddress")) {
-        return reinterpret_cast<Proc>(glXGetProcAddress);
-    }
-    if (!strcmp(name, "glXGetProcAddressARB")) {
-        return reinterpret_cast<Proc>(glXGetProcAddressARB);
-    }
-    if (!strcmp(name, "eglGetProcAddress")) {
-        return reinterpret_cast<Proc>(eglGetProcAddress);
-    }
-    return nullptr;
-}
-} // namespace
-
-EXPORT Proc glXGetProcAddress(const unsigned char *name) {
-    using Function = Proc (*)(const unsigned char *);
-    static std::atomic<Function> cache{nullptr};
-    auto real =
-        cached_function(cache, [] { return gl_function<Function>("glXGetProcAddress", "libGL.so.1"); });
-    auto function = real ? real(name) : nullptr;
-    if (function) {
-        if (auto hooked = gl_hook(reinterpret_cast<const char *>(name))) {
-            return hooked;
-        }
-    }
-    return function;
-}
-
-EXPORT Proc glXGetProcAddressARB(const unsigned char *name) {
-    using Function = Proc (*)(const unsigned char *);
-    static std::atomic<Function> cache{nullptr};
-    auto real =
-        cached_function(cache, [] { return gl_function<Function>("glXGetProcAddressARB", "libGL.so.1"); });
-    auto function = real ? real(name) : nullptr;
-    if (function) {
-        if (auto hooked = gl_hook(reinterpret_cast<const char *>(name))) {
-            return hooked;
-        }
-    }
-    return function;
-}
-
-EXPORT Proc eglGetProcAddress(const char *name) {
-    using Function = Proc (*)(const char *);
-    static std::atomic<Function> cache{nullptr};
-    auto real =
-        cached_function(cache, [] { return gl_function<Function>("eglGetProcAddress", "libEGL.so.1"); });
-    auto function = real ? real(name) : nullptr;
-    if (function) {
-        if (auto hooked = gl_hook(name)) {
-            return hooked;
-        }
-    }
-    return function;
-}
-
-namespace {
 // Dispatchable queue/device handles share a loader dispatch key. Slots are
 // published only after initialization. Vulkan requires external synchronization
 // of destruction; no device is concurrently destroyed while its queues present.
@@ -449,7 +331,6 @@ template <class Entry, class Handle> Entry *find(Entry (&entries)[capacity], Han
     }
     return nullptr;
 }
-// Called with dispatch_mutex held; the key is published after the slot is filled.
 template <class Entry> Entry *vacant_slot(Entry (&entries)[capacity]) {
     for (auto &entry : entries) {
         if (!entry.key.load()) {
@@ -458,33 +339,132 @@ template <class Entry> Entry *vacant_slot(Entry (&entries)[capacity]) {
     }
     return nullptr;
 }
+template <class Entry, class Fill> bool publish(Entry (&entries)[capacity], void *key, Fill fill) {
+    pthread_mutex_lock(&dispatch_mutex);
+    auto slot = vacant_slot(entries);
+    if (slot) {
+        fill(*slot);
+        slot->key.store(key, std::memory_order_release);
+    }
+    pthread_mutex_unlock(&dispatch_mutex);
+    return slot != nullptr;
+}
 
-template <class Handle> VkLayerInstanceCreateInfo *instance_chain(Handle info) {
-    auto next = reinterpret_cast<const VkLayerInstanceCreateInfo *>(info->pNext);
+template <class Link, class Info> Link *loader_link(const Info *info, VkStructureType type) {
+    auto next = reinterpret_cast<const Link *>(info->pNext);
     while (next) {
-        if (next->sType == VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO &&
-            next->function == VK_LAYER_LINK_INFO) {
-            return const_cast<VkLayerInstanceCreateInfo *>(next);
+        if (next->sType == type && next->function == VK_LAYER_LINK_INFO) {
+            return const_cast<Link *>(next);
         }
-        next = reinterpret_cast<const VkLayerInstanceCreateInfo *>(next->pNext);
+        next = reinterpret_cast<const Link *>(next->pNext);
     }
     return nullptr;
 }
+VkLayerInstanceCreateInfo *instance_chain(const VkInstanceCreateInfo *info) {
+    return loader_link<VkLayerInstanceCreateInfo>(info, VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO);
+}
 VkLayerDeviceCreateInfo *device_chain(const VkDeviceCreateInfo *info) {
-    auto next = reinterpret_cast<const VkLayerDeviceCreateInfo *>(info->pNext);
-    while (next) {
-        if (next->sType == VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO &&
-            next->function == VK_LAYER_LINK_INFO) {
-            return const_cast<VkLayerDeviceCreateInfo *>(next);
+    return loader_link<VkLayerDeviceCreateInfo>(info, VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO);
+}
+
+} // namespace
+
+EXPORT void glXSwapBuffers(void *display, unsigned long drawable) {
+    using Function = void (*)(void *, unsigned long);
+    static std::atomic<Function> cache{nullptr};
+    auto real = cached_function(cache, [] { return gl_function<Function>("glXSwapBuffers", "libGL.so.1"); });
+    if (real) {
+        real(display, drawable);
+    }
+    wait_if_capped();
+}
+
+EXPORT int64_t glXSwapBuffersMscOML(void *display, unsigned long drawable, int64_t target, int64_t divisor,
+                                    int64_t remainder) {
+    using Function = int64_t (*)(void *, unsigned long, int64_t, int64_t, int64_t);
+    static std::atomic<Function> cache{nullptr};
+    auto real =
+        cached_function(cache, [] { return gl_function<Function>("glXSwapBuffersMscOML", "libGL.so.1"); });
+    auto result = real ? real(display, drawable, target, divisor, remainder) : 0;
+    wait_if_capped();
+    return result;
+}
+
+EXPORT unsigned int eglSwapBuffers(void *display, void *surface) {
+    using Function = unsigned int (*)(void *, void *);
+    static std::atomic<Function> cache{nullptr};
+    auto real = cached_function(cache, [] { return gl_function<Function>("eglSwapBuffers", "libEGL.so.1"); });
+    auto result = real ? real(display, surface) : 0;
+    wait_if_capped();
+    return result;
+}
+
+EXPORT unsigned int eglSwapBuffersWithDamageKHR(void *display, void *surface, const int *rectangles,
+                                                int count) {
+    static std::atomic<DamageSwap> cache{nullptr};
+    return swap_with_damage(cache, "eglSwapBuffersWithDamageKHR", display, surface, rectangles, count);
+}
+
+EXPORT unsigned int eglSwapBuffersWithDamageEXT(void *display, void *surface, const int *rectangles,
+                                                int count) {
+    static std::atomic<DamageSwap> cache{nullptr};
+    return swap_with_damage(cache, "eglSwapBuffersWithDamageEXT", display, surface, rectangles, count);
+}
+
+EXPORT Proc glXGetProcAddress(const unsigned char *name);
+EXPORT Proc glXGetProcAddressARB(const unsigned char *name);
+EXPORT Proc eglGetProcAddress(const char *name);
+namespace {
+Proc gl_hook(const char *name) {
+    const struct {
+        const char *name;
+        Proc hook;
+    } hooks[] = {
+        {"glXSwapBuffers", reinterpret_cast<Proc>(glXSwapBuffers)},
+        {"glXSwapBuffersMscOML", reinterpret_cast<Proc>(glXSwapBuffersMscOML)},
+        {"eglSwapBuffers", reinterpret_cast<Proc>(eglSwapBuffers)},
+        {"eglSwapBuffersWithDamageKHR", reinterpret_cast<Proc>(eglSwapBuffersWithDamageKHR)},
+        {"eglSwapBuffersWithDamageEXT", reinterpret_cast<Proc>(eglSwapBuffersWithDamageEXT)},
+        {"glXGetProcAddress", reinterpret_cast<Proc>(glXGetProcAddress)},
+        {"glXGetProcAddressARB", reinterpret_cast<Proc>(glXGetProcAddressARB)},
+        {"eglGetProcAddress", reinterpret_cast<Proc>(eglGetProcAddress)},
+    };
+    for (auto &hook : hooks) {
+        if (!strcmp(name, hook.name)) {
+            return hook.hook;
         }
-        next = reinterpret_cast<const VkLayerDeviceCreateInfo *>(next->pNext);
     }
     return nullptr;
+}
+
+template <class Name>
+Proc proc_address(std::atomic<Proc (*)(Name)> &cache, const char *symbol, const char *library, Name name) {
+    auto real =
+        cached_function(cache, [symbol, library] { return gl_function<Proc (*)(Name)>(symbol, library); });
+    auto function = real ? real(name) : nullptr;
+    if (function) {
+        if (auto hooked = gl_hook(reinterpret_cast<const char *>(name))) {
+            return hooked;
+        }
+    }
+    return function;
 }
 } // namespace
 
-EXPORT PFN_vkVoidFunction VKAPI_CALL background_GetInstanceProcAddr(VkInstance, const char *);
-EXPORT PFN_vkVoidFunction VKAPI_CALL background_GetDeviceProcAddr(VkDevice, const char *);
+EXPORT Proc glXGetProcAddress(const unsigned char *name) {
+    static std::atomic<Proc (*)(const unsigned char *)> cache{nullptr};
+    return proc_address(cache, "glXGetProcAddress", "libGL.so.1", name);
+}
+
+EXPORT Proc glXGetProcAddressARB(const unsigned char *name) {
+    static std::atomic<Proc (*)(const unsigned char *)> cache{nullptr};
+    return proc_address(cache, "glXGetProcAddressARB", "libGL.so.1", name);
+}
+
+EXPORT Proc eglGetProcAddress(const char *name) {
+    static std::atomic<Proc (*)(const char *)> cache{nullptr};
+    return proc_address(cache, "eglGetProcAddress", "libEGL.so.1", name);
+}
 
 EXPORT VkResult VKAPI_CALL background_CreateInstance(const VkInstanceCreateInfo *info,
                                                      const VkAllocationCallbacks *allocator,
@@ -504,16 +484,12 @@ EXPORT VkResult VKAPI_CALL background_CreateInstance(const VkInstanceCreateInfo 
     if (result != VK_SUCCESS) {
         return result;
     }
-    pthread_mutex_lock(&dispatch_mutex);
-    auto slot = vacant_slot(instances);
-    if (slot) {
-        slot->handle = *output;
-        slot->gpa = gpa;
-        slot->physical_gpa = physical_gpa;
-        slot->key.store(dispatch_key(*output), std::memory_order_release);
-    }
-    pthread_mutex_unlock(&dispatch_mutex);
-    if (!slot) {
+    bool published = publish(instances, dispatch_key(*output), [&](Instance &slot) {
+        slot.handle = *output;
+        slot.gpa = gpa;
+        slot.physical_gpa = physical_gpa;
+    });
+    if (!published) {
         auto destroy = reinterpret_cast<PFN_vkDestroyInstance>(gpa(*output, "vkDestroyInstance"));
         destroy(*output, allocator);
         return VK_ERROR_TOO_MANY_OBJECTS;
@@ -551,16 +527,12 @@ EXPORT VkResult VKAPI_CALL background_CreateDevice(VkPhysicalDevice physical, co
     if (result != VK_SUCCESS) {
         return result;
     }
-    pthread_mutex_lock(&dispatch_mutex);
-    auto slot = vacant_slot(devices);
-    if (slot) {
-        slot->handle = *output;
-        slot->gpa = gpa;
-        slot->present = reinterpret_cast<PFN_vkQueuePresentKHR>(gpa(*output, "vkQueuePresentKHR"));
-        slot->key.store(dispatch_key(*output), std::memory_order_release);
-    }
-    pthread_mutex_unlock(&dispatch_mutex);
-    if (!slot) {
+    bool published = publish(devices, dispatch_key(*output), [&](Device &slot) {
+        slot.handle = *output;
+        slot.gpa = gpa;
+        slot.present = reinterpret_cast<PFN_vkQueuePresentKHR>(gpa(*output, "vkQueuePresentKHR"));
+    });
+    if (!published) {
         auto destroy = reinterpret_cast<PFN_vkDestroyDevice>(gpa(*output, "vkDestroyDevice"));
         destroy(*output, allocator);
         return VK_ERROR_TOO_MANY_OBJECTS;

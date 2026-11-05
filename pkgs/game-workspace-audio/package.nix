@@ -1,10 +1,10 @@
 {
-  lib,
-  stdenvNoCC,
-  python3,
-  makeWrapper,
   hyprland,
+  lib,
+  makeWrapper,
   pipewire,
+  python3,
+  stdenvNoCC,
   wireplumber,
 }:
 stdenvNoCC.mkDerivation {
@@ -16,15 +16,19 @@ stdenvNoCC.mkDerivation {
   dontBuild = true;
   doCheck = true;
   checkPhase = ''
+    runHook preCheck
     python -m unittest discover -s tests -v
+    runHook postCheck
   '';
   installPhase = ''
+    runHook preInstall
     install -Dm644 game_workspace_audio.py $out/lib/game_workspace_audio.py
     makeWrapper ${python3}/bin/python3 $out/bin/game-workspace-audio \
       --add-flags $out/lib/game_workspace_audio.py \
       --set GAME_AUDIO_HYPRCTL ${hyprland}/bin/hyprctl \
       --set GAME_AUDIO_PW_DUMP ${pipewire}/bin/pw-dump \
       --set GAME_AUDIO_WPCTL ${wireplumber}/bin/wpctl
+    runHook postInstall
   '';
   meta = {
     description = "Mute Steam games while Hyprland workspace 5 is hidden";

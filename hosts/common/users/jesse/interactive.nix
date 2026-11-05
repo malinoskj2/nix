@@ -15,5 +15,5 @@
   # Home Manager's zsh runs compinit itself.
   programs.zsh.enableGlobalCompInit = false;
 
-  home-manager.users.jesse = ../../../../users/jesse/profiles + "/${config.networking.hostName}.nix";
+  home-manager.users.jesse = ../../../../users/jesse/profiles/${config.networking.hostName}.nix;
 }

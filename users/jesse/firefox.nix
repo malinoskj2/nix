@@ -25,7 +25,7 @@ let
     "x-scheme-handler/http"
     "x-scheme-handler/https"
   ];
-  focusedFirefox = pkgs.writeShellApplication {
+  firefoxFocused = pkgs.writeShellApplication {
     name = "firefox-focused";
     runtimeInputs = [
       pkgs.hyprland
@@ -37,18 +37,16 @@ let
       # falling back to the side monitor when that is the only Firefox; if Firefox is starting,
       # wait for it to map.
       preferred_firefox() {
-        ${lib.getExe' pkgs.hyprland "hyprctl"} clients -j 2>/dev/null \
-          | ${lib.getExe pkgs.jq} -r \
-            '[.[] | select(.class == "firefox")] as $firefox
-             | [$firefox[] | select(.workspace.id > 0)] as $main
-             | (if $main | length > 0 then $main else $firefox end)
-             | min_by(.focusHistoryID)
-             | .address // empty' 2>/dev/null || true
+        hyprctl clients -j 2>/dev/null | jq -r \
+          '[.[] | select(.class == "firefox")] as $firefox
+           | [$firefox[] | select(.workspace.id > 0)] as $main
+           | (if $main | length > 0 then $main else $firefox end)
+           | min_by(.focusHistoryID)
+           | .address // empty' 2>/dev/null || true
       }
 
       focus_firefox() {
-        ${lib.getExe' pkgs.hyprland "hyprctl"} dispatch \
-          "hl.dsp.focus({ window = \"address:$1\" })" >/dev/null
+        hyprctl dispatch "hl.dsp.focus({ window = \"address:$1\" })" >/dev/null
       }
 
       address="$(preferred_firefox)"
@@ -88,13 +86,13 @@ in
   home.file."${cfg.profilesPath}/${cfg.profiles.default.path}/chrome/wavefox".source =
     "${inputs.wavefox}/chrome";
 
-  home.sessionVariables.BROWSER = lib.getExe focusedFirefox;
+  home.sessionVariables.BROWSER = lib.getExe firefoxFocused;
 
   xdg = {
     desktopEntries.firefox-focused = {
       name = "Firefox Web Link";
       icon = "firefox";
-      exec = "${lib.getExe focusedFirefox} %U";
+      exec = "${lib.getExe firefoxFocused} %U";
       mimeType = webMimeTypes;
       noDisplay = true;
     };

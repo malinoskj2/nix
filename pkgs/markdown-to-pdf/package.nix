@@ -25,9 +25,7 @@ writeShellApplication {
     pandoc
     texlive.combined.scheme-full
   ];
-  text = ''
-    export MARKDOWN_TO_PDF_TEMPLATE=${eisvogel}/template-multi-file/eisvogel.latex
-  ''
-  + builtins.readFile ./markdown-to-pdf.sh;
+  runtimeEnv.MARKDOWN_TO_PDF_TEMPLATE = "${eisvogel}/template-multi-file/eisvogel.latex";
+  text = builtins.readFile ./markdown-to-pdf.sh;
   meta.description = "Render a highly technical markdown file (code, tables, Mermaid diagrams) to a typeset PDF";
 }

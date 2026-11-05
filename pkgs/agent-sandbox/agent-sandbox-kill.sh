@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
-# Kill every agent-sandbox: stop its user units, force-remove its containers,
-# and clear the host-side state a launcher can leave behind when it never
-# runs its cleanup trap. The persistent sandbox home (agent logins, memory,
-# the SSH keys the desktop trusts) survives, so the next launch picks up
-# where the killed sandboxes left off; pass --purge to delete that home too
-# and let the next launch reseed everything from the host.
-
+# The persistent sandbox home (agent logins, memory, the SSH keys the desktop
+# trusts) survives unless --purge, so the next launch picks up where the killed
+# sandboxes left off.
 purge=
 case ${1:-} in
   '') ;;
@@ -36,8 +31,8 @@ if [[ -n $ids ]]; then
   docker rm -f "${containers[@]}" >/dev/null
 fi
 
-# Watchers whose launcher died hard would otherwise keep writing into the
-# clipboard dirs removed below.
+# A launcher that died hard never ran its cleanup trap, and its clipboard
+# watcher would otherwise keep writing into the dirs removed below.
 pkill -f "agent-sandbox-clipboard-sync $runtime/agent-sandbox-clipboard" || true
 rm -rf -- "$runtime"/agent-sandbox-clipboard.*
 rm -rf -- "$runtime"/agent-sandbox-orca/session.*

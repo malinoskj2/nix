@@ -8,7 +8,13 @@
   };
 
   programs = {
-    ssh.startAgent = true;
+    ssh = {
+      startAgent = true;
+      agentTimeout = "4h";
+      extraConfig = ''
+        AddKeysToAgent yes
+      '';
+    };
     nix-ld = {
       enable = true;
       libraries = [ pkgs.libcap ];

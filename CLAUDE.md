@@ -23,7 +23,7 @@ the exported package list, and imports the single-concern modules in `flake/`:
   arguments and the configuration revision.
 - `checks.nix`: `host-<name>` for each host on its system, `package-<name>` for
   the local packages those hosts install directly, and `devshell`. Evaluation
-  fails if a package in `pkgs/` is missing from `flake.nix`'s `packages`.
+  fails if a package in `pkgs/` is missing from `flake.nix`'s `exportedPackages`.
 - `formatting.nix`: treefmt-nix.
 - `devshell.nix`: treefmt, nh, nixd, nvd and the formatters.
 
@@ -42,8 +42,8 @@ plus host facts. Shared modules are imported explicitly by relative path from
   and journal groups, imports Home Manager, and uses
   `users/jesse/profiles/<hostName>.nix` as his profile.
 - `optional/`: one concern per file: `docker`, `fail2ban`, `fonts`, `hyprland`,
-  `nh`, `openssh-hardening`, `pipewire`, `server-tools`, `sysctl-hardening`,
-  `systemd-boot`, `workstation`.
+  `j2bar`, `nh`, `openssh-hardening`, `pipewire`, `server-tools`,
+  `sysctl-hardening`, `systemd-boot`, `workstation`.
 
 Host-only policy, such as media's sudo and `mutableUsers`, stays in the host.
 
@@ -70,7 +70,7 @@ set their outputs in `desktop.monitors`.
 
 Each `pkgs/<name>/package.nix` is a local package. `pkgs/default.nix` picks up
 every directory, and the `additions` overlay exposes them as `pkgs.<name>`. A
-new package also goes in the `packages` list in `flake.nix`. Its `callPackage` supplies
+new package also goes in the `exportedPackages` list in `flake.nix`. Its `callPackage` supplies
 claude-code and codex from `pkgs.unstable`. Install local packages by
 name. Linux-only packages set `meta.platforms`. `git-open-branch` installs the
 `git-open` command.

@@ -10,10 +10,10 @@
     ../common/optional/systemd-boot.nix
     ../common/users/jesse
 
-    ./containers.nix
     ./hardware-configuration.nix
-    ./nvidia.nix
+    ./containers.nix
     ./nfs.nix
+    ./nvidia.nix
     ./samba.nix
     ./storage.nix
   ];
@@ -46,13 +46,11 @@
     users.jesse.hashedPasswordFile = "/secret/jesse.passwd";
   };
 
-  security = {
-    sudo.execWheelOnly = true;
+  security.sudo.execWheelOnly = true;
 
-    # Docker confines every container with its docker-default profile once
-    # AppArmor is on, and loads that profile with apparmor_parser.
-    apparmor.enable = true;
-  };
+  # Docker confines every container with its docker-default profile once
+  # AppArmor is on, and loads that profile with apparmor_parser.
+  security.apparmor.enable = true;
   systemd.services.docker.path = [ pkgs.apparmor-parser ];
 
   services.openssh = {

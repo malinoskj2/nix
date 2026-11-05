@@ -1,3 +1,4 @@
+// `BRIDGE`, the bridge's source, is prepended at build time.
 export class ArrpcBridgeChild extends JSWindowActorChild {
   handleEvent() {
     // The bridge reaches into Discord's webpack modules, so it runs with the page's principal and

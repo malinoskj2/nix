@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Every wallpaper stays paused while the lock screen is up, since the video is hidden behind it.
-# Updates are event-driven: Hyprland events cover windows, workspaces and new mpvpaper surfaces, and
-# logind's LockedHint covers locking and unlocking.
 
 readonly state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/wallpaper"
 readonly j2bar="${J2BAR_BIN:-j2bar}"
@@ -44,7 +41,8 @@ print_monitor_states() {
 apply_pause_states() {
   local locked
 
-  # An unreachable j2bar counts as locked so the video never plays unseen.
+  # Every wallpaper stays paused behind the lock screen, and an unreachable j2bar counts as locked
+  # so the video never plays unseen.
   locked="$("$j2bar" msg status 2>/dev/null | jq -r '.locked' 2>/dev/null || true)"
   [[ "$locked" == false ]] || locked=true
 
@@ -93,20 +91,21 @@ session_path="$(
 
 apply_to_new_instance
 
-# Exit with the compositor so the next Hyprland start can start a fresh unit; a lingering gdbus
-# would otherwise keep this instance active on a dead socket.
+# Hyprland's events cover new mpvpaper surfaces and changes to the visible workspaces and their
+# windows, and logind's LockedHint covers locking and unlocking. A failed update is left for the
+# next event to retry rather than ending the service.
 {
   socat -u "UNIX-CONNECT:$socket" - &
   socat_pid=$!
   gdbus monitor --system --dest org.freedesktop.login1 --object-path "$session_path" &
   gdbus_pid=$!
+  # Exit with the compositor so the next Hyprland start can start a fresh unit; a lingering gdbus
+  # would otherwise keep this instance active on a dead socket.
   wait "$socat_pid" || true
   kill "$gdbus_pid" 2>/dev/null || true
 } | while read -r line; do
   case "$line" in
     openlayer\>\>mpvpaper*) apply_to_new_instance ;;
-    # These events can change the visible workspaces, their window counts or the lock state. A
-    # failed update is left for the next event to retry rather than ending the service.
     workspace* | focusedmon* | activespecial* | monitor* | openwindow* | closewindow* | \
       movewindow* | changefloatingmode* | *LockedHint*)
       apply_pause_states || true

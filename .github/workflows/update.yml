@@ -64,12 +64,13 @@ jobs:
           name: flake-lock
           path: ${{ runner.temp }}/flake-lock
 
+      - run: mv "$RUNNER_TEMP/flake-lock/flake.lock" flake.lock
+
       - id: body
         env:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           DOCS_URL: ${{ github.server_url }}/${{ github.repository }}/blob/main/docs/updating.md
         run: |
-          mv "$RUNNER_TEMP/flake-lock/flake.lock" flake.lock
           {
             echo 'body<<EOF'
             echo "Every host built against this lock in [the update run]($RUN_URL)."

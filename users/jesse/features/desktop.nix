@@ -1,4 +1,36 @@
 { lib, pkgs, ... }:
+let
+  orca-ade = pkgs.orca-ade.override {
+    globalSettings = {
+      theme = "dark";
+      appFontFamily = "Geist";
+      editorFontFamily = "FiraCode Nerd Font Mono";
+      terminalFontFamily = "FiraCode Nerd Font Mono";
+      terminalThemeDark = "Catppuccin Mocha";
+      # Orca otherwise uses its launcher's SHELL, which a dev shell sets to bash.
+      terminalDefaultShell = "/run/current-system/sw/bin/zsh";
+      pluginSystemEnabled = true;
+      # The glass titlebar needs an alpha-capable window for Hyprland's blur.
+      windowMaterial = "translucent";
+    };
+    approvedPlugins = [ "chron0.discord-presence" ];
+    # Generic keeps workspace, branch and machine names out of the activity.
+    discordPresenceSettings.detailLevel = "generic";
+  };
+  orcaSkills = [
+    "computer-use"
+    "orca-cli"
+    "orchestration"
+  ];
+  skillsFor =
+    agent:
+    lib.genAttrs' orcaSkills (
+      skill:
+      lib.nameValuePair ".${agent}/skills/${skill}" {
+        source = "${orca-ade}/share/orca-ade/skills/${skill}";
+      }
+    );
+in
 {
   imports = [
     ../arrpc
@@ -18,63 +50,17 @@
     imagemagick
     ktx-tools
     mediainfo
-    (orca-ade.override {
-      globalSettings = {
-        theme = "dark";
-        appFontFamily = "Geist";
-        editorFontFamily = "FiraCode Nerd Font Mono";
-        terminalFontFamily = "FiraCode Nerd Font Mono";
-        terminalThemeDark = "Catppuccin Mocha";
-        # Orca otherwise uses its launcher's SHELL, which a dev shell sets to bash.
-        terminalDefaultShell = "/run/current-system/sw/bin/zsh";
-        pluginSystemEnabled = true;
-      };
-      approvedPlugins = [ "chron0.discord-presence" ];
-      # Only "Working in Orca" and the agent-state badge, which the plugin always attaches.
-      discordPresenceSettings = {
-        detailLevel = "generic";
-        showAgentState = false;
-        showElapsed = false;
-      };
-    })
+    orca-ade
     pwvucontrol
     vulkan-tools
     wl-clipboard
   ];
 
-  home.file = lib.mergeAttrsList (
-    lib.mapCartesianProduct
-      (
-        { agent, skill }:
-        {
-          ".${agent}/skills/${skill}".source = "${pkgs.orca-ade}/share/orca-ade/skills/${skill}";
-        }
-      )
-      {
-        agent = [
-          "claude"
-          "codex"
-        ];
-        skill = [
-          "computer-use"
-          "orca-cli"
-          "orchestration"
-        ];
-      }
-  );
+  home.file = skillsFor "claude" // skillsFor "codex";
 
   home.sessionVariables = {
     DOWNLOAD = "/media/scratch/download";
   };
 
-  xdg.mimeApps = {
-    enable = true;
-    defaultApplications."x-scheme-handler/claude-cli" = "claude-code-url-handler.desktop";
-  };
-
-  services.gpg-agent = {
-    enable = true;
-    defaultCacheTtl = 50400;
-    maxCacheTtl = 50400;
-  };
+  xdg.mimeApps.enable = true;
 }

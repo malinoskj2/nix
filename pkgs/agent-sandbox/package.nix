@@ -9,6 +9,7 @@
   btop,
   buildEnv,
   cacert,
+  callPackage,
   cargo,
   cargo-audit,
   cargo-nextest,
@@ -91,7 +92,6 @@
   playwright-driver,
   playwright-mcp,
   playwright-test,
-  pkgs,
   procps,
   pulseaudio,
   pyghidra-mcp,
@@ -117,6 +117,7 @@
   unrar,
   unzip,
   usbutils,
+  util-linux,
   vim,
   vulkan-tools,
   wayvnc,
@@ -137,7 +138,7 @@
 }:
 
 let
-  unreal = import ./unreal.nix { inherit pkgs lib; };
+  unreal = callPackage ./unreal.nix { };
   unrealMcp = import ./unreal-mcp.nix;
   ghidraMcp = import ./ghidra-mcp.nix;
   # cudaSupport enables Cycles' CUDA and OptiX devices. Blender compiles CUDA kernels for every
@@ -149,29 +150,32 @@ let
   # Chromium's setuid and user-namespace sandboxes can't start inside the container.
   chromium' = chromium.override { commandLineArgs = "--no-sandbox --test-type"; };
 
-  plugin = runCommand "agent-sandbox-plugin" { } ''
-    install -Dm644 ${
-      writeText "plugin.json" (builtins.toJSON { name = "agent-sandbox"; })
-    } $out/.claude-plugin/plugin.json
-    install -Dm644 ${
-      writeText "mcp.json" (
+  claudePlugin =
+    let
+      manifest = writeText "plugin.json" (builtins.toJSON { name = "agent-sandbox"; });
+      mcp = writeText "mcp.json" (
         builtins.toJSON {
-          mcpServers.playwright = {
-            command = lib.getExe playwright-mcp;
-            args = [
-              "--output-dir"
-              "/tmp/playwright-mcp"
-            ];
+          mcpServers = {
+            playwright = {
+              command = lib.getExe playwright-mcp;
+              args = [
+                "--output-dir"
+                "/tmp/playwright-mcp"
+              ];
+            };
+            unreal-mcp = {
+              type = "http";
+              inherit (unrealMcp) url;
+            };
+            ghidra.command = lib.getExe pyghidra-mcp;
           };
-          mcpServers.unreal-mcp = {
-            type = "http";
-            inherit (unrealMcp) url;
-          };
-          mcpServers.ghidra.command = lib.getExe pyghidra-mcp;
         }
-      )
-    } $out/.mcp.json
-  '';
+      );
+    in
+    runCommand "agent-sandbox-plugin" { } ''
+      install -Dm644 ${manifest} $out/.claude-plugin/plugin.json
+      install -Dm644 ${mcp} $out/.mcp.json
+    '';
 
   # Orca's relay installs its Claude hooks here rather than in the read-only ~/.claude/settings.json.
   claude = writeShellScriptBin "claude" ''
@@ -179,21 +183,20 @@ let
     if [[ -f $settings ]]; then
       set -- --settings "$settings" "$@"
     fi
-    exec ${lib.getExe claude-code} --plugin-dir ${plugin} "$@"
+    exec ${lib.getExe claude-code} --plugin-dir ${claudePlugin} "$@"
   '';
 
-  # The sandbox keeps a separate writable Codex home so project trust can persist,
-  # which means later host config changes do not reach an existing SSH sandbox.
-  # MCP servers go in as -c overrides, which apply over that writable config on every launch.
+  # The sandbox seeds its own writable Codex config once, so project trust persists but later host
+  # changes never reach it. MCP servers go in as -c overrides, which apply on every launch.
+  codexMcpOverrides = lib.concatLists (
+    lib.mapAttrsToList (name: value: [
+      "-c"
+      "mcp_servers.ghidra.${name}=${builtins.toJSON value}"
+    ]) (ghidraMcp // { command = lib.getExe pyghidra-mcp; })
+  );
+
   codex' = writeShellScriptBin "codex" ''
-    exec ${lib.getExe codex} --no-alt-screen ${
-      lib.escapeShellArgs (
-        lib.concatMap (setting: [
-          "-c"
-          "mcp_servers.ghidra.${setting.name}=${builtins.toJSON setting.value}"
-        ]) (lib.attrsToList (ghidraMcp // { command = lib.getExe pyghidra-mcp; }))
-      )
-    } "$@"
+    exec ${lib.getExe codex} --no-alt-screen ${lib.escapeShellArgs codexMcpOverrides} "$@"
   '';
 
   # The desktop CLI connects to its Unix runtime socket through the read-only
@@ -208,26 +211,22 @@ let
     text = builtins.readFile ./orca-curl.sh;
   };
 
-  hookProxy = writeShellScriptBin "agent-sandbox-hook-proxy" ''
-    exec ${lib.getExe python3} ${./hook-proxy.py} "$@"
-  '';
+  pythonScript =
+    name: python: script:
+    writeShellScriptBin name ''
+      exec ${lib.getExe python} ${script} "$@"
+    '';
 
-  prepareOrcaHooks = writeShellScriptBin "agent-sandbox-prepare-orca-hooks" ''
-    exec ${lib.getExe python3} ${./prepare-orca-hooks.py} "$@"
-  '';
+  hookProxy = pythonScript "agent-sandbox-hook-proxy" python3 ./hook-proxy.py;
+  prepareOrcaHooks = pythonScript "agent-sandbox-prepare-orca-hooks" python3 ./prepare-orca-hooks.py;
+  sandboxSteam = pythonScript "sandbox-steam" (python3.withPackages (ps: [
+    ps.vdf
+  ])) ./sandbox-steam.py;
 
-  sandboxSteam = writeShellScriptBin "sandbox-steam" ''
-    exec ${python3.withPackages (ps: [ ps.vdf ])}/bin/python ${./sandbox-steam.py} "$@"
-  '';
-
-  # The container PATH an agent with an Orca hook bridge runs with: the curl
-  # shim leads, so hook URLs route through the private relay socket.
-  orcaPath = "${orcaCurl}/bin:${env}/bin:/usr/bin";
-
-  # The desktop's pinned Hyprland, able to nest in the headless sway on the NVIDIA GPU: sway offers
-  # xdg_wm_base 5, not the 6 Aquamarine asks for, and NVIDIA's GBM can neither allocate the linear
-  # buffers Aquamarine requests for a nested output nor import the implicit-modifier ones it falls
-  # back to.
+  # The desktop's pinned Hyprland, patched to nest in the headless sway on the NVIDIA GPU. Sway
+  # offers xdg_wm_base 5, not the 6 Aquamarine asks for, and NVIDIA's GBM can neither allocate the
+  # linear buffers Aquamarine requests for a nested output nor import the implicit-modifier ones it
+  # falls back to.
   hyprland' = hyprland.override (old: {
     aquamarine = old.aquamarine.overrideAttrs (aquamarine: {
       patches = (aquamarine.patches or [ ]) ++ [ ./aquamarine-nested.patch ];
@@ -295,11 +294,11 @@ let
       gh
       ghidra
       git
-      glibc.bin
       git-commitu
       git-open-branch
       gitleaks
       glib
+      glibc.bin
       gnugrep
       gnumake
       gnupg
@@ -364,8 +363,8 @@ let
       tokei
       tree
       unrar
+      unreal.tools
       unzip
-      unreal.package
       usbutils
       vim
       vulkan-tools
@@ -398,6 +397,8 @@ let
     experimental-features = nix-command flakes
   '';
 
+  caBundle = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+
   # The image carries no store paths: the launcher mounts the host store read-only,
   # which also resolves the /run/opengl-driver symlinks that the NVIDIA CDI spec mounts.
   image = dockerTools.streamLayeredImage {
@@ -415,8 +416,8 @@ let
       ln -s ${fontconfig.out}/etc/fonts/conf.d etc/fonts/conf.d
       ln -s ${tzdata}/share/zoneinfo etc/zoneinfo
       # Steam's bundled libcurl ignores SSL_CERT_FILE and reads Debian's bundle path.
-      ln -s ${cacert}/etc/ssl/certs/ca-bundle.crt etc/ssl/certs/ca-bundle.crt
-      ln -s ${cacert}/etc/ssl/certs/ca-bundle.crt etc/ssl/certs/ca-certificates.crt
+      ln -s ${caBundle} etc/ssl/certs/ca-bundle.crt
+      ln -s ${caBundle} etc/ssl/certs/ca-certificates.crt
       ln -s ${./sway.conf} etc/sway/config
       ln -s ${./nested-sway.conf} etc/sway/nested
       ln -s ${./CLAUDE.md} etc/claude-code/CLAUDE.md
@@ -428,60 +429,56 @@ let
         "claude"
         "--dangerously-skip-permissions"
       ];
-      Env = [
-        "PATH=${env}/bin:/usr/bin"
-        "LANG=C.UTF-8"
-        "CLAUDE_CODE_SANDBOXED=1"
+      Env = lib.mapAttrsToList (name: value: "${name}=${value}") {
+        PATH = "${env}/bin:/usr/bin";
+        LANG = "C.UTF-8";
+        CLAUDE_CODE_SANDBOXED = "1";
         # Claude Code reads these only from its launch environment. They drop the rm prompts it
         # can skip; removing the working directory, its parents or $HOME still prompts.
-        "CLAUDE_CODE_DISABLE_SUBSTITUTION_RM_PROMPT=1"
-        "CLAUDE_CODE_DISABLE_INLINE_SHELL_RM_PROMPT=1"
-        "CLAUDE_CODE_DISABLE_MOUNTED_DRIVE_RM_PROMPT=1"
-        "ORCA_CLI_COMMAND=orca-ide"
-        "GI_TYPELIB_PATH=${
-          lib.makeSearchPath "lib/girepository-1.0" [
-            at-spi2-core
-            gobject-introspection
-          ]
-        }"
-        "LOCALE_ARCHIVE=${glibcLocales}/lib/locale/locale-archive"
+        CLAUDE_CODE_DISABLE_SUBSTITUTION_RM_PROMPT = "1";
+        CLAUDE_CODE_DISABLE_INLINE_SHELL_RM_PROMPT = "1";
+        CLAUDE_CODE_DISABLE_MOUNTED_DRIVE_RM_PROMPT = "1";
+        ORCA_CLI_COMMAND = "orca-ide";
+        GI_TYPELIB_PATH = lib.makeSearchPath "lib/girepository-1.0" [
+          at-spi2-core
+          gobject-introspection
+        ];
+        LOCALE_ARCHIVE = "${glibcLocales}/lib/locale/locale-archive";
         # As on NixOS: the host's /etc/localtime is mounted, and a TZ that names a zone resolves
         # through TZDIR for glibc and /etc/zoneinfo for readers that ignore TZDIR, such as chrono.
-        "TZDIR=/etc/zoneinfo"
-        "SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
-        "NIX_SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
-        "FONTCONFIG_FILE=${
-          makeFontsConf {
-            fontDirectories = [
-              dejavu_fonts
-              liberation_ttf
-            ];
-          }
-        }"
-        "NIX_REMOTE=daemon"
-        "NIX_LD=${glibc}/lib/ld-linux-x86-64.so.2"
-        "NIX_LD_LIBRARY_PATH=${unreal.runtime}"
-        "UNREAL_MCP_URL=${unrealMcp.url}"
-        "DISABLE_AUTOUPDATER=1"
-        "DBUS_SESSION_BUS_CONFIG=${dbus}/share/dbus-1/session.conf"
-        "WLR_BACKENDS=headless"
-        "WLR_HEADLESS_OUTPUTS=1"
-        "WLR_LIBINPUT_NO_DEVICES=1"
-        "XDG_SESSION_TYPE=wayland"
-        "WAYLAND_DISPLAY=wayland-1"
-        "MOZ_ENABLE_WAYLAND=1"
-        "NIXOS_OZONE_WL=1"
-        "PLAYWRIGHT_BROWSERS_PATH=${playwright-driver.browsers}"
-        "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true"
-        "CARGO_PROFILE_DEV_DEBUG=line-tables-only"
-        "CARGO_PROFILE_TEST_DEBUG=line-tables-only"
-        "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS=-C link-arg=-fuse-ld=mold"
+        TZDIR = "/etc/zoneinfo";
+        SSL_CERT_FILE = caBundle;
+        NIX_SSL_CERT_FILE = caBundle;
+        FONTCONFIG_FILE = "${makeFontsConf {
+          fontDirectories = [
+            dejavu_fonts
+            liberation_ttf
+          ];
+        }}";
+        NIX_REMOTE = "daemon";
+        NIX_LD = "${glibc}/lib/ld-linux-x86-64.so.2";
+        NIX_LD_LIBRARY_PATH = unreal.libraryPath;
+        UNREAL_MCP_URL = unrealMcp.url;
+        DISABLE_AUTOUPDATER = "1";
+        DBUS_SESSION_BUS_CONFIG = "${dbus}/share/dbus-1/session.conf";
+        WLR_BACKENDS = "headless";
+        WLR_HEADLESS_OUTPUTS = "1";
+        WLR_LIBINPUT_NO_DEVICES = "1";
+        XDG_SESSION_TYPE = "wayland";
+        WAYLAND_DISPLAY = "wayland-1";
+        MOZ_ENABLE_WAYLAND = "1";
+        NIXOS_OZONE_WL = "1";
+        PLAYWRIGHT_BROWSERS_PATH = "${playwright-driver.browsers}";
+        PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
+        CARGO_PROFILE_DEV_DEBUG = "line-tables-only";
+        CARGO_PROFILE_TEST_DEBUG = "line-tables-only";
+        CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS = "-C link-arg=-fuse-ld=mold";
         # The cache lands in the sandboxes' shared home, never the host's: a sandbox must not
         # write objects the host links. Each container runs its own server, so each enforces
         # the size cap on its own.
-        "RUSTC_WRAPPER=sccache"
-        "SCCACHE_CACHE_SIZE=50G"
-      ];
+        RUSTC_WRAPPER = "sccache";
+        SCCACHE_CACHE_SIZE = "50G";
+      };
     };
   };
 
@@ -495,6 +492,7 @@ let
       openssh
       procps
       systemd
+      util-linux
       wl-clipboard
     ];
     runtimeEnv = {
@@ -502,12 +500,14 @@ let
       # Prefix numeric-leading tags so ShellCheck does not mistake the generated
       # environment assignment for arithmetic (SC2100).
       AGENT_SANDBOX_TAG = "hash-${image.imageTag}";
-      AGENT_SANDBOX_ORCA_PATH = orcaPath;
+      # The PATH an agent with an Orca hook bridge runs with: the curl shim leads,
+      # so hook URLs route through the private relay socket.
+      AGENT_SANDBOX_ORCA_PATH = "${orcaCurl}/bin:${env}/bin:/usr/bin";
     };
     text = builtins.readFile ./agent-sandbox.sh;
   };
 
-  ssh = writeShellApplication {
+  sshProxy = writeShellApplication {
     name = "agent-sandbox-ssh";
     runtimeInputs = [
       coreutils
@@ -521,7 +521,6 @@ let
     name = "agent-sandbox-kill";
     runtimeInputs = [
       coreutils
-      gawk
       procps
       systemd
     ];
@@ -533,28 +532,27 @@ let
     runtimeInputs = [
       coreutils
       git
-      gnugrep
-      systemd
     ];
     runtimeEnv = {
       AGENT_SANDBOX_HOOK_PROXY = lib.getExe hookProxy;
       AGENT_SANDBOX_PREPARE_ORCA_HOOKS = lib.getExe prepareOrcaHooks;
       AGENT_SANDBOX_LAUNCHER = lib.getExe launcher;
-      AGENT_SANDBOX_ORCA_PATH = orcaPath;
     };
     text = builtins.readFile ./agent-sandbox-exec.sh;
   };
 in
 symlinkJoin {
   name = "agent-sandbox";
-  passthru.unrealTools = unreal.package;
-  passthru.unrealTests = unreal.tests;
+  passthru = {
+    unrealTools = unreal.tools;
+    unrealTests = unreal.tests;
+  };
   paths = [
     launcher
-    ssh
-    unreal.installer
     execAgent
+    unreal.installer
     killAll
+    sshProxy
   ];
   meta = {
     description = "Run Claude Code, Codex or Muse Code in a Docker sandbox with the GPU and a headless Wayland session";

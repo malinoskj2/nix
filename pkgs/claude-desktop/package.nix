@@ -41,11 +41,11 @@
   procps,
   replaceVars,
   systemd,
-  # A directory holding claude.css, injected into the claude.ai pages the app loads, shell.css,
-  # injected into the window's own page beneath them, and optionally claude.js, run in those
-  # pages, title-bar-symbol and title-bar-symbol-light, the colors for the native window
-  # controls in dark and light mode, and code-theme-dark, the Shiki theme pinned as the dark
-  # code theme. The main window becomes transparent, so the CSS paints its title bar.
+  # A directory with claude.css, injected into the claude.ai pages the app loads, and shell.css,
+  # injected into the window's own page beneath them. Optionally, claude.js runs in those pages,
+  # title-bar-symbol and title-bar-symbol-light color the native window controls in dark and
+  # light mode, and code-theme-dark names the Shiki theme pinned as the dark code theme. The
+  # main window becomes transparent, so the CSS paints its title bar.
   theme ? null,
   wayland,
   xdg-utils,
@@ -147,7 +147,7 @@ stdenv.mkDerivation (finalAttrs: {
     replace() {
       replaceRaw "\"$1\"" "\"$2\""
     }
-    replace /bin/bash ${lib.getExe bash}
+    replace /bin/bash ${bash}/bin/bash
     replace /bin/ps ${procps}/bin/ps
     replace /usr/bin/pgrep ${procps}/bin/pgrep
     replace /usr/bin/busctl ${systemd}/bin/busctl
@@ -165,18 +165,20 @@ stdenv.mkDerivation (finalAttrs: {
 
       # The hook goes after the directive so the minified main keeps strict mode.
       main=asar/.vite/build/index.pre.js
-      if [ "$(head -c 13 $main)" != '"use strict";' ]; then
-        echo "$main no longer starts with \"use strict\";" >&2
+      directive='"use strict";'
+      if [ "$(head -c ''${#directive} $main)" != "$directive" ]; then
+        echo "$main no longer starts with $directive" >&2
         exit 1
       fi
-      { printf '"use strict";'; cat ${themeHook}; tail -c +14 $main; } > main.js
+      { printf %s "$directive"; cat ${themeHook}; tail -c +$((''${#directive} + 1)) $main; } > main.js
       mv main.js $main
     ''}
     rm -r $app/resources/app.asar $app/resources/app.asar.unpacked
     asar pack asar $app/resources/app.asar \
       --unpack '*.node' --unpack-dir resources/github-mcp
 
-    # A shell and JavaScript polyglot: each shell line starts with a path that is also a JS comment.
+    # A shell and JavaScript polyglot: each shell line starts with a path that is also a JS comment,
+    # so the store path keeps the doubled slash.
     substituteInPlace $app/resources/claude-browser-shim.js \
       --replace-fail //usr/bin/true /${coreutils}/bin/true
 

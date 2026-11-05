@@ -5,16 +5,16 @@ import socket
 import subprocess
 import sys
 import tempfile
+import textwrap
 import time
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import automatic
 
 
 class ControllerTests(unittest.TestCase):
-    def test_native_owner_birth_and_inherited_token(self):
+    def test_native_owner_start_time_and_inherited_token(self):
         first, second = socket.socketpair()
         try:
             client = automatic.Client(first)
@@ -22,7 +22,7 @@ class ControllerTests(unittest.TestCase):
             self.assertTrue(client.read())
             self.assertEqual(second.recv(1), b"F")
             self.assertTrue(client.owns({"pid": os.getpid()}))
-            with patch.object(automatic, "birth", return_value=client.born + 1):
+            with patch.object(automatic, "start_time", return_value=client.start_time + 1):
                 self.assertFalse(client.owns({"pid": os.getpid()}))
             with patch.object(automatic, "environment_token", return_value="a" * 32):
                 self.assertTrue(client.owns({"pid": -1}))
@@ -64,7 +64,17 @@ class ControllerTests(unittest.TestCase):
             state.write_text(json.dumps({"clients": [], "activewindow": {}}))
             helper = base / "hyprctl"
             helper.write_text(
-                f"#!{sys.executable}\nimport json,pathlib,sys\ncommand=sys.argv[-1]\nif command=='instances': print('[{{\"instance\":\"test\"}}]')\nelif command=='monitors': print('[{{\"name\":\"DP-1\"}}]')\nelse: print(json.dumps(json.loads(pathlib.Path({str(state)!r}).read_text())[command]))\n"
+                textwrap.dedent(f"""\
+                    #!{sys.executable}
+                    import json, pathlib, sys
+                    command = sys.argv[-1]
+                    if command == "instances":
+                        print('[{{"instance": "test"}}]')
+                    elif command == "monitors":
+                        print('[{{"name": "DP-1"}}]')
+                    else:
+                        print(json.dumps(json.loads(pathlib.Path({str(state)!r}).read_text())[command]))
+                """)
             )
             helper.chmod(0o755)
             event_path = base / "hypr/test/.socket2.sock"
@@ -74,6 +84,7 @@ class ControllerTests(unittest.TestCase):
             events.listen()
             events.settimeout(3)
             control_path = base / "control.sock"
+            window = {"pid": os.getpid(), "address": "game"}
             environment = dict(
                 os.environ,
                 XDG_RUNTIME_DIR=str(base),
@@ -89,6 +100,12 @@ class ControllerTests(unittest.TestCase):
             client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             client.settimeout(3)
             connection = None
+
+            def update(active, event, expected):
+                state.write_text(json.dumps({"clients": [window], "activewindow": active}))
+                connection.sendall(event)
+                self.assertEqual(client.recv(1), expected)
+
             try:
                 deadline = time.monotonic() + 3
                 while not control_path.exists() and time.monotonic() < deadline:
@@ -97,16 +114,9 @@ class ControllerTests(unittest.TestCase):
                 client.sendall(b"v1 " + b"b" * 32 + b"\n")
                 self.assertEqual(client.recv(1), b"F")
                 connection, _ = events.accept()
-                window = {"pid": os.getpid(), "address": "game"}
-                state.write_text(json.dumps({"clients": [window], "activewindow": {}}))
-                connection.sendall(b"openwindow>>\n")
-                self.assertEqual(client.recv(1), b"B")
-                state.write_text(json.dumps({"clients": [window], "activewindow": {"address": "game"}}))
-                connection.sendall(b"activewindowv2>>\n")
-                self.assertEqual(client.recv(1), b"F")
-                state.write_text(json.dumps({"clients": [window], "activewindow": {}}))
-                connection.sendall(b"activewindowv2>>\n")
-                self.assertEqual(client.recv(1), b"B")
+                update({}, b"openwindow>>\n", b"B")
+                update({"address": "game"}, b"activewindowv2>>\n", b"F")
+                update({}, b"activewindowv2>>\n", b"B")
                 connection.close()
                 events.close()
                 self.assertEqual(client.recv(1), b"F")

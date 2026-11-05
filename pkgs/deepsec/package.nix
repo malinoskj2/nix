@@ -26,14 +26,15 @@ buildNpmPackage (finalAttrs: {
 
   npmDepsFetcherVersion = 2;
   npmDepsHash = "sha256-PXuzNaU0QJbONaSWWMxTEkgxRAQU6uBsUXGkH34AhS4=";
-  npmFlags = [ "--ignore-scripts" ];
-  dontNpmBuild = true;
 
   nativeBuildInputs = [ autoPatchelfHook ];
   buildInputs = [
     ncurses
     stdenv.cc.cc.lib
   ];
+
+  npmFlags = [ "--ignore-scripts" ];
+  dontNpmBuild = true;
 
   meta = {
     description = "Vercel's agent-powered vulnerability scanner";

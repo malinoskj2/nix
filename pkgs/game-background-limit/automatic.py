@@ -1,5 +1,3 @@
-"""Hyprland event-driven presentation limiter; loss of IPC fails open."""
-
 import os
 from pathlib import Path
 import re
@@ -13,8 +11,16 @@ import time
 
 from game_background_limit import EVENTS, hypr, physical_signature
 
+REGISTRATION_LIMIT = 128
+REGISTRATION_TIMEOUT = 2
+MAX_CLIENTS = 256
+EVENT_READ_SIZE = 65536
+EVENT_BUFFER_LIMIT = 1024 * 1024
+RETRY_DELAY = 1
+HYPRLAND_ERRORS = (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError)
 
-def birth(pid):
+
+def start_time(pid):
     try:
         text = Path(f"/proc/{pid}/stat").read_text()
         return int(text[text.rindex(")") + 2 :].split()[19])
@@ -38,20 +44,20 @@ class Client:
         self.pid, uid, _ = struct.unpack("3i", connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
         if uid != os.getuid():
             raise ValueError("foreign controller client")
-        self.born = birth(self.pid)
-        if self.born is None:
+        self.start_time = start_time(self.pid)
+        if self.start_time is None:
             raise ValueError("unavailable client identity")
         self.token = None
         self.buffer = b""
         self.command = None
-        self.deadline = time.monotonic() + 2
+        self.deadline = time.monotonic() + REGISTRATION_TIMEOUT
 
     def read(self):
-        data = self.connection.recv(128)
+        data = self.connection.recv(REGISTRATION_LIMIT)
         if not data:
             raise OSError("client disconnected")
         self.buffer += data
-        if len(self.buffer) > 128:
+        if len(self.buffer) > REGISTRATION_LIMIT:
             raise ValueError("oversized registration")
         if b"\n" in self.buffer:
             if self.token is not None or not re.fullmatch(rb"v1 [0-9a-f]{32}\n", self.buffer):
@@ -72,7 +78,7 @@ class Client:
 
     def owns(self, window):
         pid = window.get("pid")
-        return (pid == self.pid and birth(pid) == self.born) or (
+        return (pid == self.pid and start_time(pid) == self.start_time) or (
             self.token is not None and environment_token(pid) == self.token
         )
 
@@ -91,12 +97,13 @@ def reconcile(signature, clients):
             client.set_background(bool(owned) and not focused)
 
 
-def main():
+def control_path():
     cache = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "game-background-limit"
     cache.mkdir(mode=0o700, parents=True, exist_ok=True)
-    path = Path(os.environ.get("GAME_BACKGROUND_LIMIT_SOCKET", cache / "control.sock"))
-    selector = selectors.DefaultSelector()
-    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    return Path(os.environ.get("GAME_BACKGROUND_LIMIT_SOCKET", cache / "control.sock"))
+
+
+def listen(path):
     # Do not unlink another controller's live endpoint.
     if path.exists():
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
@@ -106,129 +113,158 @@ def main():
                 path.unlink()
             else:
                 raise OSError("background limiter controller already running")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.bind(str(path))
     path.chmod(0o600)
     server.listen(64)
     server.setblocking(False)
-    selector.register(server, selectors.EVENT_READ, "server")
-    wake_read, wake_write = socket.socketpair()
-    wake_read.setblocking(False)
-    wake_write.setblocking(False)
-    selector.register(wake_read, selectors.EVENT_READ, "signal")
-    clients = {}
-    events = None
-    signature = None
-    buffered = b""
-    retry = 0
-    stopping = False
+    return server
 
-    def stop(_signum, _frame):
-        nonlocal stopping
-        stopping = True
+
+class Controller:
+    def __init__(self, path):
+        self.path = path
+        self.server = listen(path)
+        self.selector = selectors.DefaultSelector()
+        self.selector.register(self.server, selectors.EVENT_READ, self.accept)
+        self.wake_read, self.wake_write = socket.socketpair()
+        self.wake_read.setblocking(False)
+        self.wake_write.setblocking(False)
+        self.selector.register(self.wake_read, selectors.EVENT_READ, lambda _wake: False)
+        self.clients = {}
+        self.events = None
+        self.signature = None
+        self.buffered = b""
+        self.retry = 0
+        self.stopping = False
+
+    def stop(self, _signum, _frame):
+        self.stopping = True
         try:
-            wake_write.send(b"\0")
+            self.wake_write.send(b"\0")
         except OSError:
             pass
 
-    def disconnect_events():
-        nonlocal events, signature, retry, buffered
-        if events is not None:
-            selector.unregister(events)
-            events.close()
-        events, signature, buffered = None, None, b""
-        retry = time.monotonic() + 1
-        for connection, client in list(clients.items()):
+    def connect_events(self):
+        try:
+            self.signature = physical_signature()
+            candidate = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                candidate.settimeout(2)
+                candidate.connect(str(Path(os.environ["XDG_RUNTIME_DIR"]) / "hypr" / self.signature / ".socket2.sock"))
+            except Exception:
+                candidate.close()
+                raise
+            candidate.setblocking(False)
+            self.events = candidate
+            self.selector.register(self.events, selectors.EVENT_READ, self.read_events)
+            reconcile(self.signature, self.clients)
+        except HYPRLAND_ERRORS as error:
+            print(f"game-background-limit: uncapped: {error}", file=sys.stderr)
+            self.disconnect_events()
+
+    def disconnect_events(self):
+        if self.events is not None:
+            self.selector.unregister(self.events)
+            self.events.close()
+        self.events, self.signature, self.buffered = None, None, b""
+        self.retry = time.monotonic() + RETRY_DELAY
+        for connection, client in list(self.clients.items()):
             try:
                 client.set_background(False)
             except OSError:
-                remove_client(connection)
+                self.remove_client(connection)
 
-    def remove_client(connection):
-        selector.unregister(connection)
-        connection.close()  # EOF wakes the engine immediately and clears its cap.
-        clients.pop(connection, None)
+    def remove_client(self, connection):
+        self.selector.unregister(connection)
+        # EOF wakes the engine immediately and clears its cap.
+        connection.close()
+        self.clients.pop(connection, None)
 
-    signal.signal(signal.SIGTERM, stop)
-    signal.signal(signal.SIGINT, stop)
-    try:
-        while not stopping:
-            if events is None and time.monotonic() >= retry:
-                try:
-                    signature = physical_signature()
-                    candidate = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    def accept(self, server):
+        connection, _ = server.accept()
+        connection.setblocking(False)
+        try:
+            if len(self.clients) >= MAX_CLIENTS:
+                raise ValueError("too many limiter clients")
+            self.clients[connection] = Client(connection)
+            self.selector.register(connection, selectors.EVENT_READ, self.read_client)
+        except (OSError, ValueError):
+            connection.close()
+        return False
+
+    def read_client(self, connection):
+        if connection not in self.clients:
+            return False
+        try:
+            return self.clients[connection].read()
+        except (OSError, ValueError):
+            self.remove_client(connection)
+            return True
+
+    def read_events(self, events):
+        try:
+            data = events.recv(EVENT_READ_SIZE)
+            if not data:
+                raise OSError("Hyprland disconnected")
+            self.buffered += data
+            if len(self.buffered) > EVENT_BUFFER_LIMIT:
+                raise ValueError("oversized Hyprland event")
+            lines = self.buffered.split(b"\n")
+            self.buffered = lines.pop()
+            return any(line.partition(b">>")[0].decode() in EVENTS for line in lines)
+        except (OSError, ValueError):
+            self.disconnect_events()
+            return False
+
+    def timeout(self):
+        pending = [client.deadline for client in self.clients.values() if not client.token]
+        timeout = None if self.events is not None else max(0, self.retry - time.monotonic())
+        if pending:
+            remaining = max(0, min(pending) - time.monotonic())
+            timeout = remaining if timeout is None else min(timeout, remaining)
+        return timeout
+
+    def expire_registrations(self):
+        for connection, client in list(self.clients.items()):
+            if not client.token and time.monotonic() >= client.deadline:
+                self.remove_client(connection)
+
+    def run(self):
+        try:
+            while not self.stopping:
+                if self.events is None and time.monotonic() >= self.retry:
+                    self.connect_events()
+                ready = self.selector.select(self.timeout())
+                if self.stopping:
+                    break
+                changed = False
+                for key, _ in ready:
+                    changed |= key.data(key.fileobj)
+                self.expire_registrations()
+                if changed and self.events is not None:
                     try:
-                        candidate.settimeout(2)
-                        candidate.connect(
-                            str(Path(os.environ["XDG_RUNTIME_DIR"]) / "hypr" / signature / ".socket2.sock")
-                        )
-                    except Exception:
-                        candidate.close()
-                        raise
-                    candidate.setblocking(False)
-                    events = candidate
-                    selector.register(events, selectors.EVENT_READ, "hypr")
-                    reconcile(signature, clients)
-                except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
-                    print(f"game-background-limit: uncapped: {error}", file=sys.stderr)
-                    disconnect_events()
-            changed = False
-            pending = [client.deadline for client in clients.values() if not client.token]
-            timeout = None if events is not None else max(0, retry - time.monotonic())
-            if pending:
-                remaining = max(0, min(pending) - time.monotonic())
-                timeout = remaining if timeout is None else min(timeout, remaining)
-            ready = selector.select(timeout)
-            if stopping:
-                break
-            for key, _ in ready:
-                if key.data == "server":
-                    connection, _ = server.accept()
-                    connection.setblocking(False)
-                    try:
-                        if len(clients) >= 256:
-                            raise ValueError("too many limiter clients")
-                        client = Client(connection)
-                        clients[connection] = client
-                        selector.register(connection, selectors.EVENT_READ, "client")
-                    except (OSError, ValueError):
-                        connection.close()
-                elif key.data == "client":
-                    if key.fileobj not in clients:
-                        continue
-                    try:
-                        changed |= clients[key.fileobj].read()
-                    except (OSError, ValueError):
-                        remove_client(key.fileobj)
-                        changed = True
-                elif key.data == "hypr":
-                    try:
-                        data = events.recv(65536)
-                        if not data:
-                            raise OSError("Hyprland disconnected")
-                        buffered += data
-                        if len(buffered) > 1024 * 1024:
-                            raise ValueError("oversized Hyprland event")
-                        lines = buffered.split(b"\n")
-                        buffered = lines.pop()
-                        changed |= any(line.partition(b">>")[0].decode() in EVENTS for line in lines)
-                    except (OSError, ValueError):
-                        disconnect_events()
-            for connection, client in list(clients.items()):
-                if not client.token and time.monotonic() >= client.deadline:
-                    remove_client(connection)
-            if changed and events is not None:
-                try:
-                    reconcile(signature, clients)
-                except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
-                    disconnect_events()
-    finally:
-        for connection in list(clients):
-            remove_client(connection)
-        if events is not None:
-            events.close()
-        server.close()
-        wake_read.close()
-        wake_write.close()
-        selector.close()
-        path.unlink(missing_ok=True)
+                        reconcile(self.signature, self.clients)
+                    except HYPRLAND_ERRORS:
+                        self.disconnect_events()
+        finally:
+            self.close()
+
+    def close(self):
+        for connection in list(self.clients):
+            self.remove_client(connection)
+        if self.events is not None:
+            self.events.close()
+        self.server.close()
+        self.wake_read.close()
+        self.wake_write.close()
+        self.selector.close()
+        self.path.unlink(missing_ok=True)
+
+
+def main():
+    controller = Controller(control_path())
+    signal.signal(signal.SIGTERM, controller.stop)
+    signal.signal(signal.SIGINT, controller.stop)
+    controller.run()
     return 0

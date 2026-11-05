@@ -104,7 +104,11 @@ once, without a Local Network Access prompt, and that an RPC client's activity
 shows on your profile. Firefox changes to AutoConfig, `registerWindowActor`
 (including `safeForUntrustedWebProcess`) or the `LocalNetworkAccess` policy
 fail silently. To move the bridge mod, change the commit in its URL and refresh
-its hash.
+its hash, then rebase
+[`bridge-mod.patch`](../users/jesse/arrpc/bridge-mod.patch). It matches
+Discord's Flux dispatcher by its class's methods, because Discord's i18n
+messages Proxy answers every property and wins upstream's duck-typed search.
+That failure is silent too: the activity reaches the tab and shows nowhere.
 
 ## Inputs pinned to a commit
 
@@ -201,8 +205,10 @@ Treat a bump as a hardware change and test it on the device.
   `useMonacoTheme`, and the Markdown TextMate tokens redefine each theme with
   Shiki's rules, so the patch adds Shiki's `catppuccin-mocha` rules there. Rebase
   [`glass-titlebar.patch`](../pkgs/orca-ade/glass-titlebar.patch) when Orca
-  changes its Electron window options or top-bar layout, then confirm only the
-  36px titlebar band shows compositor blur. Rebase
+  changes its top-bar layout. It relies on the `windowMaterial = "translucent"`
+  setting in [`features/desktop.nix`](../users/jesse/features/desktop.nix) for
+  an alpha-capable window; confirm only the 36px titlebar band shows compositor
+  blur. Rebase
   [`claude-hooks.patch`](../pkgs/orca-ade/claude-hooks.patch): it keeps Orca out
   of the read-only `~/.claude/settings.json` by writing its hooks to
   `~/.orca/agent-hooks/claude-settings.json` and passing that file with
@@ -223,7 +229,8 @@ Treat a bump as a hardware change and test it on the device.
   one pinned commit; to move it, change `rev` and refresh its hash. The
   `postPatch` merges `discordPresenceSettings` into the plugin's compiled
   defaults, lets its URL and token settings fall back to them (upstream reads
-  those only from saved settings) and turns off its panel rewrite, all with
+  those only from saved settings), turns off its panel rewrite and changes its
+  generic details line to "Working in Orca ADE", all with
   `--replace-fail` against `dist/main.js`. The `postPatch` also edits upstream source in place: it drops
   the AppImage's glibc floor check and its downloaded Node runtime, skips the
   Docker build of the Wayland clipboard helper, which `buildPhase` compiles

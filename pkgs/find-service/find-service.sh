@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-readonly network=192.168.1.0/24
+readonly home_lan=192.168.1.0/24
 
 usage() {
   cat <<'EOF'
@@ -23,4 +23,4 @@ case "${1:-}" in
     ;;
 esac
 
-nmap --open -p "$port" "$network" | awk '/scan report/ { print $5 }'
+nmap --open -p "$port" "$home_lan" | awk '/scan report/ { print $5 }'

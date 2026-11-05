@@ -1,10 +1,3 @@
-"""Single-hue icons get their accent moved to the nearest Catppuccin accent (keeping each shade's
-relative lightness) and their grays mapped onto the Mocha neutrals. Glyphs drawn on the light paper
-sheet use Latte accents, which are made for light backgrounds; on a colored sheet, where Mocha's
-pastels are too light for white glyphs, the glyphs turn dark. Icons with several hues are logos,
-so only their paper sheet is recolored.
-"""
-
 import argparse
 import json
 import math
@@ -29,9 +22,9 @@ NEUTRAL_STOPS = [
 # Papirus's light paper sheet and its highlight.
 PAPIRUS_PAPER = "e4e4e4"
 PAPIRUS_PAPER_HIGHLIGHT = "fafafa"
-# The top stop and the paper highlight are a little lighter than any Mocha color.
+# The top neutral stop and the recolored paper highlight are a little lighter than any Mocha color.
 TOP_NEUTRAL = "e6eaf9"
-PAPER_HIGHLIGHT = "e1e6f8"
+RECOLORED_PAPER_HIGHLIGHT = "e1e6f8"
 # Lightness of a typical Papirus accent.
 REFERENCE_LIGHTNESS = 0.62
 # Shades keep this share of their lightness offset from the reference, within these bounds.
@@ -169,6 +162,11 @@ def recolor_tag(
     return HEX_COLOR.sub(recolor_hex, tag)
 
 
+# Single-hue icons get their accent moved to the nearest Catppuccin accent (keeping each shade's
+# relative lightness) and their grays mapped onto the Mocha neutrals. Glyphs drawn on the light
+# paper sheet use Latte accents, which are made for light backgrounds; on a colored sheet, where
+# Mocha's pastels are too light for white glyphs, the glyphs turn dark. Icons with several hues are
+# logos, so only their paper sheet is recolored.
 def recolor(svg: str, scheme: Scheme) -> str:
     colors = {expand_hex(color) for color in HEX_COLOR.findall(svg)}
     hues = [hue for _, chroma, hue in map(to_oklch, colors) if chroma > GRAY_CHROMA]
@@ -193,7 +191,7 @@ def load_scheme(palette_file: Path) -> Scheme:
         latte_accents=[to_oklch(latte[accent]) for accent in ACCENTS],
         glyph=mocha["base"],
         neutrals=[(stop, mocha[neutral]) for stop, neutral in NEUTRAL_STOPS] + [(1.00, TOP_NEUTRAL)],
-        paper={PAPIRUS_PAPER: mocha["text"], PAPIRUS_PAPER_HIGHLIGHT: PAPER_HIGHLIGHT},
+        paper={PAPIRUS_PAPER: mocha["text"], PAPIRUS_PAPER_HIGHLIGHT: RECOLORED_PAPER_HIGHLIGHT},
     )
 
 
@@ -207,22 +205,28 @@ def mirror_theme(source: Path, destination: Path, scheme: Scheme) -> None:
         size_copy = destination / size_dir.name
         if "@" in size_dir.name:
             size_copy.symlink_to(size_dir.readlink())
-            continue
-        size_copy.mkdir()
+        else:
+            mirror_size(size_dir, size_copy, scheme)
 
-        for context_dir in size_dir.iterdir():
-            context_copy = size_copy / context_dir.name
-            if context_dir.name != "mimetypes":
-                context_copy.symlink_to(context_dir.resolve())
-                continue
-            context_copy.mkdir()
 
-            for icon in context_dir.iterdir():
-                icon_copy = context_copy / icon.name
-                if icon.is_symlink() and "/" not in str(icon.readlink()):
-                    icon_copy.symlink_to(icon.readlink())
-                else:
-                    icon_copy.write_text(recolor(icon.read_text(), scheme))
+def mirror_size(size_dir: Path, size_copy: Path, scheme: Scheme) -> None:
+    size_copy.mkdir()
+    for context_dir in size_dir.iterdir():
+        context_copy = size_copy / context_dir.name
+        if context_dir.name == "mimetypes":
+            recolor_icons(context_dir, context_copy, scheme)
+        else:
+            context_copy.symlink_to(context_dir.resolve())
+
+
+def recolor_icons(context_dir: Path, context_copy: Path, scheme: Scheme) -> None:
+    context_copy.mkdir()
+    for icon in context_dir.iterdir():
+        icon_copy = context_copy / icon.name
+        if icon.is_symlink() and "/" not in str(icon.readlink()):
+            icon_copy.symlink_to(icon.readlink())
+        else:
+            icon_copy.write_text(recolor(icon.read_text(), scheme))
 
 
 def main() -> None:

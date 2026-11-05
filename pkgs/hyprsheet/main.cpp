@@ -54,6 +54,10 @@ static struct {
 
 class CSheetTransformer;
 
+static void notifyError(const std::string& message) {
+    HyprlandAPI::addNotification(PHANDLE, message, CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
+}
+
 // A window from its creation until it maps, in case it turns out to be a chooser. The parent is only a
 // guess from focus, for clients that don't name one through xdg-foreign.
 struct SPendingChooser {
@@ -91,9 +95,10 @@ struct SSheet {
     float                       lastProgress = 0.F;
     WP<SSheet>                  self;
 
-    bool                        isClosing() const {
+    bool isClosing() const {
         return phase == ESheetPhase::Closing;
     }
+
     bool isOpen() const {
         return phase == ESheetPhase::Open;
     }
@@ -114,12 +119,12 @@ struct SSheet {
     }
 
     static SP<SSheet> create(const PHLWINDOW& chooser, const PHLWINDOW& parent);
-    void              open(const PHLWINDOW& chooser, const PHLWINDOW& parent);
+    void              start(const PHLWINDOW& chooser, const PHLWINDOW& parent);
     void              hideParent();
     void              showParent();
     void              damageChooser();
     void              damage();
-    void              settleIfStill(float progress);
+    void              settleIfStill(float currentProgress);
     void              onProgressUpdate();
     void              onProgressEnd();
     void              close(const PHLWINDOW& window);
@@ -131,20 +136,41 @@ static std::vector<SP<SSheet>>          sheets;
 static std::vector<CHyprSignalListener> listeners;
 static CFunctionHook*                   fadeoutCreateHook = nullptr;
 
-static bool                             isChooserClass(const std::string& cls) {
-    const auto PATTERN = configValues.windowClass->value();
-    if (PATTERN.empty())
+static bool isChooserClass(const std::string& cls) {
+    static std::string pattern;
+    static std::regex  regex;
+    static bool        valid = false;
+
+    const auto CONFIGURED = configValues.windowClass->value();
+    if (CONFIGURED.empty())
         return false;
 
-    // an invalid regex must not throw inside the compositor
-    try {
-        return std::regex_match(cls, std::regex(PATTERN));
-    } catch (const std::regex_error&) { return false; }
+    // An invalid regex must not throw inside the compositor.
+    if (CONFIGURED != pattern) {
+        pattern = CONFIGURED;
+        try {
+            regex = std::regex(pattern);
+            valid = true;
+        } catch (const std::regex_error&) { valid = false; }
+    }
+
+    return valid && std::regex_match(cls, regex);
 }
 
-static SSheet* sheetFor(const PHLWINDOW& w, bool asParent) {
-    const auto IT = std::ranges::find_if(sheets, [&](const auto& s) { return (asParent ? s->parent : s->chooser).get() == w.get(); });
+static SSheet* sheetForChooser(const PHLWINDOW& w) {
+    const auto IT = std::ranges::find_if(sheets, [&](const auto& s) { return s->chooser.get() == w.get(); });
     return IT == sheets.end() ? nullptr : IT->get();
+}
+
+static SSheet* sheetForParent(const PHLWINDOW& w) {
+    const auto IT = std::ranges::find_if(sheets, [&](const auto& s) { return s->parent.get() == w.get(); });
+    return IT == sheets.end() ? nullptr : IT->get();
+}
+
+static SSheet* sheetFor(const PHLWINDOW& w) {
+    if (auto* sheet = sheetForParent(w))
+        return sheet;
+    return sheetForChooser(w);
 }
 
 static CBox lerpBox(const CBox& a, const CBox& b, float t) {
@@ -156,7 +182,7 @@ static CBox lerpBox(const CBox& a, const CBox& b, float t) {
 // and the fading is done well before the spring settles.
 constexpr float FADE_SPAN = 0.35F;
 
-static float    incomingAlpha(float travelled) {
+static float incomingAlpha(float travelled) {
     return std::clamp(travelled / FADE_SPAN, 0.F, 1.F);
 }
 
@@ -166,6 +192,11 @@ static float outgoingAlpha(float travelled) {
 
 static CBox currentBox(const PHLWINDOW& w) {
     return {w->position(IGeometric::GEOMETRIC_CURRENT), w->size(IGeometric::GEOMETRIC_CURRENT)};
+}
+
+static Vector2D renderOffset(const PHLWINDOW& w, const PHLMONITOR& monitor) {
+    const auto WORKSPACE = w->m_workspace;
+    return (w->m_pinned || !WORKSPACE ? Vector2D{} : WORKSPACE->m_renderOffset->value()) + w->m_floatingOffset - monitor->m_position;
 }
 
 // Where the parent is drawn once the sheet has opened: the chooser as it is now, in case it has
@@ -211,11 +242,10 @@ class CSheetTransformer : public Render::IWindowTransformer {
         if (ALPHA <= 0.F)
             return OUT;
 
-        const auto WORKSPACE = WINDOW->m_workspace;
-        const auto OFFSET    = (WINDOW->m_pinned || !WORKSPACE ? Vector2D{} : WORKSPACE->m_renderOffset->value()) + WINDOW->m_floatingOffset - MONITOR->m_position;
-        const auto FROM      = OWN.copy().translate(OFFSET).scale(MONITOR->m_scale);
-        auto       to        = m_sheet->isOpen() ? FROM.copy().scaleFromCenter(m_sheet->dip->value()) :
-                                                   lerpBox(currentBox(PARENT), targetBox(m_sheet), PROGRESS).translate(OFFSET).scale(MONITOR->m_scale);
+        const auto OFFSET = renderOffset(WINDOW, MONITOR);
+        const auto FROM   = OWN.copy().translate(OFFSET).scale(MONITOR->m_scale);
+        auto       to     = m_sheet->isOpen() ? FROM.copy().scaleFromCenter(m_sheet->dip->value()) :
+                                                lerpBox(currentBox(PARENT), targetBox(m_sheet), PROGRESS).translate(OFFSET).scale(MONITOR->m_scale);
 
         // Within two pixels of the window's own size it's drawn at that size on whole pixels, so it isn't
         // resampled as it comes to rest and looks the same once the sheet ends.
@@ -379,11 +409,11 @@ void SSheet::onProgressEnd() {
 SP<SSheet> SSheet::create(const PHLWINDOW& chooser, const PHLWINDOW& parent) {
     auto sheet  = makeShared<SSheet>();
     sheet->self = sheet;
-    sheet->open(chooser, parent);
+    sheet->start(chooser, parent);
     return sheet;
 }
 
-void SSheet::open(const PHLWINDOW& window, const PHLWINDOW& parentWindow) {
+void SSheet::start(const PHLWINDOW& window, const PHLWINDOW& parentWindow) {
     chooser = window;
     parent  = parentWindow;
     into    = {window->position(IGeometric::GEOMETRIC_GOAL), window->size(IGeometric::GEOMETRIC_GOAL)};
@@ -500,7 +530,7 @@ static PHLWINDOW parentFor(const PHLWINDOW& chooser) {
 
 static bool sheetable(const PHLWINDOW& chooser, const PHLWINDOW& parent) {
     return Desktop::View::validMapped(parent) && parent != chooser && chooser->m_isFloating && parent->m_workspace && parent->m_workspace == chooser->m_workspace &&
-        !sheetFor(parent, true) && !sheetFor(parent, false);
+        !sheetFor(parent);
 }
 
 // Hyprland centres a chooser only on a parent named through xdg-foreign, and not within the monitor:
@@ -541,32 +571,29 @@ static void onWindowOpenLate(PHLWINDOW w) {
 }
 
 static void onWindowClose(PHLWINDOW w) {
-    auto* sheet = sheetFor(w, true);
-    if (!sheet)
-        sheet = sheetFor(w, false);
-    if (sheet)
+    if (auto* sheet = sheetFor(w))
         sheet->close(w);
 }
 
-typedef SP<Desktop::CWindowFadeout> (*origFadeoutCreate)(PHLWINDOW, SP<Render::IFramebuffer>, float);
+using origFadeoutCreate = SP<Desktop::CWindowFadeout> (*)(PHLWINDOW, SP<Render::IFramebuffer>, float);
 
 // The closing chooser's snapshot grows back out into the parent's box on the curve the parent grows
 // back on.
 static SP<Desktop::CWindowFadeout> hkFadeoutCreate(PHLWINDOW window, SP<Render::IFramebuffer> snapshot, float sourceAlpha) {
-    auto  fadeout = ((origFadeoutCreate)fadeoutCreateHook->m_original)(window, snapshot, sourceAlpha);
+    auto  fadeout = reinterpret_cast<origFadeoutCreate>(fadeoutCreateHook->m_original)(window, snapshot, sourceAlpha);
 
-    auto* SHEET = window ? sheetFor(window, false) : nullptr;
-    if (!fadeout || !SHEET || !SHEET->isClosing())
+    auto* sheet = window ? sheetForChooser(window) : nullptr;
+    if (!fadeout || !sheet || !sheet->isClosing())
         return fadeout;
 
-    const auto PARENT = SHEET->parent.lock();
+    const auto PARENT = sheet->parent.lock();
     if (!PARENT)
         return fadeout;
 
     const auto POUT = Config::animationTree()->getAnimationPropertyConfig("hyprsheetOut");
     const auto TO   = currentBox(PARENT);
 
-    auto       retarget = [&POUT](auto& var, const auto& goal) {
+    auto retarget = [&POUT](auto& var, const auto& goal) {
         var->setConfig(POUT);
         var->setValueAndWarp(var->value());
         *var = goal;
@@ -574,8 +601,8 @@ static SP<Desktop::CWindowFadeout> hkFadeoutCreate(PHLWINDOW window, SP<Render::
 
     retarget(fadeout->m_realPosition, TO.pos());
     retarget(fadeout->m_realSize, TO.size());
-    fadeout->m_alpha->setValueAndWarp(outgoingAlpha(1.F - SHEET->progress->value()));
-    SHEET->chooserFadeout = fadeout;
+    fadeout->m_alpha->setValueAndWarp(outgoingAlpha(1.F - sheet->progress->value()));
+    sheet->chooserFadeout = fadeout;
 
     return fadeout;
 }
@@ -594,7 +621,7 @@ static void onWindowActive(PHLWINDOW w, Desktop::eFocusReason reason) {
     if (LAST.lock() == w || reason == Desktop::FOCUS_REASON_NEW_WINDOW || reason == Desktop::FOCUS_REASON_FFM)
         return;
 
-    auto* sheet = sheetFor(w, false);
+    auto* sheet = sheetForChooser(w);
     if (!sheet || !sheet->isOpen() || sheet->dip->isBeingAnimated())
         return;
 
@@ -626,11 +653,7 @@ static void onWindowDestroy() {
 
 // Either window leaving the workspace the two share ends the sheet at once.
 static void onWindowMoveToWorkspace(PHLWINDOW w) {
-    auto* sheet = sheetFor(w, true);
-    if (!sheet)
-        sheet = sheetFor(w, false);
-
-    if (sheet)
+    if (auto* sheet = sheetFor(w))
         removeSheet(sheet);
 }
 
@@ -642,20 +665,19 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     PHANDLE = handle;
 
     if (std::string{__hyprland_api_get_hash()} != __hyprland_api_get_client_hash()) {
-        HyprlandAPI::addNotification(PHANDLE, "[hyprsheet] Version mismatch (headers ver is not equal to running hyprland ver)", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
+        notifyError("[hyprsheet] Version mismatch (headers ver is not equal to running hyprland ver)");
         throw std::runtime_error("[hyprsheet] Version mismatch");
     }
 
     // Hyprland pairs matches with demangled names by a line count that drifts past any symbol dlsym
     // can't resolve, so this matches the mangled name.
-    for (auto& fn : HyprlandAPI::findFunctionsByName(PHANDLE, "_ZN7Desktop14CWindowFadeout6createE")) {
-        fadeoutCreateHook = HyprlandAPI::createFunctionHook(PHANDLE, fn.address, (void*)&hkFadeoutCreate);
-        break;
-    }
+    const auto FADEOUT_CREATE = HyprlandAPI::findFunctionsByName(PHANDLE, "_ZN7Desktop14CWindowFadeout6createE");
+    if (!FADEOUT_CREATE.empty())
+        fadeoutCreateHook = HyprlandAPI::createFunctionHook(PHANDLE, FADEOUT_CREATE.front().address, reinterpret_cast<void*>(&hkFadeoutCreate));
 
     if (!fadeoutCreateHook || !fadeoutCreateHook->hook()) {
         fadeoutCreateHook = nullptr;
-        HyprlandAPI::addNotification(PHANDLE, "[hyprsheet] Failed to hook CWindowFadeout::create", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
+        notifyError("[hyprsheet] Failed to hook CWindowFadeout::create");
         throw std::runtime_error("[hyprsheet] hook failed");
     }
 
@@ -683,7 +705,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     listeners.emplace_back(Event::bus()->m_events.window.moveToWorkspace.listen([](PHLWINDOW w, PHLWORKSPACE) { onWindowMoveToWorkspace(w); }));
     listeners.emplace_back(Event::bus()->m_events.window.active.listen([](PHLWINDOW w, Desktop::eFocusReason r) { onWindowActive(w, r); }));
 
-    return {"hyprsheet", "Draws a file chooser's parent scaled into it", "jesse", "1.0"};
+    return {"hyprsheet", "Draws a file chooser's parent window scaled into the chooser while it's open", "jesse", "1.0"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {

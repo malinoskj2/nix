@@ -67,10 +67,19 @@ ISO; follow [`mac-vm.md`](mac-vm.md).
 ### `home`: Secure Boot
 
 `home` boots through Limine with Secure Boot, and the Limine installer stops if
-no sbctl keys exist. Before the first switch, follow the one-time setup at the
-top of [`hosts/home/boot.nix`](../hosts/home/boot.nix). Its switch step is the
-`nixos-rebuild switch` above, and until that switch installs sbctl, run it
-through `nix-shell -p sbctl`.
+no sbctl keys exist. Before the first switch, set it up once, before enabling
+Secure Boot in firmware:
+
+1. Put Secure Boot into Setup Mode (clear the enrolled keys).
+2. Run `sudo sbctl create-keys`.
+3. Run `sudo sbctl enroll-keys -m -f`; `-m` keeps Microsoft's CAs so Windows
+   still boots.
+4. Switch, then check with `sudo sbctl verify`.
+5. Enable Secure Boot in firmware.
+
+The switch is the `nixos-rebuild switch` above on a fresh install, or
+`nh os switch` once the flake is applied. Until that switch installs sbctl, run
+sbctl through `nix-shell -p sbctl`.
 
 ### `home`: SSH into agent sandboxes
 

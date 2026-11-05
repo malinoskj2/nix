@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Each connected monitor gets a wallpaper@<monitor>.service, which systemd restarts when mpvpaper
-# exits. mpvpaper outlives its monitor without drawing anything, so the instance is stopped when
-# the monitor goes.
 
 find_hyprland_socket() {
   local candidate
@@ -41,6 +38,29 @@ wallpaper_unit() {
   systemctl --user "$verb" --no-block "$unit" || true
 }
 
+follow_monitors() {
+  local -a monitors
+  local monitor line
+
+  mapfile -t monitors < <(hyprctl -j monitors | jq -r '.[].name')
+  ((${#monitors[@]} > 0)) || return 1
+
+  wallpaper-randomize "${monitors[@]}"
+  for monitor in "${monitors[@]}"; do
+    # An instance left from before this service restarted still plays its old video.
+    wallpaper_unit restart "$monitor"
+  done
+
+  # mpvpaper outlives its monitor without drawing anything, so the instance is stopped when the
+  # monitor goes.
+  while read -r line; do
+    case "$line" in
+      monitoradded\>\>*) wallpaper_unit start "${line#*>>}" ;;
+      monitorremoved\>\>*) wallpaper_unit stop "${line#*>>}" ;;
+    esac
+  done
+}
+
 # The user unit can start before Hyprland's environment reaches systemd, so the script waits for
 # the compositor socket and derives the signature from it when needed. On failure, systemd
 # restarts the service.
@@ -58,20 +78,4 @@ fi
 
 # The listener is connected before the monitors are listed, so a monitor added in between is
 # started twice rather than missed. The script ends with the compositor, when the socket closes.
-socat -u "UNIX-CONNECT:$socket" - | {
-  mapfile -t monitors < <(hyprctl -j monitors | jq -r '.[].name')
-  ((${#monitors[@]} > 0)) || exit 1
-
-  wallpaper-randomize "${monitors[@]}"
-  for monitor in "${monitors[@]}"; do
-    # An instance left from before this service restarted still plays its old video.
-    wallpaper_unit restart "$monitor"
-  done
-
-  while read -r line; do
-    case "$line" in
-      monitoradded\>\>*) wallpaper_unit start "${line#*>>}" ;;
-      monitorremoved\>\>*) wallpaper_unit stop "${line#*>>}" ;;
-    esac
-  done
-}
+socat -u "UNIX-CONNECT:$socket" - | follow_monitors

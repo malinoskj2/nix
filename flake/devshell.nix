@@ -1,11 +1,7 @@
+{ lib, ... }:
 {
   perSystem =
-    {
-      config,
-      lib,
-      pkgs,
-      ...
-    }:
+    { config, pkgs, ... }:
     let
       # Editors call the formatters directly, and ruff-check and ruff-format share one package.
       formatters = lib.unique (lib.attrValues config.treefmt.build.programs);

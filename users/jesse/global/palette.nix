@@ -1,5 +1,3 @@
-# Values are copied from catppuccin/palette because reading
-# config.catppuccin.sources.palette would be import-from-derivation.
 { lib, ... }:
 let
   # "rrggbb" -> [ r g b ]
@@ -24,6 +22,8 @@ in
     readOnly = true;
     description = "Catppuccin colors as bare `rrggbb` strings, glass opacities and color helpers.";
     default = {
+      # Copied from catppuccin/palette, because reading config.catppuccin.sources.palette would
+      # be import-from-derivation.
       mocha = {
         rosewater = "f5e0dc";
         flamingo = "f2cdcd";

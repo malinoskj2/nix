@@ -32,33 +32,30 @@ EOF
   mv "$config.tmp" "$config"
 }
 
-dbus-daemon --config-file="$DBUS_SESSION_BUS_CONFIG" --address="$DBUS_SESSION_BUS_ADDRESS" --fork --nopidfile
-
-# A null sink, since games under Proton crash in XAudio2 without any audio device.
-pulseaudio -n --daemonize=no --exit-idle-time=-1 \
-  --load=module-native-protocol-unix --load="module-null-sink sink_name=null" --load=module-always-sink \
-  >"$log_dir/pulseaudio.log" 2>&1 &
-
-# Refresh only the managed MCP entry in persistent, writable harness configs.
-if ! unreal-sandbox sync-harnesses; then
-  echo "agent-sandbox: Unreal MCP config refresh failed; fix the reported config and run unreal-sandbox sync-harnesses" >&2
-fi
-
-start_sway() {
-  local renderer=$1
-  env -u WAYLAND_DISPLAY WLR_RENDERER="$renderer" sway >"$log_dir/sway-$renderer.log" 2>&1 &
-  local pid=$!
-  for _ in $(seq 100); do
+wait_for_server() {
+  local pid=$1
+  shift
+  for _ in {1..100}; do
     if ! kill -0 "$pid" 2>/dev/null; then
       return 1
     fi
-    if [[ -S $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY ]] && swaymsg -t get_version >/dev/null 2>&1; then
+    if "$@" >/dev/null 2>&1; then
       return 0
     fi
     sleep 0.1
   done
   kill "$pid" 2>/dev/null
   return 1
+}
+
+sway_ready() {
+  [[ -S $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY ]] && swaymsg -t get_version
+}
+
+start_sway() {
+  local renderer=$1
+  env -u WAYLAND_DISPLAY WLR_RENDERER="$renderer" sway >"$log_dir/sway-$renderer.log" 2>&1 &
+  wait_for_server $! sway_ready
 }
 
 # A second sway hosts a persistent Hyprland; it never takes $WAYLAND_DISPLAY or $SWAYSOCK.
@@ -67,43 +64,43 @@ start_nested_hyprland() {
   local socket=$XDG_RUNTIME_DIR/nested-sway.sock
   env -u WAYLAND_DISPLAY SWAYSOCK="$socket" WLR_RENDERER="$renderer" \
     sway --config /etc/sway/nested >"$log_dir/nested-sway.log" 2>&1 &
-  local pid=$!
-  for _ in $(seq 100); do
-    if ! kill -0 "$pid" 2>/dev/null; then
-      return 1
-    fi
-    if swaymsg --socket "$socket" -t get_version >/dev/null 2>&1; then
-      swaymsg --socket "$socket" exec agent-sandbox-nested-hyprland >/dev/null
-      return 0
-    fi
-    sleep 0.1
-  done
-  kill "$pid" 2>/dev/null
-  return 1
+  wait_for_server $! swaymsg --socket "$socket" -t get_version || return 1
+  swaymsg --socket "$socket" exec agent-sandbox-nested-hyprland >/dev/null || true
+}
+
+host_clipboard=/run/host-clipboard
+
+copy_host_clipboard() {
+  local image=$host_clipboard/image mime
+  if [[ -s $image ]] && mime=$(file --brief --mime-type "$image") && [[ $mime == image/* ]]; then
+    wl-copy --type "$mime" <"$image" || true
+  else
+    wl-copy --clear || true
+  fi
 }
 
 sync_host_clipboard() {
-  local clipboard_dir=/run/host-clipboard
-  local image=$clipboard_dir/image
   local changed
-
-  sync_image() {
-    local mime
-    if [[ -s $image ]] && mime=$(file --brief --mime-type "$image") && [[ $mime == image/* ]]; then
-      wl-copy --type "$mime" <"$image" || true
-    else
-      wl-copy --clear || true
-    fi
-  }
-
-  sync_image
-  inotifywait --monitor --quiet --event close_write,moved_to --format '%f' "$clipboard_dir" |
+  copy_host_clipboard
+  inotifywait --monitor --quiet --event close_write,moved_to --format '%f' "$host_clipboard" |
     while IFS= read -r changed; do
       if [[ $changed == image || $changed == .change ]]; then
-        sync_image
+        copy_host_clipboard
       fi
     done
 }
+
+dbus-daemon --config-file="$DBUS_SESSION_BUS_CONFIG" --address="$DBUS_SESSION_BUS_ADDRESS" --fork --nopidfile
+
+# A null sink, since games under Proton crash in XAudio2 without any audio device.
+pulseaudio -n --daemonize=no --exit-idle-time=-1 \
+  --load=module-native-protocol-unix --load="module-null-sink sink_name=null" --load=module-always-sink \
+  >"$log_dir/pulseaudio.log" 2>&1 &
+
+if ! unreal-sandbox sync-harnesses; then
+  echo "agent-sandbox: Unreal MCP config refresh failed;" \
+    "fix the reported config and run unreal-sandbox sync-harnesses" >&2
+fi
 
 renderer=
 for candidate in ${AGENT_SANDBOX_RENDERERS:-gles2 pixman}; do

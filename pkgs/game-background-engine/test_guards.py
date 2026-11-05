@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 
 binary = pathlib.Path("engine-test").resolve()
-base = {
+environment = {
     key: value
     for key, value in os.environ.items()
     if not key.startswith("GAME_BACKGROUND_") and key not in ("SteamAppId", "SteamGameId", "LD_PRELOAD")
@@ -13,7 +13,7 @@ base = {
 
 
 def check(expected, executable=binary, **values):
-    result = subprocess.check_output([str(executable), "--guard"], env=base | values, text=True)
+    result = subprocess.check_output([str(executable), "--guard"], env=environment | values, text=True)
     assert result.strip() == expected, (values, result)
 
 

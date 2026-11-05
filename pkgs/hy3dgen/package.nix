@@ -9,19 +9,23 @@
 }:
 
 let
-  # torch-bin links libnvshmem, which nixpkgs builds from source for every CUDA arch plus tests and
-  # examples, nearly exhausting RAM; build it for the RTX 5090 only. torch and torchvision alias the
-  # wheels so accelerate, diffusers and the rest don't pull a second torch.
+  # The RTX 5090 (Blackwell) is the only GPU the CUDA builds target.
+  cudaCapability = "12.0";
+
   pythonPackages = python3Packages.overrideScope (
     final: prev: {
+      # The wheels stand in for torch and torchvision, so accelerate, diffusers and the rest
+      # don't pull a second torch.
       torch = final.torch-bin;
       torchvision = final.torchvision-bin;
+      # torch-bin links libnvshmem, which nixpkgs builds from source for every CUDA arch plus
+      # tests and examples, nearly exhausting RAM.
       torch-bin = prev.torch-bin.override {
         cudaPackages = cudaPackages.overrideScope (
           _: prevCuda: {
             libnvshmem = prevCuda.libnvshmem.overrideAttrs (old: {
               cmakeFlags = old.cmakeFlags ++ [
-                (lib.cmakeFeature "CMAKE_CUDA_ARCHITECTURES" "120")
+                (lib.cmakeFeature "CMAKE_CUDA_ARCHITECTURES" (cudaPackages.flags.dropDots cudaCapability))
                 (lib.cmakeBool "NVSHMEM_BUILD_TESTS" false)
                 (lib.cmakeBool "NVSHMEM_BUILD_EXAMPLES" false)
               ];
@@ -58,7 +62,7 @@ let
   };
 
   # nvcc needs a host compiler it supports, older than the default stdenv's.
-  buildCudaPythonPackage = python3Packages.buildPythonPackage.override {
+  buildCudaPythonPackage = pythonPackages.buildPythonPackage.override {
     stdenv = cudaPackages.backendStdenv;
   };
 
@@ -90,9 +94,8 @@ let
       torch-bin
     ];
 
-    # RTX 5090 (Blackwell) only.
     env = {
-      TORCH_CUDA_ARCH_LIST = "12.0";
+      TORCH_CUDA_ARCH_LIST = cudaCapability;
       # torch's gcc bounds table stops at 13 for CUDA 12.9, though nvcc 12.9 supports gcc 14.
       TORCH_DONT_CHECK_COMPILER_ABI = "1";
     };
@@ -111,19 +114,27 @@ pythonPackages.buildPythonPackage {
 
   inherit src;
 
+  # diffusers >= 0.36 refuses local custom pipelines without trust_remote_code.
+  postPatch = ''
+    substituteInPlace hy3dgen/texgen/utils/multiview_utils.py \
+      --replace-fail "torch_dtype=torch.float16)" "torch_dtype=torch.float16, trust_remote_code=True)"
+  '';
+
   build-system = [ pythonPackages.setuptools ];
 
   nativeBuildInputs = [ pythonPackages.pybind11 ];
 
-  # gradio, fastapi and uvicorn only serve the demo; ninja and pybind11 only build the extensions.
   pythonRemoveDeps = [
+    # Only the demo uses these.
     "gradio"
     "fastapi"
     "uvicorn"
+    # Only building the extensions uses these.
     "ninja"
     "pybind11"
+    # opencv4 installs as opencv, and pymeshlab installs no dist-info, so the metadata check
+    # can't find either; both are still dependencies below.
     "opencv-python"
-    # nixpkgs' pymeshlab installs no dist-info, so the metadata check can't find it; it's still a dependency below.
     "pymeshlab"
   ];
 
@@ -156,12 +167,6 @@ pythonPackages.buildPythonPackage {
       custom-rasterizer
       xatlas
     ];
-
-  # diffusers >= 0.36 refuses local custom pipelines without trust_remote_code.
-  postPatch = ''
-    substituteInPlace hy3dgen/texgen/utils/multiview_utils.py \
-      --replace-fail "torch_dtype=torch.float16)" "torch_dtype=torch.float16, trust_remote_code=True)"
-  '';
 
   # mesh_processor.so shadows the pure-Python fallback next to it.
   postInstall = ''
