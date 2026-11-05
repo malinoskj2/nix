@@ -1,5 +1,5 @@
 diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index 7de3ba42..6691e244 100644
+index 7de3ba4..6691e24 100644
 --- a/src/renderer/src/assets/main.css
 +++ b/src/renderer/src/assets/main.css
 @@ -313,28 +313,28 @@
@@ -255,7 +255,7 @@ index 7de3ba42..6691e244 100644
    --diff-removed: var(--git-decoration-deleted);
    --diff-added-background: color-mix(in srgb, var(--diff-added) 16%, transparent);
 diff --git a/src/renderer/src/hooks/use-monaco-theme.ts b/src/renderer/src/hooks/use-monaco-theme.ts
-index 57fbc129..ccde5382 100644
+index 57fbc12..ccde538 100644
 --- a/src/renderer/src/hooks/use-monaco-theme.ts
 +++ b/src/renderer/src/hooks/use-monaco-theme.ts
 @@ -1,6 +1,7 @@
@@ -278,7 +278,7 @@ index 57fbc129..ccde5382 100644
 +      : 'vs'
  }
 diff --git a/src/renderer/src/lib/code-editor-theme.ts b/src/renderer/src/lib/code-editor-theme.ts
-index 5d6eb6e9..ca0f90ce 100644
+index 5d6eb6e..ca0f90c 100644
 --- a/src/renderer/src/lib/code-editor-theme.ts
 +++ b/src/renderer/src/lib/code-editor-theme.ts
 @@ -34,10 +34,10 @@ const BUILT_IN_COLORS: Record<ThemeBase, CodeEditorColors> = {
@@ -298,37 +298,87 @@ index 5d6eb6e9..ca0f90ce 100644
  
 diff --git a/src/renderer/src/lib/monaco-catppuccin-mocha-theme.ts b/src/renderer/src/lib/monaco-catppuccin-mocha-theme.ts
 new file mode 100644
-index 00000000..aab65429
+index 0000000..f976191
 --- /dev/null
 +++ b/src/renderer/src/lib/monaco-catppuccin-mocha-theme.ts
-@@ -0,0 +1,89 @@
+@@ -0,0 +1,139 @@
 +import type * as Monaco from 'monaco-editor'
++import type { PluginThemeTokenColorRule } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
++import { pluginMonacoTokenRules } from './plugin-monaco-token-rules'
 +
 +export const CATPPUCCIN_MOCHA_MONACO_THEME = 'catppuccin-mocha'
++
++// vale-c/orca-catppuccin's Mocha syntax colors, mapped the way Orca maps a plugin theme's.
++const tokenColors: PluginThemeTokenColorRule[] = [
++  {
++    scope: ['comment', 'punctuation.definition.comment'],
++    settings: { foreground: '#9399B2', fontStyle: 'italic' }
++  },
++  { scope: ['variable', 'support.variable'], settings: { foreground: '#CDD6F4' } },
++  { scope: ['variable.parameter'], settings: { foreground: '#EBA0AC' } },
++  { scope: ['variable.language', 'support.function.builtin'], settings: { foreground: '#F38BA8' } },
++  {
++    scope: ['constant', 'support.constant', 'variable.other.constant'],
++    settings: { foreground: '#FAB387' }
++  },
++  { scope: ['constant.numeric'], settings: { foreground: '#FAB387' } },
++  { scope: ['constant.other.symbol'], settings: { foreground: '#F38BA8' } },
++  { scope: ['variable.other.enummember'], settings: { foreground: '#94E2D5' } },
++  { scope: ['keyword', 'storage.type', 'storage.modifier'], settings: { foreground: '#CBA6F7' } },
++  { scope: ['keyword.operator'], settings: { foreground: '#89DCEB' } },
++  {
++    scope: ['string', 'punctuation.definition.string', 'markup.inline.raw', 'markup.raw'],
++    settings: { foreground: '#A6E3A1' }
++  },
++  { scope: ['constant.character.escape', 'string.regexp'], settings: { foreground: '#F5C2E7' } },
++  { scope: ['entity.name.function', 'support.function'], settings: { foreground: '#89B4FA' } },
++  {
++    scope: ['entity.name.function.macro', 'meta.preprocessor'],
++    settings: { foreground: '#F5E0DC' }
++  },
++  {
++    scope: [
++      'entity.name.type',
++      'entity.name.class',
++      'entity.name.namespace',
++      'entity.other.inherited-class',
++      'support.type',
++      'support.class',
++      'storage.type.annotation'
++    ],
++    settings: { foreground: '#F9E2AF' }
++  },
++  { scope: ['punctuation', 'meta.brace'], settings: { foreground: '#9399B2' } },
++  { scope: ['entity.name.tag'], settings: { foreground: '#89B4FA' } },
++  { scope: ['entity.other.attribute-name'], settings: { foreground: '#F9E2AF' } },
++  { scope: ['support.type.property-name'], settings: { foreground: '#89B4FA' } },
++  {
++    scope: ['meta.decorator', 'entity.name.function.decorator'],
++    settings: { foreground: '#F9E2AF' }
++  },
++  {
++    scope: ['markup.heading', 'entity.name.section'],
++    settings: { foreground: '#F38BA8', fontStyle: 'bold' }
++  },
++  { scope: ['markup.bold'], settings: { fontStyle: 'bold' } },
++  { scope: ['markup.italic'], settings: { fontStyle: 'italic' } },
++  {
++    scope: ['markup.underline.link', 'string.other.link'],
++    settings: { foreground: '#89B4FA', fontStyle: 'underline' }
++  },
++  { scope: ['markup.quote'], settings: { foreground: '#9399B2', fontStyle: 'italic' } },
++  { scope: ['markup.inserted'], settings: { foreground: '#A6E3A1' } },
++  { scope: ['markup.deleted'], settings: { foreground: '#F38BA8' } },
++  { scope: ['markup.changed'], settings: { foreground: '#89B4FA' } },
++  { scope: ['invalid'], settings: { foreground: '#F38BA8' } }
++]
 +
 +export const catppuccinMochaTheme: Monaco.editor.IStandaloneThemeData = {
 +  base: 'vs-dark',
 +  inherit: true,
 +  rules: [
 +    { token: '', foreground: 'CDD6F4', background: '1E1E2E' },
-+    { token: 'comment', foreground: '9399B2', fontStyle: 'italic' },
-+    { token: 'string', foreground: 'A6E3A1' },
-+    { token: 'string.escape', foreground: 'F5C2E7' },
-+    { token: 'regexp', foreground: 'F5C2E7' },
-+    { token: 'number', foreground: 'FAB387' },
-+    { token: 'keyword', foreground: 'CBA6F7' },
-+    { token: 'operator', foreground: '89DCEB' },
-+    { token: 'delimiter', foreground: '9399B2' },
-+    { token: 'type', foreground: 'F9E2AF' },
-+    { token: 'type.identifier', foreground: 'F9E2AF' },
-+    { token: 'identifier', foreground: 'CDD6F4' },
-+    { token: 'variable.predefined', foreground: 'F38BA8' },
-+    { token: 'constant', foreground: 'FAB387' },
-+    { token: 'function', foreground: '89B4FA' },
-+    { token: 'tag', foreground: '89B4FA' },
-+    { token: 'attribute.name', foreground: 'F9E2AF', fontStyle: 'italic' },
-+    { token: 'attribute.value', foreground: 'A6E3A1' },
-+    { token: 'metatag', foreground: 'CBA6F7' }
++    ...pluginMonacoTokenRules(tokenColors, (value) => value)
 +  ],
 +  colors: {
 +    'editor.background': '#1E1E2E',
@@ -392,7 +442,7 @@ index 00000000..aab65429
 +  }
 +}
 diff --git a/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts b/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts
-index 0f37936e..9eb05ac2 100644
+index 0f37936..9eb05ac 100644
 --- a/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts
 +++ b/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts
 @@ -4,6 +4,10 @@ import type { IToken } from 'shiki/textmate'
@@ -447,10 +497,10 @@ index 0f37936e..9eb05ac2 100644
    )
  
 diff --git a/src/renderer/src/lib/monaco-setup.ts b/src/renderer/src/lib/monaco-setup.ts
-index 008ebdd7..69135ef0 100644
+index 6f719ad..631d924 100644
 --- a/src/renderer/src/lib/monaco-setup.ts
 +++ b/src/renderer/src/lib/monaco-setup.ts
-@@ -30,6 +30,10 @@ import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-dispo
+@@ -29,6 +29,10 @@ import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-dispo
  import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
  import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
  import { runMonacoSetupSteps } from './monaco-setup-steps'
@@ -461,7 +511,7 @@ index 008ebdd7..69135ef0 100644
  import { installMonacoTsWorkerIdleStop } from './monaco-ts-worker-idle-stop'
  
  globalThis.MonacoEnvironment = {
-@@ -74,6 +78,10 @@ monacoTS.javascriptDefaults.setCompilerOptions({
+@@ -73,6 +77,10 @@ monacoTS.javascriptDefaults.setCompilerOptions({
  })
  
  runMonacoSetupSteps([
