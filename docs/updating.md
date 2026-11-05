@@ -224,7 +224,15 @@ Treat a bump as a hardware change and test it on the device.
   [`bundled-plugins.patch`](../pkgs/orca-ade/bundled-plugins.patch), which lets
   Orca's launch-plugin index carry a third-party plugin without marking it
   official, and [`approved-plugins.patch`](../pkgs/orca-ade/approved-plugins.patch),
-  which treats the plugins in `approvedPlugins` as consented. The build adds
+  which treats the plugins in `approvedPlugins` as consented. Rebase
+  [`agent-resume-wrapper.patch`](../pkgs/orca-ade/agent-resume-wrapper.patch),
+  which runs the Claude, Codex and Muse resumes Orca starts when it reopens
+  through `agentResumeWrapper`, for local workspaces only. `home` sets it to
+  `agent-sandbox-resume` (`orca.agentResumeWrapper` in
+  [`agent-sandbox.nix`](../users/jesse/agent-sandbox.nix)), which resumes in a
+  sandbox the sessions a sandbox started; other hosts leave it unset. Upstream
+  may add another automatic resume path besides the pane cold restore. The
+  build adds
   jondmarien/orca-discord-presence to that index from
   one pinned commit; to move it, change `rev` and refresh its hash. The
   `postPatch` merges `discordPresenceSettings` into the plugin's compiled
@@ -245,6 +253,11 @@ Treat a bump as a hardware change and test it on the device.
   - check that a `claude` typed into an Orca terminal and one Orca launches
     both show working and done in the sidebar, with the running tool, locally
     and in a sandbox workspace over SSH;
+  - on `home`, start `sandbox claude` and `sandbox codex` in a local
+    workspace and a plain `codex` in another, quit Orca and stop its daemon,
+    reopen it and check that both sandboxed sessions resume in new sandbox
+    containers, the plain Codex resumes on the host, and an agent in a sandbox
+    workspace over SSH resumes with its plain command;
   - open a Claude chat tab (Settings → Experimental) and check that its
     `claude` process has `--settings`;
   - check the chat view, sidebars, tabs, popovers and status bar use Mocha, then

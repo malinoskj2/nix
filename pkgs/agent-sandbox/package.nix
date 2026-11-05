@@ -540,6 +540,15 @@ let
     };
     text = builtins.readFile ./agent-sandbox-exec.sh;
   };
+
+  resumeAgent = writeShellApplication {
+    name = "agent-sandbox-resume";
+    runtimeInputs = [
+      execAgent
+      git
+    ];
+    text = builtins.readFile ./agent-sandbox-resume.sh;
+  };
 in
 symlinkJoin {
   name = "agent-sandbox";
@@ -550,6 +559,7 @@ symlinkJoin {
   paths = [
     launcher
     execAgent
+    resumeAgent
     unreal.installer
     killAll
     sshProxy
