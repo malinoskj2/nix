@@ -123,3 +123,17 @@ index 3bbe47cd..7098f52b 100644
            <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
              <TabGroupSplitNodeTree
                layout={layout}
+diff --git a/src/shared/window-material.ts b/src/shared/window-material.ts
+index f45aa13..2371192 100644
+--- a/src/shared/window-material.ts
++++ b/src/shared/window-material.ts
+@@ -74,7 +74,8 @@ export function resolveWindowMaterial(
+     return 'off'
+   }
+   const opacity = settings.terminalBackgroundOpacity
+-  if (opacity === undefined || !(opacity < 1)) {
++  // Why Linux keeps it: the glass titlebar shows the desktop through whatever the terminal opacity.
++  if (host.platform !== 'linux' && (opacity === undefined || !(opacity < 1))) {
+     return 'off'
+   }
+   return hostWindowMaterial(windowMaterialPreference(settings, host.platform), host)
