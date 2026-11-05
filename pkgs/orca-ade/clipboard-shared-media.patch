@@ -1,5 +1,5 @@
 diff --git a/src/main/window/clipboard-image-temp-file.ts b/src/main/window/clipboard-image-temp-file.ts
-index ba118401..2915833e 100644
+index 20f18264..77ad313b 100644
 --- a/src/main/window/clipboard-image-temp-file.ts
 +++ b/src/main/window/clipboard-image-temp-file.ts
 @@ -3,7 +3,6 @@ import path from 'node:path'
@@ -10,7 +10,7 @@ index ba118401..2915833e 100644
  import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboard-image'
  import {
    agentSessionPastedImageName,
-@@ -40,19 +39,17 @@ export async function saveClipboardImageBufferAsTempFile(
+@@ -41,11 +40,11 @@ export async function saveClipboardImageBufferAsTempFile(
      throw new SshHostNotServedError(args.connectionId)
    }
  
@@ -25,8 +25,10 @@ index ba118401..2915833e 100644
    }
    // A picked file keeps its own name, so the paste gets a folder to stay unique.
    const tempPath = args?.fileName
-     ? path.join(folder, `orca-paste-${randomUUID()}`, shellInertFileName(args.fileName))
-     : path.join(folder, agentSessionPastedImageName(Date.now(), randomUUID()))
+@@ -59,9 +58,7 @@ export async function saveClipboardImageBufferAsTempFile(
+           detectImageFileSignature(buffer)?.extension
+         )
+       )
 -  if (args?.fileName) {
 -    await fs.mkdir(path.dirname(tempPath), { recursive: true })
 -  }

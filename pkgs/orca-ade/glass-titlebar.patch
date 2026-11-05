@@ -1,38 +1,9 @@
-diff --git a/src/main/window/createMainWindow.ts b/src/main/window/createMainWindow.ts
-index ebec2fb1..93a35946 100644
---- a/src/main/window/createMainWindow.ts
-+++ b/src/main/window/createMainWindow.ts
-@@ -116,7 +116,14 @@ export function createMainWindow(
-     acceptFirstMouse: true,
-     // Save menu-bar space on Windows/Linux; Alt reveals it and macOS uses the system menu.
-     autoHideMenuBar: true,
--    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
-+    // The Linux renderer paints opaque content below a translucent titlebar; the native
-+    // window must expose an alpha channel for Hyprland's blur to show through that top band.
-+    backgroundColor:
-+      process.platform === 'linux'
-+        ? '#00000000'
-+        : nativeTheme.shouldUseDarkColors
-+          ? '#0a0a0a'
-+          : '#ffffff',
-     // Keep macOS traffic lights inset; hide Windows native chrome to avoid duplicate titlebars.
-     titleBarStyle:
-       process.platform === 'darwin'
-@@ -125,7 +132,7 @@ export function createMainWindow(
-           ? 'hidden'
-           : undefined,
-     // Linux ignores hidden titleBarStyle; remove its native frame to avoid duplicate titlebars.
--    ...(process.platform === 'linux' ? { frame: false } : {}),
-+    ...(process.platform === 'linux' ? { frame: false, transparent: true } : {}),
-     // Start at 1x traffic-light position; syncTrafficLightPosition follows zoom.
-     ...(process.platform === 'darwin'
-       ? {
 diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index a3fd16b9..32d2815d 100644
+index 6691e244..b8bc742b 100644
 --- a/src/renderer/src/assets/main.css
 +++ b/src/renderer/src/assets/main.css
-@@ -912,6 +912,16 @@ body
-   filter: blur(2px);
+@@ -1002,6 +1002,16 @@ body[data-modal-overlay-open]
+   backdrop-filter: none !important;
  }
  
 +/* The native Linux window is alpha-capable. Keep only the titlebar band translucent;
@@ -48,7 +19,7 @@ index a3fd16b9..32d2815d 100644
  /* Why: native windows have a stable content box and need no wake-time viewport reflow. */
  html.native-shell,
  html.native-shell body,
-@@ -1017,6 +1027,21 @@ html.native-shell .app-layout {
+@@ -1109,6 +1119,21 @@ html.native-shell .app-layout {
    background: var(--bg-titlebar, var(--card));
  }
  
@@ -71,10 +42,10 @@ index a3fd16b9..32d2815d 100644
    width: calc(80px / var(--ui-zoom-factor, 1));
    flex-shrink: 0;
 diff --git a/src/renderer/src/components/right-sidebar/index.tsx b/src/renderer/src/components/right-sidebar/index.tsx
-index fe24e790..761f12fd 100644
+index 8824a854..244dd186 100644
 --- a/src/renderer/src/components/right-sidebar/index.tsx
 +++ b/src/renderer/src/components/right-sidebar/index.tsx
-@@ -81,7 +81,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -84,7 +84,7 @@ function RightSidebarInner(): React.JSX.Element {
    const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
  
    const panelContent = rightSidebarOpen ? (
@@ -83,7 +54,7 @@ index fe24e790..761f12fd 100644
        {/* Keep panels mounted across worktree switches; remounts caused Windows IPC storms and multi-second freezes. */}
        <RightSidebarPanelContent effectiveTab={effectiveTab} rightSidebarOpen={rightSidebarOpen} />
      </div>
-@@ -138,7 +138,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -141,7 +141,7 @@ function RightSidebarInner(): React.JSX.Element {
        )}
      >
        <div
@@ -92,7 +63,7 @@ index fe24e790..761f12fd 100644
          style={{
            borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
          }}
-@@ -157,7 +157,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -160,7 +160,7 @@ function RightSidebarInner(): React.JSX.Element {
            />
          ) : (
            /* The 40px activity bar absorbs part of the 138px window-control overlay; inset the header by the remaining 98px. */
@@ -101,7 +72,7 @@ index fe24e790..761f12fd 100644
              <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
                {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
              </span>
-@@ -178,7 +178,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -181,7 +181,7 @@ function RightSidebarInner(): React.JSX.Element {
        {activityBarPosition === 'side' && (
          <ContextMenu>
            <ContextMenuTrigger asChild>
@@ -124,27 +95,27 @@ index 643a9a5e..453c31f1 100644
            <TooltipProvider delayDuration={400}>
              <ContextMenuTrigger asChild>
 diff --git a/src/renderer/src/components/tab-group/TabGroupPanel.tsx b/src/renderer/src/components/tab-group/TabGroupPanel.tsx
-index 95df5973..90a73a50 100644
+index bb817684..1a44f65a 100644
 --- a/src/renderer/src/components/tab-group/TabGroupPanel.tsx
 +++ b/src/renderer/src/components/tab-group/TabGroupPanel.tsx
-@@ -270,7 +270,7 @@ export default function TabGroupPanel({
+@@ -280,7 +280,7 @@ export default function TabGroupPanel({
        {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
        {tabStrip !== 'attached' ? null : (
          <div
--          className="@container/tab-strip h-[32px] shrink-0 border-b border-border bg-card"
+-          className="@container/tab-strip h-[32px] shrink-0 border-b border-border bg-tab-bar"
 +          className="orca-titlebar-glass @container/tab-strip h-[32px] shrink-0 border-b border-border"
            data-tab-group-strip-id={groupId}
            data-terminal-focus-release-surface="true"
            data-worktree-id={worktreeId}
 diff --git a/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx b/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx
-index 2cda9268..fac37529 100644
+index 3bbe47cd..7098f52b 100644
 --- a/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx
 +++ b/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx
 @@ -22,7 +22,10 @@ export default function TabGroupSplitLayout({
            ref={setDragRootNode}
-           className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border"
+           className="workspace-sidebar-seam flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border"
          >
--          <div className="h-[4px] shrink-0 bg-card" data-terminal-focus-release-surface="true" />
+-          <div className="h-[4px] shrink-0 bg-tab-bar" data-terminal-focus-release-surface="true" />
 +          <div
 +            className="orca-titlebar-glass h-[4px] shrink-0"
 +            data-terminal-focus-release-surface="true"

@@ -57,11 +57,17 @@ static struct {
     SP<Config::Values::CFloatValue>  blur;
 } configValues;
 
+class CRecedeTransformer;
+
+static void notifyError(const std::string& message) {
+    HyprlandAPI::addNotification(PHANDLE, message, CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
+}
+
 // Each output pixel is traced back through the tilt to the pixel of the window's frame it shows, so
 // the window is drawn with a true perspective rather than as a flat quad. `toRender` maps the
 // buffers' texture coordinates to the monitor's logical orientation, in which the tilt is defined,
-// and `fromRender` back. The shade darkens the window's own box from the top, as the reference's
-// gradient does, and leaves its shadow alone.
+// and `fromRender` back. The shade darkens the window's own box, not its shadow, from full at the
+// top through 0.22 / 0.62 of that at 55% of the way down to none at the bottom.
 constexpr const char* RECEDE_FRAG = R"GLSL(#version 300 es
 precision highp float;
 
@@ -98,10 +104,13 @@ void main() {
         return;
     }
 
+    const float MID_STOP  = 0.55;
+    const float MID_LEVEL = 0.22 / 0.62;
+
     vec4 color = texture(tex, uv);
     vec2 local = (p - windowBox.xy) / windowBox.zw;
     if (shade > 0.0 && all(greaterThanEqual(local, vec2(0.0))) && all(lessThanEqual(local, vec2(1.0)))) {
-        float ramp = local.y < 0.55 ? mix(1.0, 0.22 / 0.62, local.y / 0.55) : mix(0.22 / 0.62, 0.0, (local.y - 0.55) / 0.45);
+        float ramp = local.y < MID_STOP ? mix(1.0, MID_LEVEL, local.y / MID_STOP) : mix(MID_LEVEL, 0.0, (local.y - MID_STOP) / (1.0 - MID_STOP));
         color.rgb  = mix(color.rgb, shadeColor * color.a, shade * ramp);
     }
 
@@ -111,9 +120,18 @@ void main() {
 
 static struct {
     SP<CShader> shader;
-    bool        failed = false;
-    GLint       toRender = -1, fromRender = -1, renderSize = -1, origin = -1, scale = -1, sinAngle = -1, cosAngle = -1, invPerspective = -1, windowBox = -1, shade = -1,
-          shadeColor = -1;
+    bool        failed         = false;
+    GLint       toRender       = -1;
+    GLint       fromRender     = -1;
+    GLint       renderSize     = -1;
+    GLint       origin         = -1;
+    GLint       scale          = -1;
+    GLint       sinAngle       = -1;
+    GLint       cosAngle       = -1;
+    GLint       invPerspective = -1;
+    GLint       windowBox      = -1;
+    GLint       shade          = -1;
+    GLint       shadeColor     = -1;
 } recedeShader;
 
 static bool ensureShader() {
@@ -125,11 +143,11 @@ static bool ensureShader() {
     auto shader = makeShared<CShader>();
     if (!shader->createProgram(Render::GL::g_pHyprOpenGL->m_shaders->TEXVERTSRC, RECEDE_FRAG, true)) {
         recedeShader.failed = true;
-        HyprlandAPI::addNotification(PHANDLE, "[hyprrecede] Failed to compile the tilt shader", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
+        notifyError("[hyprrecede] Failed to compile the tilt shader");
         return false;
     }
 
-    const auto PROGRAM            = shader->program();
+    const auto PROGRAM          = shader->program();
     recedeShader.toRender       = glGetUniformLocation(PROGRAM, "toRender");
     recedeShader.fromRender     = glGetUniformLocation(PROGRAM, "fromRender");
     recedeShader.renderSize     = glGetUniformLocation(PROGRAM, "renderSize");
@@ -145,11 +163,11 @@ static bool ensureShader() {
     return true;
 }
 
-// The reference's shade is Catppuccin Crust, #11111b.
+// The shade is Catppuccin Crust, #11111b.
 constexpr std::array<float, 3> SHADE_COLOR = {17.F / 255.F, 17.F / 255.F, 27.F / 255.F};
 
 // A monitor whose windows are pushed back while a matching layer is mapped on it. The three parts
-// move on their own curves, as the reference's transform, shade and backdrop transitions do.
+// move on their own curves.
 struct SRecede {
     PHLMONITORREF         monitor;
     std::vector<PHLLSREF> layers;
@@ -170,6 +188,10 @@ struct SRecede {
         return !layers.empty();
     }
 
+    std::array<CAnimatedVariable<float>*, 3> parts() const {
+        return {tilt.get(), shade.get(), blur.get()};
+    }
+
     bool animating() const {
         return tilt->isBeingAnimated() || shade->isBeingAnimated() || blur->isBeingAnimated();
     }
@@ -180,16 +202,22 @@ struct SRecede {
     }
 
     void retarget(float goal) {
-        for (auto* var : {&tilt, &shade, &blur}) {
-            **var = goal;
+        for (auto* part : parts()) {
+            *part = goal;
         }
     }
 };
 
+struct SAttached {
+    PHLWINDOWREF        window;
+    CRecedeTransformer* transformer = nullptr;
+};
+
 static std::vector<SP<SRecede>>         recedes;
+static std::vector<SAttached>           attached;
 static std::vector<CHyprSignalListener> listeners;
 
-static SRecede*                         recedeFor(const PHLMONITOR& monitor) {
+static SRecede* recedeFor(const PHLMONITOR& monitor) {
     if (!monitor)
         return nullptr;
     const auto IT = std::ranges::find_if(recedes, [&](const auto& r) { return r->monitor.get() == monitor.get(); });
@@ -201,11 +229,11 @@ static bool matchesNamespace(const std::string& ns) {
     static std::regex  regex;
     static bool        valid = false;
 
-    const auto         CONFIGURED = configValues.layerNamespace->value();
+    const auto CONFIGURED = configValues.layerNamespace->value();
     if (CONFIGURED.empty())
         return false;
 
-    // an invalid regex must not throw inside the compositor
+    // An invalid regex must not throw inside the compositor.
     if (CONFIGURED != pattern) {
         pattern = CONFIGURED;
         try {
@@ -217,9 +245,9 @@ static bool matchesNamespace(const std::string& ns) {
     return valid && std::regex_match(ns, regex);
 }
 
-// The CSS transform the reference animates, `perspective(P) rotateX(A) scale(S)` about the bottom
-// centre, at `t` of the way from none. Like a browser, it interpolates the perspective's inverse,
-// so the tilt has depth from the first frame. Everything is in the monitor's render pixels.
+// The CSS transform `perspective(P) rotateX(A) scale(S)` about the bottom centre, at `t` of the way
+// from none. Like a browser, it interpolates the perspective's inverse, so the tilt has depth from
+// the first frame. Everything is in the monitor's render pixels.
 struct SProjection {
     Vector2D origin;
     double   scale          = 1.0;
@@ -241,6 +269,8 @@ struct SProjection {
     }
 };
 
+constexpr float EPSILON = 1e-4F;
+
 // The windows lean back about the bottom centre of the area they tile, the work area, or the whole
 // monitor under a fullscreen window, so the tiles of a workspace tilt as one plane.
 static std::optional<SProjection> projectionFor(const SRecede& recede) {
@@ -249,7 +279,7 @@ static std::optional<SProjection> projectionFor(const SRecede& recede) {
         return std::nullopt;
 
     const float T = recede.tilt->value();
-    if (std::abs(T) < 1e-4F)
+    if (std::abs(T) < EPSILON)
         return std::nullopt;
 
     const bool FULLSCREEN = MONITOR->m_activeWorkspace && Fullscreen::controller()->hasFullscreen(MONITOR->m_activeWorkspace);
@@ -335,7 +365,7 @@ class CRecedeTransformer : public Render::IWindowTransformer {
   public:
     CRecedeTransformer(PHLWINDOWREF window) : m_window(std::move(window)) {}
 
-    virtual void preWindowRender(CSurfacePassElement::SRenderData* pRenderData) override {
+    virtual void preWindowRender(CSurfacePassElement::SRenderData*) override {
         m_nextIsFrame = true;
     }
 
@@ -350,7 +380,7 @@ class CRecedeTransformer : public Render::IWindowTransformer {
         // The backdrop blurs the composed desktop once. Reapplying each translucent window's
         // own live blur after tilting gives neighbouring terminals separate blur boundaries.
         // Hyprland samples the matte's red channel, so black suppresses that extra blur.
-        if (!IS_FRAME && RECEDE && RECEDE->blur->value() > 1e-4F && configValues.blur->value() > 0.F) {
+        if (!IS_FRAME && RECEDE && RECEDE->blur->value() > EPSILON && configValues.blur->value() > 0.F) {
             const auto GUARD = g_pHyprRenderer->bindTempFB(in);
             Render::GL::g_pHyprOpenGL->setCapStatus(GL_SCISSOR_TEST, false);
             glClearColor(0.F, 0.F, 0.F, 1.F);
@@ -358,8 +388,8 @@ class CRecedeTransformer : public Render::IWindowTransformer {
             return in;
         }
 
-        const auto  PROJ   = RECEDE ? projectionFor(*RECEDE) : std::nullopt;
-        const float SHADE  = RECEDE && IS_FRAME ? std::clamp(RECEDE->shade->value(), 0.F, 1.F) * configValues.shade->value() : 0.F;
+        const auto  PROJ  = RECEDE ? projectionFor(*RECEDE) : std::nullopt;
+        const float SHADE = RECEDE && IS_FRAME ? std::clamp(RECEDE->shade->value(), 0.F, 1.F) * configValues.shade->value() : 0.F;
         if (!PROJ && SHADE <= 0.F)
             return in;
 
@@ -372,15 +402,15 @@ class CRecedeTransformer : public Render::IWindowTransformer {
         if (!MAPPING || !OUT)
             return in;
 
-        const auto  PROJECTION = PROJ.value_or(SProjection{});
-        const auto  OFFSET     = renderOffset(WINDOW, MONITOR);
-        const auto  BOX        = CBox{WINDOW->position(IGeometric::GEOMETRIC_CURRENT), WINDOW->size(IGeometric::GEOMETRIC_CURRENT)}.translate(OFFSET).scale(MONITOR->m_scale);
-        const auto  BOUNDS     = WINDOW->getFullWindowBoundingBox().translate(OFFSET).scale(MONITOR->m_scale).expand(2);
-        const CBox  FULL       = {{}, MONITOR->m_transformedSize};
-        const auto  DRAWN      = PROJECTION.apply(BOUNDS).expand(2).round().intersection(FULL);
+        const auto PROJECTION = PROJ.value_or(SProjection{});
+        const auto OFFSET     = renderOffset(WINDOW, MONITOR);
+        const auto BOX        = CBox{WINDOW->position(IGeometric::GEOMETRIC_CURRENT), WINDOW->size(IGeometric::GEOMETRIC_CURRENT)}.translate(OFFSET).scale(MONITOR->m_scale);
+        const auto BOUNDS     = WINDOW->getFullWindowBoundingBox().translate(OFFSET).scale(MONITOR->m_scale).expand(2);
+        const CBox FULL       = {{}, MONITOR->m_transformedSize};
+        const auto DRAWN      = PROJECTION.apply(BOUNDS).expand(2).round().intersection(FULL);
 
-        const auto  GUARD = g_pHyprRenderer->bindTempFB(OUT);
-        auto&       gl    = Render::GL::g_pHyprOpenGL;
+        const auto GUARD = g_pHyprRenderer->bindTempFB(OUT);
+        auto&      gl    = Render::GL::g_pHyprOpenGL;
         // The renderer's clear element doesn't reliably clear this buffer.
         gl->setCapStatus(GL_SCISSOR_TEST, false);
         glClearColor(0.F, 0.F, 0.F, 0.F);
@@ -430,14 +460,7 @@ class CRecedeTransformer : public Render::IWindowTransformer {
     bool         m_nextIsFrame = true;
 };
 
-struct SAttached {
-    PHLWINDOWREF        window;
-    CRecedeTransformer* transformer = nullptr;
-};
-
-static std::vector<SAttached> attached;
-
-static void                   attach(const PHLWINDOW& w) {
+static void attach(const PHLWINDOW& w) {
     if (!Desktop::View::validMapped(w) || !recedeFor(w->m_monitor.lock()) ||
         std::ranges::any_of(attached, [&](const auto& a) { return a.window.get() == w.get(); }))
         return;
@@ -445,6 +468,11 @@ static void                   attach(const PHLWINDOW& w) {
     auto transformer = makeUnique<CRecedeTransformer>(PHLWINDOWREF{w});
     attached.emplace_back(SAttached{.window = w, .transformer = transformer.get()});
     w->m_transformers.emplace_back(std::move(transformer));
+}
+
+static void detach(const SAttached& a) {
+    if (const auto WINDOW = a.window.lock())
+        std::erase_if(WINDOW->m_transformers, [&a](const auto& t) { return t.get() == a.transformer; });
 }
 
 // Even a no-op transformer changes Hyprland's rendering path, including output orientation.
@@ -458,7 +486,7 @@ static void syncAttachments() {
         const auto MONITOR = WINDOW->m_monitor.lock();
         if (Desktop::View::validMapped(WINDOW) && recedeFor(MONITOR))
             return false;
-        std::erase_if(WINDOW->m_transformers, [&a](const auto& t) { return t.get() == a.transformer; });
+        detach(a);
         if (MONITOR)
             g_pHyprRenderer->damageMonitor(MONITOR);
         return true;
@@ -472,15 +500,14 @@ static void syncAttachments() {
 // recedes.
 static void detachAll() {
     for (const auto& a : attached) {
-        if (const auto WINDOW = a.window.lock())
-            std::erase_if(WINDOW->m_transformers, [&a](const auto& t) { return t.get() == a.transformer; });
+        detach(a);
     }
     attached.clear();
 }
 
 static void removeRecede(SRecede* recede) {
-    for (auto* var : {&recede->tilt, &recede->shade, &recede->blur}) {
-        (*var)->resetAllCallbacks();
+    for (auto* part : recede->parts()) {
+        part->resetAllCallbacks();
     }
     recede->damage();
     std::erase_if(recedes, [recede](const auto& r) { return r.get() == recede; });
@@ -506,8 +533,8 @@ static SRecede* createRecede(const PHLMONITOR& monitor) {
     Animation::mgr()->createAnimation(0.F, recede->shade, TREE->getAnimationPropertyConfig("hyprrecedeShade"), AVARDAMAGE_NONE);
     Animation::mgr()->createAnimation(0.F, recede->blur, TREE->getAnimationPropertyConfig("hyprrecedeBlur"), AVARDAMAGE_NONE);
 
-    for (auto* var : {&recede->tilt, &recede->shade, &recede->blur}) {
-        (*var)->setUpdateCallback(recede->callback([](SRecede& r) { r.damage(); }));
+    for (auto* part : recede->parts()) {
+        part->setUpdateCallback(recede->callback([](SRecede& r) { r.damage(); }));
     }
 
     recedes.emplace_back(recede);
@@ -531,8 +558,8 @@ static void onLayerOpened(PHLLS ls) {
     recede->retarget(1.F);
 
     // An end callback set on a variable at rest runs straight away, so they go on once moving.
-    for (auto* var : {&recede->tilt, &recede->shade, &recede->blur}) {
-        (*var)->setCallbackOnEnd(recede->callback([](SRecede& r) { onPartEnd(r); }), false);
+    for (auto* part : recede->parts()) {
+        part->setCallbackOnEnd(recede->callback([](SRecede& r) { onPartEnd(r); }), false);
     }
 }
 
@@ -543,8 +570,8 @@ static void onLayerClosed(PHLLS ls) {
     }
 }
 
-// The blur covers everything below the layers, wallpaper included, the way the reference's
-// backdrop does, and fades in as a whole rather than growing in radius.
+// The blur covers everything below the layers, wallpaper included, and fades in as a whole rather
+// than growing in radius.
 static void onRenderStage(eRenderStage stage) {
     if (stage != RENDER_POST_WINDOWS)
         return;
@@ -619,7 +646,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     PHANDLE = handle;
 
     if (std::string{__hyprland_api_get_hash()} != __hyprland_api_get_client_hash()) {
-        HyprlandAPI::addNotification(PHANDLE, "[hyprrecede] Version mismatch (headers ver is not equal to running hyprland ver)", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
+        notifyError("[hyprrecede] Version mismatch (headers ver is not equal to running hyprland ver)");
         throw std::runtime_error("[hyprrecede] Version mismatch");
     }
 
@@ -657,7 +684,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     listeners.emplace_back(Event::bus()->m_events.render.pre.listen([](PHLMONITOR m) { onRenderPre(m); }));
     listeners.emplace_back(Event::bus()->m_events.render.stage.listen([](eRenderStage s) { onRenderStage(s); }));
 
-    return {"hyprrecede", "Tilts and blurs the windows behind a modal layer", "jesse", "1.0"};
+    return {"hyprrecede", "Tilts, shades and blurs the windows behind a modal layer while it's open", "jesse", "1.0"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {

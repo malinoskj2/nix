@@ -1,15 +1,9 @@
-{ lib, ... }:
 {
   programs.starship = {
     enable = true;
     settings = {
       add_newline = false;
-      format = lib.concatMapStrings (module: "$" + module) [
-        "username"
-        "git_branch"
-        "git_status"
-        "character"
-      ];
+      format = "$username$git_branch$git_status$character";
 
       username = {
         format = "[$user ]($style)";

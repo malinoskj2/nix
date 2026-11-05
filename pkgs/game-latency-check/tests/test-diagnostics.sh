@@ -13,6 +13,8 @@ monitor='{"id":1,"name":"DP-2","activeWorkspace":{"id":5},"solitary":"abc","dire
 tests=0
 
 assert_json() { jq -e "$1" >/dev/null; }
+assert_report() { jq -s -e "$1" "$report_file" >/dev/null; }
+refute() { if ("$@") >/dev/null 2>&1; then exit 1; fi; }
 passed() {
   tests=$((tests + 1))
   printf 'ok %s - %s\n' "$tests" "$1"
@@ -43,12 +45,12 @@ passed 'missing telemetry is unknown'
 report_file=$test_dir/report scope=game-fixture
 record sample "$(sample "$monitor" '{"address":"0xdef"}')"
 summarise_presentation
-jq -s -e '[.[]|select(.kind=="finding" and (.data.check=="Tearing" or .data.check=="Direct scanout"))|.data.status]|all(.=="UNKNOWN")' "$report_file" >/dev/null
+assert_report '[.[]|select(.kind=="finding" and (.data.check=="Tearing" or .data.check=="Direct scanout"))|.data.status]|all(.=="UNKNOWN")'
 passed 'background observations cannot pass gameplay checks'
 
-printf '[]' | { if physical; then exit 1; fi; }
-printf '[{"name":"NESTED-1"}]' | { if physical; then exit 1; fi; }
-printf '[%s]' "$monitor" | physical
+printf '[]' | refute has_physical_output
+printf '[{"name":"NESTED-1"}]' | refute has_physical_output
+printf '[%s]' "$monitor" | has_physical_output
 passed 'nested/headless outputs are excluded'
 
 (
@@ -66,11 +68,12 @@ passed 'physical compositor discovery ignores inherited nested session'
   choose_instance
   [[ $signature == two ]]
 )
-if (
+ambiguous_instances() {
   run() { printf '[{"instance":"one"},{"instance":"two"}]'; }
   hypr() { printf '[%s]' "$monitor"; }
   choose_instance
-) >/dev/null 2>&1; then exit 1; fi
+}
+refute ambiguous_instances
 passed 'ambiguous physical sessions require explicit selection'
 
 (
@@ -88,7 +91,7 @@ passed 'GameMode query forbids activation and registration'
 )
 for args in '--seconds 0' '--delay 61' '730 --pid 123' '--pid -1' 'steam_app_0'; do
   read -ra arguments <<<"$args"
-  if (parse_args "${arguments[@]}") >/dev/null 2>&1; then exit 1; fi
+  refute parse_args "${arguments[@]}"
 done
 passed 'argument meanings and duration bounds'
 
@@ -158,7 +161,7 @@ passed 'no matching game is a structured operational error'
   }
   selected=$(jq -cn --argjson pid "$$" --arg start "$(process_start "$$")" '{pid:$pid,process_start:$start}')
   process_report "$selected"
-  jq -s -e 'any(.[];.data.check=="GameMode registration" and .data.status=="OK") and any(.[];.data.check=="Thread scheduling" and .data.detail.inspected_threads==1)' "$report_file" >/dev/null
+  assert_report 'any(.[];.data.check=="GameMode registration" and .data.status=="OK") and any(.[];.data.check=="Thread scheduling" and .data.detail.inspected_threads==1)'
 )
 passed 'process and thread reporting using a test-shell PID, not a game'
 
@@ -183,7 +186,7 @@ passed 'process and thread reporting using a test-shell PID, not a game'
     printf 'a(io) 2 %s "/game/one" %s "/game/two"' "$$" "$$"
   }
   system_report
-  jq -s -e 'any(.[];.data.check=="Registered GameMode clients" and (.data.detail|length)==2) and any(.[];.data.check=="DRM interpretation")' "$report_file" >/dev/null
+  assert_report 'any(.[];.data.check=="Registered GameMode clients" and (.data.detail|length)==2) and any(.[];.data.check=="DRM interpretation")'
 )
 passed 'system reporting and GameMode client parsing with mocked probes'
 

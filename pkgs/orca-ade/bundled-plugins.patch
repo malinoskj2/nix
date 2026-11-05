@@ -22,7 +22,7 @@ index 580dcb70..128d6f61 100644
    if (!isReservedPluginIdentity(pluginKey)) {
      return null
 diff --git a/src/main/plugins/plugin-bundled-bootstrap.ts b/src/main/plugins/plugin-bundled-bootstrap.ts
-index 67c178fd..99c24d6e 100644
+index 390eac50..0a5fa743 100644
 --- a/src/main/plugins/plugin-bundled-bootstrap.ts
 +++ b/src/main/plugins/plugin-bundled-bootstrap.ts
 @@ -3,7 +3,6 @@ import { isAbsolute, join, relative, sep } from 'node:path'
@@ -46,19 +46,29 @@ index 67c178fd..99c24d6e 100644
              path: pluginRelativeDirectorySchema,
              contentHash: z.string().regex(/^[0-9a-f]{64}$/)
            })
+@@ -96,9 +91,6 @@ async function readBundledPluginIndex(
+ 
+ /** Whether this release ships the plugin; false when the index can't be read. */
+ export async function isBundledPluginKey(root: string, pluginKey: string): Promise<boolean> {
+-  if (!hasOfficialPluginPublisher(pluginKey)) {
+-    return false
+-  }
+   const index = await readBundledPluginIndex(root).catch(() => null)
+   return index?.plugins.some((entry) => entry.pluginKey === pluginKey) ?? false
+ }
 diff --git a/src/main/plugins/plugin-list-projection.ts b/src/main/plugins/plugin-list-projection.ts
-index 94abe29a..4693201c 100644
+index 17123b12..b04e19ae 100644
 --- a/src/main/plugins/plugin-list-projection.ts
 +++ b/src/main/plugins/plugin-list-projection.ts
-@@ -11,6 +11,7 @@ import { pluginInstalledHostImages } from './plugin-manifest-images'
+@@ -12,6 +12,7 @@ import { markCommandReplacementOwners } from './plugin-command-replacement-owner
  import type { PluginService } from './plugin-service'
  import { listPluginVmRecipeCommands } from '../../shared/plugins/artifacts/plugin-vm-recipe-artifact'
  import {
 +  hasOfficialPluginPublisher,
    isOfficialMarketplaceGitSource,
    isOfficialOrganizationGitSource,
-   pluginSourceLabel
-@@ -133,7 +134,7 @@ export async function buildPluginList(
+   pluginSourceLabel,
+@@ -142,7 +143,7 @@ export async function buildPluginList(
            : {}
        const bundled = lockEntry?.source.kind === 'bundled'
        const official =

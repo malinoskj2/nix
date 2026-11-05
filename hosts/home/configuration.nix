@@ -57,19 +57,24 @@
     MemoryMax = "24G";
   };
 
-  # agent-sandbox runs its containers under this slice. No MemoryHigh: once swap
-  # is full it can't reclaim anon memory and throttles every sandbox indefinitely
-  # instead of killing anything. MemoryMax reclaims too, then OOM-kills the
-  # largest process. A little swap lets reclaim page out tmpfs.
-  # Keep the cgroup available for the launcher's read-only stats mount, even
-  # before the first container starts.
-  systemd.slices.agent-sandbox.wantedBy = [ "multi-user.target" ];
-  systemd.slices.agent-sandbox.sliceConfig = {
-    # CCD1 has 32 MiB L3, without V-Cache. Include its SMT siblings and
-    # constrain every container in this slice; the desktop can use both CCDs.
-    AllowedCPUs = "8-15,24-31";
-    MemoryMax = "20G";
-    MemorySwapMax = "4G";
+  # agent-sandbox runs its containers under this slice.
+  systemd.slices.agent-sandbox = {
+    # Keep the cgroup available for the launcher's read-only stats mount, even
+    # before the first container starts.
+    wantedBy = [ "multi-user.target" ];
+    sliceConfig = {
+      # CCD1 has 32 MiB L3, without V-Cache. Include its SMT siblings and
+      # constrain every container in this slice; the desktop can use both CCDs.
+      AllowedCPUs = "8-15,24-31";
+
+      # No MemoryHigh: once swap is full it can't reclaim anon memory and throttles
+      # every sandbox indefinitely instead of killing anything. MemoryMax reclaims
+      # too, then OOM-kills the largest process.
+      MemoryMax = "20G";
+
+      # A little swap lets reclaim page out tmpfs.
+      MemorySwapMax = "4G";
+    };
   };
 
   programs.nix-index-database.comma.enable = true;

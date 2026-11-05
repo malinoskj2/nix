@@ -18,17 +18,17 @@ in
   unstable =
     final: _prev:
     let
-      unstable = importNixpkgs inputs.nixpkgs-unstable final;
+      unstablePkgs = importNixpkgs inputs.nixpkgs-unstable final;
     in
     {
-      unstable = unstable // {
+      unstable = unstablePkgs // {
         # TODO: drop this override and the manifest once nixpkgs-unstable reaches 2.1.280.
-        claude-code = unstable.claude-code.override {
+        claude-code = unstablePkgs.claude-code.override {
           manifest = final.lib.importJSON ./claude-code/manifest.zst.json;
         };
         # TODO: drop this override once nixpkgs-unstable reaches 0.159.2. Older clients aren't
         # offered GPT-6.1 Sol.
-        codex = unstable.codex.overrideAttrs (old: rec {
+        codex = unstablePkgs.codex.overrideAttrs (old: rec {
           version = "0.159.2";
           src = final.fetchFromGitHub {
             owner = "openai";
@@ -49,16 +49,8 @@ in
       };
     };
 
-  pins =
-    final: _prev:
-    let
-      inherit (importNixpkgs inputs.nixpkgs-firefox final) firefox;
-      inherit (importNixpkgs inputs.nixpkgs-hyprland final)
-        hyprland
-        xdg-desktop-portal-hyprland
-        ;
-    in
-    {
-      inherit firefox hyprland xdg-desktop-portal-hyprland;
-    };
+  pins = final: _prev: {
+    inherit (importNixpkgs inputs.nixpkgs-firefox final) firefox;
+    inherit (importNixpkgs inputs.nixpkgs-hyprland final) hyprland xdg-desktop-portal-hyprland;
+  };
 }

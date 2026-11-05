@@ -1,5 +1,3 @@
-"""Mute Steam playback while workspace 5 is hidden, preserving user mute states."""
-
 from dataclasses import dataclass
 import fcntl
 import json
@@ -11,10 +9,17 @@ import subprocess
 import sys
 import time
 
+GAME_WORKSPACE = 5
+COMMAND_OVERRIDES = {
+    "hyprctl": "GAME_AUDIO_HYPRCTL",
+    "pw-dump": "GAME_AUDIO_PW_DUMP",
+    "wpctl": "GAME_AUDIO_WPCTL",
+}
+
 
 def command(name, *args):
     return subprocess.run(
-        [os.environ.get("GAME_AUDIO_" + name.upper().replace("-", "_"), name), *map(str, args)],
+        [os.environ.get(COMMAND_OVERRIDES[name], name), *map(str, args)],
         capture_output=True,
         check=True,
         timeout=2,
@@ -22,7 +27,8 @@ def command(name, *args):
 
 
 def hypr(signature, query):
-    value = json.loads(command("hyprctl", *(["-i", signature] if signature else []), "-j", query))
+    instance = ["-i", signature] if signature else []
+    value = json.loads(command("hyprctl", *instance, "-j", query))
     if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
         raise ValueError("unexpected Hyprland response")
     return value
@@ -77,8 +83,8 @@ def hidden_games(windows, monitors, game_for_pid=process_game):
             app = match[1] if match else None
         if app:
             workspace = window.get("workspace", {}).get("id")
-            games.setdefault(app, []).append(workspace == 5 and workspace not in visible)
-    # Keep a game audible if another one of its windows is outside workspace 5.
+            games.setdefault(app, []).append(workspace == GAME_WORKSPACE and workspace not in visible)
+    # Keep a game audible if another one of its windows is outside the game workspace.
     return {app for app, states in games.items() if states and all(states)}
 
 
@@ -113,6 +119,19 @@ class RestorationRecord:
         return background or self.originals[identity]
 
 
+def node_mute(info):
+    return next((param["mute"] for param in info.get("params", {}).get("Props", []) if "mute" in param), None)
+
+
+def restore_key(app, props):
+    # Match WirePlumber's stream-properties key so recreated streams inherit
+    # the original mute, including a game restarted after exiting while hidden.
+    for name in ("media.role", "application.id", "application.name", "media.name", "node.name"):
+        if props.get(name):
+            return json.dumps([app, name, props[name]])
+    return None
+
+
 def streams(snapshot, game_for_pid=process_game):
     core = next((item["info"]["cookie"] for item in snapshot if item.get("type") == "PipeWire:Interface:Core"), None)
     if core is None:
@@ -124,24 +143,26 @@ def streams(snapshot, game_for_pid=process_game):
         if item.get("type") != "PipeWire:Interface:Node" or props.get("media.class") != "Stream/Output/Audio":
             continue
         app = game_for_pid(props.get("application.process.id"))
-        mute = next((param["mute"] for param in info.get("params", {}).get("Props", []) if "mute" in param), None)
+        mute = node_mute(info)
         if not app or not isinstance(mute, bool) or "object.serial" not in props:
             continue
-        # Match WirePlumber's stream-properties key so recreated streams inherit
-        # the original mute, including a game restarted after exiting while hidden.
-        key = next(
-            (
-                [name, props[name]]
-                for name in ("media.role", "application.id", "application.name", "media.name", "node.name")
-                if props.get(name)
-            ),
-            None,
-        )
+        key = restore_key(app, props)
         if key is None:
             continue
         identity = json.dumps([core, props["object.serial"]])
-        result[identity] = Stream(item["id"], app, json.dumps([app, *key]), mute)
+        result[identity] = Stream(item["id"], app, key, mute)
     return result
+
+
+def current_streams():
+    return streams(json.loads(command("pw-dump")))
+
+
+def valid_journal(saved):
+    return isinstance(saved, dict) and all(
+        isinstance(originals, dict) and originals and all(isinstance(mute, bool) for mute in originals.values())
+        for originals in saved.values()
+    )
 
 
 class RestorationJournal:
@@ -149,10 +170,7 @@ class RestorationJournal:
         self.path = path
         try:
             saved = json.loads(path.read_text())
-            if not isinstance(saved, dict) or any(
-                not isinstance(value, dict) or not value or any(not isinstance(mute, bool) for mute in value.values())
-                for value in saved.values()
-            ):
+            if not valid_journal(saved):
                 raise ValueError("invalid audio restoration journal")
         except FileNotFoundError:
             saved = {}
@@ -167,7 +185,8 @@ class RestorationJournal:
 
     def claim(self, key, record):
         self.records[key] = record
-        self.save()  # Journal before changing anything, for crash recovery.
+        # Journal before changing anything, for crash recovery.
+        self.save()
 
     def release(self, key):
         del self.records[key]
@@ -177,24 +196,21 @@ class RestorationJournal:
 def set_stream_mute(identity, stream, target):
     # IDs are recycled; revalidate serial/core and game immediately before
     # addressing the node through wpctl.
-    latest = streams(json.loads(command("pw-dump"))).get(identity)
+    latest = current_streams().get(identity)
     if not latest or latest.node_id != stream.node_id or latest.restore_key != stream.restore_key:
         raise OSError("audio stream changed before mute update")
     command("wpctl", "set-mute", stream.node_id, int(target))
 
 
 class Controller:
-    def __init__(self, path, set_mute=None):
+    def __init__(self, path, set_mute=set_stream_mute):
         self.journal = RestorationJournal(path)
         self.set_mute = set_mute
 
-    def apply(self, identity, stream, target):
-        if self.set_mute:
-            self.set_mute(stream.node_id, target)
-        else:
-            set_stream_mute(identity, stream, target)
-
     def reconcile(self, current, hidden):
+        # Keep absent streams in the journal: WirePlumber can remember our mute
+        # across a stream/game restart. Only a verified Steam game with the same
+        # application and restore key can consume that restoration record.
         by_key = {}
         for identity, stream in current.items():
             by_key.setdefault(stream.restore_key, []).append((identity, stream))
@@ -214,13 +230,10 @@ class Controller:
                     self.journal.save()
                 target = record.target(identity, background)
                 if stream.muted != target:
-                    self.apply(identity, stream, target)
+                    self.set_mute(identity, stream, target)
 
             if not background:
                 self.journal.release(key)
-        # Keep absent streams in the journal: WirePlumber can remember our mute
-        # across a stream/game restart. Only a verified Steam game with the same
-        # application and restore key can consume that restoration record.
 
 
 def main():
@@ -238,7 +251,7 @@ def main():
         signal.signal(signal.SIGINT, stop)
         try:
             while True:
-                current = streams(json.loads(command("pw-dump")))
+                current = current_streams()
                 try:
                     signature = signature or physical_session()
                     hidden = hidden_games(hypr(signature, "clients"), hypr(signature, "monitors"))
@@ -252,7 +265,7 @@ def main():
         except InterruptedError:
             pass
         finally:
-            controller.reconcile(streams(json.loads(command("pw-dump"))), set())
+            controller.reconcile(current_streams(), set())
     return 0
 
 

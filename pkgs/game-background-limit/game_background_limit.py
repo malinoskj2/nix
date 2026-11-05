@@ -1,5 +1,3 @@
-"""Launch a manually selected game, or run the automatic Steam controller."""
-
 import json
 import os
 import re
@@ -24,8 +22,11 @@ def hypr(signature, command):
         args += ["-i", signature]
     result = subprocess.run([*args, "-j", command], capture_output=True, timeout=2, check=True)
     value = json.loads(result.stdout)
-    expected = dict if command == "activewindow" else list
-    if not isinstance(value, expected) or (expected is list and not all(isinstance(item, dict) for item in value)):
+    if command == "activewindow":
+        valid = isinstance(value, dict)
+    else:
+        valid = isinstance(value, list) and all(isinstance(item, dict) for item in value)
+    if not valid:
         raise ValueError(f"unexpected Hyprland {command} response")
     return value
 
@@ -44,28 +45,27 @@ def physical_signature():
     return candidates[0]
 
 
+def prepend(environment, name, value):
+    environment[name] = f"{value}:{environment[name]}" if environment.get(name) else value
+
+
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--daemon":
         from automatic import main as daemon
 
         return daemon()
     if len(sys.argv) == 1 or sys.argv[1] in ("--help", "-h"):
-        print(
-            "Usage: game-background-limit COMMAND [ARGS...]\nSteam games are enabled automatically. This wrapper enables other games."
-        )
+        print("Usage: game-background-limit COMMAND [ARGS...]")
+        print("Steam games are enabled automatically. This wrapper enables other games.")
         return 0
+    # The system service supplies the controller. The manual wrapper can be used
+    # on other desktops; without that controller it simply remains uncapped.
     environment = dict(os.environ)
     environment["GAME_BACKGROUND_FORCE"] = "1"
     environment["GAME_BACKGROUND_LIMIT_AUTO"] = "0"
     environment["GAME_BACKGROUND_VULKAN"] = "1"
-    environment["LD_PRELOAD"] = os.environ["GAME_BACKGROUND_LIB"] + (
-        ":" + environment["LD_PRELOAD"] if environment.get("LD_PRELOAD") else ""
-    )
-    environment["XDG_DATA_DIRS"] = os.environ["GAME_BACKGROUND_DATA"] + (
-        ":" + environment["XDG_DATA_DIRS"] if environment.get("XDG_DATA_DIRS") else ""
-    )
-    # The system service supplies the controller. The manual wrapper can be used
-    # on other desktops; without that controller it simply remains uncapped.
+    prepend(environment, "LD_PRELOAD", os.environ["GAME_BACKGROUND_LIB"])
+    prepend(environment, "XDG_DATA_DIRS", os.environ["GAME_BACKGROUND_DATA"])
     os.execvpe(sys.argv[1], sys.argv[1:], environment)
 
 

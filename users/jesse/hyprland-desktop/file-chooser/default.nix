@@ -6,27 +6,25 @@
 }:
 let
   name = "Couture";
-  inherit (config.palette) glass opacity;
-  palette = config.palette.mocha;
-  icons = pkgs.callPackage ./icons.nix { inherit name palette; };
+  inherit (config.palette) glass mocha opacity;
+  icons = pkgs.callPackage ./icons.nix { inherit mocha name; };
+  defineColor = color: value: "@define-color ${color} ${value};";
   # GTK3 can't parse #rrggbbaa, so each background at each glass level is its own alpha().
-  glassColors =
-    lib.concatMap
-      (
-        color:
-        lib.mapAttrsToList (
-          level: percent: "@define-color ${color}_${level} alpha(@${color}, ${opacity percent});"
-        ) glass
-      )
-      [
+  glassColor =
+    { background, level }:
+    defineColor "${background}_${level}" "alpha(@${background}, ${opacity glass.${level}})";
+  glassColors = map glassColor (
+    lib.cartesianProduct {
+      background = [
         "base"
         "mantle"
         "crust"
       ];
+      level = lib.attrNames glass;
+    }
+  );
   colors = pkgs.writeText "colors.css" (
-    lib.concatLines (
-      lib.mapAttrsToList (color: hex: "@define-color ${color} #${hex};") palette ++ glassColors
-    )
+    lib.concatLines (lib.mapAttrsToList (color: hex: defineColor color "#${hex}") mocha ++ glassColors)
   );
   # GTK resolves the stylesheet's relative imports and images from its real path, so the files
   # share one directory instead of being linked in one by one.

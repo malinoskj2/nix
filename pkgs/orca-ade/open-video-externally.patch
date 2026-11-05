@@ -1,5 +1,5 @@
 diff --git a/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts b/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts
-index 31056fad..de0de915 100644
+index b5c78367..87ac64c9 100644
 --- a/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts
 +++ b/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts
 @@ -77,6 +77,10 @@ type TerminalFileOpenDeps = {

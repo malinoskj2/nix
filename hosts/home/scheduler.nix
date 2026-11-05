@@ -1,15 +1,17 @@
 { pkgs, ... }:
 {
-  # 6.18 LTS includes sched-ext and the AMD 3D V-Cache driver, and unlike
-  # linuxPackages_latest it doesn't break the NVIDIA driver on every bump.
-  boot.kernelPackages = pkgs.linuxPackages_6_18;
+  boot = {
+    # 6.18 LTS includes sched-ext and the AMD 3D V-Cache driver, and unlike
+    # linuxPackages_latest it doesn't break the NVIDIA driver on every bump.
+    kernelPackages = pkgs.linuxPackages_6_18;
 
-  # amd_pstate=active keeps EPP-driven frequency control whatever the kernel's
-  # default mode, and preempt=full lowers worst-case scheduling latency.
-  boot.kernelParams = [
-    "amd_pstate=active"
-    "preempt=full"
-  ];
+    # amd_pstate=active keeps EPP-driven frequency control whatever the kernel's
+    # default mode, and preempt=full lowers worst-case scheduling latency.
+    kernelParams = [
+      "amd_pstate=active"
+      "preempt=full"
+    ];
+  };
 
   # scx_lavd scores tasks by inferred latency-criticality, which suits the browser
   # and games; if it exits, the kernel falls back to its default EEVDF scheduler.

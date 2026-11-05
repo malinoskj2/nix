@@ -13,6 +13,8 @@ in
 {
   home.file.".claude/keybindings.json".source = ./keybindings.json;
 
+  xdg.mimeApps.defaultApplications."x-scheme-handler/claude-cli" = "claude-code-url-handler.desktop";
+
   programs.claude-code = {
     enable = true;
     package = pkgs.unstable.claude-code;

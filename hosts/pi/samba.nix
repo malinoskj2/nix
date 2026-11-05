@@ -1,5 +1,5 @@
-# Samba passwords are not declarative; set them with `smbpasswd -a <user>` on the host.
 {
+  # Samba passwords are not declarative; set them with `smbpasswd -a <user>` on the host.
   services.samba = {
     enable = true;
     openFirewall = true;

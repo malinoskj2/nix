@@ -59,9 +59,6 @@ def edit_svg(svg: str, base: str, glass: str, opacity: str) -> str:
     def glaze(element: str) -> str:
         return element.replace(f"fill:#{base}", f"fill:#{glass};fill-opacity:{opacity}")
 
-    def glaze_group(match: re.Match[str]) -> str:
-        return glaze(match.group(0))
-
     # Dialog's interior points at solid-normal, an unglazed copy of the window rect, so it covers
     # the same area of the SVG.
     def glaze_rect(match: re.Match[str]) -> str:
@@ -69,7 +66,7 @@ def edit_svg(svg: str, base: str, glass: str, opacity: str) -> str:
         solid = rect.replace('id="window-normal"', 'id="solid-normal"')
         return f"{solid}\n {glaze(rect)}"
 
-    svg = WINDOW_GROUP.sub(glaze_group, svg)
+    svg = WINDOW_GROUP.sub(lambda match: glaze(match.group(0)), svg)
     return WINDOW_RECT.sub(glaze_rect, svg, count=1)
 
 

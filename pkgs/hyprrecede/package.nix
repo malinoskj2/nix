@@ -34,7 +34,7 @@ hyprlandPlugins.mkHyprlandPlugin {
   '';
 
   meta = {
-    description = "Tilts, shades and blurs the windows behind a modal layer while it is open";
+    description = "Tilts, shades and blurs the windows behind a modal layer while it's open";
     license = lib.licenses.mit;
     platforms = lib.platforms.linux;
   };

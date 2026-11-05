@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
-usage() {
-  echo "Usage: markdown-to-pdf INPUT.md [OUTPUT.pdf]" >&2
+die() {
+  echo "$1" >&2
   exit 1
 }
 
-[[ $# -ge 1 && $# -le 2 ]] || usage
+[[ $# -ge 1 && $# -le 2 ]] || die "Usage: markdown-to-pdf INPUT.md [OUTPUT.pdf]"
 input=$1
-[[ -f $input ]] || {
-  echo "markdown-to-pdf: no such file: $input" >&2
-  exit 1
-}
+[[ -f $input ]] || die "markdown-to-pdf: no such file: $input"
 output=${2:-${input%.*}.pdf}
 
 workdir=$(mktemp -d)
@@ -26,34 +22,25 @@ mermaid_config="$workdir/mermaid-config.json"
 echo '{"flowchart":{"htmlLabels":false},"htmlLabels":false}' >"$mermaid_config"
 
 rendered="$workdir/rendered.md"
-: >"$rendered"
+touch "$rendered"
 
 diagram_count=0
-in_mermaid=0
-diagram_file=""
+diagram=""
 
 while IFS= read -r line || [[ -n $line ]]; do
-  if [[ $in_mermaid -eq 1 ]]; then
-    if [[ $line == '```' ]]; then
-      in_mermaid=0
-      svg="$workdir/diagram-$diagram_count.svg"
-      mmdc --puppeteerConfigFile "$puppeteer_config" --configFile "$mermaid_config" -i "$diagram_file" -o "$svg" --backgroundColor transparent
-      printf '![](%s)\n' "$svg" >>"$rendered"
-    else
-      printf '%s\n' "$line" >>"$diagram_file"
-    fi
-    continue
-  fi
-
-  if [[ $line == '```mermaid' ]]; then
-    in_mermaid=1
+  if [[ -z $diagram && $line == '```mermaid' ]]; then
     diagram_count=$((diagram_count + 1))
-    diagram_file="$workdir/diagram-$diagram_count.mmd"
-    : >"$diagram_file"
-    continue
+    diagram="$workdir/diagram-$diagram_count"
+    touch "$diagram.mmd"
+  elif [[ -z $diagram ]]; then
+    printf '%s\n' "$line" >>"$rendered"
+  elif [[ $line != '```' ]]; then
+    printf '%s\n' "$line" >>"$diagram.mmd"
+  else
+    mmdc --puppeteerConfigFile "$puppeteer_config" --configFile "$mermaid_config" -i "$diagram.mmd" -o "$diagram.svg" --backgroundColor transparent
+    printf '![](%s)\n' "$diagram.svg" >>"$rendered"
+    diagram=""
   fi
-
-  printf '%s\n' "$line" >>"$rendered"
 done <"$input"
 
 pandoc "$rendered" \

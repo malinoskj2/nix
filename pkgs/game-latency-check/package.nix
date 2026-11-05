@@ -19,15 +19,13 @@ stdenvNoCC.mkDerivation {
   pname = "game-latency-check";
   version = "1.0";
   src = ./.;
-  nativeBuildInputs = [
-    makeWrapper
-    shellcheck
-  ];
+  nativeBuildInputs = [ makeWrapper ];
   nativeCheckInputs = [
     coreutils
     gawk
     gnugrep
     jq
+    shellcheck
   ];
   doCheck = true;
   checkPhase = ''

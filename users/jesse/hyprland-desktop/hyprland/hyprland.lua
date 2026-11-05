@@ -24,18 +24,20 @@ local CHROME_WEBGPU = table.concat({
 local FILE_CHOOSER_APP = "xdg-desktop-portal-gtk"
 local FILE_CHOOSER_CLASS = "^(" .. FILE_CHOOSER_APP .. ")$"
 
+local GAME_WORKSPACE = 5
+
 local function j2bar_msg(command)
   return hl.dsp.exec_cmd(nix.j2bar .. " msg " .. command)
 end
 
-for _, output in ipairs(nix.outputs) do
-  hl.monitor(output)
+for _, monitor in ipairs(nix.monitors) do
+  hl.monitor(monitor)
 end
 
 -- Wine otherwise picks the portrait display at (0, 0) as primary. AION's fullscreen
 -- rendering then gets pillarboxed even when its outer window is on the main display.
 local function set_xwayland_primary()
-  hl.exec_cmd(nix.xrandr .. " --output " .. nix.monitors.main .. " --primary")
+  hl.exec_cmd(nix.xrandr .. " --output " .. nix.outputs.main .. " --primary")
 end
 
 hl.on("hyprland.start", set_xwayland_primary)
@@ -45,7 +47,7 @@ hl.on("monitor.layout_changed", set_xwayland_primary)
 -- The side monitor gets a named workspace of its own, so it never takes a numbered one.
 hl.workspace_rule({
   workspace = "name:side",
-  monitor = nix.monitors.side,
+  monitor = nix.outputs.side,
   default = true,
   persistent = true,
   layout_opts = { orientation = "top" },
@@ -54,7 +56,7 @@ hl.workspace_rule({
 for id = nix.workspaces.first, nix.workspaces.last do
   hl.workspace_rule({
     workspace = tostring(id),
-    monitor = nix.monitors.main,
+    monitor = nix.outputs.main,
     default = id == nix.workspaces.first,
     persistent = true,
   })
@@ -77,7 +79,6 @@ hl.config({
 -- agent-sandbox's nested Hyprland loads the same file, so both draw surfaces alike.
 require("look")
 
--- Letters are mnemonic for the application; SHIFT picks a variant.
 hl.bind(MAIN_MOD .. " + Return", hl.dsp.exec_cmd(TERMINAL))
 hl.bind(MAIN_MOD .. " + F", hl.dsp.exec_cmd(BROWSER))
 hl.bind(MAIN_MOD .. " + C", hl.dsp.exec_cmd(CHROME))
@@ -85,12 +86,9 @@ hl.bind(MAIN_MOD .. " + SHIFT + C", hl.dsp.exec_cmd(CHROME_WEBGPU))
 hl.bind(MAIN_MOD .. " + D", hl.dsp.exec_cmd(DB_CLIENT))
 hl.bind(MAIN_MOD .. " + E", hl.dsp.exec_cmd(EDITOR))
 
--- Q and V act on the focused window; Q quits its app too, and floating resizes it, as its tiled size
--- rarely fits.
 hl.bind(MAIN_MOD .. " + Q", actions.close_and_quit({ [FILE_CHOOSER_APP] = true }))
-hl.bind(MAIN_MOD .. " + V", actions.toggle_floating())
+hl.bind(MAIN_MOD .. " + V", actions.toggle_floating)
 
--- j2bar is the shell, so these binds go through its commands.
 hl.bind(MAIN_MOD .. " + P", j2bar_msg("screenshot-region"))
 hl.bind(MAIN_MOD .. " + Escape", j2bar_msg("panel-toggle menu"))
 hl.bind(MAIN_MOD .. " + SHIFT + Escape", j2bar_msg("session lock"))
@@ -101,7 +99,6 @@ hl.bind("XF86AudioRaiseVolume", j2bar_msg("volume-up"), { locked = true, repeati
 hl.bind("XF86AudioLowerVolume", j2bar_msg("volume-down"), { locked = true, repeating = true })
 hl.bind("XF86AudioMute", j2bar_msg("volume-mute"), { locked = true })
 
--- H, J, K and L follow vim's directions to move focus, swap with SHIFT and resize with ALT.
 hl.bind(MAIN_MOD .. " + H", hl.dsp.focus({ direction = "left" }))
 hl.bind(MAIN_MOD .. " + L", hl.dsp.focus({ direction = "right" }))
 hl.bind(MAIN_MOD .. " + K", hl.dsp.focus({ direction = "up" }))
@@ -115,7 +112,6 @@ hl.bind(MAIN_MOD .. " + ALT + L", hl.dsp.window.resize({ x = 10, y = 0, relative
 hl.bind(MAIN_MOD .. " + ALT + K", hl.dsp.window.resize({ x = 0, y = -10, relative = true }))
 hl.bind(MAIN_MOD .. " + ALT + J", hl.dsp.window.resize({ x = 0, y = 10, relative = true }))
 
--- Y and O cycle back and forth through the main monitor's numbered workspaces.
 hl.bind(MAIN_MOD .. " + Y", actions.focus_workspace(-1))
 hl.bind(MAIN_MOD .. " + O", actions.focus_workspace(1))
 hl.bind(MAIN_MOD .. " + SHIFT + Y", actions.move_to_workspace(-1))
@@ -141,8 +137,7 @@ hl.window_rule({
 })
 
 -- `immediate` allows tearing where input latency matters.
-hl.window_rule({ match = { class = "^(firefox)$" }, immediate = true })
-hl.window_rule({ match = { class = "^(jetbrains-datagrip)$" }, immediate = true })
+hl.window_rule({ match = { class = "^(firefox|jetbrains-datagrip)$" }, immediate = true })
 
 -- Proton windows identify their Steam app but may supply neither a tearing hint nor a game
 -- content type. Gamescope is also a game surface, so both get automatic direct scanout.
@@ -157,9 +152,9 @@ hl.window_rule({
 -- on the main monitor. Keep Steam games here, including before they enter fullscreen.
 hl.window_rule({
   name = "steam-games-placement",
-  match = { class = "^steam_app_[0-9]+$" },
-  monitor = nix.monitors.main,
-  workspace = "5",
+  match = { class = "^(steam_app_[0-9]+)$" },
+  monitor = nix.outputs.main,
+  workspace = tostring(GAME_WORKSPACE),
   suppress_event = "x11configurerequest",
 })
 
@@ -180,12 +175,11 @@ hl.window_rule({
 -- XWayland class.
 hl.window_rule({ match = { class = "^(org.kde.dolphin|dolphin)$" }, float = true })
 
--- Workspace 5 floats every window until it leaves. Tags keep its previous state across reloads
--- and disappear with the window, so closing one needs no separate bookkeeping.
+-- The game workspace floats every window until it leaves. Tags keep its previous state across
+-- reloads and disappear with the window, so closing one needs no separate bookkeeping.
 do
-  local WORKSPACE = 5
-  local WAS_TILED = "workspace-5-was-tiled"
-  local WAS_FLOATING = "workspace-5-was-floating"
+  local WAS_TILED = "workspace-" .. GAME_WORKSPACE .. "-was-tiled"
+  local WAS_FLOATING = "workspace-" .. GAME_WORKSPACE .. "-was-floating"
 
   local function sync_floating(window)
     if window == nil or not window.mapped or window.workspace == nil then
@@ -201,7 +195,7 @@ do
     end
 
     local floating
-    if window.workspace.id == WORKSPACE then
+    if window.workspace.id == GAME_WORKSPACE then
       if previous == nil then
         previous = window.floating and WAS_FLOATING or WAS_TILED
         hl.dispatch(hl.dsp.window.tag({ tag = "+" .. previous, window = window }))

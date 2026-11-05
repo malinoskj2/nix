@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Sync Orca's managed hooks into a sandbox without replacing other agent state."""
 
 import fcntl
 import json
@@ -9,6 +8,8 @@ import re
 import sys
 import tempfile
 import tomllib
+
+CODEX_RUNTIME_HOME = Path(".config/orca/codex-runtime-home/home")
 
 
 def atomic_write(destination: Path, content: bytes, mode: int) -> None:
@@ -48,9 +49,7 @@ def update_trust_hashes(config: str, hashes: dict[str, str]) -> str:
                     pass
         elif current_key in hashes and re.match(r"\s*trusted_hash\s*=", line):
             found.add(current_key)
-            replacement = f"trusted_hash = {json.dumps(hashes[current_key])}\n"
-            if line != replacement:
-                lines[index] = replacement
+            lines[index] = f"trusted_hash = {json.dumps(hashes[current_key])}\n"
     # An existing managed section without a hash is malformed; do not append a
     # duplicate table and make the entire Codex config unreadable.
     missing = hashes.keys() - found
@@ -59,38 +58,43 @@ def update_trust_hashes(config: str, hashes: dict[str, str]) -> str:
     return "".join(lines)
 
 
+def hook_state(config: dict) -> dict:
+    return config.get("hooks", {}).get("state", {})
+
+
+def trusted_hooks(state: dict, prefix: str) -> dict[str, dict]:
+    return {
+        key.removeprefix(prefix): value
+        for key, value in state.items()
+        if key.startswith(prefix) and isinstance(value.get("trusted_hash"), str)
+    }
+
+
+def trust_table(key: str, value: dict) -> str:
+    table = f"[hooks.state.{json.dumps(key)}]\ntrusted_hash = {json.dumps(value['trusted_hash'])}\n"
+    if "enabled" in value:
+        table += f"enabled = {json.dumps(bool(value['enabled']))}\n"
+    return table + "\n"
+
+
 def add_codex_trust(host_home: Path, sandbox_home: Path) -> None:
-    managed_home = host_home / ".config/orca/codex-runtime-home/home"
-    sandbox_codex = sandbox_home / ".codex"
-    source_config = managed_home / "config.toml"
-    target_config = sandbox_codex / "config.toml"
+    source_config = host_home / CODEX_RUNTIME_HOME / "config.toml"
+    target_config = sandbox_home / ".codex/config.toml"
     if not source_config.is_file() or not target_config.is_file():
         return
-    source = tomllib.loads(source_config.read_text())
+    source_state = hook_state(tomllib.loads(source_config.read_text()))
     target_text = target_config.read_text()
-    target = tomllib.loads(target_text)
-    source_state = source.get("hooks", {}).get("state", {})
-    target_state = target.get("hooks", {}).get("state", {})
-    source_prefix = str(host_home / ".config/orca/codex-runtime-home/home/hooks.json") + ":"
-    target_prefix = str(host_home / ".codex/hooks.json") + ":"
+    target_state = hook_state(tomllib.loads(target_text))
+    source_prefix = f"{host_home / CODEX_RUNTIME_HOME / 'hooks.json'}:"
+    target_prefix = f"{host_home / '.codex/hooks.json'}:"
     additions = []
     changed_hashes = {}
-    for key, value in source_state.items():
-        if not key.startswith(source_prefix):
-            continue
-        target_key = target_prefix + key[len(source_prefix) :]
-        trusted_hash = value.get("trusted_hash")
-        if not isinstance(trusted_hash, str):
-            continue
-        if target_key in target_state:
-            if target_state[target_key].get("trusted_hash") != trusted_hash:
-                changed_hashes[target_key] = trusted_hash
-            continue
-        additions.append(f"[hooks.state.{json.dumps(target_key)}]\n")
-        additions.append(f"trusted_hash = {json.dumps(trusted_hash)}\n")
-        if "enabled" in value:
-            additions.append(f"enabled = {'true' if value['enabled'] else 'false'}\n")
-        additions.append("\n")
+    for suffix, value in trusted_hooks(source_state, source_prefix).items():
+        target_key = target_prefix + suffix
+        if target_key not in target_state:
+            additions.append(trust_table(target_key, value))
+        elif target_state[target_key].get("trusted_hash") != value["trusted_hash"]:
+            changed_hashes[target_key] = value["trusted_hash"]
     if not additions and not changed_hashes:
         return
     updated = update_trust_hashes(target_text, changed_hashes)
@@ -110,7 +114,7 @@ def main() -> None:
             sync_managed_file(host_hooks / name, sandbox_hooks / name, 0o700)
         sync_managed_file(host_hooks / "claude-settings.json", sandbox_hooks / "claude-settings.json", 0o600)
         sync_managed_file(
-            host_home / ".config/orca/codex-runtime-home/home/hooks.json",
+            host_home / CODEX_RUNTIME_HOME / "hooks.json",
             sandbox_home / ".codex/hooks.json",
             0o600,
         )

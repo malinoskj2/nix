@@ -7,22 +7,28 @@ group=$(id -gn)
 runtime=/run/user/$uid
 
 agent=claude
-if [[ ${1:-} == --claude ]]; then
-  shift
-elif [[ ${1:-} == --codex ]]; then
-  agent=codex
-  shift
-elif [[ ${1:-} == --muse ]]; then
-  agent=muse
-  shift
-fi
+case ${1:-} in
+  --claude | --codex | --muse)
+    agent=${1#--}
+    shift
+    ;;
+esac
 
 data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
 sandbox_home=$data/home
-shared=("$HOME/projects" "$HOME/nix" "$HOME/orca/workspaces" "$HOME/.cache/img2char3d" "$HOME/.local/share/Steam/steamapps/common" "$HOME/.local/share/unreal-engine")
+steam_common=$HOME/.local/share/Steam/steamapps/common
+shared=(
+  "$HOME/projects"
+  "$HOME/nix"
+  "$HOME/orca/workspaces"
+  "$HOME/.cache/img2char3d"
+  "$steam_common"
+  "$HOME/.local/share/unreal-engine"
+)
 screenshots=/tmp/screenshot
 media=/tmp/agent-media
 orca_relay_dir=$runtime/agent-sandbox-orca
+ssh_dir=$data/ssh
 host_wayland=
 for sock in "$runtime"/wayland-*; do
   if [[ -S $sock ]]; then
@@ -32,6 +38,13 @@ for sock in "$runtime"/wayland-*; do
 done
 image_ref="agent-sandbox:${AGENT_SANDBOX_TAG#hash-}"
 clipboard_dir=$(mktemp --directory "$runtime/agent-sandbox-clipboard.XXXXXX")
+
+workdir=$HOME/projects
+for dir in "${shared[@]}"; do
+  if [[ $PWD == "$dir" || $PWD == "$dir"/* ]]; then
+    workdir=$PWD
+  fi
+done
 
 # Keep bind mounts in order: writable child mounts override read-only parents.
 mounts=()
@@ -106,8 +119,6 @@ configure_muse() {
   seed_if_empty "$HOME/.config/muse/settings.json" "$sandbox_home/.config/muse/settings.json"
 }
 
-steam_common=$HOME/.local/share/Steam/steamapps/common
-
 # Proton and the Steam Linux Runtimes a sandbox client installs before launching a game, which
 # the sandbox keeps its own copies of so that it never rewrites the host's.
 is_steam_tool() {
@@ -157,6 +168,34 @@ configure_steam() {
   done
 }
 
+# Keys for serving SSH sessions from the container. Only the host key and the
+# client's public key go into the container.
+configure_ssh() {
+  mkdir -p "$ssh_dir"
+  chmod 700 "$ssh_dir"
+  local key
+  for key in host client; do
+    if [[ ! -f $ssh_dir/${key}_ed25519 ]]; then
+      ssh-keygen -q -t ed25519 -N '' -C "agent-sandbox-$key" -f "$ssh_dir/${key}_ed25519"
+    fi
+  done
+  cp "$ssh_dir/client_ed25519.pub" "$ssh_dir/authorized_keys"
+  printf 'agent-sandbox %s\n' "$(<"$ssh_dir/host_ed25519.pub")" >"$ssh_dir/known_hosts"
+}
+
+write_accounts() {
+  printf 'root:x:0:0::/root:/bin/sh\n%s:x:%s:%s::%s:/bin/bash\n' "$user" "$uid" "$gid" "$HOME" >"$data/passwd"
+  printf 'root:x:0:\n%s:x:%s:%s\n' "$group" "$gid" "$user" >"$data/group"
+}
+
+free_port() {
+  local port=$1
+  while (: <"/dev/tcp/127.0.0.1/$port") 2>/dev/null; do
+    port=$((port + 1))
+  done
+  echo "$port"
+}
+
 cleanup() {
   trap - EXIT
   if [[ -n ${clipboard_watcher_pid:-} ]]; then
@@ -172,6 +211,8 @@ trap 'exit 143' HUP TERM
 
 # Mirror the host image clipboard through an isolated bind mount. A host-side
 # watcher is required because the sandbox has its own headless Wayland session.
+# It requests the generic image type so browser copies choose an image
+# representation instead of the text/html representation they often offer first.
 CLIPBOARD_STATE=data agent-sandbox-clipboard-sync "$clipboard_dir" \
   < <(wl-paste --type image 2>/dev/null)
 wl-paste --type image --watch agent-sandbox-clipboard-sync "$clipboard_dir" \
@@ -185,22 +226,8 @@ done
 mkdir -p "$screenshots" "$media"
 mkdir -p "$orca_relay_dir"
 chmod 700 "$orca_relay_dir"
-
-# Keys for serving SSH sessions from the container (agent-sandbox-ssh). Only the
-# host key and the client's public key go into the container.
-ssh_dir=$data/ssh
-mkdir -p "$ssh_dir"
-chmod 700 "$ssh_dir"
-for key in host client; do
-  if [[ ! -f $ssh_dir/${key}_ed25519 ]]; then
-    ssh-keygen -q -t ed25519 -N '' -C "agent-sandbox-$key" -f "$ssh_dir/${key}_ed25519"
-  fi
-done
-cp "$ssh_dir/client_ed25519.pub" "$ssh_dir/authorized_keys"
-printf 'agent-sandbox %s\n' "$(<"$ssh_dir/host_ed25519.pub")" >"$ssh_dir/known_hosts"
-
-printf 'root:x:0:0::/root:/bin/sh\n%s:x:%s:%s::%s:/bin/bash\n' "$user" "$uid" "$gid" "$HOME" >"$data/passwd"
-printf 'root:x:0:\n%s:x:%s:%s\n' "$group" "$gid" "$user" >"$data/group"
+configure_ssh
+write_accounts
 
 if ! docker image inspect "$image_ref" >/dev/null 2>&1; then
   "$AGENT_SANDBOX_IMAGE" | docker load >/dev/null
@@ -210,21 +237,6 @@ configure_claude
 configure_codex
 configure_muse
 configure_steam
-
-workdir=$HOME/projects
-for dir in "${shared[@]}"; do
-  if [[ $PWD == "$dir" || $PWD == "$dir"/* ]]; then
-    workdir=$PWD
-  fi
-done
-
-free_port() {
-  local port=$1
-  while (: <"/dev/tcp/127.0.0.1/$port") 2>/dev/null; do
-    port=$((port + 1))
-  done
-  echo "$port"
-}
 
 args=(
   --rm
@@ -298,12 +310,14 @@ for dir in "$steam_common"/*/; do
     args+=(--volume "$data/steam-tools/${dir##*/}:$dir")
   fi
 done
-args+=(--volume "$screenshots:$screenshots:ro")
-args+=(--volume "$media:$media")
-args+=(--volume "$orca_relay_dir:$orca_relay_dir")
-args+=(--volume "$clipboard_dir:/run/host-clipboard:ro")
-args+=(--volume "$ssh_dir/host_ed25519:/run/agent-sandbox-ssh/host_ed25519:ro")
-args+=(--volume "$ssh_dir/authorized_keys:/run/agent-sandbox-ssh/authorized_keys:ro")
+args+=(
+  --volume "$screenshots:$screenshots:ro"
+  --volume "$media:$media"
+  --volume "$orca_relay_dir:$orca_relay_dir"
+  --volume "$clipboard_dir:/run/host-clipboard:ro"
+  --volume "$ssh_dir/host_ed25519:/run/agent-sandbox-ssh/host_ed25519:ro"
+  --volume "$ssh_dir/authorized_keys:/run/agent-sandbox-ssh/authorized_keys:ro"
+)
 # The NVIDIA CDI spec mounts only the 64-bit driver; Steam's 32-bit client needs the other half.
 if [[ -e /run/opengl-driver-32 ]]; then
   args+=(--volume /run/opengl-driver-32:/run/opengl-driver-32:ro)
@@ -313,25 +327,18 @@ if [[ -n $host_wayland ]]; then
   args+=(--volume "$host_wayland:$runtime/host-wayland-1:ro")
 fi
 
-if [[ -d $HOME/.config/git ]]; then
-  mount_readonly "$HOME/.config/git"
-fi
+mount_readonly "$HOME/.config/git"
 # Orca's CLI reads its runtime metadata and connects to the desktop's Unix
 # socket from this directory. Keep Orca's mutable workspace state host-owned.
-if [[ -d $HOME/.config/orca ]]; then
-  mount_readonly "$HOME/.config/orca"
-fi
+mount_readonly "$HOME/.config/orca"
 
 # The display draws text, icons and Hyprland's compositing the way the desktop does: its fonts and
 # their rendering settings, its desktop entries and icon themes, and its Hyprland look.lua.
 if [[ -f /etc/fonts/fonts.conf ]]; then
   args+=(--volume /etc/fonts:/etc/fonts:ro --env FONTCONFIG_FILE=/etc/fonts/fonts.conf)
 fi
-for dir in "$HOME/.config/fontconfig" "$HOME/.local/share/fonts"; do
-  if [[ -d $dir ]]; then
-    mount_readonly "$dir"
-  fi
-done
+mount_readonly "$HOME/.config/fontconfig"
+mount_readonly "$HOME/.local/share/fonts"
 if [[ -f $HOME/.config/hypr/look.lua ]]; then
   mount_readonly "$HOME/.config/hypr" /run/host-hypr
 fi
@@ -350,17 +357,15 @@ fi
 
 args+=("${mounts[@]}")
 
+args+=(--interactive)
 if [[ -t 0 && -t 1 ]]; then
-  args+=(--interactive --tty)
-else
-  args+=(--interactive)
+  args+=(--tty)
 fi
 
-if [[ $agent == codex ]]; then
-  set -- codex --dangerously-bypass-approvals-and-sandbox "$@"
-elif [[ $agent == muse ]]; then
-  set -- muse --yolo "$@"
-fi
+case $agent in
+  codex) set -- codex --dangerously-bypass-approvals-and-sandbox "$@" ;;
+  muse) set -- muse --yolo "$@" ;;
+esac
 
 # Serialize port selection with container creation across concurrent
 # launches: a created container reserves its publishes, so a launcher that
@@ -368,7 +373,7 @@ fi
 # ports instead of failing to bind.
 exec 9>"$runtime/agent-sandbox-ports.lock"
 cid=
-for _ in 1 2 3 4 5; do
+for _ in {1..5}; do
   flock 9
   vnc_port=$(free_port 5900)
   hyprland_vnc_port=$(free_port $((vnc_port + 1)))

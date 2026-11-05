@@ -4,10 +4,11 @@ def addr: tostring | ascii_downcase | ltrimstr("0x") | sub("^0+"; "");
 if $w == null or $m == null then
   {time: $now, error: "Window exited, changed identity or lost its output"}
 else
+  ($w.address | addr) as $address |
   ($w.workspace.id != null and $m.activeWorkspace.id != null) as $has_workspace |
   {
     time: $now, output: $m.name,
-    focused: (if $active.address == null then null else ($active.address | addr) == ($w.address | addr) end),
+    focused: (if $active.address == null then null else ($active.address | addr) == $address end),
     workspace_visible: (if $has_workspace then
       ($w.workspace.id == $m.activeWorkspace.id or $w.workspace.id == $m.specialWorkspace.id) else null end),
     fullscreen: $w.fullscreen,
@@ -18,9 +19,9 @@ else
     vrr: $m.vrr,
     mode: ($m | {width, height, refreshRate, scale, transform, dpmsStatus}),
     tearing: (if $has_workspace and ($m | has("activelyTearing") and has("solitary")) then
-      $m.activelyTearing == true and ($m.solitary | addr) == ($w.address | addr) else null end),
+      $m.activelyTearing == true and ($m.solitary | addr) == $address else null end),
     scanout: (if $has_workspace and ($m | has("directScanoutTo")) then
-      ($m.directScanoutTo | addr) == ($w.address | addr) else null end)
+      ($m.directScanoutTo | addr) == $address else null end)
   } |
   if .workspace_visible == false then .tearing = false | .scanout = false else . end
 end

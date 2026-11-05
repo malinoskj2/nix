@@ -6,11 +6,9 @@
   ...
 }:
 let
-  inherit (config.palette) alphaHex glass;
   supportedHyprland = "0.56.2";
   hyprland = osConfig.programs.hyprland.package;
   hyprctl = lib.getExe' hyprland "hyprctl";
-  palette = config.palette.mocha;
   inherit (config.desktop) monitors;
   monitorOption = lib.types.submodule {
     options = {
@@ -33,15 +31,10 @@ let
       };
     };
   };
-  # Prepended to hyprland.lua and look.lua as `nix`.
   vars = {
-    inherit hyprctl palette;
     xrandr = lib.getExe pkgs.xrandr;
-    alpha = {
-      chrome = alphaHex glass.chrome;
-    };
-    monitors = lib.mapAttrs (_: monitor: monitor.output) monitors;
-    outputs = [
+    outputs = lib.mapAttrs (_: monitor: monitor.output) monitors;
+    monitors = [
       monitors.side
       monitors.main
     ];

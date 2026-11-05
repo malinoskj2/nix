@@ -17,7 +17,7 @@ systemctl --user start "$unit"
 
 # The entrypoint writes the sshd config once the container is up; before that,
 # an sshd session would start without the sandbox's environment.
-for _ in $(seq 900); do
+for _ in {1..900}; do
   if docker exec "$container" test -s "$config" 2>/dev/null; then
     exec docker exec --interactive "$container" "$AGENT_SANDBOX_SSHD" -i -e -f "$config"
   fi

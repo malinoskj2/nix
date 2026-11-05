@@ -1,6 +1,7 @@
 {
   coreutils,
   docker,
+  findutils,
   gawk,
   lib,
   nh,
@@ -13,6 +14,7 @@ writeShellApplication {
   runtimeInputs = [
     coreutils
     docker
+    findutils
     gawk
     nh
     systemd

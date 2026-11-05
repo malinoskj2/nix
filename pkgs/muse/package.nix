@@ -27,37 +27,31 @@ let
     }
     .${stdenv.hostPlatform.system};
 
+  src = fetchurl {
+    url = "https://lookaside.facebook.com/lookaside/muse/download/?channel=muse&version=${version}&file=${artifact.file}";
+    inherit (artifact) hash;
+  };
+
   unwrapped = runCommand "muse-unwrapped-${version}" { } ''
-    install -Dm755 ${
-      fetchurl {
-        url = "https://lookaside.facebook.com/lookaside/muse/download/?channel=muse&version=${version}&file=${artifact.file}";
-        inherit (artifact) hash;
-      }
-    } $out/bin/.muse-unwrapped
+    install -Dm755 ${src} $out/bin/.muse-unwrapped
   '';
 in
-(writeShellApplication {
+writeShellApplication {
   name = "muse";
-  runtimeEnv = {
-    MUSE_UNWRAPPED_BIN = "${unwrapped}/bin/.muse-unwrapped";
-    MUSE_CONTRIBUTOR_MODEL = contributorModel;
-  };
   text = ''
+    muse=${unwrapped}/bin/.muse-unwrapped
     if [[ -n ''${MUSE_MODEL:-} ]]; then
-      exec "$MUSE_UNWRAPPED_BIN" "$@"
+      exec "$muse" "$@"
     fi
     for arg in "$@"; do
       if [[ $arg == --model || $arg == --model=* ]]; then
-        exec "$MUSE_UNWRAPPED_BIN" "$@"
+        exec "$muse" "$@"
       fi
     done
-    exec "$MUSE_UNWRAPPED_BIN" --model "$MUSE_CONTRIBUTOR_MODEL" "$@"
+    exec "$muse" --model ${contributorModel} "$@"
   '';
-}).overrideAttrs
-  {
-    meta = {
-      description = "Meta's Muse Code terminal coding agent, starting in contributor mode by default";
-      mainProgram = "muse";
-      platforms = lib.platforms.linux;
-    };
-  }
+  meta = {
+    description = "Meta's Muse Code terminal coding agent, starting in contributor mode by default";
+    platforms = lib.platforms.linux;
+  };
+}

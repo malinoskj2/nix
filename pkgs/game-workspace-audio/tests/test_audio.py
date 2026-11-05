@@ -16,15 +16,26 @@ def stream(identity="10", key="game", mute=False, app="42", node=20):
     return {identity: Stream(node, app, key, mute)}
 
 
+def no_game(_pid):
+    return None
+
+
+def steam_game(_pid):
+    return "42"
+
+
 class AudioTest(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.path = Path(self.directory.name) / "mute.json"
         self.calls = []
-        self.controller = Controller(self.path, lambda node, mute: self.calls.append((node, mute)))
+        self.controller = Controller(self.path, self.record)
 
     def tearDown(self):
         self.directory.cleanup()
+
+    def record(self, _identity, stream, mute):
+        self.calls.append((stream.node_id, mute))
 
     def test_hidden_on_start_and_return(self):
         self.controller.reconcile(stream(), {"42"})
@@ -61,13 +72,13 @@ class AudioTest(unittest.TestCase):
     def test_game_exit_hidden_and_restart(self):
         self.controller.reconcile(stream(), {"42"})
         self.controller.reconcile({}, set())
-        restarted = Controller(self.path, lambda node, mute: self.calls.append((node, mute)))
+        restarted = Controller(self.path, self.record)
         restarted.reconcile(stream(identity="new-core", mute=True, node=21), set())
         self.assertEqual(self.calls, [(20, True), (21, False)])
 
     def test_daemon_restart_recovers_existing_mute(self):
         self.controller.reconcile(stream(), {"42"})
-        restarted = Controller(self.path, lambda node, mute: self.calls.append((node, mute)))
+        restarted = Controller(self.path, self.record)
         restarted.reconcile(stream(mute=True), set())
         self.assertEqual(self.calls, [(20, True), (20, False)])
 
@@ -77,7 +88,7 @@ class AudioTest(unittest.TestCase):
         self.assertEqual(self.calls, [(20, True)])
 
     def test_ownership_is_journaled_before_mute_failure(self):
-        def fail(_node, _mute):
+        def fail(_identity, _stream, _mute):
             raise OSError("audio server disappeared")
 
         controller = Controller(self.path, fail)
@@ -87,7 +98,7 @@ class AudioTest(unittest.TestCase):
 
     def test_existing_journal_format_is_restored(self):
         self.path.write_text(json.dumps({"game": {"10": False}}))
-        controller = Controller(self.path, lambda node, mute: self.calls.append((node, mute)))
+        controller = Controller(self.path, self.record)
         controller.reconcile(stream(mute=True), set())
         self.assertEqual(self.calls, [(20, False)])
         self.assertEqual(json.loads(self.path.read_text()), {})
@@ -123,17 +134,17 @@ class AudioTest(unittest.TestCase):
             {"activeWorkspace": {"id": 5}, "focused": False},
             {"activeWorkspace": {"id": -1337}, "focused": True},
         ]
-        self.assertEqual(hidden_games([window()], monitors, lambda _: None), set())
+        self.assertEqual(hidden_games([window()], monitors, no_game), set())
         monitors[0]["activeWorkspace"]["id"] = 2
-        self.assertEqual(hidden_games([window()], monitors, lambda _: None), {"42"})
+        self.assertEqual(hidden_games([window()], monitors, no_game), {"42"})
         # Moving any game window out of workspace 5 restores its audio.
-        self.assertEqual(hidden_games([window(workspace=2)], monitors, lambda _: None), set())
+        self.assertEqual(hidden_games([window(workspace=2)], monitors, no_game), set())
 
     def test_custom_native_class_and_steam_ui(self):
         native = {"class": "native-game", "pid": 1, "workspace": {"id": 5}}
         steam = {"class": "steam", "pid": 2, "workspace": {"id": 5}}
-        self.assertEqual(hidden_games([native, steam], [], lambda _: "42"), {"42"})
-        self.assertEqual(hidden_games([steam], [], lambda _: "42"), set())
+        self.assertEqual(hidden_games([native, steam], [], steam_game), {"42"})
+        self.assertEqual(hidden_games([steam], [], steam_game), set())
 
     def test_process_steam_id_and_helper_exclusion(self):
         with (
@@ -159,15 +170,15 @@ class AudioTest(unittest.TestCase):
                 "info": {"props": props, "params": {"Props": [{"mute": False}]}},
             },
         ]
-        actual = streams(snapshot, lambda _: "42")
+        actual = streams(snapshot, steam_game)
         self.assertEqual(len(actual), 1)
         self.assertEqual(next(iter(actual.values())).app, "42")
         other_core = copy.deepcopy(snapshot)
         other_core[0]["info"]["cookie"] = 101
-        self.assertNotEqual(set(actual), set(streams(other_core, lambda _: "42")))
-        self.assertEqual(streams(snapshot, lambda _: None), {})
+        self.assertNotEqual(set(actual), set(streams(other_core, steam_game)))
+        self.assertEqual(streams(snapshot, no_game), {})
         props["media.class"] = "Stream/Input/Audio"
-        self.assertEqual(streams(snapshot, lambda _: "42"), {})
+        self.assertEqual(streams(snapshot, steam_game), {})
 
 
 if __name__ == "__main__":

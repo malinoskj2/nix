@@ -1,11 +1,11 @@
 { lib, pkgs, ... }:
 let
   steamGameMode =
-    p:
+    packageSet:
     assert lib.assertMsg (
-      p.gamemode.version == "1.8.2"
-    ) "The Steam GameMode patch requires review for GameMode ${p.gamemode.version}.";
-    p.gamemode.overrideAttrs (old: {
+      packageSet.gamemode.version == "1.8.2"
+    ) "The Steam GameMode patch requires review for GameMode ${packageSet.gamemode.version}.";
+    packageSet.gamemode.overrideAttrs (old: {
       patches = (old.patches or [ ]) ++ [ ./steam-gamemode.patch ];
       # The auto loader dlopens the client by soname. Steam's inner runtime
       # replaces LD_LIBRARY_PATH, so the client also needs an explicit search path.
@@ -25,13 +25,8 @@ let
       path = "${lib.getLib (steamGameMode pkgs.pkgsi686Linux)}/lib/libgamemodeauto.so.0";
     }
   ];
-
 in
 {
-  environment.systemPackages = [
-    pkgs.game-latency-check
-  ];
-
   nixpkgs.overlays = [
     (_final: prev: {
       gamemode =
@@ -50,6 +45,7 @@ in
   # ExecStart uses a stable security-wrapper path; changing its target alone
   # does not make systemd notice that the running user daemon needs replacing.
   systemd.user.services.gamemoded.restartTriggers = [ pkgs.gamemode ];
+
   programs = {
     j2bar.gameEngine.enable = true;
 
@@ -64,34 +60,36 @@ in
       });
     gamemode = {
       enable = true;
-      # CCD0 has 96 MiB L3 (V-Cache); include its SMT siblings. Pin only
-      # registered games and keep both CCDs online for the unrestricted desktop.
-      settings.cpu = {
-        pin_cores = "0-7,16-23";
-        park_cores = "no";
+      settings = {
+        # CCD0 has 96 MiB L3 (V-Cache); include its SMT siblings. Pin only
+        # registered games and keep both CCDs online for the unrestricted desktop.
+        cpu = {
+          pin_cores = "0-7,16-23";
+          park_cores = "no";
+        };
+        # Steam inherits the automatic client library, but its persistent UI must
+        # not keep GameMode active after the last game exits. Filters are path
+        # substrings, so avoid "steam" (which also appears in game install paths).
+        filter.blacklist = [
+          "/ubuntu12_32/steam"
+          "/steamwebhelper"
+          "/steamservice"
+          "/steam_monitor"
+          "/steam-runtime-launcher-service"
+          "-srt-launcher-service"
+          "/steam-runtime-supervisor"
+          "/steam-runtime-input-monitor"
+          "/srt-logger"
+        ];
       };
-      # Steam inherits the automatic client library, but its persistent UI must
-      # not keep GameMode active after the last game exits. Filters are path
-      # substrings, so avoid "steam" (which also appears in game install paths).
-      settings.filter.blacklist = [
-        "/ubuntu12_32/steam"
-        "/steamwebhelper"
-        "/steamservice"
-        "/steam_monitor"
-        "/steam-runtime-launcher-service"
-        "-srt-launcher-service"
-        "/steam-runtime-supervisor"
-        "/steam-runtime-input-monitor"
-        "/srt-logger"
-      ];
     };
     steam = {
       enable = true;
       package = pkgs.steam.override {
         # j2bar injection is explicit per game: j2bar game-run -- %command%.
         # Preserve the independent GameMode client and privileged CPU policy.
-        extraLibraries = p: [
-          (lib.getLib (steamGameMode p))
+        extraLibraries = packageSet: [
+          (lib.getLib (steamGameMode packageSet))
         ];
         extraProfile = ''
           # A bar started in nix develop can pass tens of KiB of compiler flags
@@ -103,4 +101,6 @@ in
       };
     };
   };
+
+  environment.systemPackages = [ pkgs.game-latency-check ];
 }

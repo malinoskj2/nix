@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Forward one private Unix socket to Orca's current loopback hook port."""
-
 import json
 import os
 import re
@@ -12,6 +10,10 @@ import sys
 import threading
 
 MAX_HEAD = 65536
+READ_SIZE = 65536
+MAX_CONNECTIONS = 32
+IDLE_TIMEOUT = 5
+CONNECT_TIMEOUT = 2
 
 
 def peer_pid(sock: socket.socket) -> int:
@@ -67,21 +69,40 @@ def read_head(sock: socket.socket) -> bytes | None:
     while b"\r\n\r\n" not in data:
         if len(data) > MAX_HEAD:
             return None
-        chunk = sock.recv(65536)
+        chunk = sock.recv(READ_SIZE)
         if not chunk:
             return None
         data += chunk
     return data
 
 
+def relay(client: socket.socket, upstream: socket.socket) -> None:
+    sockets = [client, upstream]
+    while sockets:
+        readable, _, _ = select.select(sockets, [], [], IDLE_TIMEOUT)
+        if not readable:
+            return
+        for source in readable:
+            target = upstream if source is client else client
+            try:
+                data = source.recv(READ_SIZE)
+                if data:
+                    target.sendall(data)
+                else:
+                    sockets.remove(source)
+                    target.shutdown(socket.SHUT_WR)
+            except OSError:
+                return
+
+
 class HookServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     daemon_threads = True
-    request_queue_size = 32
+    request_queue_size = MAX_CONNECTIONS
 
     def __init__(self, socket_path: str, endpoint_path: str, fallback_port: int):
         self.endpoint_path = endpoint_path
         self.fallback_port = fallback_port
-        self.slots = threading.BoundedSemaphore(32)
+        self.slots = threading.BoundedSemaphore(MAX_CONNECTIONS)
         super().__init__(socket_path, HookHandler)
         os.chmod(socket_path, 0o600)
 
@@ -89,6 +110,8 @@ class HookServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
         if not self.slots.acquire(blocking=False):
             request.close()
             return
+        # The handler thread releases the slot when it finishes, so release it
+        # here only if that thread never started.
         try:
             super().process_request(request, client_address)
         except BaseException:
@@ -117,14 +140,14 @@ class HookHandler(socketserver.BaseRequestHandler):
     def handle(self):
         server: HookServer = self.server
         try:
-            self.request.settimeout(5)
+            self.request.settimeout(IDLE_TIMEOUT)
             data = read_head(self.request)
             if data is None:
                 return
             head, _, body = data.partition(b"\r\n\r\n")
             data = translate_agent_process(head, peer_pid(self.request)) + b"\r\n\r\n" + body
             self.request.settimeout(None)
-            upstream = socket.create_connection(("127.0.0.1", server.current_port()), timeout=2)
+            upstream = socket.create_connection(("127.0.0.1", server.current_port()), timeout=CONNECT_TIMEOUT)
         except OSError:
             return
         with upstream:
@@ -132,22 +155,7 @@ class HookHandler(socketserver.BaseRequestHandler):
                 upstream.sendall(data)
             except OSError:
                 return
-            sockets = [self.request, upstream]
-            while sockets:
-                readable, _, _ = select.select(sockets, [], [], 5)
-                if not readable:
-                    return
-                for source in readable:
-                    target = upstream if source is self.request else self.request
-                    try:
-                        data = source.recv(65536)
-                        if data:
-                            target.sendall(data)
-                        else:
-                            sockets.remove(source)
-                            target.shutdown(socket.SHUT_WR)
-                    except OSError:
-                        return
+            relay(self.request, upstream)
 
 
 if __name__ == "__main__":
