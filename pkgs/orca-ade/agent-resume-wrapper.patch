@@ -1,0 +1,80 @@
+diff --git a/src/renderer/src/components/terminal-pane/pty-connection/cold-restore-resume-startup.ts b/src/renderer/src/components/terminal-pane/pty-connection/cold-restore-resume-startup.ts
+index 7623aee..00a82b8 100644
+--- a/src/renderer/src/components/terminal-pane/pty-connection/cold-restore-resume-startup.ts
++++ b/src/renderer/src/components/terminal-pane/pty-connection/cold-restore-resume-startup.ts
+@@ -2,7 +2,10 @@ import {
+   getConnectionIdForWorktreeCopy,
+   getConnectionIdFromState
+ } from '@/lib/connection-owner-resolution'
+-import { normalizeExecutionHostId } from '../../../../../shared/execution-host'
++import {
++  normalizeExecutionHostId,
++  parseExecutionHostId
++} from '../../../../../shared/execution-host'
+ import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+ import { useAppStore } from '@/store'
+ import { createBrowserUuid } from '@/lib/browser-uuid'
+@@ -18,6 +21,9 @@ import {
+   sleepingRecordNamesAnotherExecutionHost
+ } from '@/lib/sleeping-record-execution-host-scope'
+ import { resolveResumeLaunchRecipe } from '../../../../../shared/tui-agent-launch-defaults'
++import { nixAgentResumeWrapper } from '../../../../../shared/nix-agent-resume-wrapper'
++import type { TuiAgent } from '../../../../../shared/tui-agent'
++import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
+ import {
+   agentProviderSessionsEqual,
+   isResumableTuiAgent,
+@@ -112,8 +118,12 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
+     const startupPlan = buildAgentResumeStartupPlan({
+       agent,
+       providerSession,
+-      cmdOverrides: state.settings?.agentCmdOverrides ?? {},
+-      ...resolveResumeLaunchRecipe(launchConfig),
++      ...withAgentResumeWrapper(
++        agent,
++        !connectionId && parseExecutionHostId(session.executionHostId)?.kind === 'local',
++        state.settings?.agentCmdOverrides ?? {},
++        resolveResumeLaunchRecipe(launchConfig)
++      ),
+       platform: resumeTarget.platform,
+       agentHostPlatform: resumeTarget.agentHostPlatform,
+       shell: resumeTarget.shell,
+@@ -158,6 +168,38 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
+   }
+ }
+ 
++const WRAPPED_RESUME_AGENTS: ReadonlySet<TuiAgent> = new Set(['claude', 'codex', 'muse'])
++
++/** Local resumes of these agents run through the declared wrapper; a command that is already
++ *  wrapped, or doesn't start with the agent's own binary, is left as it is. */
++function withAgentResumeWrapper(
++  agent: TuiAgent,
++  isLocal: boolean,
++  cmdOverrides: Partial<Record<TuiAgent, string>>,
++  recipe: ReturnType<typeof resolveResumeLaunchRecipe>
++): ReturnType<typeof resolveResumeLaunchRecipe> & {
++  cmdOverrides: Partial<Record<TuiAgent, string>>
++} {
++  const wrap = (command: string): string | null =>
++    nixAgentResumeWrapper && new RegExp(`^${agent}(\\s|$)`).test(command.trim())
++      ? `${nixAgentResumeWrapper} ${command.trim()}`
++      : null
++  if (!WRAPPED_RESUME_AGENTS.has(agent) || !isLocal) {
++    return { ...recipe, cmdOverrides }
++  }
++  if (recipe.agentCommand) {
++    return {
++      ...recipe,
++      cmdOverrides,
++      agentCommand: wrap(recipe.agentCommand) ?? recipe.agentCommand
++    }
++  }
++  const command = wrap(
++    cmdOverrides[agent] || getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[agent], 'linux')
++  )
++  return { ...recipe, cmdOverrides: command ? { ...cmdOverrides, [agent]: command } : cmdOverrides }
++}
++
+ /** Keeps the reattach fallback's actual fresh-agent outcome with the pane's start. */
+ export function reopenPaneAfterMissingReattach(
+   session: ConnectPanePtySession,

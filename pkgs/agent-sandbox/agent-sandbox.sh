@@ -6,7 +6,8 @@ user=$(id -un)
 group=$(id -gn)
 runtime=/run/user/$uid
 
-agent=claude
+# Without an agent flag, the arguments are the container's command, Claude by default.
+agent=
 case ${1:-} in
   --claude | --codex | --muse)
     agent=${1#--}
@@ -363,6 +364,7 @@ if [[ -t 0 && -t 1 ]]; then
 fi
 
 case $agent in
+  claude) set -- claude --dangerously-skip-permissions "$@" ;;
   codex) set -- codex --dangerously-bypass-approvals-and-sandbox "$@" ;;
   muse) set -- muse --yolo "$@" ;;
 esac
