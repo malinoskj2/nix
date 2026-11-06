@@ -124,6 +124,7 @@
           "markdown-to-pdf"
           "muse"
           "orca-ade"
+          "playwright-browsers"
           "pubip"
           "pyghidra-mcp"
           "switch-and-reset-sandboxes"

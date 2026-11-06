@@ -89,7 +89,7 @@
   pandoc,
   pciutils,
   pkg-config,
-  playwright-driver,
+  playwright-browsers,
   playwright-mcp,
   playwright-test,
   procps,
@@ -468,7 +468,7 @@ let
         WAYLAND_DISPLAY = "wayland-1";
         MOZ_ENABLE_WAYLAND = "1";
         NIXOS_OZONE_WL = "1";
-        PLAYWRIGHT_BROWSERS_PATH = "${playwright-driver.browsers}";
+        PLAYWRIGHT_BROWSERS_PATH = "${playwright-browsers}";
         PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
         CARGO_PROFILE_DEV_DEBUG = "line-tables-only";
         CARGO_PROFILE_TEST_DEBUG = "line-tables-only";
