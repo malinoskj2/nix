@@ -56,7 +56,12 @@ let
         }
       );
     };
+  modelSettings = {
+    model = "gpt-6.1-sol";
+    model_reasoning_effort = "medium";
+  };
   settings = tomlFormat.generate "codex-settings.toml" config.programs.codex.settings;
+  sandboxSettings = tomlFormat.generate "codex-sandbox-settings.toml" modelSettings;
   # Codex saves folder trust and model choices to its own config.toml, so it
   # has to be a writable file with these settings merged in, not a store link.
   mergeSettings = pkgs.writers.writePython3 "codex-merge-settings" {
@@ -70,12 +75,21 @@ in
     enable = true;
     package = pkgs.unstable.codex;
     skills = ../claude/skills;
-    settings.tui.alternate_screen = "never";
-    context = lib.concatMapStringsSep "\n" builtins.readFile [
-      ../claude/rules/worktrees.md
-      ../claude/rules/media.md
-      ../claude/rules/sandbox-display.md
-    ];
+    settings = modelSettings // {
+      tui.alternate_screen = "never";
+    };
+    context =
+      lib.concatMapStringsSep "\n" builtins.readFile [
+        ../claude/rules/worktrees.md
+        ../claude/rules/media.md
+        ../claude/rules/sandbox-display.md
+      ]
+      + ''
+
+        # Codex questions
+
+        - Codex: do not use the asynchronous question tool (`request_user_input_async`) that requires Shift+Enter to view a pending question. Make reasonable assumptions and continue. If clarification is essential, ask directly in chat.
+      '';
   };
 
   home.file = lib.mapAttrs' mkAgent agents // {
@@ -85,5 +99,10 @@ in
   home.activation.codexSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
     run mkdir -p "$HOME/.codex"
     run ${mergeSettings} ${settings} "$HOME/.codex/config.toml"
+    # The agent sandbox seeds its config.toml from this one only once.
+    sandboxConfig="${config.xdg.dataHome}/agent-sandbox/home/.codex/config.toml"
+    if [ -s "$sandboxConfig" ]; then
+      run ${mergeSettings} ${sandboxSettings} "$sandboxConfig"
+    fi
   '';
 }
