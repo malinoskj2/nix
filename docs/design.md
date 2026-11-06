@@ -49,7 +49,7 @@ Shell components use the Catppuccin palette with these roles:
 
 Bar icons are white at 70% (`#ffffffb3`).
 
-The GTK file chooser, Dolphin, Firefox and Orca use **mauve** as their accent. That
+The GTK file chooser, Firefox and Orca use **mauve** as their accent. That
 is the one known split from the peach used by the shell; keep new shell
 components on peach.
 
@@ -186,11 +186,9 @@ Hyprland springs, defined in `hyprland.lua`:
 - Bar icons have no tooltips when their menu shows the same information.
 - Windows have radius 10 and no border; hyprfocus's dip marks focus. Hyprbars
   is only a thin drag strip on Alacritty and mpv.
-- Icons are Catppuccin Mocha Papirus, built two ways. The GTK file chooser
-  uses Couture: blue folders, with one accent per place and a gray trash in
-  its list and sidebar. Dolphin uses Papirus-Dark-Catppuccin: peach folders,
-  with mimetype icons recolored to the palette by
-  `users/jesse/dolphin/papirus-catppuccin.py`.
+- The GTK file chooser uses Couture icons based on Catppuccin Mocha Papirus:
+  blue folders, with one accent per place and a gray trash in its list and
+  sidebar.
 - The cursor is OpenZone White Slim at 24.
 
 ## New components

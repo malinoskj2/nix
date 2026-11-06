@@ -2,8 +2,8 @@
 
 Four independent GPT-6.1 Sol reviewers examined patches, sandbox infrastructure,
 custom desktop packages, and Nix/host configuration. This reviews commit
-`9f0f3c9`; the findings are suggestions, not implemented changes. The supervising
-review checked key references, evaluated the locked upstream CLI versions, and
+`9f0f3c9`; findings are suggestions except where a completion note says otherwise.
+The supervising review checked key references, evaluated the locked upstream CLI versions, and
 independently reproduced the TOML updater failures. No live desktop, Docker
 concurrency, or full Orca restart acceptance test was performed.
 
@@ -268,20 +268,14 @@ config mount. An immutable user config symlink is not an equivalent replacement.
 
 ### 16. Drop Dolphin's custom cosmetic transformation pipeline
 
-**Medium payoff; small effort for icons; visible behavior change.**
+**Completed: Dolphin was removed entirely at the user's request.**
 
-[Dolphin already uses Catppuccin Papirus folders](../users/jesse/dolphin/default.nix#L8),
-then adds a [254-line SVG recoloring engine](../users/jesse/dolphin/papirus-catppuccin.py#L1)
-with color conversion and gamut handling. Use the existing theme directly and
-delete the custom MIME-icon transformation and `icons.nix`.
-
-Independent further cuts: use the stock Kvantum theme instead of the
-[90-line glass transformation](../users/jesse/dolphin/kvantum-glass.py#L5), and
-choose an existing font with suitable metrics instead of
-[rewriting a font](../users/jesse/dolphin/view-font.nix#L1).
-**Loss:** custom MIME-icon colors, optionally glass and the SF view font. Check
-icons, thumbnails, view spacing and D-Bus launch. Retain functional Open With
-menu setup and KIO/thumbnail plugins.
+The original recommendation was to remove a 254-line MIME-icon recoloring
+engine, a 90-line Kvantum glass transformation and custom font rewriting.
+Complete removal also deletes the Home Manager module, wrapper, generated
+configuration and compositor window rule. The GTK portal file chooser retains
+its independent theme and icons. Claude Desktop and its custom packaging/theme
+were removed at the same time.
 
 ### 17. Use one package inventory
 
