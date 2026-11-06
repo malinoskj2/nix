@@ -118,9 +118,8 @@ That failure is silent too: the activity reaches the tab and shows nowhere.
 hashes of Apple's `.dmg` downloads, but Apple replaces those files in place. A
 machine that doesn't already have a file then fails with a hash mismatch, and
 so does CI. To fix it, move the pinned commit to a recent one (upstream
-refreshes the hashes daily), run `nix flake lock`, and check that the Dolphin
-font build in [`users/jesse/dolphin/`](../users/jesse/dolphin) still finds
-`SF-Pro-Text-*.otf` under `${pkgs.sf-pro}/share/fonts/opentype`.
+refreshes the hashes daily), run `nix flake lock`, and rebuild the affected
+font packages.
 
 ### `nixos-hardware`
 
@@ -167,12 +166,6 @@ Treat a bump as a hardware change and test it on the device.
   priority must be interpreted from CPU niceness, distinct from explicit
   best-effort priority zero. Check boost/restore across threads and preservation
   of custom priorities when updating the 1.8.2 version assertion.
-- **Claude Desktop.** [`pkgs/claude-desktop/`](../pkgs/claude-desktop) fetches
-  one `.deb` from Anthropic's APT repository. To move it, copy the newest
-  `Version` and `SHA256` from
-  `https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-amd64/Packages`.
-  The build patches hardcoded paths in `app.asar` and fails if one is gone;
-  find where the new release looks instead.
 - **Orca.** [`pkgs/orca-ade/`](../pkgs/orca-ade) builds one stablyai/orca
   release tag from source against `pkgs.unstable`'s Electron 43, Node 24 and
   pnpm 11. To move it, change `version`, then refresh the source hash and both

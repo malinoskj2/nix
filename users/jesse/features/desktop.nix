@@ -76,8 +76,6 @@ in
 {
   imports = [
     ../arrpc
-    ../claude-desktop
-    ../dolphin
     ../firefox.nix
     ../mpv.nix
     ../pointer-cursor.nix

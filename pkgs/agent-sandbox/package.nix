@@ -410,7 +410,7 @@ let
       ln -s ${bashInteractive}/bin/bash bin/bash
       ln -s ${coreutils}/bin/env usr/bin/env
       ln -s ${orcaCli}/bin/orca-ide usr/bin/orca-ide
-      # For prebuilt binaries such as the Claude CLI that Claude Desktop installs over SSH.
+      # For prebuilt binaries uploaded over SSH.
       ln -s ${nix-ld}/libexec/nix-ld lib64/ld-linux-x86-64.so.2
       ln -s ${nixConf} etc/nix/nix.conf
       ln -s ${fontconfig.out}/etc/fonts/conf.d etc/fonts/conf.d

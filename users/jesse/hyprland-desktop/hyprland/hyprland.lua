@@ -171,10 +171,6 @@ hl.window_rule({
   no_shadow = true,
 })
 
--- Dolphin works like the dialogs above, and the class matches both its Wayland app_id and its
--- XWayland class.
-hl.window_rule({ match = { class = "^(org.kde.dolphin|dolphin)$" }, float = true })
-
 -- The game workspace floats every window until it leaves. Tags keep its previous state across
 -- reloads and disappear with the window, so closing one needs no separate bookkeeping.
 do
