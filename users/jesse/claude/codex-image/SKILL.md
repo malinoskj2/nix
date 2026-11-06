@@ -1,6 +1,6 @@
 ---
 name: codex-image
-description: Generate or edit raster images with Codex (gpt-6-astra, high reasoning) and its built-in image generator. Use whenever a task needs a raster or visually complex image that can't reasonably be hand-written as SVG, CSS or code, such as illustrations, photos, realistic or painterly art, detailed icons, logos with texture, sprites, textures, backgrounds, hero images, mockups, concept art, reference images for 3D, or edits to an existing image. Don't use it for charts, diagrams, simple geometric SVG, screenshots or UI you can build in code.
+description: Generate or edit raster images with Codex (gpt-6.1-sol, medium reasoning) and its built-in image generator. Use whenever a task needs a raster or visually complex image that can't reasonably be hand-written as SVG, CSS or code, such as illustrations, photos, realistic or painterly art, detailed icons, logos with texture, sprites, textures, backgrounds, hero images, mockups, concept art, reference images for 3D, or edits to an existing image. Don't use it for charts, diagrams, simple geometric SVG, screenshots or UI you can build in code.
 ---
 
 # Codex image generation
@@ -15,10 +15,11 @@ no_mcp=()
 while read -r name; do
   no_mcp+=(-c "mcp_servers.$name.enabled=false")
 done < <(codex mcp list --json | jq -r '.[].name')
-codex exec \
+codex \
   "${no_mcp[@]}" \
-  -m gpt-6-astra \
-  -c model_reasoning_effort=high \
+  exec \
+  -m gpt-6.1-sol \
+  -c model_reasoning_effort=medium \
   -s read-only \
   --skip-git-repo-check \
   -C "$out" \
@@ -30,6 +31,7 @@ cat "$out/last.txt"
 
 - Run it with a Bash timeout of 600000 ms.
 - Keep the MCP servers disabled. Image generation never uses them, and each `codex exec` would otherwise start its own copy of every server.
+- Put the MCP disable overrides before `exec`, alongside the sandbox wrapper's connection overrides. Placing them after `exec` can replace Ghidra's connection settings and fail startup with `invalid transport`.
 - Keep `-s read-only` and the no-shell instruction. Codex's own sandbox can't start in some containers, so Codex only generates and you copy the file.
 - Images land under `~/.codex/generated_images/<thread>/`. Copy them to where the task needs them; never link to that directory from a project.
 - For edits or style references, attach the images with `-i a.png,b.png` and say in the prompt what to change and what to keep.
