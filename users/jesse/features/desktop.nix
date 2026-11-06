@@ -5,6 +5,35 @@
   ...
 }:
 let
+  # Resolve on the execution host, including Darwin hosts reached over SSH.
+  sandboxAgentCommand =
+    agent:
+    "/bin/sh -c ${
+      lib.escapeShellArg (
+        lib.replaceStrings [ "\n" ] [ " " ] ''
+          case "$(uname -s)" in
+            Darwin)
+              remaining=$PATH;
+              while :; do
+                directory=''${remaining%%:*};
+                for candidate in "''${directory:-.}"/sandbox-*; do
+                  if [ -f "$candidate" ] && [ -x "$candidate" ]; then
+                    exec "$candidate" "$@";
+                  fi;
+                done;
+                case $remaining in
+                  *:*) remaining=''${remaining#*:} ;;
+                  *) break ;;
+                esac;
+              done;
+              echo 'Orca: no executable sandbox-* command found in PATH' >&2;
+              exit 127 ;;
+            Linux) exec agent-sandbox-exec "$@" ;;
+            *) echo 'Orca: unsupported sandbox host OS' >&2; exit 1 ;;
+          esac
+        ''
+      )
+    } orca-sandbox ${agent}";
   orca-ade = pkgs.orca-ade.override {
     globalSettings = {
       theme = "dark";
@@ -17,6 +46,13 @@ let
       pluginSystemEnabled = true;
       # The glass titlebar needs an alpha-capable window for Hyprland's blur.
       windowMaterial = "translucent";
+    }
+    // lib.optionalAttrs (config.orca.agentResumeWrapper != null) {
+      agentCmdOverrides = lib.genAttrs [
+        "claude"
+        "codex"
+        "muse"
+      ] sandboxAgentCommand;
     };
     approvedPlugins = [ "chron0.discord-presence" ];
     # Generic keeps workspace, branch and machine names out of the activity.

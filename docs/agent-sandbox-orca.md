@@ -1,5 +1,14 @@
 # Orca terminals in an agent sandbox
 
+On `home`, the Nix-built Orca configures the Claude, Codex and Muse launch
+buttons to use a sandbox command. Linux launches use `agent-sandbox-exec`.
+On Darwin execution hosts, the command searches `PATH` in order and invokes
+the first executable file matching `sandbox-*`, passing the harness name
+(`claude`, `codex` or `muse`) followed by Orca's launch arguments. Matches
+within a PATH directory follow shell glob order. If no matching executable
+exists, the launch fails with an error. Restart Orca after rebuilding to
+load these overrides.
+
 From a repository or a local Orca worktree, launch an agent with:
 
 ```sh
