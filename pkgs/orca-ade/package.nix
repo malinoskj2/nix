@@ -36,8 +36,8 @@ let
   discord-presence = fetchFromGitHub {
     owner = "jondmarien";
     repo = "orca-discord-presence";
-    rev = "cd0630bbcc2c830765a51fc023fe736dfe7f0f06";
-    hash = "sha256-z7r3qtsJxwz0AcHXNY811Irz2mzBGLpFZcjc9vSfaJ8=";
+    rev = "f0ac386a8f013ef89927dd42b9ad4ab6c8c05324";
+    hash = "sha256-06QILPJFKilluXh8EaBXDtVRUyHirikBJLe7JRjZuZM=";
   };
   sourceCommit = "27eb5e2a6c5017c6fdcba4fee16bf54256550c6f";
   arch = stdenv.hostPlatform.node.arch;
@@ -106,16 +106,23 @@ stdenv.mkDerivation (finalAttrs: {
     # Bundled, so Orca installs and updates it from the package like its own launch plugins.
     plugin=resources/plugins/launch/chron0.discord-presence
     mkdir $plugin
-    cp -r ${discord-presence}/{orca-plugin.json,README.md,dist,panel} $plugin
+    cp -r ${discord-presence}/{orca-plugin.json,README.md,dist,panel,assets} $plugin
     chmod -R u+w $plugin
-    # Saved settings still win over these defaults. The worker would otherwise rewrite its panel
-    # inside the hash-addressed install, which Orca then rejects as corrupted.
+    # Keep the installed identity and settings when upstream changes its publisher.
+    python3 - <<'PYTHON'
+    import json
+    from pathlib import Path
+    path = Path("resources/plugins/launch/chron0.discord-presence/orca-plugin.json")
+    manifest = json.loads(path.read_text())
+    manifest["publisher"] = "chron0"
+    path.write_text(json.dumps(manifest, indent=2) + "\n")
+    PYTHON
+    # Saved settings still win over these defaults.
     substituteInPlace $plugin/dist/main.js \
       --replace-fail 'var BOOLEAN_FIELDS = ' ${lib.escapeShellArg "DEFAULT_SETTINGS = Object.freeze({ ...DEFAULT_SETTINGS, ...${builtins.toJSON discordPresenceSettings} }); var BOOLEAN_FIELDS = "} \
       --replace-fail 'normalizeOpenUrl(source.openUrl);' 'normalizeOpenUrl(source.openUrl ?? DEFAULT_SETTINGS.openUrl);' \
       --replace-fail 'normalizeBridgeUrl(source.bridgeUrl);' 'normalizeBridgeUrl(source.bridgeUrl ?? DEFAULT_SETTINGS.bridgeUrl);' \
       --replace-fail 'normalizeBridgeToken(source.bridgeToken);' 'normalizeBridgeToken(source.bridgeToken ?? DEFAULT_SETTINGS.bridgeToken);' \
-      --replace-fail 'const skip = env[PANEL_WRITE_SKIP_ENV];' 'const skip = "1";' \
       --replace-fail 'return "Working in Orca";' 'return "Working in Orca ADE";'
     node -e '
       const { readFileSync, writeFileSync } = require("node:fs")
