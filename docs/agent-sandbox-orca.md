@@ -53,6 +53,10 @@ clipboard mirror, which makes image data available to Wayland clients inside
 the sandbox. After updating Orca, restart the desktop app for the paste path
 change to take effect; existing sandboxes already mount the media directory.
 
+Agent-generated screenshots, recordings and other development captures go in the
+current repository or worktree root's globally Git-ignored `.tmp/` directory.
+Repository mounts already share these files at the same absolute host paths.
+
 The sandbox image uses the desktop `orca-ide` CLI. A read-only bind of
 `~/.config/orca` gives it the live runtime metadata and Unix socket, so Orca
 commands can reach the desktop without the SSH relay.
