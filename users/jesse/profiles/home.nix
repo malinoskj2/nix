@@ -5,6 +5,7 @@
     ../features/admin.nix
     ../features/cli.nix
     ../features/desktop.nix
+    ../features/discord-context.nix
     ../features/dev.nix
     ../features/native.nix
     ../features/rust
@@ -14,6 +15,10 @@
     ../datagrip
     ../git.nix
     ../hyprland-desktop
+  ];
+
+  services.discord-context.excludedGuilds = [
+    "902708289098375209" # ogchat
   ];
 
   home.stateVersion = "25.11";
