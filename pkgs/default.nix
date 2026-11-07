@@ -10,6 +10,14 @@ let
   };
 
   # Built-ins only: the overlay passes its final pkgs, so the names can't depend on pkgs.lib.
-  directories = builtins.removeAttrs (builtins.readDir ./.) [ "default.nix" ];
+  entries = builtins.readDir ./.;
+  packages = builtins.filter (
+    name: entries.${name} == "directory" && builtins.pathExists ./${name}/package.nix
+  ) (builtins.attrNames entries);
 in
-builtins.mapAttrs (name: _: callPackage ./${name}/package.nix { }) directories
+builtins.listToAttrs (
+  builtins.map (name: {
+    inherit name;
+    value = callPackage ./${name}/package.nix { };
+  }) packages
+)
