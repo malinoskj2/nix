@@ -61,7 +61,14 @@ let
     model_reasoning_effort = "medium";
   };
   settings = tomlFormat.generate "codex-settings.toml" config.programs.codex.settings;
-  sandboxSettings = tomlFormat.generate "codex-sandbox-settings.toml" modelSettings;
+  # The container provides isolation; Codex should not add another sandbox inside it.
+  sandboxSettings = tomlFormat.generate "codex-sandbox-settings.toml" (
+    modelSettings
+    // {
+      sandbox_mode = "danger-full-access";
+      approval_policy = "never";
+    }
+  );
   # Codex saves folder trust and model choices to its own config.toml, so it
   # has to be a writable file with these settings merged in, not a store link.
   mergeSettings = pkgs.writers.writePython3 "codex-merge-settings" {
