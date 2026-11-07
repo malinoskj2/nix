@@ -279,6 +279,7 @@ args=(
   --env USER="$user"
   --env TERM
   --env COLORTERM
+  --env AGENT_SANDBOX_INSTANCE="${AGENT_SANDBOX_NAME:-}"
   --env AGENT_SANDBOX_RENDERERS
   --env XDG_RUNTIME_DIR="$runtime"
   --env DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"

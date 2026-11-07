@@ -63,6 +63,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./bundled-plugins.patch
     ./approved-plugins.patch
     ./agent-resume-wrapper.patch
+    ./terminal-container-indicators.patch
   ];
 
   postPatch = ''

@@ -123,4 +123,8 @@ fi
 # Written last so that SSH sessions, which wait for it, find the display up.
 write_sshd_config
 
+# Report from inside the running container, after setup succeeds.
+if [[ -n ${ORCA_PANE_KEY:-} && ${AGENT_SANDBOX_INSTANCE:-} =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]]; then
+  printf '\033]777;orca-container;name=%s\033\134' "$AGENT_SANDBOX_INSTANCE"
+fi
 exec "$@"

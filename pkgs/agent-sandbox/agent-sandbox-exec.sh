@@ -32,12 +32,24 @@ fi
 instance=agent-sandbox-$alias-h$$-$RANDOM
 echo "agent-sandbox-exec: starting instance $instance" >&2
 
+finish_launch() {
+  if [[ -n ${ORCA_PANE_KEY:-} ]]; then
+    printf '\033]777;orca-container;clear\033\134' >&2
+  fi
+  if [[ -n ${relay_dir:-} ]]; then
+    stop_hook_bridge
+  fi
+}
+trap finish_launch EXIT
+trap 'exit 130' INT
+trap 'exit 143' HUP TERM
+
 stop_hook_bridge() {
   if [[ -n ${proxy_pid:-} ]]; then
     kill "$proxy_pid" 2>/dev/null || true
     wait "$proxy_pid" 2>/dev/null || true
   fi
-  rm -f -- "$proxy_socket" "$relay_dir/proxy.log"
+  rm -f -- "${proxy_socket:-}" "$relay_dir/proxy.log"
   rmdir -- "$relay_dir"
 }
 
@@ -54,9 +66,6 @@ start_hook_bridge() {
   relay_dir=$(mktemp -d "$relay_root/session.XXXXXXXX")
   chmod 700 "$relay_dir"
   proxy_socket=$relay_dir/hook.sock
-  trap stop_hook_bridge EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
   "$AGENT_SANDBOX_HOOK_PROXY" "$proxy_socket" "${ORCA_AGENT_HOOK_ENDPOINT:-}" \
     "$ORCA_AGENT_HOOK_PORT" >"$relay_dir/proxy.log" 2>&1 &
   proxy_pid=$!

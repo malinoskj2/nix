@@ -78,3 +78,26 @@ The direct launch remains experimental. The local Orca process cannot see the
 agent process or its sandbox session files. Agent recognition, session history,
 and resume need verification and further integration before this replaces the
 SSH setup.
+
+## Container indicators
+
+The Nix-built Orca carries `terminal-container-indicators.patch`. Each running
+container reports its instance name over OSC 777 (`orca-container;name=...`)
+from its entrypoint, after setup. The host launcher sends `orca-container;clear`
+when it exits, including failed launches. The report travels with that terminal's
+output, so another terminal in the same worktree never inherits the badge.
+
+Orca shows a box icon beside that agent's sidebar row, in its terminal tab and
+in its pane header. Hovering gives the container name. A tab with split panes
+shows a layers icon when its reported environments differ or only some panes
+have reported containers. A pane without a report has no container icon; this
+does not claim it is running on the host. These are launcher lifecycle reports,
+not checks of Claude or Codex permission settings.
+
+Reports survive title changes and renderer reattachment while the owning Orca
+runtime remains alive. The patched terminal daemon forwards reports even when
+hidden terminal output is thinned. PTY exit drops the renderer's report. Restart
+Orca and start fresh agent terminals after rebuilding; existing containers and
+unpatched execution hosts do not supply this integration. The direct Linux
+`agent-sandbox-exec` launcher is instrumented; other launchers need to emit the
+same start/clear reports to show a badge.
