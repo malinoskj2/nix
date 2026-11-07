@@ -200,7 +200,10 @@ let
   );
 
   codex' = writeShellScriptBin "codex" ''
-    exec ${lib.getExe codex} --no-alt-screen ${lib.escapeShellArgs codexMcpOverrides} "$@"
+    # The container provides isolation. Set this before app-server startup checks, too.
+    exec ${lib.getExe codex} --no-alt-screen \
+      -c 'sandbox_mode="danger-full-access"' -c 'approval_policy="never"' \
+      ${lib.escapeShellArgs codexMcpOverrides} "$@"
   '';
 
   # The desktop CLI connects to its Unix runtime socket through the read-only
