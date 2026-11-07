@@ -1,0 +1,862 @@
+diff --git a/src/main/daemon/protocol/daemon-stream-events.ts b/src/main/daemon/protocol/daemon-stream-events.ts
+index 7cad2cad..03a74ca0 100644
+--- a/src/main/daemon/protocol/daemon-stream-events.ts
++++ b/src/main/daemon/protocol/daemon-stream-events.ts
+@@ -55,6 +55,7 @@ export type DataGapEvent = {
+
+ /** Daemon-authoritative notifications; main retains title/status scanning to include its synthetic frames. */
+ export type DaemonTransientFact =
++  | { kind: 'container'; name: string | null }
+   | { kind: 'bell' }
+   | { kind: 'command-finished'; exitCode: number | null }
+   | { kind: 'pr-link'; link: TerminalGitHubPRLink }
+diff --git a/src/main/daemon/transport/stream/daemon-background-transient-facts.ts b/src/main/daemon/transport/stream/daemon-background-transient-facts.ts
+index 5917698c..aa07f58f 100644
+--- a/src/main/daemon/transport/stream/daemon-background-transient-facts.ts
++++ b/src/main/daemon/transport/stream/daemon-background-transient-facts.ts
+@@ -39,6 +39,7 @@ export class BackgroundTransientFactRelay {
+       this.trackersBySessionId.set(
+         sessionId,
+         createTerminalTitleTracker({
++          onContainerReport: (name) => this.emitFact(sessionId, { kind: 'container', name }),
+           onBell: () => this.emitFact(sessionId, { kind: 'bell' }),
+           onCommandFinished: (exitCode) =>
+             this.emitFact(sessionId, { kind: 'command-finished', exitCode }),
+diff --git a/src/main/providers/pty-provider-events.ts b/src/main/providers/pty-provider-events.ts
+index c73a0262..1d750965 100644
+--- a/src/main/providers/pty-provider-events.ts
++++ b/src/main/providers/pty-provider-events.ts
+@@ -12,6 +12,7 @@ export type PtyDataEvent = {
+
+ /** Notification fact observed while the thinning transport owned scan authority for this PTY. */
+ export type PtyTransientFact =
++  | { kind: 'container'; name: string | null }
+   | { kind: 'bell' }
+   | { kind: 'command-finished'; exitCode: number | null }
+   | { kind: 'pr-link'; link: TerminalGitHubPRLink }
+diff --git a/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts.spec.ts b/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts.spec.ts
+index 05d346e9..05c81f36 100644
+--- a/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts.spec.ts
++++ b/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts.spec.ts
+@@ -14,6 +14,40 @@ import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.s
+ import { DECORATIVE_TITLE_FACT_HEARTBEAT_MS } from '../decorative-title-fact-emission'
+
+ describe('terminal side-effect fact channel', () => {
++  it('retains each container report for reattach and clears it after launcher exit', () => {
++    const { runtime, batches } = createSideEffectRuntime()
++    syncSinglePty(runtime)
++    runtime.onPtyData('pty-1', '\x1b]777;orca-container;name=nix\x1b\\', 100)
++    expect(batches.flatMap((batch) => batch.facts)).toContainEqual({
++      kind: 'container',
++      name: 'nix'
++    })
++    expect(runtime.getTerminalSideEffectSnapshot('pty-1')?.facts).toContainEqual({
++      kind: 'container',
++      name: 'nix'
++    })
++    runtime.onPtyData('pty-1', '\x1b]777;orca-container;clear\x1b\\', 101)
++    expect(runtime.getTerminalSideEffectSnapshot('pty-1')?.facts).toContainEqual({
++      kind: 'container',
++      name: null
++    })
++  })
++
++  it('retains daemon container facts when background output is thinned', () => {
++    const { runtime, batches } = createSideEffectRuntime()
++    syncSinglePty(runtime)
++    runtime.setPtyTransientFactDelegation('pty-1', true)
++    runtime.emitDaemonPtyTransientFact('pty-1', { kind: 'container', name: 'nix' })
++    expect(batches.flatMap((batch) => batch.facts)).toContainEqual({
++      kind: 'container',
++      name: 'nix'
++    })
++    expect(runtime.getTerminalSideEffectSnapshot('pty-1')?.facts).toContainEqual({
++      kind: 'container',
++      name: 'nix'
++    })
++  })
++
+   it('defers desktop-only output scanners until a headless runtime is promoted', () => {
+     const { runtime, batches } = createSideEffectRuntime()
+     const trackerEntries = (
+diff --git a/src/main/runtime/terminal/output/terminal-title-tracker.ts b/src/main/runtime/terminal/output/terminal-title-tracker.ts
+index a511d6a1..6617001a 100644
+--- a/src/main/runtime/terminal/output/terminal-title-tracker.ts
++++ b/src/main/runtime/terminal/output/terminal-title-tracker.ts
+@@ -74,6 +74,9 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
+     }
+     const tracker = createTerminalTitleTracker(
+       {
++        onContainerReport: (name) => {
++          this.recordTerminalSideEffectFact(ptyId, { kind: 'container', name })
++        },
+         onTitle: (normalizedTitle, rawTitle, meta) => {
+           const live = this.ptyTitleTrackersByPtyId.get(ptyId)
+           const gateKey = this.makeDecorativeTitleGateKey(rawTitle, normalizedTitle)
+diff --git a/src/main/runtime/terminal/output/terminal-transient-facts.ts b/src/main/runtime/terminal/output/terminal-transient-facts.ts
+index b5b6cb60..d5bc1705 100644
+--- a/src/main/runtime/terminal/output/terminal-transient-facts.ts
++++ b/src/main/runtime/terminal/output/terminal-transient-facts.ts
+@@ -28,6 +28,15 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
+    *  between chunks, so recordTerminalSideEffectFact emits it immediately. */
+   emitDaemonPtyTransientFact(ptyId: string, fact: PtyTransientFact): void {
+     switch (fact.kind) {
++      case 'container': {
++        const tracker = this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker
++        if (tracker) {
++          tracker.reportContainerName(fact.name)
++        } else {
++          this.recordTerminalSideEffectFact(ptyId, fact)
++        }
++        return
++      }
+       case 'bell':
+         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
+         return
+@@ -157,7 +166,8 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
+       recordTitle && (normalizedTitle === null || !isCursorNativeAgentTitle(recordTitle))
+         ? recordTitle
+         : null
+-    if (normalizedTitle === null && !rawTitle) {
++    const containerName = tracker?.getContainerName()
++    if (normalizedTitle === null && !rawTitle && !tracker) {
+       return null
+     }
+     return {
+@@ -165,11 +175,18 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
+       seq: this.ptyOutputSequenceById.get(ptyId) ?? 0,
+       replay: true,
+       facts: [
+-        {
+-          kind: 'title',
+-          normalizedTitle: normalizedTitle ?? normalizeTerminalTitle(rawTitle!),
+-          rawTitle: rawTitle ?? normalizedTitle!
+-        }
++        ...(containerName !== undefined
++          ? [{ kind: 'container' as const, name: containerName }]
++          : []),
++        ...(normalizedTitle !== null || rawTitle
++          ? [
++              {
++                kind: 'title' as const,
++                normalizedTitle: normalizedTitle ?? normalizeTerminalTitle(rawTitle!),
++                rawTitle: rawTitle ?? normalizedTitle!
++              }
++            ]
++          : [])
+       ],
+       ...this.resolveTerminalSideEffectAttribution(ptyId)
+     }
+diff --git a/src/renderer/src/components/TerminalContainerBadge.fixture.tsx b/src/renderer/src/components/TerminalContainerBadge.fixture.tsx
+new file mode 100644
+index 00000000..5d3e7c84
+--- /dev/null
++++ b/src/renderer/src/components/TerminalContainerBadge.fixture.tsx
+@@ -0,0 +1,22 @@
++import { defineFixture } from '../component-fixtures/component-fixture'
++import { ContainerBadge } from './TerminalContainerBadge'
++
++export const environments = defineFixture({
++  width: 430,
++  render: () => (
++    <div className="space-y-3 rounded-md border bg-background p-4 text-xs text-foreground">
++      <div className="flex items-center gap-2 rounded-md border px-3 py-2">
++        <ContainerBadge names={['agent-sandbox-nix']} />
++        <span>Claude · sandboxed terminal</span>
++      </div>
++      <div className="flex items-center gap-2 rounded-md border px-3 py-2">
++        <ContainerBadge names={[null]} />
++        <span>Codex · environment not reported</span>
++      </div>
++      <div className="flex items-center gap-2 rounded-md border px-3 py-2">
++        <ContainerBadge names={['agent-sandbox-nix', null]} />
++        <span>Split tab · mixed environments</span>
++      </div>
++    </div>
++  )
++})
+diff --git a/src/renderer/src/components/TerminalContainerBadge.test.tsx b/src/renderer/src/components/TerminalContainerBadge.test.tsx
+new file mode 100644
+index 00000000..4dcfc137
+--- /dev/null
++++ b/src/renderer/src/components/TerminalContainerBadge.test.tsx
+@@ -0,0 +1,76 @@
++import { beforeEach, describe, expect, it, vi } from 'vitest'
++import { renderToStaticMarkup } from 'react-dom/server'
++import { TooltipProvider } from './ui/tooltip'
++import type * as ContainerState from '@/lib/terminal-container-state'
++import { useTerminalContainers } from '@/lib/terminal-container-state'
++
++vi.mock('@/lib/terminal-container-state', async (importOriginal) => {
++  const original = await importOriginal<typeof ContainerState>()
++  return {
++    ...original,
++    useTerminalContainers: Object.assign(
++      (selector: (state: ReturnType<typeof original.useTerminalContainers.getState>) => unknown) =>
++        selector(original.useTerminalContainers.getState()),
++      original.useTerminalContainers
++    )
++  }
++})
++
++const fixture = vi.hoisted(() => ({ state: {} as Record<string, unknown> }))
++vi.mock('@/store', () => ({
++  useAppStore: (selector: (state: unknown) => unknown) => selector(fixture.state)
++}))
++import { PaneContainerBadge, TabContainerBadge } from './TerminalContainerBadge'
++
++const first = '11111111-1111-4111-8111-111111111111'
++const second = '22222222-2222-4222-8222-222222222222'
++const render = (element: React.ReactNode) =>
++  renderToStaticMarkup(<TooltipProvider>{element}</TooltipProvider>)
++
++beforeEach(() => {
++  fixture.state = {
++    terminalLayoutsByTabId: {
++      tab: {
++        root: {
++          type: 'split',
++          direction: 'horizontal',
++          first: { type: 'leaf', leafId: first },
++          second: { type: 'leaf', leafId: second }
++        },
++        ptyIdsByLeafId: { [first]: 'pty-1', [second]: 'pty-2' }
++      }
++    },
++    ptyIdsByTabId: { tab: ['pty-1', 'pty-2'] }
++  }
++  useTerminalContainers.setState({ reports: { 'pty-1': { seq: 1, name: 'nix' } } })
++})
++
++describe('terminal container badges', () => {
++  it('marks only the reporting pane, even when another pane shares its tab', () => {
++    expect(render(<PaneContainerBadge paneKey={`tab:${first}`} />)).toContain('Container: nix')
++    expect(render(<PaneContainerBadge paneKey={`tab:${second}`} />)).toBe('')
++  })
++  it('uses the sole mounted PTY while a single-pane binding is being restored', () => {
++    fixture.state = {
++      terminalLayoutsByTabId: { tab: { root: { type: 'leaf', leafId: first } } },
++      ptyIdsByTabId: { tab: ['pty-1'] }
++    }
++    expect(render(<PaneContainerBadge paneKey={`tab:${first}`} />)).toContain('Container: nix')
++    expect(render(<TabContainerBadge tabId="tab" />)).toContain('Container: nix')
++    expect(render(<PaneContainerBadge paneKey={`tab:${second}`} />)).toBe('')
++  })
++  it('marks a split tab as mixed when another pane has no report', () => {
++    expect(render(<TabContainerBadge tabId="tab" />)).toContain('data-terminal-container="mixed"')
++    expect(render(<TabContainerBadge tabId="tab" />)).toContain('environment not reported')
++  })
++  it('shows both container names when the split panes differ', () => {
++    useTerminalContainers.setState({
++      reports: { 'pty-1': { seq: 1, name: 'nix' }, 'pty-2': { seq: 1, name: 'other' } }
++    })
++    expect(render(<TabContainerBadge tabId="tab" />)).toContain('Container: nix, other')
++  })
++  it('does not call an unreported terminal a host', () => {
++    useTerminalContainers.setState({ reports: {} })
++    expect(render(<TabContainerBadge tabId="tab" />)).toBe('')
++  })
++})
+diff --git a/src/renderer/src/components/TerminalContainerBadge.tsx b/src/renderer/src/components/TerminalContainerBadge.tsx
+new file mode 100644
+index 00000000..aa5a6f58
+--- /dev/null
++++ b/src/renderer/src/components/TerminalContainerBadge.tsx
+@@ -0,0 +1,84 @@
++import { createContext } from 'react'
++import { Box, Layers } from 'lucide-react'
++import { useShallow } from 'zustand/react/shallow'
++import { useAppStore } from '@/store'
++import { useTerminalContainers } from '@/lib/terminal-container-state'
++import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
++import { collectLeafIds } from '../../../shared/workspace-layout/terminal-pane-layout-tree'
++import type { AppState } from '@/store/types'
++import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
++
++export const TerminalTabContainerContext = createContext<string | null>(null)
++
++export function paneContainerPty(state: AppState, paneKey: string): string | null {
++  const pane = parsePaneKey(paneKey)
++  if (!pane) {
++    return null
++  }
++  const layout = state.terminalLayoutsByTabId[pane.tabId]
++  if (layout) {
++    const boundPty = layout.ptyIdsByLeafId?.[pane.leafId]
++    if (boundPty) {
++      return boundPty
++    }
++    const leaves = collectLeafIds(layout.root)
++    if (leaves.length !== 1 || leaves[0] !== pane.leafId) {
++      return null
++    }
++  }
++  const ids = state.ptyIdsByTabId[pane.tabId] ?? []
++  return ids.length === 1 ? ids[0]! : null
++}
++
++export function ContainerBadge({
++  names
++}: {
++  names: readonly (string | null)[]
++}): React.JSX.Element | null {
++  const containers = [...new Set(names.filter((name): name is string => name !== null))]
++  if (containers.length === 0) {
++    return null
++  }
++  const mixed = containers.length > 1 || names.some((name) => name === null)
++  const label = `${mixed ? 'Mixed environments. ' : ''}Container: ${containers.join(', ')}${names.includes(null) ? '; other panes: environment not reported' : ''}`
++  const Icon = mixed ? Layers : Box
++  return (
++    <Tooltip>
++      <TooltipTrigger asChild>
++        <span
++          className="inline-flex shrink-0 text-muted-foreground"
++          aria-label={label}
++          data-terminal-container={mixed ? 'mixed' : containers[0]}
++        >
++          <Icon className="size-3" aria-hidden />
++        </span>
++      </TooltipTrigger>
++      <TooltipContent side="top" sideOffset={4}>
++        {label}
++      </TooltipContent>
++    </Tooltip>
++  )
++}
++
++export function PaneContainerBadge({ paneKey }: { paneKey: string }): React.JSX.Element | null {
++  const ptyId = useAppStore((state) => paneContainerPty(state, paneKey))
++  const name = useTerminalContainers((state) =>
++    ptyId ? (state.reports[ptyId]?.name ?? null) : null
++  )
++  return <ContainerBadge names={[name]} />
++}
++
++export function TabContainerBadge({ tabId }: { tabId: string }): React.JSX.Element | null {
++  const ptyIds = useAppStore(
++    useShallow((state) => {
++      const layout = state.terminalLayoutsByTabId[tabId]
++      return layout
++        ? collectLeafIds(layout.root).map((id) => paneContainerPty(state, `${tabId}:${id}`))
++        : (state.ptyIdsByTabId[tabId] ?? [])
++    })
++  )
++  const names = useTerminalContainers(
++    useShallow((state) => ptyIds.map((id) => (id ? (state.reports[id]?.name ?? null) : null)))
++  )
++  return <ContainerBadge names={names} />
++}
+diff --git a/src/renderer/src/components/dashboard/DashboardAgentRow.tsx b/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
+index 7adc4351..687887a3 100644
+--- a/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
++++ b/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
+@@ -1,3 +1,4 @@
++import { PaneContainerBadge } from '@/components/TerminalContainerBadge'
+ import React, { useState, useCallback } from 'react'
+ import { cn } from '@/lib/utils'
+ import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
+@@ -318,6 +319,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
+             <AgentTypeIcon agentType={agent.agentType} size={14} />
+           </span>
+         )}
++        {agent.rowSource !== 'subagent' && <PaneContainerBadge paneKey={agent.paneKey} />}
+         {/* Why: interpolate-size:allow-keywords is the only way to animate height to/from auto without measuring in JS; falls back to an instant swap where unsupported. */}
+         <span
+           className={cn(
+diff --git a/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx b/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
+index d2736ce8..e33f4c74 100644
+--- a/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
++++ b/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
+@@ -1,3 +1,4 @@
++import { PaneContainerBadge } from '@/components/TerminalContainerBadge'
+ import React, { useCallback, useEffect, useRef } from 'react'
+ import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
+ import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
+@@ -237,6 +238,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
+             tooltipSide="right"
+             progress={presentation.progress}
+           />
++          {agent.rowSource !== 'subagent' && <PaneContainerBadge paneKey={agent.paneKey} />}
+           {!hideIcon && (
+             <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
+               <AgentTypeIcon agentType={agent.agentType} size={13} />
+diff --git a/src/renderer/src/components/tab-bar/TerminalSortableTab.tsx b/src/renderer/src/components/tab-bar/TerminalSortableTab.tsx
+index 3deeaef1..ef0e8ca4 100644
+--- a/src/renderer/src/components/tab-bar/TerminalSortableTab.tsx
++++ b/src/renderer/src/components/tab-bar/TerminalSortableTab.tsx
+@@ -1,3 +1,4 @@
++import { TerminalTabContainerContext } from '@/components/TerminalContainerBadge'
+ import { useTabAgent } from '@/lib/use-tab-agent'
+ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+ import SortableTab, { type SortableTabProps } from './SortableTab'
+@@ -7,5 +8,9 @@ type TerminalSortableTabProps = Omit<SortableTabProps, 'tab' | 'agent'> & { tab:
+ /** A terminal pane can change agents, so its identity is inferred from live pane signals. */
+ export default function TerminalSortableTab(props: TerminalSortableTabProps): React.JSX.Element {
+   const agent = useTabAgent(props.tab)
+-  return <SortableTab {...props} agent={agent} />
++  return (
++    <TerminalTabContainerContext.Provider value={props.tab.id}>
++      <SortableTab {...props} agent={agent} />
++    </TerminalTabContainerContext.Provider>
++  )
+ }
+diff --git a/src/renderer/src/components/tab-bar/TerminalTabLeadingIcon.tsx b/src/renderer/src/components/tab-bar/TerminalTabLeadingIcon.tsx
+index a6cd6269..641c0cda 100644
+--- a/src/renderer/src/components/tab-bar/TerminalTabLeadingIcon.tsx
++++ b/src/renderer/src/components/tab-bar/TerminalTabLeadingIcon.tsx
+@@ -1,3 +1,5 @@
++import { useContext } from 'react'
++import { TabContainerBadge, TerminalTabContainerContext } from '@/components/TerminalContainerBadge'
+ import { AgentStateDot } from '@/components/AgentStateDot'
+ import { AgentIcon } from '@/lib/agent-catalog'
+ import { cn } from '@/lib/utils'
+@@ -44,7 +46,17 @@ function TerminalTabAgentIdentityIcon({
+   )
+ }
+
+-export function TerminalTabLeadingIcon({
++export function TerminalTabLeadingIcon(props: TerminalTabLeadingIconProps): React.JSX.Element {
++  const tabId = useContext(TerminalTabContainerContext)
++  return (
++    <>
++      <TerminalTabIdentityIcon {...props} />
++      {tabId && <TabContainerBadge tabId={tabId} />}
++    </>
++  )
++}
++
++function TerminalTabIdentityIcon({
+   agent,
+   activityStatus,
+   shell,
+diff --git a/src/renderer/src/components/terminal-pane/TerminalPaneHeaderOverlay.tsx b/src/renderer/src/components/terminal-pane/TerminalPaneHeaderOverlay.tsx
+index db125bf1..2c6a2393 100644
+--- a/src/renderer/src/components/terminal-pane/TerminalPaneHeaderOverlay.tsx
++++ b/src/renderer/src/components/terminal-pane/TerminalPaneHeaderOverlay.tsx
+@@ -1,3 +1,4 @@
++import { PaneContainerBadge } from '@/components/TerminalContainerBadge'
+ import { ImeInput } from '@/lib/ime-text-field'
+ import type { CSSProperties, RefObject } from 'react'
+ import { MessageSquarePlus, SquareSplitVertical, SquareTerminal, X } from 'lucide-react'
+@@ -208,6 +209,7 @@ export default function TerminalPaneHeaderOverlay({
+                     {title}
+                   </button>
+                 ) : null}
++                <PaneContainerBadge paneKey={makePaneKey(tabId, pane.leafId)} />
+                 <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
+                   {canContinueAgentSessionInNewSession && isActivePane ? (
+                     <Tooltip>
+diff --git a/src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.ts b/src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.ts
+index 2715c944..06e4b9f7 100644
+--- a/src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.ts
++++ b/src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.ts
+@@ -1,4 +1,9 @@
+ /** One fact consumer per local-main/SSH PTY, mounted or parked. Never-consumed PTYs drop attention facts; recently unregistered consumers alone open a bounded handoff buffer. */
++import {
++  beginTerminalContainerTracking,
++  forgetTerminalContainer,
++  observeTerminalContainers
++} from '@/lib/terminal-container-state'
+ import type { AgentIdleEdgeMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
+ import type { GlobalSettings } from '../../../../shared/global-settings-types'
+ import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
+@@ -223,6 +228,7 @@ function drainHandoffFactBuffer(ptyId: string, entry: ConsumerEntry): void {
+ }
+
+ export function dispatchTerminalSideEffectBatch(batch: TerminalSideEffectBatch): void {
++  observeTerminalContainers(batch)
+   const entry = consumersByPtyId.get(batch.ptyId)
+   if (!entry) {
+     bufferHandoffFactBatch(batch)
+@@ -240,7 +246,16 @@ function ensureSideEffectChannelSubscription(): void {
+   if (typeof onSideEffect !== 'function') {
+     return
+   }
+-  channelUnsubscribe = onSideEffect(dispatchTerminalSideEffectBatch)
++  const unsubscribeFacts = onSideEffect(dispatchTerminalSideEffectBatch)
++  const unsubscribeExit = window.api.pty.onExit?.(({ id }) => forgetTerminalContainer(id))
++  const unsubscribeSpawn = window.api.pty.onSpawned?.(({ id }) =>
++    beginTerminalContainerTracking(id)
++  )
++  channelUnsubscribe = () => {
++    unsubscribeFacts()
++    unsubscribeExit?.()
++    unsubscribeSpawn?.()
++  }
+ }
+
+ export type TerminalSideEffectFactConsumerOptions = {
+@@ -270,6 +285,7 @@ export function registerTerminalSideEffectFactConsumer(
+         .then((batch) => {
+           // Slow replay applies only while this registration remains current.
+           if (batch && consumersByPtyId.get(options.ptyId) === entry) {
++            observeTerminalContainers(batch)
+             applyBatchToConsumer(entry, { ...batch, replay: true })
+           }
+         })
+diff --git a/src/renderer/src/lib/terminal-container-state.test.ts b/src/renderer/src/lib/terminal-container-state.test.ts
+new file mode 100644
+index 00000000..c2fec4f5
+--- /dev/null
++++ b/src/renderer/src/lib/terminal-container-state.test.ts
+@@ -0,0 +1,36 @@
++import { beforeEach, expect, it } from 'vitest'
++import {
++  beginTerminalContainerTracking,
++  forgetTerminalContainer,
++  observeTerminalContainers,
++  useTerminalContainers
++} from './terminal-container-state'
++
++beforeEach(() => {
++  useTerminalContainers.setState({ reports: {} })
++  beginTerminalContainerTracking('first')
++  beginTerminalContainerTracking('second')
++})
++const observe = (ptyId: string, seq: number, name: string | null) =>
++  observeTerminalContainers({ ptyId, seq, facts: [{ kind: 'container', name }] })
++
++it('keeps terminal environments separate and refuses stale replay', () => {
++  observe('first', 4, 'nix')
++  observe('second', 7, 'other')
++  observe('first', 5, null)
++  observe('first', 4, 'nix')
++  expect(useTerminalContainers.getState().reports.first.name).toBeNull()
++  expect(useTerminalContainers.getState().reports.second.name).toBe('other')
++  forgetTerminalContainer('second')
++  expect(useTerminalContainers.getState().reports.second).toBeUndefined()
++})
++
++it('refuses late attach snapshots after exit and accepts a new incarnation', () => {
++  observe('first', 4, 'nix')
++  forgetTerminalContainer('first')
++  observe('first', 5, 'nix')
++  expect(useTerminalContainers.getState().reports.first).toBeUndefined()
++  beginTerminalContainerTracking('first')
++  observe('first', 1, 'fresh')
++  expect(useTerminalContainers.getState().reports.first.name).toBe('fresh')
++})
+diff --git a/src/renderer/src/lib/terminal-container-state.ts b/src/renderer/src/lib/terminal-container-state.ts
+new file mode 100644
+index 00000000..836bd5e4
+--- /dev/null
++++ b/src/renderer/src/lib/terminal-container-state.ts
+@@ -0,0 +1,47 @@
++import { create } from 'zustand'
++import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
++
++const exitedPtys = new Set<string>()
++
++type Report = { name: string | null; seq: number }
++export const useTerminalContainers = create<{ reports: Record<string, Report> }>(() => ({
++  reports: {}
++}))
++
++export function observeTerminalContainers(batch: TerminalSideEffectBatch): void {
++  if (exitedPtys.has(batch.ptyId)) {
++    return
++  }
++  for (const fact of batch.facts) {
++    if (fact.kind !== 'container') {
++      continue
++    }
++    useTerminalContainers.setState((state) => {
++      const previous = state.reports[batch.ptyId]
++      if (previous && batch.seq < previous.seq) {
++        return state
++      }
++      return { reports: { ...state.reports, [batch.ptyId]: { name: fact.name, seq: batch.seq } } }
++    })
++  }
++}
++
++export function beginTerminalContainerTracking(ptyId: string): void {
++  exitedPtys.delete(ptyId)
++}
++
++export function forgetTerminalContainer(ptyId: string): void {
++  // Bound tombstones while refusing late replay after exit; new PTY incarnations reopen on spawn.
++  exitedPtys.add(ptyId)
++  if (exitedPtys.size > 1024) {
++    exitedPtys.delete(exitedPtys.values().next().value!)
++  }
++  useTerminalContainers.setState((state) => {
++    if (!(ptyId in state.reports)) {
++      return state
++    }
++    const reports = { ...state.reports }
++    delete reports[ptyId]
++    return { reports }
++  })
++}
+diff --git a/src/shared/terminal/output/terminal-container-relay.test.ts b/src/shared/terminal/output/terminal-container-relay.test.ts
+new file mode 100644
+index 00000000..41c4b11c
+--- /dev/null
++++ b/src/shared/terminal/output/terminal-container-relay.test.ts
+@@ -0,0 +1,19 @@
++import { expect, it } from 'vitest'
++import { BackgroundTransientFactRelay } from '../../../main/daemon/transport/stream/daemon-background-transient-facts'
++import type { DaemonTransientFact } from '../../../main/daemon/protocol/daemon-stream-events'
++
++it('forwards container start and clear facts before hidden output is discarded', () => {
++  const facts: { session: string; fact: DaemonTransientFact }[] = []
++  const relay = new BackgroundTransientFactRelay((session, fact) => facts.push({ session, fact }))
++  relay.setSessionBackground('first', true)
++  relay.setSessionBackground('second', true)
++  relay.onSessionData('first', '\x1b]777;orca-container;name=nix\x1b\\')
++  relay.onSessionData('second', '\x1b]777;orca-container;name=other\x1b\\')
++  relay.onSessionData('first', '\x1b]777;orca-container;clear\x1b\\')
++  expect(facts).toEqual([
++    { session: 'first', fact: { kind: 'container', name: 'nix' } },
++    { session: 'second', fact: { kind: 'container', name: 'other' } },
++    { session: 'first', fact: { kind: 'container', name: null } }
++  ])
++  relay.dispose()
++})
+diff --git a/src/shared/terminal/output/terminal-container-report.test.ts b/src/shared/terminal/output/terminal-container-report.test.ts
+new file mode 100644
+index 00000000..06abfcd1
+--- /dev/null
++++ b/src/shared/terminal/output/terminal-container-report.test.ts
+@@ -0,0 +1,68 @@
++import { describe, expect, it, vi } from 'vitest'
++import { createContainerReportScanner, parseContainerReport } from './terminal-container-report'
++import { createTerminalTitleTracker } from './terminal-output-side-effects'
++
++const report = (name: string) => `\x1b]777;orca-container;name=${name}\x1b\\`
++
++describe('container reports', () => {
++  it('accepts only bounded container names and an explicit clear', () => {
++    expect(parseContainerReport('orca-container;name=agent-sandbox-nix-h12')).toBe(
++      'agent-sandbox-nix-h12'
++    )
++    expect(parseContainerReport('orca-container;clear')).toBeNull()
++    for (const value of ['', '../host', 'a\n', 'a'.repeat(129)]) {
++      expect(parseContainerReport(`orca-container;name=${value}`)).toBeUndefined()
++    }
++  })
++
++  it('handles every possible chunk split, with BEL and ST terminators', () => {
++    for (const sequence of [report('nix'), report('nix').replace('\x1b\\', '\x07')]) {
++      for (let split = 0; split <= sequence.length; split++) {
++        const observed = vi.fn()
++        const scan = createContainerReportScanner(observed)
++        scan(sequence.slice(0, split))
++        scan(sequence.slice(split))
++        expect(observed.mock.calls).toEqual([['nix']])
++      }
++    }
++  })
++
++  it('ignores reports inside other terminal strings and recovers from oversized input', () => {
++    const observed = vi.fn()
++    const scan = createContainerReportScanner(observed)
++    scan(`\x1b]0;${report('spoof')}`)
++    scan(`\x1bP${report('spoof')}`)
++    scan(`\x1b]777;${'x'.repeat(10000)}\x07`)
++    scan(report('real'))
++    expect(observed.mock.calls).toEqual([['real']])
++  })
++
++  it('keeps independent PTYs, preserves reports through title changes, and clears on exit reports', () => {
++    const first = createTerminalTitleTracker({})
++    const second = createTerminalTitleTracker({})
++    first.handleChunk(report('nix'))
++    second.handleChunk(report('other'))
++    first.handleChunk('\x1b]0;Claude Code\x07')
++    expect(first.getContainerName()).toBe('nix')
++    first.handleChunk('\x1b]777;orca-container;clear\x1b\\')
++    expect(first.getContainerName()).toBeNull()
++    expect(second.getContainerName()).toBe('other')
++    first.dispose()
++    second.dispose()
++  })
++
++  it('accepts daemon reports while skipping thinned bytes and resets scanner carry at handoff', () => {
++    const tracker = createTerminalTitleTracker({})
++    tracker.handleChunk(report('partial').slice(0, 10))
++    tracker.setTransientFactScanningSuppressed(true)
++    tracker.handleChunk(report('untrusted-gap'))
++    expect(tracker.getContainerName()).toBeUndefined()
++    tracker.reportContainerName('daemon')
++    tracker.setTransientFactScanningSuppressed(false)
++    tracker.handleChunk(report('partial').slice(10))
++    expect(tracker.getContainerName()).toBe('daemon')
++    tracker.handleChunk(report('foreground'))
++    expect(tracker.getContainerName()).toBe('foreground')
++    tracker.dispose()
++  })
++})
+diff --git a/src/shared/terminal/output/terminal-container-report.ts b/src/shared/terminal/output/terminal-container-report.ts
+new file mode 100644
+index 00000000..fad421db
+--- /dev/null
++++ b/src/shared/terminal/output/terminal-container-report.ts
+@@ -0,0 +1,81 @@
++/** Launcher reports describe a container, never the agent's permission policy. */
++export const CONTAINER_REPORT_OSC = 777
++const PREFIX = 'orca-container;'
++const MAX_BODY = 160
++
++export function parseContainerReport(body: string): string | null | undefined {
++  if (body === `${PREFIX}clear`) {
++    return null
++  }
++  if (!body.startsWith(`${PREFIX}name=`)) {
++    return undefined
++  }
++  const name = body.slice(`${PREFIX}name=`.length)
++  return /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(name) ? name : undefined
++}
++
++/** Bounded string scanner; never interpret a report embedded inside another control string. */
++export function createContainerReportScanner(report: (name: string | null) => void) {
++  let state: 'text' | 'escape' | 'string' | 'string-escape' = 'text'
++  let body = ''
++  let osc = false
++  let overflow = false
++  const finish = () => {
++    if (osc && !overflow && body.startsWith(`${CONTAINER_REPORT_OSC};`)) {
++      const name = parseContainerReport(body.slice(4))
++      if (name !== undefined) {
++        report(name)
++      }
++    }
++    state = 'text'
++    body = ''
++  }
++  return (data: string): void => {
++    for (let index = 0; index < data.length; index++) {
++      if (state === 'text') {
++        index = data.indexOf('\x1b', index)
++        if (index === -1) {
++          return
++        }
++      }
++      const char = data[index]
++      if (char === '\x18' || char === '\x1a') {
++        state = 'text'
++        body = ''
++        continue
++      }
++      if (state === 'text') {
++        if (char === '\x1b') {
++          state = 'escape'
++        }
++      } else if (state === 'escape') {
++        if (']PX^_'.includes(char)) {
++          state = 'string'
++          osc = char === ']'
++          body = ''
++          overflow = false
++        } else {
++          state = char === '\x1b' ? 'escape' : 'text'
++        }
++      } else if (state === 'string-escape') {
++        if (char === '\\') {
++          finish()
++        } else {
++          overflow = true
++          state = char === '\x1b' ? 'string-escape' : 'string'
++        }
++      } else if (char === '\x07') {
++        finish()
++      } else if (char === '\x1b') {
++        state = 'string-escape'
++      } else if (!overflow && osc) {
++        if (body.length < MAX_BODY) {
++          body += char
++        } else {
++          overflow = true
++          body = ''
++        }
++      }
++    }
++  }
++}
+diff --git a/src/shared/terminal/output/terminal-output-side-effects.ts b/src/shared/terminal/output/terminal-output-side-effects.ts
+index 96204338..7f54f7c0 100644
+--- a/src/shared/terminal/output/terminal-output-side-effects.ts
++++ b/src/shared/terminal/output/terminal-output-side-effects.ts
+@@ -16,6 +16,7 @@ import {
+   extractAllOscTitles,
+   extractAllOscTitleEntries
+ } from '../../agent-status/title/osc-title-extraction'
++import { createContainerReportScanner } from './terminal-container-report'
+ import type { ProgramActivityChange } from '../../agent-status/transport/agent-status-osc'
+
+ import { placeProgramActivityAmongTitles } from '../../program-status/title-activity-order'
+@@ -49,6 +50,7 @@ type TerminalTitleTrackerChunkOptions = {
+ }
+
+ export type TerminalTitleTrackerCallbacks = {
++  onContainerReport?: (name: string | null) => void
+   /** Fired once per observed OSC title, in byte order — including the synthesized cleared title when the stale-working timer fires. */
+   onTitle?: (normalizedTitle: string, rawTitle: string, meta?: TerminalTitleFactMeta) => void
+   onAgentBecameIdle?: (title: string, meta?: AgentIdleEdgeMeta) => void
+@@ -71,6 +73,8 @@ export type TerminalTitleTrackerCallbacks = {
+ }
+
+ export type TerminalTitleTracker = {
++  getContainerName: () => string | null | undefined
++  reportContainerName: (name: string | null) => void
+   /** Feed one raw PTY chunk; titles are applied synchronously in byte order. */
+   handleChunk: (data: string, options?: TerminalTitleTrackerChunkOptions) => void
+   /** Parse fabricated spinner title/BEL frames statelessly so they cannot corrupt real cross-chunk escapes. */
+@@ -95,6 +99,15 @@ export function createTerminalTitleTracker(
+   callbacks: TerminalTitleTrackerCallbacks,
+   options: { initialTitle?: string } = {}
+ ): TerminalTitleTracker {
++  let containerName: string | null | undefined
++  const reportContainerName = (name: string | null): void => {
++    if (containerName === name) {
++      return
++    }
++    containerName = name
++    callbacks.onContainerReport?.(name)
++  }
++  let scanContainerReport = createContainerReportScanner(reportContainerName)
+   const {
+     onTitle,
+     onAgentBecameIdle,
+@@ -175,6 +188,9 @@ export function createTerminalTitleTracker(
+   }
+
+   function handleChunk(data: string, options: TerminalTitleTrackerChunkOptions = {}): void {
++    if (!transientFactScanningSuppressed) {
++      scanContainerReport(data)
++    }
+     const titleScanData = options.titleScanData ?? data
+     // Why: hot path — scan for the OSC introducer once and share it with the bell detector's fast-path gate.
+     const containsOscIntroducer = data.includes('\x1b]')
+@@ -279,6 +295,8 @@ export function createTerminalTitleTracker(
+   }
+
+   return {
++    getContainerName: () => containerName,
++    reportContainerName,
+     handleChunk,
+     applySyntheticTitleFrame,
+     endProgramActivity: () => applyProgramActivity(null),
+@@ -301,6 +319,7 @@ export function createTerminalTitleTracker(
+         return
+       }
+       transientFactScanningSuppressed = suppressed
++      scanContainerReport = createContainerReportScanner(reportContainerName)
+       if (!suppressed) {
+         // Cross-chunk carry predates the gapped span; reset it so stale state can't swallow real bells or mint phantom facts.
+         bellDetector?.reset()
+diff --git a/src/shared/terminal/output/terminal-side-effect-facts.ts b/src/shared/terminal/output/terminal-side-effect-facts.ts
+index 87821d1d..89d6adc0 100644
+--- a/src/shared/terminal/output/terminal-side-effect-facts.ts
++++ b/src/shared/terminal/output/terminal-side-effect-facts.ts
+@@ -8,6 +8,7 @@ import type { TerminalGitHubPRLink } from '../links/terminal-github-pr-link-dete
+ export type TerminalSideEffectFact =
+   | { kind: 'agent-status'; payload: ParsedAgentStatusPayload }
+   | { kind: 'title'; normalizedTitle: string; rawTitle: string; staleWorkingTitleClear?: boolean }
++  | { kind: 'container'; name: string | null }
+   | { kind: 'bell' }
+   | { kind: 'agent-working' }
+   | {
