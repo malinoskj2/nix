@@ -9,6 +9,16 @@ within a PATH directory follow shell glob order. If no matching executable
 exists, the launch fails with an error. Restart Orca after rebuilding to
 load these overrides.
 
+Native Chat sessions show a box icon and **Sandbox** label on their chat tab,
+worktree agent row and dashboard row when their recorded launch used the declared
+sandbox command. This labels the session's launch route, independently of its
+permission mode and the workspace's host. It is not a container health indicator.
+The launch choice is saved on reservation and retained across reconnects and
+operation replays; a new owner records its new launch choice. Older sessions with
+no launch provenance stay unlabelled until their next launch or resume after
+rebuilding and restarting Orca. Terminal sessions use their existing live container
+reports instead.
+
 From a repository or a local Orca worktree, launch an agent with:
 
 ```sh
