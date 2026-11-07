@@ -47,7 +47,8 @@ in
         NoNewPrivileges = true;
         PrivateTmp = true;
         ProtectSystem = "strict";
-        ProtectHome = true;
+        # Keep homes hidden without blocking traversal to systemd's /run/user credentials.
+        ProtectHome = "tmpfs";
         RestrictAddressFamilies = [
           "AF_UNIX"
           "AF_INET"
