@@ -52,6 +52,22 @@
     cores = 16;
   };
 
+  security.sudo.extraRules = [
+    {
+      users = [ "jesse" ];
+      commands = [
+        {
+          command = "/run/current-system/sw/bin/nixos-rebuild";
+          options = [ "NOPASSWD" ];
+        }
+        {
+          command = "/run/current-system/sw/bin/nh";
+          options = [ "NOPASSWD" ];
+        }
+      ];
+    }
+  ];
+
   systemd.services.nix-daemon.serviceConfig = {
     MemoryHigh = "20G";
     MemoryMax = "24G";
