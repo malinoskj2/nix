@@ -74,6 +74,11 @@
 
   programs.nix-index-database.comma.enable = true;
 
+  services.printing = {
+    enable = true;
+    drivers = [ pkgs.hplipWithPlugin ];
+  };
+
   environment.systemPackages = with pkgs; [
     agent-sandbox
     switch-and-reset-sandboxes
