@@ -10,23 +10,22 @@ automation under Discord's rules, even though every Discord request is read-only
 
 ## Configure
 
-Add server IDs and optional exclusions to `users/jesse/profiles/home.nix`:
+Add server and channel exclusions to `users/jesse/profiles/home.nix`:
 
 ```nix
 services.discord-context = {
-  allowedGuilds = [ "123456789012345678" ];
-  excludedGuilds = [ ];
+  excludedGuilds = [ "123456789012345678" ];
   excludedChannels = [
     "234567890123456789" # Channel or category, including descendants.
   ];
 };
 ```
 
-The default allowlist is empty. Exclusions override it. DMs are excluded.
+All servers are allowed unless explicitly excluded. DMs are excluded.
 Discord's Developer Mode exposes Copy Server ID and Copy Channel ID in context
-menus. New servers stay excluded until explicitly allowed. New channels in an
-allowed server are included unless they descend from an excluded category/channel.
-For strictly curated coverage, exclude the other categories/channels as well.
+menus. Newly joined servers are included automatically. New channels are included
+unless they descend from an excluded category/channel. For strictly curated
+coverage, exclude the other categories/channels as well.
 
 Store the token as a single line in `~/.config/discord-context/token`, outside
 this repository and the Nix store. Create its directory with mode 700 and the

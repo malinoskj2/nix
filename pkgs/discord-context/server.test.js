@@ -12,7 +12,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 test('HTTP MCP handshake, tools, policy reload and browser/host rejection', { timeout: 15000 }, async t => {
   const dir = await mkdtemp(join(tmpdir(), 'discord-context-test-'));
   const policy = join(dir, 'policy.json');
-  await writeFile(policy, JSON.stringify({ allowedGuilds: [] }));
+  await writeFile(policy, JSON.stringify({ excludedGuilds: ['1'] }));
   await writeFile(join(dir, 'token'), 'test-only-credential');
   const child = spawn(process.execPath, [new URL('./server.js', import.meta.url).pathname], {
     env: { ...process.env, PORT: '0', DISCORD_TOKEN_FILE: join(dir, 'token'), DISCORD_POLICY_FILE: policy },
@@ -39,10 +39,10 @@ test('HTTP MCP handshake, tools, policy reload and browser/host rejection', { ti
   const tools = await client.listTools();
   assert.deepEqual(tools.tools.map(t => t.name).sort(), ['list_channels', 'list_servers', 'list_threads', 'read_messages', 'search_messages']);
   assert.ok(tools.tools.every(t => t.annotations.readOnlyHint));
-  const empty = await client.callTool({ name: 'search_messages', arguments: { query: 'test' } });
-  assert.deepEqual(JSON.parse(empty.content[0].text), { results: [], serverLimitReached: false });
-  await writeFile(policy, JSON.stringify({ allowedGuilds: ['1'], excludedGuilds: ['1'] }));
-  const excluded = await client.callTool({ name: 'search_messages', arguments: { query: 'test', guildId: '1' } });
+  const initial = await client.callTool({ name: 'search_messages', arguments: { query: 'test', guildId: '1' } });
+  assert.equal(initial.isError, true);
+  await writeFile(policy, JSON.stringify({ excludedGuilds: ['2'] }));
+  const excluded = await client.callTool({ name: 'search_messages', arguments: { query: 'test', guildId: '2' } });
   assert.equal(excluded.isError, true);
   assert.equal(JSON.stringify(excluded).includes('test-only-credential'), false);
   const invalid = await client.callTool({ name: 'read_messages', arguments: { channelId: '../x' } });

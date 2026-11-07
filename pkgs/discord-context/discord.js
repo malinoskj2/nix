@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 const id = z.string().regex(/^\d{1,20}$/);
 export const policySchema = z.object({
-  allowedGuilds: z.array(id),
   excludedGuilds: z.array(id).default([]),
   excludedChannels: z.array(id).default([]),
 }).strict();
@@ -44,7 +43,7 @@ export class DiscordContext {
   }
 
   guildAllowed(guildId) {
-    return this.policy.allowedGuilds.includes(guildId) && !this.policy.excludedGuilds.includes(guildId);
+    return !this.policy.excludedGuilds.includes(guildId);
   }
 
   requireGuild(guildId) {
@@ -118,7 +117,7 @@ export class DiscordContext {
   }
 
   async search({ query, guildId, channelId, authorId, before, after, offset = 0 }) {
-    const guilds = guildId ? [guildId] : this.policy.allowedGuilds.filter(g => this.guildAllowed(g));
+    const guilds = guildId ? [guildId] : (await this.listServers()).map(g => g.id);
     for (const guild of guilds) this.requireGuild(guild);
     const results = [];
     for (const guild of guilds.slice(0, 20)) {

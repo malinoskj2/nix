@@ -8,7 +8,7 @@ let
   cfg = config.services.discord-context;
   policy = pkgs.writeText "discord-context-policy.json" (
     builtins.toJSON {
-      inherit (cfg) allowedGuilds excludedGuilds excludedChannels;
+      inherit (cfg) excludedGuilds excludedChannels;
     }
   );
   url = "http://127.0.0.1:7781/mcp";
@@ -22,8 +22,7 @@ let
 in
 {
   options.services.discord-context = {
-    allowedGuilds = ids "Discord server IDs allowed for reading and searching. Empty denies all servers.";
-    excludedGuilds = ids "Server IDs excluded even if allowed.";
+    excludedGuilds = ids "Server IDs excluded from reading and searching. All other servers are allowed.";
     excludedChannels = ids "Excluded channel/category IDs, including all descendant threads and channels.";
   };
 
