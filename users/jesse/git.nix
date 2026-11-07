@@ -22,6 +22,7 @@
       core.editor = "vim";
       credential.helper = "cache --timeout 43200";
       diff.renames = "copies";
+      init.defaultBranch = "main";
       safe.directory = "${config.home.homeDirectory}/nix";
       submodule.recurse = true;
     };
