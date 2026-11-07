@@ -1,7 +1,7 @@
-diff --git a/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts b/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts
+diff --git a/src/renderer/src/components/terminal-pane/links/files/terminal-file-open-routing.ts b/src/renderer/src/components/terminal-pane/links/files/terminal-file-open-routing.ts
 index b5c78367..87ac64c9 100644
---- a/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts
-+++ b/src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts
+--- a/src/renderer/src/components/terminal-pane/links/files/terminal-file-open-routing.ts
++++ b/src/renderer/src/components/terminal-pane/links/files/terminal-file-open-routing.ts
 @@ -77,6 +77,10 @@ type TerminalFileOpenDeps = {
    openInSourceGroupSurface?: 'internal' | 'browser'
  }

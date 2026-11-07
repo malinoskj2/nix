@@ -39,18 +39,18 @@ let
     rev = "cd0630bbcc2c830765a51fc023fe736dfe7f0f06";
     hash = "sha256-z7r3qtsJxwz0AcHXNY811Irz2mzBGLpFZcjc9vSfaJ8=";
   };
-  sourceCommit = "965978bc78bf03a6a43187c1ed28fcffe0e01bb5";
+  sourceCommit = "27eb5e2a6c5017c6fdcba4fee16bf54256550c6f";
   arch = stdenv.hostPlatform.node.arch;
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "orca-ade";
-  version = "1.4.248";
+  version = "1.4.253";
 
   src = fetchFromGitHub {
     owner = "stablyai";
     repo = "orca";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-sxvoCG+0nPBnr9Z+WnFlrO/5hbInl79zQylPaod+og4=";
+    hash = "sha256-kqm3C8ErQ3i3gR7gqizlm6qparI3PIADgmP9T2DANoo=";
   };
 
   patches = [
@@ -119,7 +119,7 @@ stdenv.mkDerivation (finalAttrs: {
       --replace-fail 'return "Working in Orca";' 'return "Working in Orca ADE";'
     node -e '
       const { readFileSync, writeFileSync } = require("node:fs")
-      const { hashPackagedPluginTree } = require("./config/scripts/verify-packaged-plugin-resources.cjs")
+      const { hashPackagedPluginTree } = require("./config/scripts/desktop-distribution/runtime-verification/verify-packaged-plugin-resources.cjs")
       const [indexPath, plugin] = process.argv.slice(1)
       const index = JSON.parse(readFileSync(indexPath, "utf8"))
       index.plugins.push({
@@ -131,17 +131,22 @@ stdenv.mkDerivation (finalAttrs: {
     ' resources/plugins/launch/bundled-plugins.json $plugin
 
     # Official skill installs pin to the tag's commit, which upstream reads from a git checkout.
-    substituteInPlace config/scripts/build-source-commit.mjs \
+    substituteInPlace config/scripts/build-identity/build-source-commit.mjs \
       --replace-fail "execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()" "'${sourceCommit}'"
     # Both concern only the upstream AppImage: the glibc floor guards its Ubuntu 20.04 users,
     # and only the AppImage ships the downloaded Node, which the deb and rpm drop again.
     substituteInPlace config/electron-builder.config.cjs \
-      --replace-fail "const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')" \
-        "const verifyLinuxGlibcFloor = () => {}" \
+      --replace-fail 'verifyLinuxGlibcFloor(context.appOutDir, { targetArch })' 'void context.appOutDir'  \
       --replace-fail "appImageNodeRuntime = await placeAppImageNodeRuntime(resourcesDir, targetArch)" ""
     # Upstream builds the Wayland clipboard helper in Docker; buildPhase compiles it instead.
-    substituteInPlace config/wayland-clipboard-resources.cjs \
-      --replace-fail "[join(root, 'config', 'scripts', 'build-wayland-clipboard.mjs'), '--arch', arch]" "['-e', \"\"]"
+    python3 - <<'PYTHON'
+    from pathlib import Path
+    path = Path("config/wayland-clipboard-resources.cjs")
+    source = path.read_text()
+    start = source.index("    [\n      join(root, 'config', 'scripts', 'native-build', 'linux', 'build-wayland-clipboard.mjs')")
+    end = source.index("    ],", start) + len("    ],")
+    path.write_text(source[:start] + "    ['-e', \"\"]," + source[end:])
+    PYTHON
 
     # Uploaded bundles come from the read-only store, and Orca writes into them after extracting.
     substituteInPlace src/main/ssh/system-transport/system-ssh-file-transfer.ts \
@@ -154,7 +159,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     inherit (finalAttrs) env;
     fetcherVersion = 4;
-    hash = "sha256-ZwOio8FOFoffZDl2237uTtTmTMbe54liu0hDGTiTreI=";
+    hash = "sha256-vUQ/owOXyBFFB1sLKmktmltDsGNg6FLdvrDUJB1zGc4=";
   };
 
   mobilePnpmDeps = fetchPnpmDeps {
@@ -163,7 +168,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     sourceRoot = "${finalAttrs.src.name}/mobile";
     fetcherVersion = 4;
-    hash = "sha256-QIvI+BPgoEnuhIj/Jr1W9TLTo6ppW9Z7GZJMh4tyifk=";
+    hash = "sha256-tFEW5EBiql6mSiTRJSJsC+Tq7/7TV8slmPqajoehswU=";
   };
 
   nativeBuildInputs = [
@@ -206,7 +211,7 @@ stdenv.mkDerivation (finalAttrs: {
 
     pnpm run build:packages
     pnpm exec tsc -p config/tsconfig.build.cli.json --outDir out --composite false --incremental false
-    node config/scripts/verify-cli-bin.mjs --fix-executable --fix-package-json
+    node config/scripts/cli-build/verify-cli-bin.mjs --fix-executable --fix-package-json
     pnpm run build:electron-vite
     pnpm run verify:built-skills-cli
     pnpm run build:web-from-renderer
@@ -270,7 +275,7 @@ stdenv.mkDerivation (finalAttrs: {
       {
         src = fetchurl {
           url = "https://github.com/stablyai/orca/releases/download/v${finalAttrs.version}/orca-ide_${finalAttrs.version}_amd64.deb";
-          hash = "sha256-Pe4bfVl7WikUU53Jldnk4VR+O6+x5nkpXViE9DnLQII=";
+          hash = "sha256-mC/CWxgF3IvmYJa5oevK8LVe7DlmtcbuYGkZeXJj1XI=";
         };
         nativeBuildInputs = [ dpkg ];
       }
