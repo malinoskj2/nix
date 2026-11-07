@@ -48,7 +48,8 @@
   boot.kernel.sysctl."vm.swappiness" = 100;
 
   nix.settings = {
-    max-jobs = 16;
+    # Run one build at a time so parallel builds don't multiply the core budget.
+    max-jobs = 1;
     cores = 16;
   };
 

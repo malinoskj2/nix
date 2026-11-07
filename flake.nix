@@ -56,7 +56,7 @@
       type = "github";
       owner = "nixos";
       repo = "nixpkgs";
-      rev = "21a67dc470149f337cecafbe965d8d252a390518";
+      rev = "f9a75f41be3a74eab55d3a7679d34ad6cc0da977";
     };
     nixpkgs-hyprland = {
       type = "github";
@@ -80,7 +80,7 @@
       type = "github";
       owner = "QNetITQ";
       repo = "WaveFox";
-      ref = "0.6.155";
+      ref = "0.9.159";
       flake = false;
     };
   };

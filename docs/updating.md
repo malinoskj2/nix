@@ -19,6 +19,10 @@ The [update workflow](../.github/workflows/update.yml) runs `nix flake update`
 every week, runs `nix flake check` against the new lock on each system, and
 opens a pull request only when every check passes.
 
+`home` limits Nix to one build with 16 cores. The sandbox's Blender also uses
+`WITH_CYCLES_CUDA_BUILD_SERIAL`, because CUDA's split compiler otherwise starts
+extra threads alongside the regular compiler jobs.
+
 ## Inputs that move as a unit
 
 ### The release
@@ -93,7 +97,11 @@ or software-renderer acceptance.
 release for that Firefox major version. Move them together. Then open Firefox
 and check what [`users/jesse/firefox.nix`](../users/jesse/firefox.nix) depends
 on: the Nova setting, the imported WaveFox CSS, the cascade-layer order and the
-transparent chrome. A Firefox or WaveFox UI change can break any of them
+transparent chrome. Firefox 159 also needs the local horizontal-tab overrides for
+the inset rounded content frame, navigation spacing, hidden sidebar toggle,
+fallback tab icon and translucent selected tab. Check normal, maximized and
+fullscreen windows when moving these.
+A Firefox or WaveFox UI change can break any of them
 without a build error.
 
 [`users/jesse/arrpc/`](../users/jesse/arrpc) also adds an AutoConfig file to
