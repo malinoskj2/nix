@@ -12,16 +12,23 @@ if [[ $agent != claude && $agent != codex && $agent != muse ]]; then
   exit 2
 fi
 
-if ! repo_root=$(git rev-parse --show-toplevel 2>/dev/null); then
+if repo_root=$(git rev-parse --show-toplevel 2>/dev/null); then
+  # Linked worktrees use the main repository's name, regardless of their directory.
+  git_common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+  if [[ $(basename "$git_common_dir") == .git ]]; then
+    repo_root=$(dirname "$git_common_dir")
+  fi
+  alias=sandbox-$(basename "$repo_root")
+elif [[ $agent == codex && -n ${CODEX_HOME:-} ]] ||
+  [[ $agent == claude && -n ${CLAUDE_CONFIG_DIR:-} ]]; then
+  # Chat's model/account probes run from its account directory, outside Git.
+  # They still need the sandbox and the selected account, never a host fallback.
+  alias=sandbox-$agent-chat
+else
   echo 'agent-sandbox-exec: run this command inside a Git repository' >&2
   exit 2
 fi
-# Linked worktrees use the main repository's name, regardless of their directory.
-git_common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
-if [[ $(basename "$git_common_dir") == .git ]]; then
-  repo_root=$(dirname "$git_common_dir")
-fi
-alias=sandbox-$(basename "$repo_root")
+
 if [[ ! $alias =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
   echo "agent-sandbox-exec: invalid sandbox alias: $alias" >&2
   exit 2
@@ -33,7 +40,7 @@ instance=agent-sandbox-$alias-h$$-$RANDOM
 echo "agent-sandbox-exec: starting instance $instance" >&2
 
 finish_launch() {
-  if [[ -n ${ORCA_PANE_KEY:-} ]]; then
+  if [[ -n ${ORCA_PANE_KEY:-} && -z ${ORCA_STRUCTURED_SESSION:-} ]]; then
     printf '\033]777;orca-container;clear\033\134' >&2
   fi
   if [[ -n ${relay_dir:-} ]]; then

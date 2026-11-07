@@ -62,6 +62,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./clipboard-shared-media.patch
     ./bundled-plugins.patch
     ./approved-plugins.patch
+    ./structured-sandbox-launch.patch
     ./agent-resume-wrapper.patch
     ./terminal-container-indicators.patch
   ];
@@ -218,6 +219,7 @@ stdenv.mkDerivation (finalAttrs: {
     pnpm rebuild node-pty @parcel/watcher
 
     pnpm run build:packages
+    pnpm exec vitest run src/main/native-chat/structured-agent-command-resolution.test.ts
     pnpm exec tsc -p config/tsconfig.build.cli.json --outDir out --composite false --incremental false
     node config/scripts/cli-build/verify-cli-bin.mjs --fix-executable --fix-package-json
     pnpm run build:electron-vite

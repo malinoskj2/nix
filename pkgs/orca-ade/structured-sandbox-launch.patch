@@ -1,0 +1,76 @@
+--- a/src/main/native-chat/structured-agent-command-resolution.ts
++++ b/src/main/native-chat/structured-agent-command-resolution.ts
+@@ -1,4 +1,6 @@
+ import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
++import { nixGlobalSettings } from '../../shared/nix-global-settings'
++import { parseAgentCommand } from '../../shared/agent-launch/startup/agent-command-plan'
+ import { homedir } from 'node:os'
+ import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
+ import type { GlobalSettings } from '../../shared/global-settings-types'
+@@ -47,10 +49,19 @@
+   settings: CommandSettings | null | undefined,
+   options: CommandOptions
+ ) {
+-  const plan = structuredAgentCommandPlan(
+-    settings?.agentCmdOverrides?.[agent] ?? '',
+-    options.platform ?? process.platform
+-  )
++  const input = settings?.agentCmdOverrides?.[agent]?.trim() ?? ''
++  const platform = options.platform ?? process.platform
++  // Nix declares a quoted /bin/sh wrapper for both terminals and Chat. Spawn its
++  // argv directly; only the exact administrator-declared command may opt into
++  // shell syntax. User edits still go through the upstream literal-only parser.
++  const declaredSettings: Partial<GlobalSettings> = nixGlobalSettings
++  const declared = declaredSettings.agentCmdOverrides?.[agent]?.trim()
++  const parsed = input && input === declared && platform !== 'win32'
++    ? parseAgentCommand('', input, 'escape')
++    : null
++  const plan = parsed?.ok && !parsed.env && !parsed.divergesFromShell
++    ? { program: parsed.binary, prefixArgs: parsed.prefixArgs }
++    : structuredAgentCommandPlan(input, platform)
+   const overlay = settings?.agentDefaultEnv?.[agent]
+   const command = plan
+     ? resolveExecutableCommand(plan.program, {
+--- a/src/main/native-chat/structured-agent-command-resolution.test.ts
++++ b/src/main/native-chat/structured-agent-command-resolution.test.ts
+@@ -1,8 +1,17 @@
+ import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+ import { tmpdir } from 'node:os'
+ import { join } from 'node:path'
+-import { afterEach, describe, expect, it } from 'vitest'
++import { afterEach, describe, expect, it, vi } from 'vitest'
+ import { resolveStructuredAgentCommand } from './structured-agent-command-resolution'
++
++vi.mock('../../shared/nix-global-settings', () => ({
++  nixGlobalSettings: {
++    agentCmdOverrides: {
++      codex: `/bin/sh -c 'exec sandbox-launcher "$@"' orca-sandbox codex`,
++      claude: `/bin/sh -c 'exec sandbox-launcher "$@"' orca-sandbox claude`
++    }
++  }
++}))
+ 
+ const NOT_RUNNABLE = expect.objectContaining({
+   name: 'AgentSessionPreSpawnError',
+@@ -26,6 +35,21 @@
+ }
+ 
+ describe('structured agent executable resolution', () => {
++  it.skipIf(process.platform === 'win32')('preserves declared Codex and Claude shell wrapper argv', () => {
++    for (const agent of ['codex', 'claude'] as const) {
++      const command = `/bin/sh -c 'exec sandbox-launcher "$@"' orca-sandbox ${agent}`
++      expect(resolveStructuredAgentCommand(agent, {
++        agentCmdOverrides: { [agent]: command }
++      })).toEqual({
++        command: '/bin/sh',
++        prefixArgs: ['-c', 'exec sandbox-launcher "$@"', 'orca-sandbox', agent]
++      })
++      expect(() => resolveStructuredAgentCommand(agent, {
++        agentCmdOverrides: { [agent]: command + ' ; echo changed' }
++      })).toThrow(NOT_RUNNABLE)
++    }
++  })
++
+   it('resolves a basename through the configured PATH and a home-relative path through the host home', () => {
+     const { directory, command } = executable()
+     const basenameCommand = join(directory, 'agent-custom')

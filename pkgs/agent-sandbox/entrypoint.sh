@@ -90,6 +90,11 @@ sync_host_clipboard() {
     done
 }
 
+# Reserve stdout exclusively for the agent protocol during container setup.
+# Keep stdin open for Codex app-server and Claude's stream-json transport.
+exec 3>&1
+exec 1>&2
+
 dbus-daemon --config-file="$DBUS_SESSION_BUS_CONFIG" --address="$DBUS_SESSION_BUS_ADDRESS" --fork --nopidfile
 
 # A null sink, since games under Proton crash in XAudio2 without any audio device.
@@ -124,7 +129,8 @@ fi
 write_sshd_config
 
 # Report from inside the running container, after setup succeeds.
-if [[ -n ${ORCA_PANE_KEY:-} && ${AGENT_SANDBOX_INSTANCE:-} =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]]; then
+if [[ -z ${ORCA_STRUCTURED_SESSION:-} && -n ${ORCA_PANE_KEY:-} && ${AGENT_SANDBOX_INSTANCE:-} =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]]; then
   printf '\033]777;orca-container;name=%s\033\134' "$AGENT_SANDBOX_INSTANCE"
 fi
+exec 1>&3 3>&-
 exec "$@"

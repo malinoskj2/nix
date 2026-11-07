@@ -83,6 +83,31 @@ agent process or its sandbox session files. Agent recognition, session history,
 and resume need verification and further integration before this replaces the
 SSH setup.
 
+## Chat interface
+
+Codex and Claude can use Orca's **Chat** interface with the same sandbox launch
+commands as the CLI interface. The Nix-built Orca accepts the exact declarative
+command as a program and argument vector, including its quoted shell script.
+Edited commands still use Orca's normal literal-command validation. Rebuild and
+restart Orca to pick up `structured-sandbox-launch.patch`.
+
+Chat's Codex app-server and Claude stream-json protocols use pipes, without a
+TTY. Sandbox setup writes diagnostics to stderr and reserves stdout for the
+agent protocol. Chat launches pass the sealed Orca session identity and the
+selected `CODEX_HOME` or `CLAUDE_CONFIG_DIR` into the container. That account
+directory is mounted writable at the same absolute path so authentication,
+transcripts and resume stay with the account Orca selected. The rest of Orca's
+state remains read-only, except the per-chat scratch directory used for inline
+artifacts. Claude's selected authentication environment is forwarded only to
+Claude.
+
+Model/account probes may run outside a Git repository. When they supply an
+account directory, the launcher gives them a fresh `sandbox-codex-chat` or
+`sandbox-claude-chat` instance; it never falls back to running the agent on the
+host. Closing or cancelling the provider process removes its container.
+Container badges remain a terminal integration; Chat does not receive terminal
+escape sequences.
+
 ## Container indicators
 
 The Nix-built Orca carries `terminal-container-indicators.patch`. Each running
