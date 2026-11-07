@@ -42,19 +42,19 @@ index 6691e244..b8bc742b 100644
    width: calc(80px / var(--ui-zoom-factor, 1));
    flex-shrink: 0;
 diff --git a/src/renderer/src/components/right-sidebar/index.tsx b/src/renderer/src/components/right-sidebar/index.tsx
-index 8824a854..244dd186 100644
+index f6f23657..31f15b6b 100644
 --- a/src/renderer/src/components/right-sidebar/index.tsx
 +++ b/src/renderer/src/components/right-sidebar/index.tsx
-@@ -84,7 +84,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -89,7 +89,7 @@ function RightSidebarInner(): React.JSX.Element {
    const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
  
    const panelContent = rightSidebarOpen ? (
 -    <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
 +    <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-sidebar scrollbar-sleek-parent">
-       {/* Keep panels mounted across worktree switches; remounts caused Windows IPC storms and multi-second freezes. */}
-       <RightSidebarPanelContent effectiveTab={effectiveTab} rightSidebarOpen={rightSidebarOpen} />
-     </div>
-@@ -141,7 +141,7 @@ function RightSidebarInner(): React.JSX.Element {
+       {creatingWorktree ? (
+         <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
+           {translate(
+@@ -155,7 +155,7 @@ function RightSidebarInner(): React.JSX.Element {
        )}
      >
        <div
@@ -63,7 +63,7 @@ index 8824a854..244dd186 100644
          style={{
            borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
          }}
-@@ -160,7 +160,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -174,7 +174,7 @@ function RightSidebarInner(): React.JSX.Element {
            />
          ) : (
            /* The 40px activity bar absorbs part of the 138px window-control overlay; inset the header by the remaining 98px. */
@@ -72,7 +72,7 @@ index 8824a854..244dd186 100644
              <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
                {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
              </span>
-@@ -181,7 +181,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -195,7 +195,7 @@ function RightSidebarInner(): React.JSX.Element {
        {activityBarPosition === 'side' && (
          <ContextMenu>
            <ContextMenuTrigger asChild>

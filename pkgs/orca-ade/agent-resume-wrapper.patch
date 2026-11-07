@@ -1,30 +1,21 @@
-diff --git a/src/renderer/src/components/terminal-pane/pty-connection/cold-restore-resume-startup.ts b/src/renderer/src/components/terminal-pane/pty-connection/cold-restore-resume-startup.ts
-index 7623aee..00a82b8 100644
---- a/src/renderer/src/components/terminal-pane/pty-connection/cold-restore-resume-startup.ts
-+++ b/src/renderer/src/components/terminal-pane/pty-connection/cold-restore-resume-startup.ts
-@@ -2,7 +2,10 @@ import {
+diff --git a/src/renderer/src/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup.ts b/src/renderer/src/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup.ts
+index df75501b..fdb80df9 100644
+--- a/src/renderer/src/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup.ts
++++ b/src/renderer/src/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup.ts
+@@ -1,8 +1,11 @@
++import { nixAgentResumeWrapper } from '../../../../../../shared/nix-agent-resume-wrapper'
++import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
++import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
+ import {
    getConnectionIdForWorktreeCopy,
    getConnectionIdFromState
  } from '@/lib/connection-owner-resolution'
--import { normalizeExecutionHostId } from '../../../../../shared/execution-host'
-+import {
-+  normalizeExecutionHostId,
-+  parseExecutionHostId
-+} from '../../../../../shared/execution-host'
- import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
- import { useAppStore } from '@/store'
- import { createBrowserUuid } from '@/lib/browser-uuid'
-@@ -18,6 +21,9 @@ import {
-   sleepingRecordNamesAnotherExecutionHost
- } from '@/lib/sleeping-record-execution-host-scope'
- import { resolveResumeLaunchRecipe } from '../../../../../shared/tui-agent-launch-defaults'
-+import { nixAgentResumeWrapper } from '../../../../../shared/nix-agent-resume-wrapper'
-+import type { TuiAgent } from '../../../../../shared/tui-agent'
-+import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
- import {
-   agentProviderSessionsEqual,
-   isResumableTuiAgent,
-@@ -112,8 +118,12 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
+-import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
++import { normalizeExecutionHostId, parseExecutionHostId } from '../../../../../../shared/execution-host'
+ import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+ import { useAppStore } from '@/store/index'
+ import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+@@ -112,8 +115,12 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
      const startupPlan = buildAgentResumeStartupPlan({
        agent,
        providerSession,
@@ -39,7 +30,7 @@ index 7623aee..00a82b8 100644
        platform: resumeTarget.platform,
        agentHostPlatform: resumeTarget.agentHostPlatform,
        shell: resumeTarget.shell,
-@@ -158,6 +168,38 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
+@@ -158,6 +165,38 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
    }
  }
  

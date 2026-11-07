@@ -149,7 +149,7 @@ index 00000000..fc319cdb
 +import { existsSync } from 'node:fs'
 +import { dirname, join } from 'node:path'
 +import { getSharedManagedScriptPath, writeManagedScript } from '../agent-hooks/installer-utils'
-+import { quotePosixShell } from '../../shared/shell-argument-quoting'
++import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 +
 +// Why: ~/.claude/settings.json may be read-only (e.g. a Nix store symlink), so Orca's
 +// hooks live in their own file and reach only the Claude sessions Orca starts.
@@ -236,13 +236,13 @@ index bb4f6ed1..606be340 100644
  export function retireClaudeManagedStatusLine(
    config: HooksConfig,
 diff --git a/src/main/ipc/pty/host-env/assembly.ts b/src/main/ipc/pty/host-env/assembly.ts
-index 83f4e3a5..db8c7fa4 100644
+index 7c9e2af8..00708558 100644
 --- a/src/main/ipc/pty/host-env/assembly.ts
 +++ b/src/main/ipc/pty/host-env/assembly.ts
 @@ -1,3 +1,4 @@
 +import { delimiter } from 'node:path'
  import { applyClaudeAgentViewEnv } from './claude-agent-view'
- import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
+ import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal/images/terminal-inline-images-settings'
  import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
 @@ -13,6 +14,7 @@ import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager
  import { wslInteropHealthMonitor } from '../../../wsl/execution/wsl-interop-health'
