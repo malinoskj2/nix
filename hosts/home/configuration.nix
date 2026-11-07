@@ -99,6 +99,22 @@
   services.printing = {
     enable = true;
     drivers = [ pkgs.hplipWithPlugin ];
+    browsed.enable = true;
+    browsedConf = ''
+      BrowseRemoteProtocols dnssd
+      CreateIPPPrinterQueues All
+    '';
+  };
+
+  # Discover driverless USB printers (including the DeskJet 2800) and LAN printers.
+  services.ipp-usb.enable = true;
+  # Also discover printers already connected when this configuration is activated.
+  # With no printer connected, ipp-usb stays idle and watches for USB hotplug.
+  systemd.services.ipp-usb.wantedBy = [ "multi-user.target" ];
+  services.avahi = {
+    enable = true;
+    nssmdns4 = true;
+    openFirewall = true;
   };
 
   environment.systemPackages = with pkgs; [
