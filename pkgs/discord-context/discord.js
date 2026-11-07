@@ -72,6 +72,23 @@ export class DiscordContext {
     return guilds.filter(g => this.guildAllowed(g.id)).map(g => ({ id: g.id, name: g.name }));
   }
 
+  async getMemberRoles(guildId, userId) {
+    this.requireGuild(guildId);
+    const member = await this.api(`/guilds/${guildId}/members/${userId}`);
+    const roles = await this.api(`/guilds/${guildId}/roles`);
+    const byId = new Map(roles.map(role => [role.id, role]));
+    // @everyone is implicit in Discord's member role list.
+    const assigned = [...new Set([guildId, ...member.roles])].map(id => {
+      const role = byId.get(id);
+      return {
+        id, name: role?.name ?? null, position: role?.position ?? null,
+        hoist: role?.hoist ?? null, managed: role?.managed ?? null,
+      };
+    });
+    assigned.sort((a, b) => (b.position ?? -1) - (a.position ?? -1));
+    return { guildId, userId, roles: assigned };
+  }
+
   async listChannels(guildId) {
     this.requireGuild(guildId);
     const channels = await this.api(`/guilds/${guildId}/channels`);

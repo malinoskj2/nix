@@ -37,7 +37,7 @@ test('HTTP MCP handshake, tools, policy reload and browser/host rejection', { ti
   t.after(() => client.close());
   await client.connect(transport);
   const tools = await client.listTools();
-  assert.deepEqual(tools.tools.map(t => t.name).sort(), ['list_channels', 'list_servers', 'list_threads', 'read_messages', 'search_messages']);
+  assert.deepEqual(tools.tools.map(t => t.name).sort(), ['get_member_roles', 'list_channels', 'list_servers', 'list_threads', 'read_messages', 'search_messages']);
   assert.ok(tools.tools.every(t => t.annotations.readOnlyHint));
   const initial = await client.callTool({ name: 'search_messages', arguments: { query: 'test', guildId: '1' } });
   assert.equal(initial.isError, true);
@@ -45,6 +45,10 @@ test('HTTP MCP handshake, tools, policy reload and browser/host rejection', { ti
   const excluded = await client.callTool({ name: 'search_messages', arguments: { query: 'test', guildId: '2' } });
   assert.equal(excluded.isError, true);
   assert.equal(JSON.stringify(excluded).includes('test-only-credential'), false);
+  const excludedRoles = await client.callTool({ name: 'get_member_roles', arguments: { guildId: '2', userId: '3' } });
+  assert.equal(excludedRoles.isError, true);
+  const invalidRoles = await client.callTool({ name: 'get_member_roles', arguments: { guildId: '1', userId: '../x' } });
+  assert.equal(invalidRoles.isError, true);
   const invalid = await client.callTool({ name: 'read_messages', arguments: { channelId: '../x' } });
   assert.equal(invalid.isError, true);
   assert.equal((await fetch(address, { method: 'POST', headers: { Origin: 'https://example.com' } })).status, 403);
