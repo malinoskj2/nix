@@ -220,7 +220,12 @@ stdenv.mkDerivation (finalAttrs: {
     pnpm rebuild node-pty @parcel/watcher
 
     pnpm run build:packages
-    pnpm exec vitest run src/main/native-chat/structured-agent-command-resolution.test.ts
+    pnpm exec vitest run --config config/vitest.config.ts \
+      src/main/native-chat/structured-agent-command-resolution.test.ts \
+      src/main/native-chat/nix-sandbox-launch-environment.test.ts \
+      src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts \
+      src/main/runtime/agent-session/structured-agent-session-integration.test.ts \
+      src/renderer/src/components/StructuredSessionSandboxBadge.test.tsx
     pnpm exec tsc -p config/tsconfig.build.cli.json --outDir out --composite false --incremental false
     node config/scripts/cli-build/verify-cli-bin.mjs --fix-executable --fix-package-json
     pnpm run build:electron-vite

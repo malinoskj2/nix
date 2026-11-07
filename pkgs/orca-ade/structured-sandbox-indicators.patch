@@ -110,7 +110,7 @@ index 4d6e5db4..386d6c93 100644
 +      ...nixSandboxLaunchEnvironment(agent, settings)
      }
    }
- 
+
 diff --git a/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts b/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts
 index 330ed4df..acc4364e 100644
 --- a/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts
@@ -129,7 +129,7 @@ index 330ed4df..acc4364e 100644
 +    ...nixSandboxLaunchEnvironment(agent, settings)
    }
  }
- 
+
 diff --git a/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts b/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts
 index acab3283..fa5d4fdf 100644
 --- a/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts
@@ -454,3 +454,58 @@ index 0732f967..1e980f31 100644
        (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
        !Object.hasOwn(record, 'launchEnv') &&
        isPersistedAgentSessionObservationLease(record.lease) &&
+diff --git a/src/main/runtime/agent-session/structured-agent-session-integration.test.ts b/src/main/runtime/agent-session/structured-agent-session-integration.test.ts
+--- a/src/main/runtime/agent-session/structured-agent-session-integration.test.ts
++++ b/src/main/runtime/agent-session/structured-agent-session-integration.test.ts
+@@ -202,6 +202,7 @@
+ let dispatcher: RpcDispatcher
+ let bootEnvironmentReads: number
+ let codexOverrideReads: number
++let configuredSandboxLaunch: string
+ let configuredCodexProfile: string
+ let shellEnvironmentPolicy: NativeChatShellEnvironmentPolicy
+
+@@ -241,6 +242,7 @@
+   codex = fakeCodex()
+   bootEnvironmentReads = 0
+   codexOverrideReads = 0
++  configuredSandboxLaunch = '0'
+   configuredCodexProfile = 'configured'
+   shellEnvironmentPolicy = { inheritAll: true, names: [] }
+   const runtime = {
+@@ -284,7 +286,7 @@
+             return {}
+           }
+           codexOverrideReads += 1
+-          return { CODEX_PROFILE: configuredCodexProfile }
++          return { CODEX_PROFILE: configuredCodexProfile, ORCA_SANDBOX_LAUNCH: configuredSandboxLaunch }
+         },
+         ...scriptedCodexTransport(codex.openConnection)
+       }).then(() => undefined),
+@@ -305,6 +307,15 @@
+ })
+
+ describe('a structured codex session over agentSession.*', () => {
++  it.each(['1', '0'])('records and publishes sandbox launch %s through runtime wiring', async (marker) => {
++    configuredSandboxLaunch = marker
++    await ok<{ fence: number }>('agentSession.create', createIntentParams())
++    const host = getStructuredAgentSessionHost()!
++    expect(codex.live().launch.env.ORCA_SANDBOX_LAUNCH).toBe(marker)
++    expect(host.deps.store.getRecord(SESSION)?.sandboxLaunch).toBe(marker === '1')
++    expect(host.readStatusSummary(SESSION)?.sandboxLaunch).toBe(marker === '1')
++  })
++
+   it('joins final deferred writes before runtime teardown completes', async () => {
+     await ok<{ fence: number }>('agentSession.create', createIntentParams())
+     codex.notify('turn/started', { threadId: THREAD, turn: { id: TURN } })
+diff --git a/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts b/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
+--- a/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
++++ b/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
+@@ -80,6 +80,7 @@
+     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
+     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
+     resolveWorkspacePath: deps.resolveWorkspacePath,
++    ...(deps.resolveAgentLaunchEnv ? { resolveLaunchEnv: deps.resolveAgentLaunchEnv } : {}),
+     logger: deps.logger,
+     ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
+     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
