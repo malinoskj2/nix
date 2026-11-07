@@ -28,13 +28,13 @@ let
 in
 python3Packages.buildPythonApplication rec {
   pname = "pyghidra-mcp";
-  version = "0.2.7";
+  version = "0.3.0";
   pyproject = true;
 
   src = fetchPypi {
     pname = "pyghidra_mcp";
     inherit version;
-    hash = "sha256-ieR/OWAlZmfG+Y71xj5qWl6b5GdxNUeUfcksLx+UAYU=";
+    hash = "sha256-nMmpnhfJixEa+eCulkx/tWuM4i0uM0ZF+sCiMdKsDEA=";
   };
 
   patches = [ ./stdio-stdout.patch ];

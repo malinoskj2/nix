@@ -127,7 +127,7 @@ in
         "WaveFox.HorizontalTabs.AttachedTabs" = true;
         "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
 
-        # WaveFox 0.6.x targets the Nova UI.
+        # WaveFox 0.9.x targets the Nova UI.
         "browser.nova.enabled" = true;
 
         # Pages get prefers-color-scheme: light while the chrome stays dark.
@@ -155,6 +155,32 @@ in
             --toolbar-field-background-color: ${rgba mocha.mantle glass.layer} !important;
           }
           #main-window { background: transparent !important; }
+
+          /* Firefox 159/WaveFox 0.9 removed the inset content frame and added a
+             sidebar toggle. Keep the established horizontal-tab layout. */
+          @media not -moz-pref("sidebar.verticalTabs") {
+            :root { --tab-background-color-selected: ${rgba mocha.base glass.chrome} !important; }
+            #sidebar-button { display: none !important; }
+            #nav-bar { border: none !important; }
+            #nav-bar-customization-target { padding-inline-start: 4px !important; }
+
+            :root[sizemode="normal"]:not([inDOMFullscreen]) #tabbrowser-tabbox {
+              padding: 0 4px 4px !important;
+            }
+            .browserContainer {
+              border: 1px solid var(--chrome-content-separator-color) !important;
+            }
+            :root[sizemode="normal"]:not([inDOMFullscreen]) .browserContainer {
+              border-radius: 8px !important;
+              overflow: clip !important;
+            }
+
+            /* Nova now hides the fallback icon for pages without a favicon. */
+            .tabbrowser-tab:not([busy]) .tab-icon-image:not([src]) {
+              display: block !important;
+              content: url("chrome://global/skin/icons/defaultFavicon.svg") !important;
+            }
+          }
         }
       '';
     };

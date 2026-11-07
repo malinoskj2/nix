@@ -144,7 +144,11 @@ let
   # cudaSupport enables Cycles' CUDA and OptiX devices. Blender compiles CUDA kernels for every
   # architecture by default; the RTX 5090 only needs sm_120.
   blender' = (blender.override { cudaSupport = true; }).overrideAttrs (old: {
-    cmakeFlags = old.cmakeFlags ++ [ (lib.cmakeFeature "CYCLES_CUDA_BINARIES_ARCH" "sm_120") ];
+    cmakeFlags = old.cmakeFlags ++ [
+      (lib.cmakeFeature "CYCLES_CUDA_BINARIES_ARCH" "sm_120")
+      # Otherwise CUDA's split compiler uses every CPU, outside Nix's core budget.
+      (lib.cmakeBool "WITH_CYCLES_CUDA_BUILD_SERIAL" true)
+    ];
   });
 
   # Chromium's setuid and user-namespace sandboxes can't start inside the container.
