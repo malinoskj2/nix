@@ -61,6 +61,14 @@ Manager also configures the connection for each host harness; host loopback
 refers to a host editor, not an editor inside Docker. No Unreal port is
 published from Docker.
 
+Codex keeps this connection disabled by default, both on the host and in the
+sandbox, so ordinary sessions do not try to contact an absent editor. After
+starting the editor, enable it for an Unreal session with:
+
+```sh
+codex -c mcp_servers.unreal-mcp.enabled=true
+```
+
 Start the editor before the agent, or reconnect the agent's MCP after startup.
 Editor restarts require reconnecting existing direct HTTP sessions. One editor
 per sandbox is supported; the wrapper holds a lock for its lifetime.

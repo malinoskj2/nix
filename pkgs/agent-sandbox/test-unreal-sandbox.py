@@ -44,6 +44,7 @@ class UnrealSandboxTests(unittest.TestCase):
                 "[mcp_servers.other]\n"
                 'command = "other"\n'
                 "[mcp_servers.unreal-mcp]\n"
+                "enabled = true\n"
                 'command = "obsolete"\n',
             )
             unreal.sync_harnesses()
@@ -56,6 +57,14 @@ class UnrealSandboxTests(unittest.TestCase):
             self.assertEqual(data["projects"]["/project"]["trust_level"], "trusted")
             self.assertEqual(data["mcp_servers"]["other"]["command"], "other")
             self.assertNotIn("command", data["mcp_servers"]["unreal-mcp"])
+            self.assertFalse(data["mcp_servers"]["unreal-mcp"]["enabled"])
+
+    def test_fresh_config_disables_unreal_connection(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, HOME=directory):
+            unreal.sync_harnesses()
+            data = tomlkit.parse((Path(directory) / ".codex/config.toml").read_text())
+            self.assertFalse(data["mcp_servers"]["unreal-mcp"]["enabled"])
+            self.assertEqual(data["mcp_servers"]["unreal-mcp"]["url"], unreal.URL)
 
     def test_prepare_preserves_project_and_ini_preferences(self):
         with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):

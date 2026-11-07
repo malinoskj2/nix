@@ -8,6 +8,7 @@ in
     inherit (unrealMcp) url;
   };
   programs.codex.settings.mcp_servers.unreal-mcp = {
+    enabled = false;
     inherit (unrealMcp) url;
     startup_timeout_sec = 30;
     tool_timeout_sec = 120;

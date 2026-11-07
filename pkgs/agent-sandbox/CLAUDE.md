@@ -94,6 +94,8 @@ files under `~/.cache/unreal-engine`. The bundled SDK/toolchain is used for C++;
 GCC is not a replacement for Unreal's Linux toolchain.
 
 Claude Code and Codex have an `unreal-mcp` connection configured.
+Codex disables it by default. For Unreal work, start the editor, then launch
+`codex -c mcp_servers.unreal-mcp.enabled=true` to enable it for that session.
 Start the editor before starting the agent, or reconnect MCP after editor startup
 or restart. A configured connection alone does not prove the engine is available:
 require `mcp-check` or a successful read-only `list_toolsets` call. Discover toolsets
