@@ -68,6 +68,37 @@ test('explicit excluded channel is rejected before search or message fetching', 
   assert.equal(calls.some(([p]) => p.includes('/messages')), false);
 });
 
+test('member roles resolve assigned roles and @everyone without exposing member data', async () => {
+  const calls = [];
+  const context = new DiscordContext(async path => {
+    calls.push(path);
+    if (path === '/guilds/1/members/3')
+      return { roles: ['5', '4', '6'], user: { email: 'secret' }, nick: 'secret' };
+    if (path === '/guilds/1/roles') return [
+      { id: '1', name: '@everyone', position: 0, hoist: false, managed: false },
+      { id: '4', name: 'Moderator', position: 10, hoist: true, managed: false, permissions: 'secret' },
+      { id: '5', name: 'Member', position: 1, hoist: false, managed: true },
+      { id: '7', name: 'Unassigned', position: 20 },
+    ];
+    throw new Error('Unexpected API request.');
+  }, {});
+  assert.deepEqual(await context.getMemberRoles('1', '3'), {
+    guildId: '1', userId: '3', roles: [
+      { id: '4', name: 'Moderator', position: 10, hoist: true, managed: false },
+      { id: '5', name: 'Member', position: 1, hoist: false, managed: true },
+      { id: '1', name: '@everyone', position: 0, hoist: false, managed: false },
+      { id: '6', name: null, position: null, hoist: null, managed: null },
+    ],
+  });
+  assert.deepEqual(calls, ['/guilds/1/members/3', '/guilds/1/roles']);
+});
+
+test('member roles in excluded servers are rejected before any API request', async () => {
+  const { context, calls } = fixture();
+  await assert.rejects(context.getMemberRoles('2', '3'));
+  assert.deepEqual(calls, []);
+});
+
 test('read output contains links but no nested reply or forwarded content', async () => {
   const { context } = fixture();
   const messages = await context.readMessages({ channelId: '20', around: '31' });
