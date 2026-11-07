@@ -11,16 +11,6 @@
       hostsOnSystem = lib.filterAttrs (
         _: host: host.pkgs.stdenv.hostPlatform.system == system
       ) self.nixosConfigurations;
-      hostPackages =
-        host:
-        let
-          users = lib.attrValues (host.config.home-manager.users or { });
-        in
-        host.config.environment.systemPackages ++ lib.concatMap (user: user.home.packages) users;
-      installedPaths = lib.catAttrs "outPath" (lib.concatMap hostPackages (lib.attrValues hostsOnSystem));
-      installedPackages = lib.filterAttrs (
-        _: package: lib.elem package.outPath installedPaths
-      ) self'.packages;
       localPackages = lib.filterAttrs (_: lib.meta.availableOn pkgs.stdenv.hostPlatform) (
         import ../pkgs { inherit pkgs; }
       );
@@ -28,16 +18,12 @@
       hostChecks = lib.mapAttrs' (
         name: host: lib.nameValuePair "host-${name}" host.config.system.build.toplevel
       ) hostsOnSystem;
-      packageChecks = lib.mapAttrs' (
-        name: package: lib.nameValuePair "package-${name}" package
-      ) installedPackages;
     in
     {
       checks =
         assert lib.assertMsg (unexported == [ ])
           "pkgs/ packages missing from exportedPackages in flake.nix: ${lib.concatStringsSep ", " unexported}";
         hostChecks
-        // packageChecks
         // {
           devshell = self'.devShells.default;
         }

@@ -43,6 +43,8 @@ while IFS= read -r line || [[ -n $line ]]; do
   fi
 done <"$input"
 
+[[ -z $diagram ]] || die "markdown-to-pdf: unclosed Mermaid block in $input"
+
 pandoc "$rendered" \
   --resource-path="$workdir:$(dirname "$input")" \
   --from=markdown+smart \

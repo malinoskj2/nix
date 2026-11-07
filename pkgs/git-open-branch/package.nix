@@ -1,6 +1,7 @@
 {
   git,
   gnused,
+  jq,
   lib,
   stdenv,
   writeShellApplication,
@@ -13,6 +14,7 @@ writeShellApplication {
   runtimeInputs = [
     git
     gnused
+    jq
   ]
   ++ lib.optionals stdenv.hostPlatform.isLinux [ xdg-utils ];
   text = builtins.readFile ./git-open-branch.sh;

@@ -21,9 +21,9 @@ the exported package list, and imports the single-concern modules in `flake/`:
   overlays.
 - `hosts.nix`: `mkHost.nixos`, which builds a NixOS host with the Linux nixpkgs
   arguments and the configuration revision.
-- `checks.nix`: `host-<name>` for each host on its system, `package-<name>` for
-  the local packages those hosts install directly, and `devshell`. Evaluation
-  fails if a package in `pkgs/` is missing from `flake.nix`'s `exportedPackages`.
+- `checks.nix`: `host-<name>` for each host on its system, `devshell`, and the
+  Unreal sandbox test on x86_64. Host closures build the packages they use.
+  Evaluation fails if a package in `pkgs/` is missing from `flake.nix`'s `exportedPackages`.
 - `formatting.nix`: treefmt-nix.
 - `devshell.nix`: treefmt, nh, nixd, nvd and the formatters.
 
@@ -69,10 +69,10 @@ set their outputs in `desktop.monitors`.
 ### Packages, overlays and patches
 
 Each `pkgs/<name>/package.nix` is a local package. `pkgs/default.nix` picks up
-every directory, and the `additions` overlay exposes them as `pkgs.<name>`. A
-new package also goes in the `exportedPackages` list in `flake.nix`. Its `callPackage` supplies
-claude-code and codex from `pkgs.unstable`. Install local packages by
-name. Linux-only packages set `meta.platforms`. `git-open-branch` installs the
+directories containing `package.nix`, and the `additions` overlay exposes them
+as `pkgs.<name>`. A new package also goes in the `exportedPackages` list in `flake.nix`.
+Its `callPackage` supplies claude-code and codex from `pkgs.unstable`. Install
+local packages by name. Linux-only packages set `meta.platforms`. `git-open-branch` installs the
 `git-open` command.
 
 `overlays/default.nix` holds `additions`, `unstable` and `pins`. `unstable` is
@@ -94,10 +94,10 @@ until told.
 
 Format and lint with `nix fmt` (treefmt: deadnix, statix and nixfmt for Nix,
 shellcheck and shfmt for shell, ruff for Python, StyLua for Lua and Luau).
-`nix flake check` also builds every host whose system matches, the local
-packages those hosts install directly, and the devshell. Prefer evaluating or
-building the affected host before applying it, and don't run a `switch` unless
-explicitly asked. Hosts are applied with `nh os switch`, and `media` only from
+`nix flake check` also builds every host whose system matches (including its
+installed packages), the devshell, and the Unreal sandbox test on x86_64.
+Prefer evaluating or building the affected host before applying it, and don't
+run a `switch` unless explicitly asked. Hosts are applied with `nh os switch`, and `media` only from
 another host, with `--target-host` (`docs/bootstrap.md`). No host needs
 `--impure`. Don't copy secrets into the repository.
 
