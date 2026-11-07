@@ -28,6 +28,7 @@
 
     # The order reaches git's ignore file, so this list stays unsorted.
     ignores = [
+      "/.tmp/"
       ".idea/"
       "docker-compose.override.yml"
       "/storage/"

@@ -23,7 +23,8 @@ respect the user's chosen graphics settings and synchronisation tradeoffs.
   explanation or config work does not authorise resuming telemetry or captures.
 - Avoid capture/recording and heavy builds during the measurement: these can
   change scanout eligibility or compete for CPU/GPU time. Save any requested
-  images or videos under `/tmp/agent-media/` and report absolute host paths.
+  images or videos in the current repository root's `.tmp/` directory and report
+  absolute host paths.
 - Do not add Gamescope to solve latency or a background FPS cap by default.
   Nested Gamescope remains in the presentation path while focused too; its
   unfocused cap does not remove that extra stage when the game regains focus.

@@ -80,8 +80,8 @@ evidence that the real editor works.
 Epic recommends 32G RAM. The current sandbox slice shares a 20G limit across all
 containers. Run one editor/heavy build at a time; full source-engine compilation
 requires a separately sized environment. Keep reusable engine/cache files and
-report their disk footprint. Store captures in `/tmp/agent-media` and provide
-their absolute host paths.
+report their disk footprint. Store captures in the current repository root's
+globally Git-ignored `.tmp/` directory and provide their absolute host paths.
 
 ## Validation status
 
