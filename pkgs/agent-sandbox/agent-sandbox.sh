@@ -199,6 +199,11 @@ free_port() {
 
 cleanup() {
   trap - EXIT
+  # The desktop owns the launcher, not the container's PID namespace. Stop the
+  # container explicitly on cancellation or Orca exit, even if stdin is held open.
+  if [[ -n ${cid:-} ]]; then
+    docker rm --force "$cid" >/dev/null 2>&1 || true
+  fi
   if [[ -n ${clipboard_watcher_pid:-} ]]; then
     kill "$clipboard_watcher_pid" 2>/dev/null || true
     wait "$clipboard_watcher_pid" 2>/dev/null || true
@@ -293,11 +298,26 @@ for name in \
   ORCA_PANE_KEY ORCA_TAB_ID ORCA_WORKTREE_ID ORCA_TERMINAL_HANDLE \
   ORCA_AGENT_LAUNCH_TOKEN ORCA_AGENT_HOOK_ENDPOINT \
   ORCA_AGENT_HOOK_PORT ORCA_AGENT_HOOK_TOKEN ORCA_AGENT_HOOK_ENV \
-  ORCA_AGENT_HOOK_VERSION ORCA_AGENT_HOOK_TRANSPORT; do
+  ORCA_AGENT_HOOK_VERSION ORCA_AGENT_HOOK_TRANSPORT \
+  ORCA_STRUCTURED_SESSION ORCA_AGENT_SESSION_ID ORCA_AGENT_SESSION_SPAWN_TOKEN \
+  ORCA_USER_DATA_PATH ORCA_CLI_COMMAND ORCA_ENVIRONMENT ORCA_PAIRING_CODE ORCA_REMOTE_PAIRING \
+  ORCA_CHAT_SCRATCH_DIR; do
   if [[ -v $name ]]; then
     args+=(--env "$name=${!name}")
   fi
 done
+# The Chat host has already selected Claude's account and scrubbed inherited
+# credentials. Preserve that selection only for Claude, not other harnesses.
+if [[ $agent == claude ]]; then
+  for name in \
+    CLAUDE_CODE_ENTRYPOINT CLAUDE_AGENT_SDK_VERSION \
+    ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_CUSTOM_HEADERS \
+    CLAUDE_CODE_OAUTH_TOKEN AWS_BEARER_TOKEN_BEDROCK; do
+    if [[ -v $name ]]; then
+      args+=(--env "$name=${!name}")
+    fi
+  done
+fi
 if [[ -n ${ORCA_AGENT_HOOK_SOCKET:-} ]]; then
   args+=(--env "PATH=$AGENT_SANDBOX_ORCA_PATH" --env "ORCA_AGENT_HOOK_SOCKET=$ORCA_AGENT_HOOK_SOCKET")
 fi
@@ -333,6 +353,35 @@ mount_readonly "$HOME/.config/git"
 # Orca's CLI reads its runtime metadata and connects to the desktop's Unix
 # socket from this directory. Keep Orca's mutable workspace state host-owned.
 mount_readonly "$HOME/.config/orca"
+
+# Chat pins an account directory before spawning the provider. Preserve that
+# identity and its writable transcripts/config, overriding only that subtree of
+# Orca's read-only mount. The rest of Orca's desktop state stays read-only.
+account_variable=
+case $agent in
+  codex) account_variable=CODEX_HOME ;;
+  claude) account_variable=CLAUDE_CONFIG_DIR ;;
+esac
+if [[ -n $account_variable && -n ${!account_variable:-} ]]; then
+  account_home=${!account_variable}
+  if [[ $account_home != /* || ! -d $account_home || $account_home == *:* ]]; then
+    echo "agent-sandbox: invalid $account_variable directory" >&2
+    exit 2
+  fi
+  args+=(--env "$account_variable=$account_home" --volume "$account_home:$account_home")
+  if [[ $PWD == "$account_home" || $PWD == "$account_home"/* ]]; then
+    args+=(--workdir "$PWD")
+  fi
+fi
+
+# Inline Chat artifacts have a dedicated per-session directory under Orca state.
+if [[ -n ${ORCA_CHAT_SCRATCH_DIR:-} ]]; then
+  if [[ $ORCA_CHAT_SCRATCH_DIR != /* || ! -d $ORCA_CHAT_SCRATCH_DIR || $ORCA_CHAT_SCRATCH_DIR == *:* ]]; then
+    echo 'agent-sandbox: invalid ORCA_CHAT_SCRATCH_DIR directory' >&2
+    exit 2
+  fi
+  args+=(--volume "$ORCA_CHAT_SCRATCH_DIR:$ORCA_CHAT_SCRATCH_DIR")
+fi
 
 # The display draws text, icons and Hyprland's compositing the way the desktop does: its fonts and
 # their rendering settings, its desktop entries and icon themes, and its Hyprland look.lua.
