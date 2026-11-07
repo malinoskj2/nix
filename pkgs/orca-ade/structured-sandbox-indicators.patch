@@ -1,0 +1,456 @@
+diff --git a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-saved-status.ts b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-saved-status.ts
+index 66223e46..1e7043fa 100644
+--- a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-saved-status.ts
++++ b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-saved-status.ts
+@@ -51,6 +51,7 @@ export function savedStructuredAgentSessionStatus(
+     ...(isAgentChatPermissionMode(record.permissionMode)
+       ? { permissionMode: record.permissionMode }
+       : {}),
++    sandboxLaunch: record.sandboxLaunch,
+     ...(launchDirectory ? { launchDirectory } : {}),
+     ...structuredSummaryConversationNaming(record, undefined),
+     ...(typeof record.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
+diff --git a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary-equality.ts b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary-equality.ts
+index 76c480f8..d7acc370 100644
+--- a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary-equality.ts
++++ b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary-equality.ts
+@@ -11,6 +11,7 @@ export function structuredStatusSummariesEqual(
+ ): boolean {
+   return (
+     a.workspaceId === b.workspaceId &&
++    a.sandboxLaunch === b.sandboxLaunch &&
+     a.usageLimitContinue?.turnItemId === b.usageLimitContinue?.turnItemId &&
+     a.usageLimitContinue?.resetsAt === b.usageLimitContinue?.resetsAt &&
+     a.usageLimitContinue?.state === b.usageLimitContinue?.state &&
+diff --git a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary.ts b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary.ts
+index edb8af2a..95309e20 100644
+--- a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary.ts
++++ b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary.ts
+@@ -70,6 +70,7 @@ export function structuredAgentSessionStatusSummary({
+   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
+   return {
+     sessionId,
++    sandboxLaunch: record?.sandboxLaunch,
+     ...(usageLimitContinue ? { usageLimitContinue } : {}),
+     workspaceId: session.params.location.workspaceId,
+     agent: session.params.provider,
+diff --git a/src/main/native-chat/nix-sandbox-launch-environment.test.ts b/src/main/native-chat/nix-sandbox-launch-environment.test.ts
+new file mode 100644
+index 00000000..b1eb52b4
+--- /dev/null
++++ b/src/main/native-chat/nix-sandbox-launch-environment.test.ts
+@@ -0,0 +1,22 @@
++import { describe, expect, it, vi } from 'vitest'
++import { nixSandboxLaunchEnvironment } from './nix-sandbox-launch-environment'
++const { command } = vi.hoisted(() => ({
++  command: `/bin/sh -c 'exec sandbox-launcher "$@"' orca-sandbox codex`
++}))
++vi.mock('../../shared/nix-global-settings', () => ({
++  nixGlobalSettings: { agentCmdOverrides: { codex: command } }
++}))
++
++describe('sandbox launch provenance', () => {
++  it('recognises only the exact declared sandbox command', () => {
++    expect(nixSandboxLaunchEnvironment('codex', { agentCmdOverrides: { codex: command } })).toEqual(
++      { ORCA_SANDBOX_LAUNCH: '1' }
++    )
++    for (const override of ['codex', command + ' --other', '']) {
++      expect(
++        nixSandboxLaunchEnvironment('codex', { agentCmdOverrides: { codex: override } })
++      ).toEqual({ ORCA_SANDBOX_LAUNCH: '0' })
++    }
++    expect(nixSandboxLaunchEnvironment('claude', {})).toEqual({ ORCA_SANDBOX_LAUNCH: '0' })
++  })
++})
+diff --git a/src/main/native-chat/nix-sandbox-launch-environment.ts b/src/main/native-chat/nix-sandbox-launch-environment.ts
+new file mode 100644
+index 00000000..267d4aa9
+--- /dev/null
++++ b/src/main/native-chat/nix-sandbox-launch-environment.ts
+@@ -0,0 +1,18 @@
++import type { GlobalSettings } from '../../shared/global-settings-types'
++import { nixGlobalSettings } from '../../shared/nix-global-settings'
++
++/** Pin launch provenance, independent of agent permissions and the workspace's host. */
++export function nixSandboxLaunchEnvironment(
++  agent: string,
++  settings: Partial<Pick<GlobalSettings, 'agentCmdOverrides'>>
++): Record<string, string> {
++  const declared: Partial<GlobalSettings> = nixGlobalSettings
++  const command = settings.agentCmdOverrides?.[agent]?.trim()
++  const sandbox = Boolean(
++    command &&
++    command === declared.agentCmdOverrides?.[agent]?.trim() &&
++    command.endsWith(` orca-sandbox ${agent}`)
++  )
++  // Explicit false prevents an inherited sandbox variable labelling a host launch.
++  return { ORCA_SANDBOX_LAUNCH: sandbox ? '1' : '0' }
++}
+diff --git a/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts b/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
+index 4d6e5db4..386d6c93 100644
+--- a/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
++++ b/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
+@@ -1,3 +1,4 @@
++import { nixSandboxLaunchEnvironment } from '../../../native-chat/nix-sandbox-launch-environment'
+ import { ensureStructuredAgentModelCatalogOwner } from '../model-catalog/structured-agent-model-catalog-wiring'
+ import type { StructuredAgentModelCatalogDeps } from './structured-agent-runtime-registration-types'
+ import { resolveStructuredCodexAccountKind } from '../environment/structured-agent-account-home'
+@@ -23,11 +24,13 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
+   /** Apply the host-owning desktop's account overlay to configured agent environment. */
+   protected structuredAgentLaunchEnv(
+     agent: StructuredAgentId,
+-    settings: Pick<GlobalSettings, 'agentDefaultEnv'>
++    settings: Pick<GlobalSettings, 'agentDefaultEnv'> &
++      Partial<Pick<GlobalSettings, 'agentCmdOverrides'>>
+   ) {
+     return {
+       ...resolveTuiAgentLaunchEnv(agent, settings),
+-      ...this.accounts.hostLaunchEnvFor(agent)
++      ...this.accounts.hostLaunchEnvFor(agent),
++      ...nixSandboxLaunchEnvironment(agent, settings)
+     }
+   }
+ 
+diff --git a/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts b/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts
+index 330ed4df..acc4364e 100644
+--- a/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts
++++ b/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts
+@@ -1,3 +1,4 @@
++import { nixSandboxLaunchEnvironment } from '../../../native-chat/nix-sandbox-launch-environment'
+ import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+ import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+ import type { GlobalSettings } from '../../../../shared/global-settings-types'
+@@ -103,7 +104,8 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
+ ): Promise<Record<string, string>> {
+   return {
+     ...(await resolveHostAgentBaseEnvironment(settings)),
+-    ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : {})
++    ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : {}),
++    ...nixSandboxLaunchEnvironment(agent, settings)
+   }
+ }
+ 
+diff --git a/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts b/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts
+index acab3283..fa5d4fdf 100644
+--- a/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts
++++ b/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts
+@@ -11,6 +11,7 @@ import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/li
+ import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+ import {
+   applyAgentSessionReservation,
++  commitAgentSessionReservation,
+   type AgentSessionReserveRequest
+ } from './agent-session-reservation-admission'
+ import type { AgentSessionStoreState } from '../records/agent-session-store-state'
+@@ -185,3 +186,74 @@ describe('re-create over a failed create', () => {
+     }
+   })
+ })
++
++describe('sandbox launch provenance', () => {
++  it.each(['1', '0', undefined])('pins launch provenance %s on the reserved session', (marker) => {
++    const state = storeState()
++    const request = reserveRequest({
++      launchEnv: marker ? { ORCA_SANDBOX_LAUNCH: marker } : {},
++      operation: {
++        callerKey: 'client-1',
++        operationId: `${NOW}-${'1'.padStart(32, '0')}`,
++        fingerprint: 'fp-1'
++      }
++    })
++    const result = commitAgentSessionReservation(state, request, LEASE_TTL_MS)
++    expect(result.record.sandboxLaunch).toBe(marker === '1')
++    expect(state.records.get(request.sessionId)?.sandboxLaunch).toBe(marker === '1')
++    expect(result.record).not.toHaveProperty('launchEnv')
++  })
++})
++
++it('retains the recorded launch when a create operation replays with changed settings', () => {
++  const state = storeState()
++  const request = reserveRequest({
++    launchEnv: { ORCA_SANDBOX_LAUNCH: '1' },
++    operation: {
++      callerKey: 'client-1',
++      operationId: `${NOW}-${'2'.padStart(32, '0')}`,
++      fingerprint: 'fp-2'
++    }
++  })
++  commitAgentSessionReservation(state, request, LEASE_TTL_MS)
++  const replay = commitAgentSessionReservation(state, { ...request, launchEnv: {} }, LEASE_TTL_MS)
++  expect(replay.disposition).toBe('replayed')
++  expect(replay.record.sandboxLaunch).toBe(true)
++})
++
++it('replaces sandbox provenance when a released session resumes on the host', () => {
++  const state = storeState()
++  const operationId = `${NOW}-${'3'.padStart(32, '0')}`
++  const request = reserveRequest({
++    launchEnv: { ORCA_SANDBOX_LAUNCH: '1' },
++    operation: { callerKey: 'client-1', operationId, fingerprint: 'fp-3' }
++  })
++  const first = commitAgentSessionReservation(state, request, LEASE_TTL_MS)
++  state.records.set(request.sessionId, {
++    ...first.record,
++    lease: {
++      ...first.record.lease,
++      claimStatus: 'released',
++      handoffStage: null,
++      reservedSpawnToken: null,
++      ownerProcess: null,
++      deathEvidence: { kind: 'exit-observed', detail: 'stopped', observedAt: NOW }
++    }
++  })
++  const resumed = commitAgentSessionReservation(
++    state,
++    {
++      ...request,
++      launchEnv: {},
++      expectedFence: first.record.lease.runtimeFence,
++      operation: {
++        callerKey: 'client-1',
++        operationId: `${NOW}-${'4'.padStart(32, '0')}`,
++        fingerprint: 'fp-4'
++      }
++    },
++    LEASE_TTL_MS
++  )
++  expect(resumed.disposition).toBe('reserved')
++  expect(resumed.record.sandboxLaunch).toBe(false)
++})
+diff --git a/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.ts b/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.ts
+index 4c4fc4c5..cdadfe42 100644
+--- a/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.ts
++++ b/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.ts
+@@ -325,6 +325,13 @@ function reserveWithOperationRow(
+   legacyIds: readonly string[] = []
+ ): AgentSessionReserveResult {
+   const result = applyAgentSessionReservation(state, request, leaseTtlMs, legacyIds)
++  // Reattaching/replaying a live owner must retain that owner's launch provenance.
++  if (result.disposition !== 'retry-reservation') {
++    result.record = {
++      ...result.record,
++      sandboxLaunch: request.launchEnv?.ORCA_SANDBOX_LAUNCH === '1'
++    }
++  }
+   state.operations.set(agentSessionOperationKey(row.callerKey, row.operationId), row)
+   state.records.set(result.record.sessionId, result.record)
+   return { ...result, operationRow: row }
+diff --git a/src/renderer/src/components/StructuredSessionSandboxBadge.test.tsx b/src/renderer/src/components/StructuredSessionSandboxBadge.test.tsx
+new file mode 100644
+index 00000000..f13a6db3
+--- /dev/null
++++ b/src/renderer/src/components/StructuredSessionSandboxBadge.test.tsx
+@@ -0,0 +1,56 @@
++// @vitest-environment happy-dom
++import { act, cleanup, render } from '@testing-library/react'
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
++
++const fixture = vi.hoisted(() => ({
++  tab: { entityId: 'session-one' } as { entityId: string } | undefined,
++  sandboxLaunch: undefined as boolean | undefined,
++  listeners: new Set<() => void>()
++}))
++vi.mock('@/store', () => ({ useAppStore: (select: (state: unknown) => unknown) => select({}) }))
++vi.mock('@/lib/structured-chat-tab-index', () => ({ structuredChatTabById: () => fixture.tab }))
++vi.mock('@/runtime/structured-agent-session-owner', () => ({
++  structuredAgentSessionOwnerForTab: () => 'local',
++  structuredAgentSessionTargetForHost: () => ({ kind: 'local' })
++}))
++vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
++  getStructuredAgentSessionStatusFeed: () => ({
++    activate: () => () => {},
++    subscribeSession: (_id: string, listener: () => void) => {
++      fixture.listeners.add(listener)
++      return () => fixture.listeners.delete(listener)
++    },
++    getSnapshot: () => new Map([['session-one', { sandboxLaunch: fixture.sandboxLaunch }]])
++  })
++}))
++import { StructuredSessionSandboxBadge } from './StructuredSessionSandboxBadge'
++
++beforeEach(() => {
++  fixture.tab = { entityId: 'session-one' }
++  fixture.sandboxLaunch = undefined
++})
++afterEach(cleanup)
++
++describe('native chat sandbox indicator', () => {
++  it('shows recorded sandbox launches and responds when the owning host changes the launch', () => {
++    const view = render(<StructuredSessionSandboxBadge worktreeId="worktree" tabId="tab" />)
++    expect(view.queryByText('Sandbox')).toBeNull()
++    act(() => {
++      fixture.sandboxLaunch = true
++      fixture.listeners.forEach((listener) => listener())
++    })
++    expect(view.getByText('Sandbox').getAttribute('data-session-environment')).toBe('sandbox')
++    act(() => {
++      fixture.sandboxLaunch = false
++      fixture.listeners.forEach((listener) => listener())
++    })
++    expect(view.queryByText('Sandbox')).toBeNull()
++  })
++
++  it('does not label a terminal or an older session with no launch provenance', () => {
++    fixture.tab = undefined
++    fixture.sandboxLaunch = true
++    const view = render(<StructuredSessionSandboxBadge worktreeId="worktree" tabId="terminal" />)
++    expect(view.queryByText('Sandbox')).toBeNull()
++  })
++})
+diff --git a/src/renderer/src/components/StructuredSessionSandboxBadge.tsx b/src/renderer/src/components/StructuredSessionSandboxBadge.tsx
+new file mode 100644
+index 00000000..9f01b761
+--- /dev/null
++++ b/src/renderer/src/components/StructuredSessionSandboxBadge.tsx
+@@ -0,0 +1,51 @@
++import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
++import { Box } from 'lucide-react'
++import { useAppStore } from '@/store'
++import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
++import {
++  structuredAgentSessionOwnerForTab,
++  structuredAgentSessionTargetForHost
++} from '@/runtime/structured-agent-session-owner'
++import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
++
++/** Read the session's recorded launch, never today's Command setting or permission mode. */
++export function StructuredSessionSandboxBadge({
++  worktreeId,
++  tabId
++}: {
++  worktreeId: string
++  tabId: string
++}): React.JSX.Element | null {
++  const tab = useAppStore((state) =>
++    structuredChatTabById(state.unifiedTabsByWorktree, worktreeId, tabId)
++  )
++  const owner = useAppStore((state) => (tab ? structuredAgentSessionOwnerForTab(state, tab) : null))
++  const sessionId = tab?.entityId
++  const feed = useMemo(() => {
++    const target = structuredAgentSessionTargetForHost(owner)
++    return sessionId && target ? getStructuredAgentSessionStatusFeed(target) : null
++  }, [owner, sessionId])
++  useEffect(() => feed?.activate(), [feed])
++  const subscribe = useCallback(
++    (listener: () => void) =>
++      feed && sessionId ? feed.subscribeSession(sessionId, listener) : () => {},
++    [feed, sessionId]
++  )
++  const sandbox = useSyncExternalStore(
++    subscribe,
++    () => sessionId && feed?.getSnapshot().get(sessionId)?.sandboxLaunch === true,
++    () => false
++  )
++  if (!sandbox) return null
++  return (
++    <span
++      className="mx-1 inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground"
++      data-session-environment="sandbox"
++      title="This session uses the sandbox launcher"
++      aria-label="Sandbox launch"
++    >
++      <Box className="size-3" aria-hidden />
++      Sandbox
++    </span>
++  )
++}
+diff --git a/src/renderer/src/components/dashboard/DashboardAgentRow.tsx b/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
+index 687887a3..43eafc6e 100644
+--- a/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
++++ b/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
+@@ -1,3 +1,4 @@
++import { StructuredSessionSandboxBadge } from '@/components/StructuredSessionSandboxBadge'
+ import { PaneContainerBadge } from '@/components/TerminalContainerBadge'
+ import React, { useState, useCallback } from 'react'
+ import { cn } from '@/lib/utils'
+@@ -319,7 +320,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
+             <AgentTypeIcon agentType={agent.agentType} size={14} />
+           </span>
+         )}
+-        {agent.rowSource !== 'subagent' && <PaneContainerBadge paneKey={agent.paneKey} />}
++        {agent.rowSource !== 'subagent' && (
++          <>
++            <PaneContainerBadge paneKey={agent.paneKey} />
++            <StructuredSessionSandboxBadge worktreeId={agent.tab.worktreeId} tabId={agent.tab.id} />
++          </>
++        )}
+         {/* Why: interpolate-size:allow-keywords is the only way to animate height to/from auto without measuring in JS; falls back to an instant swap where unsupported. */}
+         <span
+           className={cn(
+diff --git a/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx b/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
+index e33f4c74..2b1235f8 100644
+--- a/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
++++ b/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
+@@ -1,3 +1,4 @@
++import { StructuredSessionSandboxBadge } from '@/components/StructuredSessionSandboxBadge'
+ import { PaneContainerBadge } from '@/components/TerminalContainerBadge'
+ import React, { useCallback, useEffect, useRef } from 'react'
+ import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
+@@ -238,7 +239,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
+             tooltipSide="right"
+             progress={presentation.progress}
+           />
+-          {agent.rowSource !== 'subagent' && <PaneContainerBadge paneKey={agent.paneKey} />}
++          {agent.rowSource !== 'subagent' && (
++            <>
++              <PaneContainerBadge paneKey={agent.paneKey} />
++              <StructuredSessionSandboxBadge
++                worktreeId={agent.tab.worktreeId}
++                tabId={agent.tab.id}
++              />
++            </>
++          )}
+           {!hideIcon && (
+             <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
+               <AgentTypeIcon agentType={agent.agentType} size={13} />
+diff --git a/src/renderer/src/components/tab-bar/SortableTab.tsx b/src/renderer/src/components/tab-bar/SortableTab.tsx
+index 001f7833..ebececd7 100644
+--- a/src/renderer/src/components/tab-bar/SortableTab.tsx
++++ b/src/renderer/src/components/tab-bar/SortableTab.tsx
+@@ -1,3 +1,4 @@
++import { StructuredSessionSandboxBadge } from '@/components/StructuredSessionSandboxBadge'
+ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
+ import { useCallback, useEffect } from 'react'
+ import { useSortable } from '@dnd-kit/sortable'
+@@ -255,6 +256,7 @@ export default function SortableTab({
+         isActive={isActive}
+         progress={programProgress}
+       />
++      {nativeChat && <StructuredSessionSandboxBadge worktreeId={tab.worktreeId} tabId={tab.id} />}
+       {isPinned && !isEditing && (
+         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
+       )}
+diff --git a/src/shared/agent-session/agent-session-wire.ts b/src/shared/agent-session/agent-session-wire.ts
+index a8c564b3..12a31789 100644
+--- a/src/shared/agent-session/agent-session-wire.ts
++++ b/src/shared/agent-session/agent-session-wire.ts
+@@ -251,6 +251,8 @@ export type AgentSessionStatusSummary = {
+   sleptAt?: number
+   /** Host-path directory the session is held to regardless of its workspace's current directory
+    *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
++  /** Provenance of the most recent reserved launch; absent on older hosts. */
++  sandboxLaunch?: boolean
+   launchDirectory?: string
+   updatedAt: number
+   /** Date the lead status by its own lifecycle edge, never updatedAt (child rows change it). Missing/older-host dates leave readers tracking time themselves. */
+diff --git a/src/shared/agent-session/lifecycle/agent-session-record.ts b/src/shared/agent-session/lifecycle/agent-session-record.ts
+index 0732f967..1e980f31 100644
+--- a/src/shared/agent-session/lifecycle/agent-session-record.ts
++++ b/src/shared/agent-session/lifecycle/agent-session-record.ts
+@@ -122,6 +122,8 @@ export type AgentSessionRecord = {
+   /** Optional host-written construction observation; checked independently of record readability. */
+   acquiredAccount?: unknown
+   /** Initial launch directory in host path syntax. Floating sessions resume here; worktree/folder IDs resolve their durable location. */
++  /** The most recent owner was reserved through the declared sandbox launcher. */
++  sandboxLaunch?: boolean
+   launchDirectory?: string
+   /** Provider options the user chose, replayed whenever a new owner starts the session. */
+   options?: Record<string, string>
+@@ -327,6 +329,7 @@ export function isPersistedAgentSessionObservationRecord(
+       (record.conversationName === undefined ||
+         isAgentSessionConversationName(record.conversationName)) &&
+       (record.conversationNameSource === undefined || record.conversationNameSource === 'user') &&
++      (record.sandboxLaunch === undefined || typeof record.sandboxLaunch === 'boolean') &&
+       (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
+       !Object.hasOwn(record, 'launchEnv') &&
+       isPersistedAgentSessionObservationLease(record.lease) &&
