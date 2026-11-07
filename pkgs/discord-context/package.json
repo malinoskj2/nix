@@ -1,0 +1,13 @@
+{
+  "name": "discord-context",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "discord-context": "server.js" },
+  "scripts": { "test": "node --test" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "express": "5.3.0",
+    "zod": "4.6.7"
+  }
+}

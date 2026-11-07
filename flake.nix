@@ -107,6 +107,7 @@
           "battery"
           "claude-desktop"
           "deepsec"
+          "discord-context"
           "find-service"
           "game-background-engine"
           "game-background-limit"
