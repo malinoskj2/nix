@@ -49,6 +49,7 @@ def sync_harnesses() -> None:
     path = home / ".codex/config.toml"
     config = tomlkit.parse(path.read_text()) if path.exists() else tomlkit.document()
     config.setdefault("mcp_servers", {})["unreal-mcp"] = {
+        "enabled": False,
         "url": URL,
         "startup_timeout_sec": 30,
         "tool_timeout_sec": 120,
