@@ -11,6 +11,7 @@ url="$(
 )" || exit 1
 
 branch="$(git branch --show-current)"
+branch="$(printf '%s' "$branch" | jq -sRr @uri)"
 case "$url" in
   https://bitbucket.org/*) url+="${branch:+/src/$branch}" ;;
   *) url+="${branch:+/tree/$branch}" ;;
