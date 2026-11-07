@@ -83,6 +83,7 @@ in
         ../claude/rules/worktrees.md
         ../claude/rules/media.md
         ../claude/rules/sandbox-display.md
+        ../claude/rules/sandbox-previews.md
       ]
       + ''
 

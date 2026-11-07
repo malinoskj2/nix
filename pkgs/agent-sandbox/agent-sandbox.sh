@@ -386,7 +386,20 @@ for _ in {1..5}; do
     --publish "127.0.0.1:$hyprland_vnc_port:5901"
     --publish "127.0.0.1:$novnc_port:6080"
     --env AGENT_SANDBOX_VNC_URL="$novnc_url"
+    --env 'AGENT_PREVIEW_PORTS=8080 8081 8082 8083 8084'
   )
+  preview_host_port=18080
+  for preview_port in {8080..8084}; do
+    preview_host_port=$(free_port "$preview_host_port")
+    while [[ $preview_host_port == "$vnc_port" || $preview_host_port == "$hyprland_vnc_port" || $preview_host_port == "$novnc_port" ]]; do
+      preview_host_port=$(free_port $((preview_host_port + 1)))
+    done
+    publish_args+=(
+      --publish "127.0.0.1:$preview_host_port:$preview_port"
+      --env "AGENT_PREVIEW_URL_$preview_port=http://127.0.0.1:$preview_host_port"
+    )
+    preview_host_port=$((preview_host_port + 1))
+  done
   if cid=$(docker create "${args[@]}" "${publish_args[@]}" "$image_ref" "$@"); then
     break
   fi

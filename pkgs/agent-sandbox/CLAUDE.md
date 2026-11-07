@@ -45,6 +45,10 @@ The human's desktop Wayland socket is mounted at `$XDG_RUNTIME_DIR/host-wayland-
 
 Don't delete sockets or lock files in `$XDG_RUNTIME_DIR`: the sway and Hyprland sessions only create them at startup, so removing one cuts off every new client until the sandbox restarts.
 
+## Preview sites
+
+Each sandbox publishes five preview ports on the host's loopback interface. Choose an unused port from `$AGENT_PREVIEW_PORTS` (`8080` through `8084`) and bind the server to `0.0.0.0`. If it is occupied, try another listed port; disable any automatic fallback outside this range. Use `http://127.0.0.1:<sandbox-port>` for sandbox browser checks. Give the human the matching `$AGENT_PREVIEW_URL_8080` through `$AGENT_PREVIEW_URL_8084` URL, including any required path, for the host browser or Orca's host-side browser. The host port can differ from the sandbox port. Keep the server running; links last only while the server and sandbox are running.
+
 ## Tools
 
 The sandbox includes the host's Rust toolchain, Clang and LLDB, Nix tooling, media and texture tools (FFmpeg/ffprobe, ImageMagick, MediaInfo, KTX, mpv), document converters, archive utilities, and network and graphics diagnostics. Use commands on `PATH`; there is no need to search `/nix/store` for these executables. `mpvpaper` and `swaybg` are available for testing wallpapers on the sandbox display. GCC remains the default C compiler; invoke `clang` explicitly when needed.
