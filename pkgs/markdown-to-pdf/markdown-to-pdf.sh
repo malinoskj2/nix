@@ -56,6 +56,11 @@ while IFS= read -r line || [[ -n $line ]]; do
   printf '%s\n' "$line" >>"$rendered"
 done <"$input"
 
+if [[ $in_mermaid -eq 1 ]]; then
+  echo "markdown-to-pdf: unclosed Mermaid block in $input" >&2
+  exit 1
+fi
+
 pandoc "$rendered" \
   --resource-path="$workdir:$(dirname "$input")" \
   --from=markdown+smart \
