@@ -22,7 +22,7 @@ function fixture(policy = {}) {
     if (path.endsWith('/messages')) return [message('31', '20')];
     return channels[path.split('/').at(-1)];
   };
-  return { calls, context: new DiscordContext(api, { allowedGuilds: ['1'], excludedChannels: ['10'], ...policy }) };
+  return { calls, context: new DiscordContext(api, { excludedGuilds: ['2'], excludedChannels: ['10'], ...policy }) };
 }
 
 test('category exclusions cover child channels and threads on every read path', async () => {
@@ -44,11 +44,21 @@ test('search drops excluded channels, foreign guilds, counts and nested content'
   assert.deepEqual(calls.find(([path]) => path.endsWith('/messages/search'))[1].getAll('channel_id'), ['20']);
 });
 
-test('excluded servers override allowed servers; empty allowlist denies search', async () => {
-  const { context, calls } = fixture({ excludedGuilds: ['1'] });
+test('all servers are allowed unless explicitly excluded', async () => {
+  const { context } = fixture({ excludedGuilds: [] });
+  assert.deepEqual((await context.listServers()).map(g => g.id), ['1', '2']);
+  assert.equal(context.guildAllowed('3'), true);
+  await context.requireChannel('21');
+});
+
+test('excluded servers are blocked on discovery, search and direct reads', async () => {
+  const { context, calls } = fixture({ excludedGuilds: ['1', '2'] });
   assert.deepEqual(await context.listServers(), []);
+  assert.deepEqual((await context.search({ query: 'hello' })).results, []);
+  await assert.rejects(context.listChannels('1'));
+  await assert.rejects(context.listThreads('1'));
   await assert.rejects(context.search({ query: 'hello', guildId: '1' }));
-  assert.deepEqual((await fixture({ allowedGuilds: [] }).context.search({ query: 'hello' })).results, []);
+  await assert.rejects(context.readMessages({ channelId: '20' }));
   assert.equal(calls.some(([p]) => p.includes('/messages')), false);
 });
 
@@ -66,8 +76,8 @@ test('read output contains links but no nested reply or forwarded content', asyn
 });
 
 test('policy rejects malformed IDs and unknown configuration', () => {
-  assert.throws(() => policySchema.parse({ allowedGuilds: ['../x'] }));
-  assert.throws(() => policySchema.parse({ allowedGuilds: [], allowAll: true }));
+  assert.throws(() => policySchema.parse({ excludedGuilds: ['../x'] }));
+  assert.throws(() => policySchema.parse({ allowAll: true }));
 });
 
 test('HTTP uses only GET, serializes requests and does not expose error bodies', async () => {
