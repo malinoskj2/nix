@@ -42,6 +42,7 @@ in
       media = ./rules/media.md;
       rust = ./rules/rust.md;
       sandbox-display = ./rules/sandbox-display.md;
+      sandbox-previews = ./rules/sandbox-previews.md;
       worktrees = ./rules/worktrees.md;
     };
 

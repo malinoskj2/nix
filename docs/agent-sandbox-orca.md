@@ -37,6 +37,15 @@ when it stops. Orca's pane, worktree, terminal, launch-token, and hook
 environment travels with the agent process. Further arguments go to the
 selected agent.
 
+Each container also publishes sandbox ports `8080` through `8084` on five
+available host loopback ports, starting the search at `18080`. Agents choose an
+unused port from `$AGENT_PREVIEW_PORTS` and bind the server to `0.0.0.0`.
+`AGENT_PREVIEW_URL_8080` through `AGENT_PREVIEW_URL_8084` give the corresponding
+host URLs for links opened in Orca's host-side browser or a host browser. Browser
+checks inside the sandbox use the sandbox port instead. These links work only
+while the preview server and its container are running. After rebuilding the
+config, start a new sandbox to pick up the mappings.
+
 Orca saves local clipboard image pastes under `/tmp/agent-media`, which is
 shared with the sandbox at the same path. The sandbox's private `/tmp` cannot
 read host files saved directly there. This is separate from the host image
