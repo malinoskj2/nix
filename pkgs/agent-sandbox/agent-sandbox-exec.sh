@@ -64,7 +64,7 @@ stop_hook_bridge() {
 # desktop loopback; the container sees a Unix socket under its bind-mounted
 # runtime directory. Its curl shim uses that socket only for Orca hook URLs.
 start_hook_bridge() {
-  local relay_root
+  local relay_root container_codex_home host_codex_home
   relay_root=/run/user/$(id -u)/agent-sandbox-orca
   "$AGENT_SANDBOX_PREPARE_ORCA_HOOKS" "$HOME" "${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox/home"
 
@@ -73,8 +73,12 @@ start_hook_bridge() {
   relay_dir=$(mktemp -d "$relay_root/session.XXXXXXXX")
   chmod 700 "$relay_dir"
   proxy_socket=$relay_dir/hook.sock
+  # Explicit accounts are bind-mounted at the same path. Without CODEX_HOME,
+  # Codex writes into the sandbox's private home, which Orca cannot see there.
+  container_codex_home=${CODEX_HOME:-$HOME/.codex}
+  host_codex_home=${CODEX_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox/home/.codex}
   "$AGENT_SANDBOX_HOOK_PROXY" "$proxy_socket" "${ORCA_AGENT_HOOK_ENDPOINT:-}" \
-    "$ORCA_AGENT_HOOK_PORT" >"$relay_dir/proxy.log" 2>&1 &
+    "$ORCA_AGENT_HOOK_PORT" "$container_codex_home" "$host_codex_home" >"$relay_dir/proxy.log" 2>&1 &
   proxy_pid=$!
   for _ in {1..100}; do
     [[ -S $proxy_socket ]] && break
