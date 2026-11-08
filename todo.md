@@ -24,3 +24,6 @@ warnings when the editor is closed.
 Current state: Unreal MCP is disabled by default in Codex. After starting the
 editor, opt in with `codex -c mcp_servers.unreal-mcp.enabled=true`.
 No lazy wrapper has been installed or tested locally.
+Ghidra MCP is also disabled by default in Codex; opt in with
+`codex -c mcp_servers.ghidra.enabled=true`. Claude Code no longer registers
+Ghidra MCP by default.

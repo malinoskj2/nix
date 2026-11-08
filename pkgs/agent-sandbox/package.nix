@@ -171,7 +171,6 @@ let
               type = "http";
               inherit (unrealMcp) url;
             };
-            ghidra.command = lib.getExe pyghidra-mcp;
           };
         }
       );
