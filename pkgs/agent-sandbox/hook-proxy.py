@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import os
+from pathlib import Path
 import re
 import select
 import socket
@@ -8,8 +9,10 @@ import socketserver
 import struct
 import sys
 import threading
+from urllib.parse import parse_qsl, urlencode
 
 MAX_HEAD = 65536
+MAX_BODY = 8 * 1024 * 1024
 READ_SIZE = 65536
 MAX_CONNECTIONS = 32
 IDLE_TIMEOUT = 5
@@ -76,6 +79,71 @@ def read_head(sock: socket.socket) -> bytes | None:
     return data
 
 
+def translate_transcript(body: bytes, content_type: str, container_home: Path, host_home: Path) -> bytes:
+    """Translate only Codex's transcript field, using this launch's account mount."""
+    def translate(payload):
+        if not isinstance(payload, dict) or not isinstance(payload.get("transcript_path"), str):
+            return False
+        path = Path(payload["transcript_path"])
+        try:
+            relative = path.relative_to(container_home / "sessions")
+        except ValueError:
+            return False
+        if ".." in relative.parts or container_home == host_home:
+            return False
+        payload["transcript_path"] = str(host_home / "sessions" / relative)
+        return True
+
+    try:
+        if content_type == "application/json":
+            payload = json.loads(body)
+            if translate(payload):
+                return json.dumps(payload, separators=(",", ":")).encode()
+        elif content_type == "application/x-www-form-urlencoded":
+            fields = parse_qsl(body.decode(), keep_blank_values=True)
+            changed = False
+            for index, (key, value) in enumerate(fields):
+                if key == "payload":
+                    payload = json.loads(value)
+                    if translate(payload):
+                        fields[index] = (key, json.dumps(payload, separators=(",", ":")))
+                        changed = True
+            if changed:
+                return urlencode(fields).encode()
+    except (ValueError, UnicodeError):
+        pass
+    return body
+
+
+def translate_request(sock: socket.socket, head: bytes, body: bytes, container_home: Path, host_home: Path) -> bytes:
+    lines = head.split(b"\r\n")
+    if lines[0].split()[:2] != [b"POST", b"/hook/codex"]:
+        return head + b"\r\n\r\n" + body
+    headers = {}
+    for line in lines[1:]:
+        name, sep, value = line.partition(b":")
+        if sep:
+            headers[name.strip().lower()] = value.strip()
+    # curl's hook transports send a Content-Length. Leave other framing alone.
+    if b"transfer-encoding" in headers or b"content-length" not in headers:
+        return head + b"\r\n\r\n" + body
+    length = int(headers[b"content-length"])
+    if not 0 <= length <= MAX_BODY:
+        raise ValueError("hook body exceeds limit")
+    if headers.get(b"expect", b"").lower() == b"100-continue":
+        sock.sendall(b"HTTP/1.1 100 Continue\r\n\r\n")
+    while len(body) < length:
+        chunk = sock.recv(min(READ_SIZE, length - len(body)))
+        if not chunk:
+            raise ValueError("incomplete hook body")
+        body += chunk
+    content_type = headers.get(b"content-type", b"").split(b";", 1)[0].strip().decode("ascii")
+    translated = translate_transcript(body[:length], content_type, container_home, host_home)
+    lines = [line for line in lines if line.partition(b":")[0].strip().lower() not in (b"content-length", b"expect")]
+    lines.append(b"Content-Length: " + str(len(translated)).encode())
+    return b"\r\n".join(lines) + b"\r\n\r\n" + translated + body[length:]
+
+
 def relay(client: socket.socket, upstream: socket.socket) -> None:
     sockets = [client, upstream]
     while sockets:
@@ -99,9 +167,11 @@ class HookServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     daemon_threads = True
     request_queue_size = MAX_CONNECTIONS
 
-    def __init__(self, socket_path: str, endpoint_path: str, fallback_port: int):
+    def __init__(self, socket_path: str, endpoint_path: str, fallback_port: int, container_home: Path, host_home: Path):
         self.endpoint_path = endpoint_path
         self.fallback_port = fallback_port
+        self.container_home = container_home
+        self.host_home = host_home
         self.slots = threading.BoundedSemaphore(MAX_CONNECTIONS)
         super().__init__(socket_path, HookHandler)
         os.chmod(socket_path, 0o600)
@@ -145,10 +215,11 @@ class HookHandler(socketserver.BaseRequestHandler):
             if data is None:
                 return
             head, _, body = data.partition(b"\r\n\r\n")
-            data = translate_agent_process(head, peer_pid(self.request)) + b"\r\n\r\n" + body
+            head = translate_agent_process(head, peer_pid(self.request))
+            data = translate_request(self.request, head, body, server.container_home, server.host_home)
             self.request.settimeout(None)
             upstream = socket.create_connection(("127.0.0.1", server.current_port()), timeout=CONNECT_TIMEOUT)
-        except OSError:
+        except (OSError, ValueError):
             return
         with upstream:
             try:
@@ -159,7 +230,7 @@ class HookHandler(socketserver.BaseRequestHandler):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        raise SystemExit("usage: hook-proxy <socket> <endpoint-file> <fallback-port>")
-    with HookServer(sys.argv[1], sys.argv[2], int(sys.argv[3])) as proxy:
+    if len(sys.argv) != 6:
+        raise SystemExit("usage: hook-proxy <socket> <endpoint-file> <fallback-port> <container-codex-home> <host-codex-home>")
+    with HookServer(sys.argv[1], sys.argv[2], int(sys.argv[3]), Path(sys.argv[4]), Path(sys.argv[5])) as proxy:
         proxy.serve_forever(poll_interval=0.2)
