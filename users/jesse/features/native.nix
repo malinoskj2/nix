@@ -11,7 +11,6 @@ in
     mold
   ];
 
-  programs.claude-code.mcpServers.ghidra.command = lib.getExe pkgs.pyghidra-mcp;
   programs.codex.settings.mcp_servers.ghidra = ghidraMcp // {
     command = lib.getExe pkgs.pyghidra-mcp;
   };

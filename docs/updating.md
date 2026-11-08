@@ -288,8 +288,11 @@ Treat a bump as a hardware change and test it on the device.
   extensions.
 - **pyghidra-mcp.** [`pkgs/pyghidra-mcp/`](../pkgs/pyghidra-mcp) is the Ghidra
   MCP server for Claude Code and Codex on the host and in the agent sandbox,
-  run over stdio by its `ghidra-mcp` launcher. It packages `ghidrecomp`
-  inline. To move either, change `version` and refresh its hash, then rebase
+  run over stdio by its `ghidra-mcp` launcher. It is disabled by default in
+  Codex; opt in with `codex -c mcp_servers.ghidra.enabled=true`. Claude Code
+  does not register it by default; add it explicitly for projects that need it.
+  It packages `ghidrecomp` inline. To move either, change `version` and refresh
+  its hash, then rebase
   [`stdio-stdout.patch`](../pkgs/pyghidra-mcp/stdio-stdout.patch): ghidrecomp
   and Ghidra print to stdout, so in stdio mode the patch gives the MCP stream
   its own copy of stdout and points fd 1 at stderr. Check it by importing a
