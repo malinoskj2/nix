@@ -29,10 +29,6 @@
       ref = "release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    j2bar = {
-      url = "git+file:///home/jesse/projects/j2bar?ref=master";
-      inputs.nixpkgs.follows = "nixpkgs-hyprland";
-    };
     nix-index-database = {
       type = "github";
       owner = "nix-community";
@@ -69,6 +65,13 @@
       owner = "nixos";
       repo = "nixpkgs";
       ref = "nixos-unstable";
+    };
+    tohru = {
+      type = "github";
+      owner = "malinoskj2";
+      repo = "tohru";
+      # Its plugin must build against the same Hyprland as the desktop.
+      inputs.hyprland-nixpkgs.follows = "nixpkgs-hyprland";
     };
     treefmt-nix = {
       type = "github";
@@ -132,7 +135,6 @@
           "wallpaper-outputs"
           "wallpaper-play"
           "wallpaper-randomize"
-          "wallpaper-select"
           "wifi-connect"
           "zsh-claude-command"
         ];

@@ -13,10 +13,10 @@ in
   '';
 
   config = {
-    home.packages = [
-      pkgs.wallpaper-randomize
-      pkgs.wallpaper-select
-    ];
+    home.packages = [ pkgs.wallpaper-randomize ];
+
+    # A linked directory rather than linked files, so the videos are regular files to find.
+    home.file.".wallpapers/video".source = ./wallpapers;
 
     systemd.user.services = {
       wallpaper-autopause = {
@@ -26,7 +26,6 @@ in
           PartOf = [ "graphical-session.target" ];
         };
         Service = {
-          Environment = [ "J2BAR_BIN=${config.home.sessionVariables.J2BAR_BIN}" ];
           ExecStart = lib.getExe pkgs.wallpaper-autopause;
           Restart = "on-failure";
           RestartSec = 2;

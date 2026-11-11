@@ -44,52 +44,50 @@ the few packages that need something newer.
 
 ### Hyprland
 
-`nixpkgs-hyprland` pins the compositor and portal together. The j2bar input builds
-its bundled focus/bar/glass/sheet/recede plugin against the exact host Hyprland
-package; standalone effect packages and overlay patches are no longer installed. Their
-retired sources remain in this repository pending packaged live desktop acceptance.
-The desktop assertion in `users/jesse/hyprland-desktop/hyprland/default.nix` and
+`nixpkgs-hyprland` pins the compositor and portal together. The `tohru` input's
+plugin (focus dips, title bars, chooser sheets and launcher recession) is built
+against the exact host Hyprland package, and its own `hyprland-nixpkgs` input
+follows `nixpkgs-hyprland`. The desktop assertion in
+`users/jesse/hyprland-desktop/hyprland/default.nix`, the plugin package and the
 first-frame tearing patch assertion in `hosts/home/gaming.nix` require 0.56.2.
 
 To upgrade, review/rebase `hosts/home/tearing-first-frame.patch` against the new
-compositor, including cursor/DRM restrictions. Review the bundled native plugin
-in the j2bar repository against the same pinned headers; a successful compile
-alone does not establish compatibility. Check chooser opening/closing from
-Firefox on both normal and rotated monitors, title-bar maximize/unload, live
-panel glass and launcher recession without damage artifacts. Rebase
-`pkgs/agent-sandbox/aquamarine-nested.patch` against the coupled backend, verify
-`NESTED-1`, update version assertions, and build `home` before activation.
+compositor, including cursor/DRM restrictions. Review the plugin in the Tohru
+repository against the same pinned headers; a successful compile alone does not
+establish compatibility. Check chooser opening/closing from Firefox on both
+normal and rotated monitors, title-bar maximize/unload and launcher recession
+without damage artifacts. Rebase `pkgs/agent-sandbox/aquamarine-nested.patch`
+against the coupled backend, verify `NESTED-1`, update version assertions, and
+build `home` before activation.
 
-### j2bar
+### Tohru
 
-The pinned `j2bar` flake input supplies the Rust shell, bundled compositor plugin
-and both game-engine architectures. Update that input only after its complete
-Rust/native/private-GUI gates pass, then build this host. NixOS owns the sole
-`j2bar.service`, admin policy, PAM service, runtime PATH and `/etc/xdg/j2bar/config.toml`.
-Home Manager supplies the matching compositor library and key bindings; it does
-not generate a second user config or duplicate shell service.
+The `tohru` flake input (`github:malinoskj2/tohru`) supplies the shell, its Home
+Manager module and the compositor plugin. `users/jesse/hyprland-desktop/tohru.nix`
+enables it with its systemd user services (bar, session menu, launcher and the
+only notification daemon) and sets `bar.preferred_output` to the main monitor.
+The flake's own package is used, so its pinned nixpkgs keeps the Pleamar build
+cached; it only exports x86_64-linux, and other hosts run without a shell. Update
+with `nix flake update tohru`, then build `home`.
 
-Exact glass, focus, title-bar, chooser and recession settings formerly in Lua
-now live in `hosts/common/optional/j2bar.nix` under `settings.effects`. Lua retains
-plugin loading, monitor topology, input and low-latency game/window policy.
-Super+A opens the Assistant; other existing bindings stay the same.
+Effect settings live in `hyprland/look.lua`. The plugin registers its animation
+leaves only once it is loaded, which at startup is after the configuration has
+run, so `look.lua` sets them through `pcall` and again on `hyprland.start`.
 
-A preexisting `~/.config/j2bar/config.toml` takes precedence over `/etc/xdg`.
-Before eventual cutover, inspect and back it up or merge its intended overrides;
-this repository does not delete personal state or config. Wallpaper assignments
-remain at `$XDG_STATE_HOME/wallpaper/assignments.json`; the native player reuses
-that schema. The workspace audio restoration journal remains at
-`$XDG_STATE_HOME/game-workspace-audio/mute.json` and is retained. Stop the old
-wallpaper and audio services before native workers start, while game playback
-streams still exist so recorded mute state can be restored. No service or
-running Steam process was changed while preparing these declarations.
+The rest of the desktop is standard Hyprland tooling:
 
-The native limiter is opt-in per game: set Steam launch options to
-`j2bar game-run -- %command%` (or `j2bar game-run -- GAME [ARGS...]` outside Steam).
-The old global Steam engine injection is disabled; the independent
-GameMode CPU policy/preload and first-frame tearing patch remain. Restart games
-after eventual activation. Do not infer physical game latency from nested EGL
-or software-renderer acceptance.
+- hyprlock locks, through `session-lock` (`lock.nix`), which also sets logind's
+  `LockedHint` so `wallpaper-autopause` pauses behind it.
+- hypridle keeps the old timeouts: lock after 30 minutes, screens off a minute
+  into a lock, suspend after 2 hours or 90 minutes into a lock, and lock before
+  sleep. There is no pre-action fade and no caffeine toggle.
+- hyprpolkitagent is the only polkit agent.
+- Super+P runs `grimblast --notify --freeze copysave area` into
+  `~/Pictures/Screenshots`.
+- Video wallpapers run from the `wallpaper-outputs` and `wallpaper@` units.
+
+j2bar's game engine and workspace-5 audio worker are gone; games run without a
+limiter. `~/.config/j2bar` and j2bar's state are left in place for rollback.
 
 ### Firefox
 
@@ -302,14 +300,9 @@ Treat a bump as a hardware change and test it on the device.
 
 ## Background game FPS limiting
 
-The j2bar input owns the native Vulkan/GLX/EGL engine and source/license notes.
-Enable it per game with `j2bar game-run -- %command%`; the shell owns focus
-tracking and workspace-5 audio restoration. The old standalone controller,
-audio daemon and global Steam loader injection are absent. Preserve GameMode
-and the compositor tearing patch when updating. Verify both engine architectures
-inside Steam's actual pressure-vessel runtime, controller loss/focus recovery
-and representative games before claiming latency or overhead results. Historical
-standalone measurements remain history, not proof of the new launch route.
+There is no background limiter since the move from j2bar to Tohru; see
+[game-latency.md](game-latency.md#background-frame-limit). Preserve GameMode and
+the compositor tearing patch when updating.
 
 ## Things an update never touches
 

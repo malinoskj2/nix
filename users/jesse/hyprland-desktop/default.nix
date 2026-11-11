@@ -2,6 +2,8 @@
   imports = [
     ./file-chooser
     ./hyprland
-    ./j2bar.nix
+    ./lock.nix
+    ./tohru.nix
+    ./wallpaper.nix
   ];
 }

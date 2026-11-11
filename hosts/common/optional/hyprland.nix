@@ -7,6 +7,8 @@ in
   services.speechd.enable = false;
 
   programs.hyprland.enable = true;
+  # The locker, with its PAM service; Home Manager configures it.
+  programs.hyprlock.enable = true;
 
   environment.sessionVariables = {
     GSETTINGS_SCHEMA_DIR = "${schemas}/share/gsettings-schemas/${schemas.name}/glib-2.0/schemas";

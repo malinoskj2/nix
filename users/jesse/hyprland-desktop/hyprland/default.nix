@@ -6,6 +6,7 @@
   ...
 }:
 let
+  inherit (config.palette) alphaHex glass;
   supportedHyprland = "0.56.2";
   hyprland = osConfig.programs.hyprland.package;
   hyprctl = lib.getExe' hyprland "hyprctl";
@@ -32,14 +33,18 @@ let
     };
   };
   vars = {
+    palette = config.palette.mocha;
+    alpha.chrome = alphaHex glass.chrome;
     xrandr = lib.getExe pkgs.xrandr;
     outputs = lib.mapAttrs (_: monitor: monitor.output) monitors;
     monitors = [
       monitors.side
       monitors.main
     ];
-    j2bar = config.home.sessionVariables.J2BAR_BIN;
-    j2barPlugin = "${osConfig.programs.j2bar.hyprlandPlugin.package}/lib/libj2bar-hyprland.so";
+    tohru =
+      if config.programs.tohru.enable then lib.getExe' config.programs.tohru.package "tohru" else null;
+    tohruPlugin = "${config.programs.tohru.hyprlandPlugin.package}/lib/libtohru-hyprland.so";
+    screenshot = "env XDG_SCREENSHOTS_DIR=${config.home.sessionVariables.XDG_SCREENSHOTS_DIR} ${lib.getExe pkgs.grimblast} --notify --freeze copysave area";
     workspaces = {
       first = 1;
       last = 5;

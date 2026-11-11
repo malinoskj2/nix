@@ -7,7 +7,6 @@
     ../common/optional/docker.nix
     ../common/optional/fonts.nix
     ../common/optional/hyprland.nix
-    ../common/optional/j2bar.nix
     ../common/optional/nh.nix
     ../common/optional/pipewire.nix
     ../common/optional/systemd-boot.nix
@@ -21,7 +20,7 @@
   networking = {
     hostName = "mac-vm";
 
-    # j2bar's network source talks to NetworkManager over D-Bus.
+    # Tohru's network panel talks to NetworkManager over D-Bus.
     networkmanager.enable = true;
   };
 

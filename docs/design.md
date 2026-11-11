@@ -1,6 +1,6 @@
 # Design
 
-The `home` desktop (Hyprland, j2bar and the GTK file chooser) follows one
+The `home` desktop (Hyprland, Tohru and the GTK file chooser) follows one
 design language: macOS 27's layout and type, drawn in Catppuccin Mocha on
 glass, with a few motifs of its own. This file is the reference for it. Change
 it when the language changes, and check new work against it.
@@ -71,17 +71,16 @@ imitate (the calendar's month is "September", bold, like "Network").
 
 ## Glass
 
-Compositor effects and authored motion are configured through the native
-`programs.j2bar.settings.effects` policy. Hyprland Lua retains input, output
-topology and window/session rules, with one bundled plugin load declaration.
+Compositor effects and authored motion live in `hyprland/look.lua`, with the
+Tohru plugin's focus, title-bar, chooser and recession settings. Tohru draws its
+own glass with Pleamar's native glass, frost and refraction, and animates its own
+layers, so Hyprland leaves them alone.
 
-- **Hyprland blur** is strong (3 passes, vibrancy 0.2), because the shell's glass
-  relies on what shows through it.
-- **The bundled j2bar glass effect** applies macOS 27's Clear widget glass to layers:
-  almost no refraction, a directional rim, and a gleam in the lambda colors
-  across a floating panel's top rim once when it opens. Its corner radii must
-  match the surface: 22 for the on-screen display, 18 for panels, polkit prompts
-  and notification banners, and 36 for the launcher container.
+- **Hyprland blur** is strong (3 passes, vibrancy 0.2) for windows that use it.
+- **Shell glass** follows macOS 27's Clear widget glass where Pleamar allows.
+  Corner radii match the surface: 22 for the on-screen display, 18 for panels
+  and notification banners, and 36 for the launcher container. j2bar's
+  compositor-drawn gleam and rim lighting are not reproduced.
 - **The bar** is 8% glass with a 30% white 1px outline and no shadow.
 - **Notification banners** are 55% glass, with no outline or app name.
 - **The file chooser** draws its own frame: radius 20, a crust `chrome` body

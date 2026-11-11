@@ -32,6 +32,8 @@
     };
   };
 
+  wallpaper.launcher.enable = true;
+
   services.discord-context.excludedGuilds = [
     "902708289098375209" # ogchat
   ];

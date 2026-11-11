@@ -28,7 +28,7 @@ pick_video() {
 }
 
 mkdir -p "$state_dir"
-# wallpaper-select writes the file too, and every monitor's wallpaper-play may run this at once.
+# Every monitor's wallpaper-play may run this at once.
 exec 9>"$state_dir/lock"
 flock 9
 

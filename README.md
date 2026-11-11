@@ -13,8 +13,8 @@ imported as-is. Borrow whatever's useful.
 
 ## ✨ Highlights
 
-- 🪟 **Hyprland in Lua** with the bundled compositor effects and
-  [j2bar desktop shell](docs/updating.md#j2bar)
+- 🪟 **Hyprland in Lua** with the [Tohru desktop shell](docs/updating.md#tohru)
+  and its compositor effects
 - 🎨 **One Catppuccin palette** in [`palette.nix`](users/jesse/global/palette.nix),
   shared by every themed app
 - 🤖 **Every host built in CI** on native x86_64-linux and aarch64-linux runners,

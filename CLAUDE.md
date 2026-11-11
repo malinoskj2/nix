@@ -7,7 +7,7 @@ This flake builds five NixOS hosts:
 - `home`: primary desktop, with Hyprland, NVIDIA and Home Manager.
 - `katana`: ThinkPad, with Hyprland and Home Manager.
 - `mac-vm`: aarch64 VMware Fusion guest on the work Mac, with `home`'s Hyprland
-  and j2bar desktop and Home Manager.
+  desktop and Home Manager. Tohru only builds for x86_64-linux, so it has no shell.
 - `pi`: aarch64 server with its own `pi` user and no Home Manager.
 - `media`: media server with Docker and NVIDIA transcoding.
 
@@ -42,7 +42,7 @@ plus host facts. Shared modules are imported explicitly by relative path from
   and journal groups, imports Home Manager, and uses
   `users/jesse/profiles/<hostName>.nix` as his profile.
 - `optional/`: one concern per file: `docker`, `fail2ban`, `fonts`, `hyprland`,
-  `j2bar`, `nh`, `openssh-hardening`, `pipewire`, `server-tools`,
+  `nh`, `openssh-hardening`, `pipewire`, `server-tools`,
   `sysctl-hardening`, `systemd-boot`, `workstation`.
 
 Host-only policy, such as media's sudo and `mutableUsers`, stays in the host.
@@ -63,7 +63,7 @@ modules) plus opt-in `users/jesse/features/`: `admin`, `cli`, `desktop`, `dev`,
 programs are flat modules at `users/jesse/<program>.nix` or
 `users/jesse/<program>/`, imported by `global/`, a feature or a profile.
 Identity comes from the NixOS account. `users/jesse/hyprland-desktop/` is the
-Hyprland and j2bar desktop, imported by the `home` and `mac-vm` profiles, which
+Hyprland and Tohru desktop, with hyprlock, hypridle, hyprpolkitagent and the video wallpapers, imported by the `home` and `mac-vm` profiles, which
 set their outputs in `desktop.monitors`.
 
 ### Packages, overlays and patches
@@ -78,8 +78,8 @@ local packages by name. Linux-only packages set `meta.platforms`. `git-open-bran
 `overlays/default.nix` holds `additions`, `unstable` and `pins`. `unstable` is
 `pkgs.unstable`, with claude-code built from the manifest in
 `overlays/claude-code/` and local Codex patches. `pins` takes Firefox, Hyprland,
-the Hyprland portal from exact nixpkgs revisions. The j2bar input supplies the
-single compositor plugin, built against the host Hyprland package. The `apple-fonts` input's overlay adds `pkgs.sf-pro`,
+the Hyprland portal from exact nixpkgs revisions. The `tohru` input supplies the
+desktop shell and its compositor plugin, built against the host Hyprland package. The `apple-fonts` input's overlay adds `pkgs.sf-pro`,
 `sf-compact`, `sf-mono` and `ny`.
 
 Patches sit next to what applies them: a `pkgs/` package keeps its patch in its
@@ -122,6 +122,6 @@ restating rules here. On top of it, for agents:
 - `git add` new files before evaluating; flakes only see tracked files.
 - Never bump `system.stateVersion` or `home.stateVersion`, and never hand-edit
   `hardware-configuration.nix`.
-- The `home` Hyprland and j2bar desktop is fully declared under
+- The `home` Hyprland and Tohru desktop is fully declared under
   `users/jesse/hyprland-desktop/` and must not gain a dependency on the old
   `~/env` dotfiles checkout.

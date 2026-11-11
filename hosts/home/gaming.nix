@@ -47,8 +47,6 @@ in
   systemd.user.services.gamemoded.restartTriggers = [ pkgs.gamemode ];
 
   programs = {
-    j2bar.gameEngine.enable = true;
-
     # Check tearing eligibility before the first frame has been marked torn.
     # Keep this on the physical desktop; nested agent compositors do not use DRM.
     hyprland.package =
@@ -86,7 +84,6 @@ in
     steam = {
       enable = true;
       package = pkgs.steam.override {
-        # j2bar injection is explicit per game: j2bar game-run -- %command%.
         # Preserve the independent GameMode client and privileged CPU policy.
         extraLibraries = packageSet: [
           (lib.getLib (steamGameMode packageSet))

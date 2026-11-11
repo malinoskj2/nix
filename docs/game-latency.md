@@ -123,63 +123,18 @@ verification. These checks did not establish zero added input latency.
 
 ## Workspace 5 game audio
 
-The native j2bar game worker, enabled by `game.mute_workspace_5_audio`, mutes
-Steam game playback when workspace 5 is
-hidden on the physical Hyprland desktop, then restores each stream's prior mute
-state when returning or moving the game elsewhere. Workspace 5 remains audible
-when it is visible and focus moves to the side monitor. Steam's UI, microphone
-streams and unrelated applications are excluded. This works independently of
-the background frame limiter and needs no Steam restart or launch options.
-
-The worker reads PipeWire playback nodes and associates their process with
-`SteamAppId`, including Wine audio subprocesses and native games with custom
-window classes. If any window of the same app is outside workspace 5, its audio
-stays audible. Games that hide their process environment cannot be identified
-and remain untouched. Changes are checked every half second; audio can play for
-that interval when a new stream appears or the workspace changes.
-
-Normal stream mute and volume controls remain available. A stream muted before
-leaving stays muted on return; automated muting remembers the original state.
-While hidden, the worker enforces mute, so manual unmuting takes effect after
-returning. It restores current streams when stopped or when compositor IPC is
-unavailable. PipeWire's core cookie and object serial identify existing streams,
-and the worker rechecks identity before addressing a recycled numeric node ID.
-
-WirePlumber can save a mute when a game exits while hidden. A private restoration
-journal at `$XDG_STATE_HOME/game-workspace-audio/mute.json` (normally
-`~/.local/state/game-workspace-audio/mute.json`) retains the original state until
-a verified Steam stream with the same app ID and WirePlumber restoration key
-returns. That also recovers after a worker crash or stream recreation. Separate
-launches of the same app share the workspace policy and restoration key; when a
-replacement stream inherits the automated mute, it inherits the prior stream's
-original state. For a newly created stream, a deliberate new user mute cannot
-be distinguished from WirePlumber restoring the automated mute; the journal's
-original state wins. Existing streams that were manually muted stay muted.
-Disable workspace audio muting while the game's playback streams still exist
-before removing this feature; otherwise a saved mute can remain until the worker
-runs again. A new stream may briefly inherit that mute before the next check.
+Muting Steam games while workspace 5 is hidden was a j2bar feature. Tohru does not
+have it, so games on a hidden workspace 5 stay audible. The retired standalone
+worker is still under `pkgs/game-workspace-audio`.
 
 ## Background frame limit
 
-The native j2bar shell controls the packaged Vulkan/GLX/EGL limiter for explicitly
-registered launches. Configure Steam launch options as:
-
-```sh
-j2bar game-run -- %command%
-```
-
-Outside Steam use `j2bar game-run -- GAME [ARGS...]`. Remove this wrapper to opt
-out and relaunch. Global Steam preload/Vulkan injection from the old standalone
-engine is disabled. The GameMode automatic client remains independently
-installed and preserves the existing privileged CPU policy.
-
-Focus loss applies the configured background limit; focusing any window belonging
-to that exact launch releases it. Unknown/unmatched process identity, lost
-compositor state or controller transport releases the cap. Workspace-5 audio is
-owned by the same shell and retains the existing restoration journal. Both native
-engine architectures and actual pressure-vessel launch routes require verification
-after loader/compositor updates. Existing measurements of the retired standalone
-controller do not establish the new route's physical latency or focused overhead.
+The background limiter was also j2bar's (`j2bar game-run -- %command%`) and went
+with it; games run uncapped in the background. Remove any `j2bar game-run`
+launch options left in Steam. The GameMode automatic client remains
+independently installed and preserves the existing privileged CPU policy. The
+retired standalone engine is still under `pkgs/game-background-engine` and
+`pkgs/game-background-limit`.
 
 ### Historical standalone measurements
 
@@ -187,9 +142,7 @@ The retired standalone engine was checked in AION on 1 October: read-only
 XPresent samples counted 72–112 FPS while focused and approximately 10 FPS in
 the background; a separate five-second background sample counted 50 frames.
 Those observations established the old background cap, not focused overhead,
-frame times, tearing, direct scanout or the new j2bar per-game launch route.
-The old implementation and license notes remain under `pkgs/game-background-engine`
-until packaged live desktop validation permits removal.
+frame times, tearing or direct scanout.
 
 ### Steam launched from a development shell
 

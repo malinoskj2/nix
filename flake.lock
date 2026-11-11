@@ -140,27 +140,6 @@
         "type": "github"
       }
     },
-    "j2bar": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs-hyprland"
-        ]
-      },
-      "locked": {
-        "lastModified": 1792871139,
-        "narHash": "sha256-k98medaLulbfnT5brXZlfkw+Lg89EhY2fN4OaBVTobI=",
-        "ref": "master",
-        "rev": "3a8daa5e077f4085b5262041ea4832373b8754ca",
-        "revCount": 619,
-        "type": "git",
-        "url": "file:///home/jesse/projects/j2bar"
-      },
-      "original": {
-        "ref": "master",
-        "type": "git",
-        "url": "file:///home/jesse/projects/j2bar"
-      }
-    },
     "nix-index-database": {
       "inputs": {
         "nixpkgs": [
@@ -266,6 +245,22 @@
         "type": "github"
       }
     },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1793977579,
+        "narHash": "sha256-WrSODdZFVIs/Hh2NzC0bY+ROByi0bATg8WfePX8dPj8=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "4fe25e12eb9f4c744966dd3de5a05246cf098601",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "4fe25e12eb9f4c744966dd3de5a05246cf098601",
+        "type": "github"
+      }
+    },
     "ny": {
       "flake": false,
       "locked": {
@@ -284,13 +279,13 @@
         "catppuccin": "catppuccin",
         "flake-parts": "flake-parts",
         "home-manager": "home-manager",
-        "j2bar": "j2bar",
         "nix-index-database": "nix-index-database",
         "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs",
         "nixpkgs-firefox": "nixpkgs-firefox",
         "nixpkgs-hyprland": "nixpkgs-hyprland",
         "nixpkgs-unstable": "nixpkgs-unstable",
+        "tohru": "tohru",
         "treefmt-nix": "treefmt-nix",
         "wavefox": "wavefox"
       }
@@ -377,6 +372,27 @@
       "original": {
         "type": "file",
         "url": "https://devimages-cdn.apple.com/design/resources/download/SF-Pro.dmg"
+      }
+    },
+    "tohru": {
+      "inputs": {
+        "hyprland-nixpkgs": [
+          "nixpkgs-hyprland"
+        ],
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1794409609,
+        "narHash": "sha256-z9szZWmxuSRaKxGdKkJCx1xU1vQy+nJyjGUqSn0KNFk=",
+        "owner": "malinoskj2",
+        "repo": "tohru",
+        "rev": "11d3ea0fea83ef1ebbeb3e009f11690c322d8494",
+        "type": "github"
+      },
+      "original": {
+        "owner": "malinoskj2",
+        "repo": "tohru",
+        "type": "github"
       }
     },
     "treefmt-nix": {

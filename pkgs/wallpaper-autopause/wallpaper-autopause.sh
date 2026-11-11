@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 readonly state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/wallpaper"
-readonly j2bar="${J2BAR_BIN:-j2bar}"
 
 find_hyprland_socket() {
   local candidate
@@ -41,10 +40,13 @@ print_monitor_states() {
 apply_pause_states() {
   local locked
 
-  # Every wallpaper stays paused behind the lock screen, and an unreachable j2bar counts as locked
+  # Every wallpaper stays paused behind the lock screen, and an unreadable hint counts as locked
   # so the video never plays unseen.
-  locked="$("$j2bar" msg status 2>/dev/null | jq -r '.locked' 2>/dev/null || true)"
-  [[ "$locked" == false ]] || locked=true
+  locked="$(
+    busctl --system get-property org.freedesktop.login1 "$session_path" \
+      org.freedesktop.login1.Session LockedHint 2>/dev/null || true
+  )"
+  if [[ "$locked" == "b false" ]]; then locked=false; else locked=true; fi
 
   print_monitor_states | {
     failed=0

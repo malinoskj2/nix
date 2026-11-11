@@ -1,21 +1,17 @@
 # Installing `mac-vm`
 
 `mac-vm` is an aarch64 NixOS guest in VMware Fusion on the work Mac, with
-`home`'s Hyprland and j2bar desktop. Before installing anything on the Mac,
+`home`'s Hyprland desktop. Tohru only builds for x86_64-linux, so the VM runs
+it without a shell. Before installing anything on the Mac,
 check that its management allows Fusion.
 
-## 1. On `home`: publish the flake and bundle j2bar
+## 1. On `home`: publish the flake
 
-The VM clones this repository from GitHub, so push the commit with `mac-vm` on
-it. The `j2bar` input is the local checkout at `/home/jesse/projects/j2bar`,
-which has no remote, and the flake doesn't evaluate without it, so bundle it:
+The VM clones this repository from GitHub, so push the commit with `mac-vm` on it:
 
 ```sh
 git -C ~/nix push
-git -C ~/projects/j2bar bundle create ~/j2bar.bundle --all
 ```
-
-Copy `~/j2bar.bundle` to the Mac's `~/Downloads`.
 
 ## 2. On the Mac: install Fusion and create the VM
 
@@ -47,20 +43,11 @@ passwd
 ip -4 addr
 ```
 
-Then, on the Mac, copy the bundle in:
-
-```sh
-scp ~/Downloads/j2bar.bundle nixos@<vm-ip>:
-```
-
 ## 4. In the installer: partition and install
 
 The checked-in [`hardware-configuration.nix`](../hosts/mac-vm/hardware-configuration.nix)
 mounts the partitions by the labels `nixos` and `boot`, so keep those labels.
 Check the disk name with `lsblk` first; Fusion's NVMe disk is `nvme0n1`.
-
-j2bar is cloned twice: the installer evaluates the flake from its own
-`/home/jesse/projects/j2bar`, and later switches use the installed system's.
 
 ```sh
 sudo -i
@@ -75,11 +62,7 @@ mount /dev/disk/by-label/nixos /mnt
 mkdir -p /mnt/boot
 mount -o umask=077 /dev/disk/by-label/boot /mnt/boot
 
-nix-shell -p git --run '
-  git clone https://github.com/malinoskj2/nix /mnt/home/jesse/nix
-  git clone /home/nixos/j2bar.bundle /mnt/home/jesse/projects/j2bar
-  git clone /home/nixos/j2bar.bundle /home/jesse/projects/j2bar
-'
+nix-shell -p git --run 'git clone https://github.com/malinoskj2/nix /mnt/home/jesse/nix'
 
 cd /mnt/home/jesse/nix
 nixos-generate-config --root /mnt --show-hardware-config > hosts/mac-vm/hardware-configuration.nix
@@ -91,7 +74,7 @@ reboot
 ```
 
 If `mac-vm` isn't on `main` yet, clone its branch with `-b <branch>`. The
-install builds Codex, Orca, j2bar and a few local packages from source, since
+install builds Codex, Orca and a few local packages from source, since
 no binary cache has them for aarch64.
 
 ## 5. First login

@@ -26,8 +26,8 @@ local FILE_CHOOSER_CLASS = "^(" .. FILE_CHOOSER_APP .. ")$"
 
 local GAME_WORKSPACE = 5
 
-local function j2bar_msg(command)
-  return hl.dsp.exec_cmd(nix.j2bar .. " msg " .. command)
+local function tohru(command)
+  return hl.dsp.exec_cmd(nix.tohru .. " " .. command)
 end
 
 for _, monitor in ipairs(nix.monitors) do
@@ -70,8 +70,8 @@ hl.config({
     repeat_rate = 24,
   },
   misc = {
-    -- If j2bar's locker dies, the next one takes the lock over instead of the session staying
-    -- on Hyprland's dead-lock screen.
+    -- If hyprlock dies, the next one takes the lock over instead of the session staying on
+    -- Hyprland's dead-lock screen.
     allow_session_lock_restore = true,
   },
 })
@@ -89,15 +89,15 @@ hl.bind(MAIN_MOD .. " + E", hl.dsp.exec_cmd(EDITOR))
 hl.bind(MAIN_MOD .. " + Q", actions.close_and_quit({ [FILE_CHOOSER_APP] = true }))
 hl.bind(MAIN_MOD .. " + V", actions.toggle_floating)
 
-hl.bind(MAIN_MOD .. " + P", j2bar_msg("screenshot-region"))
-hl.bind(MAIN_MOD .. " + Escape", j2bar_msg("panel-toggle menu"))
-hl.bind(MAIN_MOD .. " + SHIFT + Escape", j2bar_msg("session lock"))
-hl.bind(MAIN_MOD .. " + Space", j2bar_msg("panel-toggle launcher"))
-hl.bind(MAIN_MOD .. " + S", j2bar_msg("panel-toggle control-center"))
-hl.bind(MAIN_MOD .. " + A", j2bar_msg("panel-toggle assistant"))
-hl.bind("XF86AudioRaiseVolume", j2bar_msg("volume-up"), { locked = true, repeating = true })
-hl.bind("XF86AudioLowerVolume", j2bar_msg("volume-down"), { locked = true, repeating = true })
-hl.bind("XF86AudioMute", j2bar_msg("volume-mute"), { locked = true })
+hl.bind(MAIN_MOD .. " + P", hl.dsp.exec_cmd(nix.screenshot))
+hl.bind(MAIN_MOD .. " + SHIFT + Escape", hl.dsp.exec_cmd("loginctl lock-session"))
+if nix.tohru then
+  hl.bind(MAIN_MOD .. " + Escape", tohru("session toggle"))
+  hl.bind(MAIN_MOD .. " + Space", tohru("launcher toggle"))
+  hl.bind("XF86AudioRaiseVolume", tohru("audio volume up"), { locked = true, repeating = true })
+  hl.bind("XF86AudioLowerVolume", tohru("audio volume down"), { locked = true, repeating = true })
+  hl.bind("XF86AudioMute", tohru("audio mute toggle"), { locked = true })
+end
 
 hl.bind(MAIN_MOD .. " + H", hl.dsp.focus({ direction = "left" }))
 hl.bind(MAIN_MOD .. " + L", hl.dsp.focus({ direction = "right" }))
