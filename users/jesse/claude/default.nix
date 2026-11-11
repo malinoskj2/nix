@@ -96,23 +96,7 @@ in
         }
       ];
       permissions = {
-        allow = [
-          "Bash(ls:*)"
-          "Bash(find:*)"
-          "Bash(cat:*)"
-          "Bash(grep:*)"
-          "Bash(rg:*)"
-          "Bash(fd:*)"
-          "Bash(git status:*)"
-          "Bash(git log:*)"
-          "Bash(git diff:*)"
-          "Bash(git branch:*)"
-          "Bash(git show:*)"
-          "Bash(git add:*)"
-          "Bash(git commit:*)"
-          "Bash(nix flake show:*)"
-          "Bash(nix flake check:*)"
-        ];
+        allow = [ "Bash" ];
         ask = [ "Bash(git push:*)" ];
         # Deny rules hold even when permission prompts are bypassed.
         deny = [
@@ -120,10 +104,6 @@ in
           "Read(~/.gnupg/**)"
           "Read(**/.env)"
           "Read(**/secrets/**)"
-          "Bash(nh os switch:*)"
-          "Bash(nixos-rebuild switch:*)"
-          "Bash(home-manager switch:*)"
-          "Bash(darwin-rebuild switch:*)"
           "Bash(git push --force:*)"
           "Bash(git push -f:*)"
           "Bash(git reset --hard:*)"

@@ -84,6 +84,8 @@ in
     skills = ../claude/skills;
     settings = modelSettings // {
       tui.alternate_screen = "never";
+      sandbox_mode = "danger-full-access";
+      approval_policy = "never";
     };
     context =
       lib.concatMapStringsSep "\n" builtins.readFile [
