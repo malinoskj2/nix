@@ -240,7 +240,7 @@ new file mode 100644
 index 00000000..f13a6db3
 --- /dev/null
 +++ b/src/renderer/src/components/StructuredSessionSandboxBadge.test.tsx
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,58 @@
 +// @vitest-environment happy-dom
 +import { act, cleanup, render } from '@testing-library/react'
 +import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -277,24 +277,26 @@ index 00000000..f13a6db3
 +describe('native chat sandbox indicator', () => {
 +  it('shows recorded sandbox launches and responds when the owning host changes the launch', () => {
 +    const view = render(<StructuredSessionSandboxBadge worktreeId="worktree" tabId="tab" />)
-+    expect(view.queryByText('Sandbox')).toBeNull()
++    expect(view.queryByLabelText('Sandbox launch')).toBeNull()
 +    act(() => {
 +      fixture.sandboxLaunch = true
 +      fixture.listeners.forEach((listener) => listener())
 +    })
-+    expect(view.getByText('Sandbox').getAttribute('data-session-environment')).toBe('sandbox')
++    const badge = view.getByLabelText('Sandbox launch')
++    expect(badge.getAttribute('data-session-environment')).toBe('sandbox')
++    expect(badge.textContent).toBe('')
 +    act(() => {
 +      fixture.sandboxLaunch = false
 +      fixture.listeners.forEach((listener) => listener())
 +    })
-+    expect(view.queryByText('Sandbox')).toBeNull()
++    expect(view.queryByLabelText('Sandbox launch')).toBeNull()
 +  })
 +
 +  it('does not label a terminal or an older session with no launch provenance', () => {
 +    fixture.tab = undefined
 +    fixture.sandboxLaunch = true
 +    const view = render(<StructuredSessionSandboxBadge worktreeId="worktree" tabId="terminal" />)
-+    expect(view.queryByText('Sandbox')).toBeNull()
++    expect(view.queryByLabelText('Sandbox launch')).toBeNull()
 +  })
 +})
 diff --git a/src/renderer/src/components/StructuredSessionSandboxBadge.tsx b/src/renderer/src/components/StructuredSessionSandboxBadge.tsx
@@ -302,7 +304,7 @@ new file mode 100644
 index 00000000..9f01b761
 --- /dev/null
 +++ b/src/renderer/src/components/StructuredSessionSandboxBadge.tsx
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,50 @@
 +import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 +import { Box } from 'lucide-react'
 +import { useAppStore } from '@/store'
@@ -344,13 +346,12 @@ index 00000000..9f01b761
 +  if (!sandbox) return null
 +  return (
 +    <span
-+      className="mx-1 inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground"
++      className="mx-1 inline-flex shrink-0 items-center text-muted-foreground"
 +      data-session-environment="sandbox"
 +      title="This session uses the sandbox launcher"
 +      aria-label="Sandbox launch"
 +    >
 +      <Box className="size-3" aria-hidden />
-+      Sandbox
 +    </span>
 +  )
 +}
