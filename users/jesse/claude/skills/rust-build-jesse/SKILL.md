@@ -136,6 +136,17 @@ when they fit the task and remain maintained:
 - `signal-hook` for process signal handling.
 - `xdg` for XDG configuration, data, cache and state directories.
 
+Before writing code for a problem that is not specific to the project, such as
+a standard format, protocol, algorithm, data structure or platform API, look for
+an established crate that already solves it and use it instead of writing the
+same thing. Established means wide adoption and active maintenance: substantial
+downloads and reverse dependencies on crates.io, use by well-known projects, or
+a recognized maintainer or organization. Prefer the standard library or a crate
+already in the dependency graph, and keep the code when the crate would add far
+more than the task needs. Do not add an unknown crate with little adoption. If
+one looks unusually good anyway, mention it with the evidence for user approval
+and proceed without it unless approved.
+
 Before adding or recommending a crate, check its current upstream maintenance
 status and compatibility with the project's MSRV, target platforms and required
 features. Use upstream repository and release evidence; a quiet release history
