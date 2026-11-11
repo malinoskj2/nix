@@ -16,6 +16,9 @@
   - cross-reference pointers ("see docs/…", "see foo.nix")
   - comments explaining a change, task or history
 
+## Subagents
+- Never use Fable for subagents, workflow agents or non-leader agent-team members unless I explicitly ask for Fable. Pick another model instead, even if an agent definition or skill would default to Fable.
+
 ## Task lists
 - Each git repo has a shared task list, set by `env.CLAUDE_CODE_TASK_LIST_ID` in its `.claude/settings.local.json`.
 - At the start of a session in a git repo, if that key is missing, set it to the basename of the main worktree (`basename "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"`). Merge it into the existing file rather than overwriting it, and add `.claude/settings.local.json` to `.git/info/exclude` if Git doesn't already ignore it.
