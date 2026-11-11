@@ -180,7 +180,7 @@ let
       install -Dm644 ${mcp} $out/.mcp.json
     '';
 
-  # Orca's relay installs its Claude hooks here rather than in the read-only ~/.claude/settings.json.
+  # Orca's relay installs its Claude hooks here rather than in the Nix-managed ~/.claude/settings.json.
   claude = writeShellScriptBin "claude" ''
     settings=''${AGENT_SANDBOX_CLAUDE_SETTINGS:-$HOME/.orca/agent-hooks/claude-settings.json}
     if [[ -f $settings ]]; then

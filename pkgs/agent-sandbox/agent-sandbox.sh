@@ -84,8 +84,11 @@ seed_if_empty() {
 }
 
 configure_claude() {
+  # Writable so /effort can save; Home Manager re-merges it on each switch.
+  seed_if_empty "$HOME/.claude/settings.json" "$sandbox_home/.claude/settings.json"
+
   local name
-  for name in CLAUDE.md settings.json skills hooks agents commands output-styles plugins rules; do
+  for name in CLAUDE.md skills hooks agents commands output-styles plugins rules; do
     mount_readonly "$HOME/.claude/$name"
   done
 

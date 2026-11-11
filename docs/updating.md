@@ -204,7 +204,7 @@ Treat a bump as a hardware change and test it on the device.
   `resolveWindowMaterial`, which upstream turns off unless terminals are
   translucent; confirm only the 36px titlebar band shows compositor blur. Rebase
   [`claude-hooks.patch`](../pkgs/orca-ade/claude-hooks.patch): it keeps Orca out
-  of the read-only `~/.claude/settings.json` by writing its hooks to
+  of the Nix-managed `~/.claude/settings.json` by writing its hooks to
   `~/.orca/agent-hooks/claude-settings.json` and passing that file with
   `--settings`. Claude account profiles, each with its own
   `CLAUDE_CONFIG_DIR`, share that file. Over SSH it writes the same file on the

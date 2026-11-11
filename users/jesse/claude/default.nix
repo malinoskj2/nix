@@ -1,9 +1,18 @@
 {
+  config,
   lib,
   pkgs,
   ...
 }:
 let
+  cfg = config.programs.claude-code;
+  settingsFile = "${cfg.configDir}/settings.json";
+  settingsSource = config.home.file.${settingsFile}.source;
+  merge-settings = pkgs.writeShellApplication {
+    name = "claude-merge-settings";
+    runtimeInputs = [ pkgs.jq ];
+    text = builtins.readFile ./merge-settings.sh;
+  };
   archive-completed-task = pkgs.writeShellApplication {
     name = "archive-completed-task";
     runtimeInputs = [ pkgs.jq ];
@@ -12,6 +21,17 @@ let
 in
 {
   home.file.".claude/keybindings.json".source = ./keybindings.json;
+  home.file.${settingsFile}.enable = false;
+
+  home.activation.claudeSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+    run mkdir -p ${lib.escapeShellArg cfg.configDir}
+    run ${lib.getExe merge-settings} ${settingsSource} ${lib.escapeShellArg settingsFile}
+    # The agent sandbox seeds its settings.json from this one only once.
+    sandboxSettings="${config.xdg.dataHome}/agent-sandbox/home/.claude/settings.json"
+    if [ -s "$sandboxSettings" ]; then
+      run ${lib.getExe merge-settings} ${settingsSource} "$sandboxSettings"
+    fi
+  '';
 
   xdg.mimeApps.defaultApplications."x-scheme-handler/claude-cli" = "claude-code-url-handler.desktop";
 
