@@ -48,13 +48,16 @@ environment travels with the agent process. Further arguments go to the
 selected agent.
 
 Each container also publishes sandbox ports `8080` through `8084` on five
-available host loopback ports, starting the search at `18080`. Agents choose an
-unused port from `$AGENT_PREVIEW_PORTS` and bind the server to `0.0.0.0`.
-`AGENT_PREVIEW_URL_8080` through `AGENT_PREVIEW_URL_8084` give the corresponding
-host URLs for links opened in Orca's host-side browser or a host browser. The
-entrypoint also forwards each of those host ports to its sandbox port on the
-container's loopback with `socat`, so the same URLs work for browser checks
-inside the sandbox. These links work only
+available host ports, starting the search at `18080`. They are published on
+every interface, so any device on the LAN can open a running preview without
+signing in. Agents choose an unused port from `$AGENT_PREVIEW_PORTS` and bind
+the server to `0.0.0.0`. `AGENT_PREVIEW_URL_8080` through
+`AGENT_PREVIEW_URL_8084` give the corresponding URLs on the host's LAN address,
+found from its default route when the sandbox starts, or on `127.0.0.1` when
+there is none. The same URLs open in a host browser, Orca's host-side browser,
+the sandbox's browser and on other devices. For the loopback fallback, the
+entrypoint forwards each host port to its sandbox port on the container's
+loopback with `socat`. These links work only
 while the preview server and its container are running. After rebuilding the
 config, start a new sandbox to pick up the mappings.
 

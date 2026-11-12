@@ -57,6 +57,7 @@
   hyprland,
   imagemagick,
   inotify-tools,
+  iproute2,
   jq,
   killall,
   ktx-tools,
@@ -497,6 +498,7 @@ let
       coreutils
       gnugrep
       gnused
+      iproute2
       openssh
       procps
       systemd

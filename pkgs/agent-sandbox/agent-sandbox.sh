@@ -433,6 +433,10 @@ esac
 # picks the same ports loses the create and retries with freshly probed
 # ports instead of failing to bind.
 exec 9>"$runtime/agent-sandbox-ports.lock"
+# Preview ports are published on every interface, and their URLs use the LAN
+# address, so the links also open on other devices.
+preview_address=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
+preview_address=${preview_address:-127.0.0.1}
 cid=
 for _ in {1..5}; do
   flock 9
@@ -454,8 +458,8 @@ for _ in {1..5}; do
       preview_host_port=$(free_port $((preview_host_port + 1)))
     done
     publish_args+=(
-      --publish "127.0.0.1:$preview_host_port:$preview_port"
-      --env "AGENT_PREVIEW_URL_$preview_port=http://127.0.0.1:$preview_host_port"
+      --publish "$preview_host_port:$preview_port"
+      --env "AGENT_PREVIEW_URL_$preview_port=http://$preview_address:$preview_host_port"
     )
     preview_host_port=$((preview_host_port + 1))
   done
