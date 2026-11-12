@@ -7,6 +7,7 @@ You are running inside a Docker sandbox. You may read anything you can find in t
 - `~/.local/share/unreal-engine`, read-write: Epic's Linux Unreal Engine builds
 - `~/.cache/img2char3d`, read-write: model weights for `~/projects/img2char3d`
 - `~/.local/share/Steam/steamapps/common`, read-write: installed Steam games, at the same path as on the host. Its Proton, Steam Linux Runtime and Steamworks Shared folders are the sandbox's own, so updating them leaves the host's untouched
+- `/mnt/media3/agent-sandbox`, read-write: the sandbox's directory on the media server's NFS share, at the same path as on the host. Use it to archive large files off the host's disk. It is missing when the media server was unreachable at startup. It is a soft mount, so a long copy can fail with I/O errors; copy with `rsync`, compare, and only then delete the source
 - `~/.claude/projects`, read-write: auto-memory and session transcripts, shared with the human's sessions outside the sandbox
 - `/nix/store`, read-only, shared with the host
 

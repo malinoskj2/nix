@@ -28,6 +28,7 @@ shared=(
 )
 screenshots=/tmp/screenshot
 media=/tmp/agent-media
+media_share=/mnt/media3/agent-sandbox
 orca_relay_dir=$runtime/agent-sandbox-orca
 ssh_dir=$data/ssh
 host_wayland=
@@ -343,6 +344,11 @@ args+=(
   --volume "$ssh_dir/host_ed25519:/run/agent-sandbox-ssh/host_ed25519:ro"
   --volume "$ssh_dir/authorized_keys:/run/agent-sandbox-ssh/authorized_keys:ro"
 )
+# The media host's NFS share is automounted, and binding a directory inside it
+# keeps it mounted while the sandbox runs. Skip it when the host is unreachable.
+if timeout 15 test -d "$media_share"; then
+  args+=(--volume "$media_share:$media_share")
+fi
 # The NVIDIA CDI spec mounts only the 64-bit driver; Steam's 32-bit client needs the other half.
 if [[ -e /run/opengl-driver-32 ]]; then
   args+=(--volume /run/opengl-driver-32:/run/opengl-driver-32:ro)
