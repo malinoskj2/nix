@@ -22,8 +22,11 @@ in
     in
     {
       unstable = unstablePkgs // {
-        # TODO: drop this override and the manifest once nixpkgs-unstable reaches 2.1.319.
         claude-code = unstablePkgs.claude-code.override {
+          # The wrapper puts alsa-lib on LD_LIBRARY_PATH, which every command Claude runs inherits.
+          # Unstable's build needs a newer glibc than release programs that load libasound have.
+          inherit (final) alsa-lib;
+          # TODO: drop the manifest once nixpkgs-unstable reaches 2.1.319.
           manifest = final.lib.importJSON ./claude-code/manifest.zst.json;
         };
       };
