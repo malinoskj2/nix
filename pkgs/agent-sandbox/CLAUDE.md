@@ -52,7 +52,7 @@ Don't delete sockets or lock files in `$XDG_RUNTIME_DIR`: the sway and Hyprland 
 
 ## Preview sites
 
-Each sandbox publishes five preview ports on the host's loopback interface. Choose an unused port from `$AGENT_PREVIEW_PORTS` (`8080` through `8084`) and bind the server to `0.0.0.0`. If it is occupied, try another listed port; disable any automatic fallback outside this range. Use `http://127.0.0.1:<sandbox-port>` for sandbox browser checks. Give the human the matching `$AGENT_PREVIEW_URL_8080` through `$AGENT_PREVIEW_URL_8084` URL, including any required path, for the host browser or Orca's host-side browser. The host port can differ from the sandbox port. Keep the server running; links last only while the server and sandbox are running.
+Each sandbox publishes five preview ports on the host's loopback interface. Choose an unused port from `$AGENT_PREVIEW_PORTS` (`8080` through `8084`) and bind the server to `0.0.0.0`. If it is occupied, try another listed port; disable any automatic fallback outside this range. The matching `$AGENT_PREVIEW_URL_8080` through `$AGENT_PREVIEW_URL_8084` URL works both in the sandbox and on the host, because the sandbox forwards that host port to its own preview port: use it for sandbox browser checks and give it to the human, including any required path. The host port can differ from the sandbox port. Keep the server running; links last only while the server and sandbox are running.
 
 ## Tools
 

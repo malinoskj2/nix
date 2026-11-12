@@ -102,6 +102,7 @@
   rustc,
   rustfmt,
   sccache,
+  socat,
   sops,
   source2viewer-cli,
   ssh-to-age,
@@ -359,6 +360,7 @@ let
       rustfmt
       sandboxSteam
       sccache
+      socat
       sops
       source2viewer-cli
       ssh-to-age

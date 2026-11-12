@@ -102,6 +102,17 @@ pulseaudio -n --daemonize=no --exit-idle-time=-1 \
   --load=module-native-protocol-unix --load="module-null-sink sink_name=null" --load=module-always-sink \
   >"$log_dir/pulseaudio.log" 2>&1 &
 
+# Answer each preview port's host URL here too, so one link works in the sandbox and on the host.
+for preview_port in ${AGENT_PREVIEW_PORTS:-}; do
+  preview_url_var=AGENT_PREVIEW_URL_$preview_port
+  preview_url=${!preview_url_var:-}
+  preview_host_port=${preview_url##*:}
+  if [[ $preview_host_port =~ ^[0-9]+$ && $preview_host_port != "$preview_port" ]]; then
+    socat "TCP-LISTEN:$preview_host_port,bind=127.0.0.1,fork,reuseaddr" "TCP:127.0.0.1:$preview_port" \
+      >"$log_dir/preview-$preview_port.log" 2>&1 &
+  fi
+done
+
 if ! unreal-sandbox sync-harnesses; then
   echo "agent-sandbox: Unreal MCP config refresh failed;" \
     "fix the reported config and run unreal-sandbox sync-harnesses" >&2
