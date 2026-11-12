@@ -54,16 +54,18 @@
   security.sudo.extraRules = [
     {
       users = [ "jesse" ];
-      commands = [
-        {
-          command = "/run/current-system/sw/bin/nixos-rebuild";
-          options = [ "NOPASSWD" ];
-        }
-        {
-          command = "/run/current-system/sw/bin/nh";
-          options = [ "NOPASSWD" ];
-        }
-      ];
+      # nh refuses to run as root, and elevates each step itself through env.
+      commands =
+        map
+          (command: {
+            inherit command;
+            options = [ "NOPASSWD" ];
+          })
+          [
+            "/run/current-system/sw/bin/nixos-rebuild"
+            "/run/current-system/sw/bin/env * /nix/store/*-nixos-system-*/bin/switch-to-configuration *"
+            "/run/current-system/sw/bin/env * --profile /nix/var/nix/profiles/system *"
+          ];
     }
   ];
 
