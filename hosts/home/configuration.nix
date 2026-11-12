@@ -30,8 +30,7 @@
     # NetworkManager owns the interfaces and creates the wired DHCP profile.
     networkmanager.enable = true;
 
-    # Orca's LAN listener for the mobile app.
-    firewall.interfaces.enp8s0.allowedTCPPorts = [ 6768 ];
+    firewall.enable = false;
   };
 
   swapDevices = [
