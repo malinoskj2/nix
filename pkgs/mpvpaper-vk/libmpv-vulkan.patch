@@ -1,0 +1,230 @@
+diff --git a/include/mpv/render_vk.h b/include/mpv/render_vk.h
+new file mode 100644
+index 0000000..e332a09
+--- /dev/null
++++ b/include/mpv/render_vk.h
+@@ -0,0 +1,29 @@
++#ifndef MPV_CLIENT_API_RENDER_VK_H_
++#define MPV_CLIENT_API_RENDER_VK_H_
++
++#include <libplacebo/vulkan.h>
++
++#include "render.h"
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#define MPV_RENDER_API_TYPE_VULKAN "vulkan"
++
++#define MPV_RENDER_PARAM_VULKAN_INIT_PARAMS ((mpv_render_param_type)0x766b0001)
++// pl_tex: the renderable texture mpv_render_context_render() draws into.
++#define MPV_RENDER_PARAM_VULKAN_TEX ((mpv_render_param_type)0x766b0002)
++
++typedef struct mpv_vulkan_init_params {
++    // Receives the device mpv renders with, created on an instance with
++    // VK_KHR_wayland_surface. It lives until the render context is freed, so
++    // swapchains made on it must be destroyed first.
++    pl_vulkan *device;
++} mpv_vulkan_init_params;
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif
+diff --git a/meson.build b/meson.build
+index fb10be5..40872f3 100644
+--- a/meson.build
++++ b/meson.build
+@@ -1319,7 +1319,8 @@ if features['vulkan'] and features['android']
+ endif
+ 
+ if features['vulkan'] and features['wayland']
+-    sources += files('video/out/vulkan/context_wayland.c')
++    sources += files('video/out/vulkan/context_wayland.c',
++                     'video/out/vulkan/libmpv_vk.c')
+ endif
+ 
+ if features['vulkan'] and features['win32-desktop']
+@@ -1796,7 +1797,8 @@ if get_option('libmpv')
+                  description: 'mpv media player client library')
+ 
+     headers = ['include/mpv/client.h', 'include/mpv/render.h',
+-               'include/mpv/render_gl.h', 'include/mpv/stream_cb.h']
++               'include/mpv/render_gl.h', 'include/mpv/render_vk.h',
++               'include/mpv/stream_cb.h']
+     install_headers(headers, subdir: 'mpv')
+ 
+     # Allow projects to build with libmpv by cloning into ./subprojects/mpv
+diff --git a/video/out/gpu/libmpv_gpu.c b/video/out/gpu/libmpv_gpu.c
+index 1b13c79..62c07f0 100644
+--- a/video/out/gpu/libmpv_gpu.c
++++ b/video/out/gpu/libmpv_gpu.c
+@@ -8,6 +8,9 @@
+ static const struct libmpv_gpu_context_fns *context_backends[] = {
+ #if HAVE_GL
+     &libmpv_gpu_context_gl,
++#endif
++#if HAVE_VULKAN && HAVE_WAYLAND
++    &libmpv_gpu_context_vk,
+ #endif
+     NULL
+ };
+diff --git a/video/out/gpu/libmpv_gpu.h b/video/out/gpu/libmpv_gpu.h
+index 497dcc3..2b25502 100644
+--- a/video/out/gpu/libmpv_gpu.h
++++ b/video/out/gpu/libmpv_gpu.h
+@@ -38,3 +38,4 @@ struct libmpv_gpu_context_fns {
+ };
+ 
+ extern const struct libmpv_gpu_context_fns libmpv_gpu_context_gl;
++extern const struct libmpv_gpu_context_fns libmpv_gpu_context_vk;
+diff --git a/video/out/gpu/video.c b/video/out/gpu/video.c
+index c0a1be8..7938013 100644
+--- a/video/out/gpu/video.c
++++ b/video/out/gpu/video.c
+@@ -3540,6 +3540,13 @@ done:
+         p->ra->fns->clear(p->ra, fbo->tex, color, &target_rc);
+     }
+ 
++    // hwdec_vulkan holds the AVVkFrame lock while a frame is mapped, and the
++    // decoder takes it to reference or flush that frame, so keeping the frame
++    // mapped until the next upload deadlocks seeks, loops and shutdown.
++    if (p->image.hwdec_mapped &&
++        strcmp(p->hwdec_mapper->owner->driver->name, "vulkan") == 0)
++        unref_current_image(p);
++
+     p->frames_rendered++;
+     pass_report_performance(p);
+ }
+diff --git a/video/out/vulkan/context.c b/video/out/vulkan/context.c
+index 7c196eb..a5d6a33 100644
+--- a/video/out/vulkan/context.c
++++ b/video/out/vulkan/context.c
+@@ -143,7 +143,7 @@ static const struct ra_swapchain_fns vulkan_swapchain;
+ struct mpvk_ctx *ra_vk_ctx_get(struct ra_ctx *ctx)
+ {
+     if (!ctx->swapchain || ctx->swapchain->fns != &vulkan_swapchain)
+-        return NULL;
++        return ctx->ra ? ra_get_native_resource(ctx->ra, "mpvk_ctx") : NULL;
+ 
+     struct priv *p = ctx->swapchain->priv;
+     return p->vk;
+diff --git a/video/out/vulkan/libmpv_vk.c b/video/out/vulkan/libmpv_vk.c
+new file mode 100644
+index 0000000..6447784
+--- /dev/null
++++ b/video/out/vulkan/libmpv_vk.c
+@@ -0,0 +1,111 @@
++#include "common.h"
++#include "context.h"
++#include "mpv/render_vk.h"
++#include "options/m_config.h"
++#include "video/out/gpu/libmpv_gpu.h"
++#include "video/out/placebo/ra_pl.h"
++#include "video/out/placebo/utils.h"
++
++extern const struct m_sub_options vulkan_conf;
++
++struct priv {
++    struct mpvk_ctx vk;
++    struct ra_ctx *ra_ctx;
++    struct ra_tex target;
++};
++
++static int init(struct libmpv_gpu_context *ctx, mpv_render_param *params)
++{
++    ctx->priv = talloc_zero(NULL, struct priv);
++    struct priv *p = ctx->priv;
++
++    mpv_vulkan_init_params *init_params =
++        get_mpv_render_param(params, MPV_RENDER_PARAM_VULKAN_INIT_PARAMS, NULL);
++    if (!init_params || !init_params->device)
++        return MPV_ERROR_INVALID_PARAMETER;
++
++    struct ra_ctx_opts *ctx_opts = mp_get_config_group(p, ctx->global, &ra_ctx_conf);
++
++    p->vk.pllog = mppl_log_create(p, ctx->log);
++    if (!p->vk.pllog)
++        return MPV_ERROR_UNSUPPORTED;
++
++    const char *exts[] = {
++        VK_KHR_SURFACE_EXTENSION_NAME,
++        VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME,
++    };
++    p->vk.vkinst = pl_vk_inst_create(p->vk.pllog, &(struct pl_vk_inst_params) {
++        .debug = ctx_opts->debug,
++        .debug_extra = ctx_opts->debug,
++        .extensions = exts,
++        .num_extensions = MP_ARRAY_SIZE(exts),
++    });
++    if (!p->vk.vkinst)
++        return MPV_ERROR_UNSUPPORTED;
++
++    struct vulkan_opts *vk_opts = mp_get_config_group(p, ctx->global, &vulkan_conf);
++    p->vk.vulkan = mppl_create_vulkan(vk_opts, p->vk.vkinst, p->vk.pllog,
++                                      VK_NULL_HANDLE, false);
++    if (!p->vk.vulkan)
++        return MPV_ERROR_UNSUPPORTED;
++    p->vk.gpu = p->vk.vulkan->gpu;
++
++    p->ra_ctx = talloc_zero(p, struct ra_ctx);
++    p->ra_ctx->log = ctx->log;
++    p->ra_ctx->global = ctx->global;
++    p->ra_ctx->opts = (struct ra_ctx_opts) {
++        .debug = ctx_opts->debug,
++    };
++    p->ra_ctx->ra = ra_create_pl(p->vk.gpu, ctx->log);
++    if (!p->ra_ctx->ra)
++        return MPV_ERROR_UNSUPPORTED;
++
++    // hwdec_vulkan finds the instance and device through this.
++    ra_add_native_resource(p->ra_ctx->ra, "mpvk_ctx", &p->vk);
++
++    ctx->ra_ctx = p->ra_ctx;
++    *init_params->device = p->vk.vulkan;
++    return 0;
++}
++
++static int wrap_fbo(struct libmpv_gpu_context *ctx, mpv_render_param *params,
++                    struct ra_tex **out)
++{
++    struct priv *p = ctx->priv;
++
++    pl_tex tex = get_mpv_render_param(params, MPV_RENDER_PARAM_VULKAN_TEX, NULL);
++    if (!tex)
++        return MPV_ERROR_INVALID_PARAMETER;
++
++    if (!mppl_wrap_tex(p->ra_ctx->ra, tex, &p->target))
++        return MPV_ERROR_UNSUPPORTED;
++
++    *out = &p->target;
++    return 0;
++}
++
++static void done_frame(struct libmpv_gpu_context *ctx, bool ds)
++{
++}
++
++static void destroy(struct libmpv_gpu_context *ctx)
++{
++    struct priv *p = ctx->priv;
++
++    if (p->ra_ctx && p->ra_ctx->ra) {
++        pl_gpu_finish(p->vk.gpu);
++        p->ra_ctx->ra->fns->destroy(p->ra_ctx->ra);
++        p->ra_ctx->ra = NULL;
++    }
++    pl_vulkan_destroy(&p->vk.vulkan);
++    pl_vk_inst_destroy(&p->vk.vkinst);
++    pl_log_destroy(&p->vk.pllog);
++}
++
++const struct libmpv_gpu_context_fns libmpv_gpu_context_vk = {
++    .api_name = MPV_RENDER_API_TYPE_VULKAN,
++    .init = init,
++    .wrap_fbo = wrap_fbo,
++    .done_frame = done_frame,
++    .destroy = destroy,
++};

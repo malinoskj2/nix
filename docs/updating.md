@@ -151,6 +151,22 @@ Treat a bump as a hardware change and test it on the device.
 - **htop.** [`pkgs/htop-vim-navigation/`](../pkgs/htop-vim-navigation) asserts
   the htop versions its patch was checked against. If a nixpkgs update trips
   it, re-check the patch next to it and add the new version.
+- **mpvpaper-vk.** [`pkgs/mpvpaper-vk/`](../pkgs/mpvpaper-vk) plays the video
+  wallpapers. It is nixpkgs' mpvpaper drawing through Vulkan, built against a
+  private patched mpv so the system mpv stays stock, and an mpv update
+  rebuilds it from source.
+  [`libmpv-vulkan.patch`](../pkgs/mpvpaper-vk/libmpv-vulkan.patch) adds a
+  `vulkan` libmpv render API that creates the device with mpv's own
+  `mppl_create_vulkan` and hands it to the client. It also unmaps Vulkan hwdec
+  frames after each render in the `gpu` renderer, which otherwise holds the
+  `AVVkFrame` lock and deadlocks the decoder on loops, seeks and shutdown.
+  [`mpvpaper-vulkan.patch`](../pkgs/mpvpaper-vk/mpvpaper-vulkan.patch) replaces
+  mpvpaper's EGL path with libplacebo swapchains on that device and defaults
+  `gpu-hwdec-interop` to `vulkan`, because libmpv otherwise loads every interop
+  at startup, and the CUDA one holds about 1 GB of VRAM. Rebase the patches when
+  mpv or mpvpaper moves. Then play a wallpaper and check that `hwdec-current`
+  is `vulkan`, playback continues past the loop point, pause and seek work,
+  SIGTERM exits promptly and `nvidia-smi` shows about 250 MiB per instance.
 - **Steam GameMode.** [`hosts/home/gaming.nix`](../hosts/home/gaming.nix)
   patches Steam's 32-bit and 64-bit GameMode libraries with
   [`steam-gamemode.patch`](../hosts/home/steam-gamemode.patch). It gates automatic

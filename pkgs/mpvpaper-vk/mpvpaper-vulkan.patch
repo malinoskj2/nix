@@ -1,0 +1,379 @@
+diff --git a/meson.build b/meson.build
+index 7c6ed15..97c3603 100644
+--- a/meson.build
++++ b/meson.build
+@@ -1,11 +1,11 @@
+-project('mpvpaper', ['c'])
++project('mpvpaper-vk', ['c'])
+ cc = meson.get_compiler('c')
+ 
+ dl_dep = cc.find_library('dl', required : false)
+ wl_protocols=dependency('wayland-protocols')
+ wl_client=dependency('wayland-client')
+-wl_egl=dependency('wayland-egl')
+-egl=dependency('egl')
++libplacebo=dependency('libplacebo')
++vulkan=dependency('vulkan')
+ mpv=dependency('mpv')
+ threads=dependency('threads')
+ 
+@@ -25,9 +25,9 @@ protocols_headers=[
+ lib_protocols=static_library('protocols',protocols_src+protocols_headers,dependencies: wl_client)
+ protocols_dep=declare_dependency(link_with: lib_protocols,sources: protocols_headers)
+ 
+-executable(meson.project_name(), ['src/main.c', 'src/glad.c', 'src/cflogprinter.c'],
++executable(meson.project_name(), ['src/main.c', 'src/cflogprinter.c'],
+ include_directories : ['inc'],
+-dependencies: [dl_dep, wl_client, wl_egl, egl, mpv, threads, protocols_dep], install: true)
++dependencies: [dl_dep, wl_client, libplacebo, vulkan, mpv, threads, protocols_dep], install: true)
+ 
+ shm_dep = cc.find_library('rt', required : false)
+ executable(meson.project_name() + '-holder', ['src/holder.c'],
+diff --git a/src/holder.c b/src/holder.c
+index 6151b45..76e5061 100644
+--- a/src/holder.c
++++ b/src/holder.c
+@@ -56,7 +56,7 @@ static void revive_mpvpaper() {
+         }
+     }
+ 
+-    execv(strcat(exe_dir, "mpvpaper"), halt_info.argv_copy);
++    execv(strcat(exe_dir, "mpvpaper-vk"), halt_info.argv_copy);
+ }
+ 
+ static void check_stoplist() {
+diff --git a/src/main.c b/src/main.c
+index d97fb95..56ec9ea 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -13,13 +13,12 @@
+ 
+ #include "wlr-layer-shell-unstable-v1-client-protocol.h"
+ #include <wayland-client.h>
+-#include <wayland-egl.h>
+ 
+-#include <glad/glad.h>
+-#include <glad/glad_egl.h>
++#define VK_USE_PLATFORM_WAYLAND_KHR
++#include <libplacebo/vulkan.h>
+ 
+ #include <mpv/client.h>
+-#include <mpv/render_gl.h>
++#include <mpv/render_vk.h>
+ 
+ #include <cflogprinter.h>
+ 
+@@ -43,8 +42,8 @@ struct display_output {
+     struct wl_state *state;
+     struct wl_surface *surface;
+     struct zwlr_layer_surface_v1 *layer_surface;
+-    struct wl_egl_window *egl_window;
+-    EGLSurface *egl_surface;
++    VkSurfaceKHR vk_surface;
++    pl_swapchain swapchain;
+ 
+     uint32_t width, height;
+     uint32_t scale;
+@@ -55,9 +54,8 @@ struct display_output {
+     bool redraw_needed;
+ };
+ 
+-static EGLConfig egl_config;
+-static EGLDisplay *egl_display;
+-static EGLContext *egl_context;
++static pl_vulkan vk_device;
++static struct wl_state *paper_state;
+ 
+ static mpv_handle *mpv;
+ static mpv_render_context *mpv_glcontext;
+@@ -105,13 +103,22 @@ static void exit_cleanup() {
+             pthread_cancel(threads[i]);
+     }
+ 
++    // Swapchains live on mpv's device, so they go before its render context
++    if (paper_state) {
++        struct display_output *output;
++        wl_list_for_each(output, &paper_state->outputs, link) {
++            pl_swapchain_destroy(&output->swapchain);
++            if (output->vk_surface) {
++                vkDestroySurfaceKHR(vk_device->instance, output->vk_surface, NULL);
++                output->vk_surface = VK_NULL_HANDLE;
++            }
++        }
++    }
++
+     if (mpv_glcontext)
+         mpv_render_context_free(mpv_glcontext);
+     if (mpv)
+         mpv_terminate_destroy(mpv);
+-
+-    if (egl_context)
+-        eglDestroyContext(egl_display, egl_context);
+ }
+ 
+ static void exit_mpvpaper(int reason) {
+@@ -136,24 +143,20 @@ static void handle_signal(int signum) {
+ const static struct wl_callback_listener wl_surface_frame_listener;
+ 
+ static void render(struct display_output *output) {
++    struct pl_swapchain_frame frame;
++    if (!pl_swapchain_start_frame(output->swapchain, &frame)) {
++        cflp_error("Failed to start a swapchain frame for %s", output->name);
++        return;
++    }
++
+     mpv_render_param render_params[] = {
+-        {MPV_RENDER_PARAM_OPENGL_FBO, &(mpv_opengl_fbo) {
+-            .fbo = 0,
+-            .w = output->width * output->scale,
+-            .h = output->height * output->scale,
+-        }},
+-        // Flip rendering (needed due to flipped GL coordinate system).
+-        {MPV_RENDER_PARAM_FLIP_Y, &(int){1}},
++        {MPV_RENDER_PARAM_VULKAN_TEX, (void *)frame.fbo},
++        {MPV_RENDER_PARAM_FLIP_Y, &(int){frame.flipped}},
+         // Do not wait for a fresh frame to render
+         {MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME, &(int){0}},
+         {MPV_RENDER_PARAM_INVALID, NULL},
+     };
+ 
+-    if (!eglMakeCurrent(egl_display, output->egl_surface, output->egl_surface, egl_context))
+-        cflp_error("Failed to make output surface current %s", eglGetErrorString(eglGetError()));
+-
+-    glViewport(0, 0, output->width * output->scale, output->height * output->scale);
+-
+     // Render frame
+     int mpv_err = mpv_render_context_render(mpv_glcontext, render_params);
+     if (mpv_err < 0)
+@@ -165,8 +168,9 @@ static void render(struct display_output *output) {
+     output->redraw_needed = false;
+ 
+     // Display frame
+-    if (!eglSwapBuffers(egl_display, output->egl_surface))
+-        cflp_error("Failed to swap egl buffers %s", eglGetErrorString(eglGetError()));
++    if (!pl_swapchain_submit_frame(output->swapchain))
++        cflp_error("Failed to submit a swapchain frame for %s", output->name);
++    pl_swapchain_swap_buffers(output->swapchain);
+ }
+ 
+ static void frame_handle_done(void *data, struct wl_callback *callback, uint32_t frame_time) {
+@@ -228,7 +232,7 @@ static void stop_mpvpaper() {
+     exit_cleanup();
+ 
+     // Start holder script
+-    execv(strcat(exe_dir, "mpvpaper-holder"), new_argv);
++    execv(strcat(exe_dir, "mpvpaper-vk-holder"), new_argv);
+ 
+     cflp_error("Failed to stop mpvpaper");
+     exit(EXIT_FAILURE);
+@@ -419,6 +423,8 @@ static void set_init_mpv_options(const struct wl_state *state) {
+     mpv_set_option_string(mpv, "terminal", "yes");
+     mpv_set_option_string(mpv, "config", "yes");
+     mpv_set_option_string(mpv, "background-color", "#00000000");
++    // libmpv loads every interop up front, and the CUDA one alone holds about 1 GB of VRAM
++    mpv_set_option_string(mpv, "gpu-hwdec-interop", "vulkan");
+ 
+     // Convenience options passed for slideshow mode
+     if (SLIDESHOW_TIME != 0) {
+@@ -447,11 +453,6 @@ static void set_init_mpv_options(const struct wl_state *state) {
+     }
+ }
+ 
+-static void *get_proc_address_mpv(void *ctx, const char *name) {
+-    (void)ctx;
+-    return eglGetProcAddress(name);
+-}
+-
+ static void render_update_callback(void *callback_ctx) {
+     (void)callback_ctx;
+     uint8_t tmp = 0;
+@@ -489,18 +490,18 @@ static void init_mpv(const struct wl_state *state) {
+         mpv_set_option_string(mpv, "vo", "libmpv");
+     }
+ 
+-    // Have mpv render onto egl context
++    // Have mpv create the Vulkan device and render onto its textures
+     mpv_render_param params[] = {
+         {MPV_RENDER_PARAM_WL_DISPLAY, state->display},
+-        {MPV_RENDER_PARAM_API_TYPE, MPV_RENDER_API_TYPE_OPENGL},
+-        {MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &(mpv_opengl_init_params){
+-            .get_proc_address = get_proc_address_mpv,
++        {MPV_RENDER_PARAM_API_TYPE, MPV_RENDER_API_TYPE_VULKAN},
++        {MPV_RENDER_PARAM_VULKAN_INIT_PARAMS, &(mpv_vulkan_init_params){
++            .device = &vk_device,
+         }},
+         {MPV_RENDER_PARAM_INVALID, NULL},
+     };
+     mpv_err = mpv_render_context_create(&mpv_glcontext, mpv, params);
+     if (mpv_err < 0) {
+-        cflp_error("Failed to initialize mpv GL context, %s", mpv_error_string(mpv_err));
++        cflp_error("Failed to initialize mpv Vulkan context, %s", mpv_error_string(mpv_err));
+         exit_mpvpaper(EXIT_FAILURE);
+     }
+ 
+@@ -553,82 +554,17 @@ static void init_mpv(const struct wl_state *state) {
+     mpv_render_context_set_update_callback(mpv_glcontext, render_update_callback, NULL);
+ }
+ 
+-static void init_egl(struct wl_state *state) {
+-    egl_display = eglGetPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR, state->display, NULL);
+-    if (egl_display == EGL_NO_DISPLAY) {
+-        cflp_error("Failed to get EGL display");
+-        exit_mpvpaper(EXIT_FAILURE);
+-    }
+-    if (!eglInitialize(egl_display, NULL, NULL)) {
+-        cflp_error("Failed to initialize EGL %s", eglGetErrorString(eglGetError()));
+-        exit_mpvpaper(EXIT_FAILURE);
+-    }
+-
+-    eglBindAPI(EGL_OPENGL_API);
+-    const EGLint win_attrib[] = {
+-        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+-        EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
+-        EGL_RED_SIZE, 8,
+-        EGL_GREEN_SIZE, 8,
+-        EGL_BLUE_SIZE, 8,
+-        EGL_ALPHA_SIZE, 8,
+-        EGL_NONE
+-    };
+-
+-    EGLint num_config;
+-    if (!eglChooseConfig(egl_display, win_attrib, &egl_config, 1, &num_config)) {
+-        cflp_error("Failed to set EGL frame buffer config %s", eglGetErrorString(eglGetError()));
+-        exit_mpvpaper(EXIT_FAILURE);
+-    }
+-
+-    // Check for OpenGL compatibility for creating egl context
+-    static const struct { int major, minor; } gl_versions[] = {
+-        {4, 6}, {4, 5}, {4, 4}, {4, 3}, {4, 2}, {4, 1}, {4, 0},
+-        {3, 3}, {3, 2}, {3, 1}, {3, 0},
+-        {0, 0}
+-    };
+-    egl_context = NULL;
+-    for (uint i=0; gl_versions[i].major > 0; i++) {
+-        const EGLint ctx_attrib[] = {
+-            EGL_CONTEXT_MAJOR_VERSION, gl_versions[i].major,
+-            EGL_CONTEXT_MINOR_VERSION, gl_versions[i].minor,
+-            EGL_NONE
+-        };
+-        egl_context = eglCreateContext(egl_display, egl_config, EGL_NO_CONTEXT, ctx_attrib);
+-        if (egl_context) {
+-            if (VERBOSE)
+-                cflp_info("OpenGL %i.%i EGL context created", gl_versions[i].major, gl_versions[i].minor);
+-            break;
+-        }
+-    }
+-    if (!egl_context) {
+-        cflp_error("Failed to create EGL context %s", eglGetErrorString(eglGetError()));
+-        exit_mpvpaper(EXIT_FAILURE);
+-    }
+-
+-    if (!eglMakeCurrent(egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, egl_context)) {
+-        cflp_error("Failed to make context current %s", eglGetErrorString(eglGetError()));
+-        exit_mpvpaper(EXIT_FAILURE);
+-    }
+-
+-    if (!gladLoadGLLoader((GLADloadproc)eglGetProcAddress)) {
+-        cflp_error("Failed to load OpenGL %s", eglGetErrorString(eglGetError()));
+-        exit_mpvpaper(EXIT_FAILURE);
+-    }
+-}
+-
+ static void destroy_display_output(struct display_output *output) {
+     if (!output)
+         return;
+     wl_list_remove(&output->link);
++    pl_swapchain_destroy(&output->swapchain);
++    if (output->vk_surface)
++        vkDestroySurfaceKHR(vk_device->instance, output->vk_surface, NULL);
+     if (output->layer_surface != NULL)
+         zwlr_layer_surface_v1_destroy(output->layer_surface);
+     if (output->surface != NULL)
+         wl_surface_destroy(output->surface);
+-    if (output->egl_surface)
+-        eglDestroySurface(egl_display, output->egl_surface);
+-    if (output->egl_window)
+-        wl_egl_window_destroy(output->egl_window);
+     wl_output_destroy(output->wl_output);
+ 
+     free(output->name);
+@@ -645,31 +581,36 @@ static void layer_surface_configure(void *data, struct zwlr_layer_surface_v1 *su
+     zwlr_layer_surface_v1_ack_configure(surface, serial);
+     wl_surface_set_buffer_scale(output->surface, output->scale);
+ 
+-    if (!output->egl_window) {
+-        output->egl_window = wl_egl_window_create(output->surface, output->width * output->scale,
+-                output->height * output->scale);
+-        output->egl_surface = eglCreatePlatformWindowSurface(egl_display, egl_config, output->egl_window, NULL);
+-        if (!output->egl_surface) {
+-            cflp_error("Failed to create EGL surface for %s %s", output->name, eglGetErrorString(eglGetError()));
++    int sw_width = output->width * output->scale;
++    int sw_height = output->height * output->scale;
++
++    if (!output->swapchain) {
++        VkWaylandSurfaceCreateInfoKHR surface_info = {
++            .sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
++            .display = output->state->display,
++            .surface = output->surface,
++        };
++        if (vkCreateWaylandSurfaceKHR(vk_device->instance, &surface_info, NULL, &output->vk_surface) != VK_SUCCESS) {
++            cflp_error("Failed to create Vulkan surface for %s", output->name);
+             destroy_display_output(output);
+             return;
+         }
+ 
+-        if (!eglMakeCurrent(egl_display, output->egl_surface, output->egl_surface, egl_context))
+-            cflp_error("Failed to make output surface current %s", eglGetErrorString(eglGetError()));
+-        eglSwapInterval(egl_display, 0);
+-
+-        // After making EGL_NO_SURFACE current to a context
+-        // Only with the Nvidia Pro drivers will set the draw buffer state to GL_NONE
+-        // So we are going to force GL_BACK just like Mesa's EGL implementation
+-        glDrawBuffer(GL_BACK);
+-
+-        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
++        // Frame callbacks pace rendering, so presenting must not block on vblank
++        output->swapchain = pl_vulkan_create_swapchain(vk_device, pl_vulkan_swapchain_params(
++            .surface = output->vk_surface,
++            .present_mode = VK_PRESENT_MODE_MAILBOX_KHR,
++        ));
++        if (!output->swapchain || !pl_swapchain_resize(output->swapchain, &sw_width, &sw_height)) {
++            cflp_error("Failed to create Vulkan swapchain for %s", output->name);
++            destroy_display_output(output);
++            return;
++        }
+ 
+         // Start render loop
+         render(output);
+-    } else {
+-        wl_egl_window_resize(output->egl_window, output->width * output->scale, output->height * output->scale, 0, 0);
++    } else if (!pl_swapchain_resize(output->swapchain, &sw_width, &sw_height)) {
++        cflp_error("Failed to resize Vulkan swapchain for %s", output->name);
+     }
+ }
+ 
+@@ -1096,12 +1037,11 @@ int main(int argc, char **argv) {
+     if (VERBOSE)
+         cflp_success("Connected to Wayland compositor");
+ 
+-    // Don't start egl and mpv if just displaying outputs
++    paper_state = &state;
++
++    // Don't start mpv if just displaying outputs
+     if (!SHOW_OUTPUTS) {
+         // Init render before outputs
+-        init_egl(&state);
+-        if (VERBOSE)
+-            cflp_success("EGL initialized");
+         init_mpv(&state);
+         init_threads();
+         if (VERBOSE)
+@@ -1178,7 +1118,7 @@ int main(int argc, char **argv) {
+                 // Redraw immediately if not waiting for frame callback
+                 if (output->frame_callback == NULL) {
+                     // Avoid crash when output is destroyed
+-                    if (output->egl_window && output->egl_surface) {
++                    if (output->swapchain) {
+                         if (VERBOSE == 2)
+                             cflp_info("MPV is ready to render the next frame for %s", output->name);
+                         render(output);

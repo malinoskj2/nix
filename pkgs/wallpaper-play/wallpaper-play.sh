@@ -23,7 +23,7 @@ if [[ ! -f "$video" ]]; then
 fi
 [[ -f "$video" ]] || die "no video for $monitor"
 
-# mpvpaper splits the options on spaces, so none may contain one. It draws on the background layer
+# mpvpaper-vk splits the options on spaces, so none may contain one. It draws on the background layer
 # unless told otherwise. Without quiet, mpv's status line fills the journal.
 options=(
   loop-file=inf
@@ -36,4 +36,4 @@ options=(
   pause=yes
   quiet
 )
-exec mpvpaper -o "${options[*]}" "$monitor" "$video"
+exec mpvpaper-vk -o "${options[*]}" "$monitor" "$video"

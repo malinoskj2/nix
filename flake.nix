@@ -125,6 +125,7 @@
           "hyprrecede"
           "hyprsheet"
           "markdown-to-pdf"
+          "mpvpaper-vk"
           "muse"
           "orca-ade"
           "playwright-browsers"
