@@ -11,7 +11,7 @@ You are running inside a Docker sandbox. You may read anything you can find in t
 - `~/.claude/projects`, read-write: auto-memory and session transcripts, shared with the human's sessions outside the sandbox
 - `/nix/store`, read-only, shared with the host
 
-The rest of the home directory belongs to the sandbox, not the host. The NVIDIA GPU is available (`nvidia-smi`).
+The rest of the home directory belongs to the sandbox, not the host. Apart from logins, Steam, sccache and the Unreal shader cache, it is wiped about once a week, so keep work in the mapped directories. The NVIDIA GPU is available (`nvidia-smi`).
 
 ## Display
 

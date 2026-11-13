@@ -48,7 +48,18 @@ instance down, and a later launch starts from a fresh container. Only state
 mapped from the host carries over between instances: the persistent sandbox
 home, the shared project directories and the other bind mounts. The
 container's writable layer, its `/tmp` and any Docker volumes are discarded
-when it stops. Orca's pane, worktree, terminal, launch-token, and hook
+when it stops.
+
+The persistent home doesn't keep everything. `agent-sandbox-clean` deletes it
+all except the agent and Steam logins, `.ssh`, `.orca-relay`, Steam's own
+directory, sccache and the Unreal shader cache, and empties the sandboxes'
+`/tmp` root. It refuses while a sandbox is running, apart from the shared Codex
+server, which it stops. The `agent-sandbox-clean` user timer runs it hourly
+once a week has passed since the last clean, so it lands at the first idle
+hour. `agent-sandbox-kill --clean` stops every sandbox and cleans straight
+away.
+
+Orca's pane, worktree, terminal, launch-token, and hook
 environment travels with the agent process. Further arguments go to the
 selected agent.
 

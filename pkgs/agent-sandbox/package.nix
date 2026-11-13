@@ -571,9 +571,21 @@ let
     text = builtins.readFile ./agent-sandbox-ssh.sh;
   };
 
+  clean = writeShellApplication {
+    name = "agent-sandbox-clean";
+    runtimeInputs = [
+      coreutils
+      findutils
+      gnugrep
+      systemd
+    ];
+    text = builtins.readFile ./agent-sandbox-clean.sh;
+  };
+
   killAll = writeShellApplication {
     name = "agent-sandbox-kill";
     runtimeInputs = [
+      clean
       coreutils
       procps
       systemd
@@ -616,6 +628,7 @@ symlinkJoin {
     execAgent
     resumeAgent
     unreal.installer
+    clean
     killAll
     sshProxy
   ];

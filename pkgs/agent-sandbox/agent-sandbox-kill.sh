@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 
 # The persistent sandbox home (agent logins, memory, the SSH keys the desktop
-# trusts) survives unless --purge, so the next launch picks up where the killed
-# sandboxes left off.
-purge=
+# trusts) survives unless --clean or --purge, so the next launch picks up where
+# the killed sandboxes left off.
+purge='' clean=''
 case ${1:-} in
   '') ;;
+  --clean) clean=1 ;;
   --purge) purge=1 ;;
   *)
-    echo 'usage: agent-sandbox-kill [--purge]' >&2
+    echo 'usage: agent-sandbox-kill [--clean | --purge]' >&2
     exit 2
     ;;
 esac
@@ -21,6 +22,8 @@ data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
 while read -r unit _; do
   systemctl --user stop "$unit"
 done < <(systemctl --user list-units --all --plain --no-legend 'agent-sandbox@*')
+# Restart=on-failure would bring the shared Codex server's container back.
+systemctl --user stop agent-sandbox-codex-server.service
 
 containers=()
 ids=$(docker ps -aq --filter name=^agent-sandbox-)
@@ -37,8 +40,11 @@ pkill -f "agent-sandbox-clipboard-sync $runtime/agent-sandbox-clipboard" || true
 rm -rf -- "$runtime"/agent-sandbox-clipboard.*
 rm -rf -- "$runtime"/agent-sandbox-orca/session.*
 
-if [[ -n $purge ]]; then
+echo "agent-sandbox-kill: removed ${#containers[@]} container(s)"
+
+if [[ -n $clean ]]; then
+  agent-sandbox-clean
+elif [[ -n $purge ]]; then
   rm -rf -- "$data"
   echo "agent-sandbox-kill: purged $data"
 fi
-echo "agent-sandbox-kill: removed ${#containers[@]} container(s)"

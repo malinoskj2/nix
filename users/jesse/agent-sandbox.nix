@@ -36,6 +36,26 @@ in
     };
   };
 
+  # Wipes the shared sandbox home except logins, Steam and the kept caches, at
+  # most weekly and only while no sandbox runs.
+  systemd.user.services.agent-sandbox-clean = {
+    Unit.Description = "Clean the agent sandbox home";
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${lib.getExe' pkgs.agent-sandbox "agent-sandbox-clean"} --if-older-than 7";
+      SuccessExitStatus = 75;
+    };
+  };
+
+  systemd.user.timers.agent-sandbox-clean = {
+    Unit.Description = "Clean the agent sandbox home when it is idle";
+    Timer = {
+      OnCalendar = "hourly";
+      Persistent = true;
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
+
   # ~/.ssh/config stays hand-written; it pulls this in with `Include config.d/*`.
   home.file.".ssh/config.d/agent-sandbox".text = ''
     Host sandbox-*
