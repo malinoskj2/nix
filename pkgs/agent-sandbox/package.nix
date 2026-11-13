@@ -417,6 +417,14 @@ let
     experimental-features = nix-command flakes
   '';
 
+  # Managed settings outrank the user settings the sandbox seeds from the host. Agents never call
+  # the LSP tool, and each sandbox's rust-analyzer held several GB.
+  claudeManagedSettings = writeText "managed-settings.json" (
+    builtins.toJSON {
+      enabledPlugins."rust-analyzer-lsp@claude-plugins-official" = false;
+    }
+  );
+
   caBundle = "${cacert}/etc/ssl/certs/ca-bundle.crt";
 
   # The image carries no store paths: the launcher mounts the host store read-only,
@@ -441,6 +449,7 @@ let
       ln -s ${./sway.conf} etc/sway/config
       ln -s ${./nested-sway.conf} etc/sway/nested
       ln -s ${./CLAUDE.md} etc/claude-code/CLAUDE.md
+      ln -s ${claudeManagedSettings} etc/claude-code/managed-settings.json
       echo 'hosts: files dns' > etc/nsswitch.conf
     '';
     config = {
