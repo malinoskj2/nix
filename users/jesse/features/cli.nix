@@ -10,6 +10,7 @@
     git-commitu
     git-open-branch
     markdown-to-pdf
+    media-gallery
     pubip
 
     bc

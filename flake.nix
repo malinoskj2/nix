@@ -125,6 +125,7 @@
           "hyprrecede"
           "hyprsheet"
           "markdown-to-pdf"
+          "media-gallery"
           "mpvpaper-vk"
           "muse"
           "orca-ade"

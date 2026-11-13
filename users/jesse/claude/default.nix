@@ -53,6 +53,7 @@ in
       laravel-build-jesse = ./skills/laravel-build-jesse;
       laravel-orchestrator = ./skills/laravel-orchestrator;
       laravel-review-jesse = ./skills/laravel-review-jesse;
+      media-gallery = ./skills/media-gallery;
       recommit = ./skills/recommit;
       rust-build-jesse = ./skills/rust-build-jesse;
       rust-design-jesse = ./skills/rust-design-jesse;

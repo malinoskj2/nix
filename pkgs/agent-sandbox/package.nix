@@ -70,6 +70,7 @@
   makeFontsConf,
   man-db,
   markdown-to-pdf,
+  media-gallery,
   mediainfo,
   mold,
   mpv,
@@ -339,6 +340,7 @@ let
       lshw
       man-db
       markdown-to-pdf
+      media-gallery
       mediainfo
       mold
       mpv
