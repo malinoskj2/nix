@@ -26,6 +26,16 @@ in
     };
   };
 
+  # Sandbox launchers start it; it then stays up for later sandboxes.
+  systemd.user.services.agent-sandbox-codex-server = {
+    Unit.Description = "Codex app-server shared by the agent sandboxes";
+    Service = {
+      ExecStart = lib.getExe' pkgs.agent-sandbox "agent-sandbox-codex-server";
+      Restart = "on-failure";
+      RestartSec = 5;
+    };
+  };
+
   # ~/.ssh/config stays hand-written; it pulls this in with `Include config.d/*`.
   home.file.".ssh/config.d/agent-sandbox".text = ''
     Host sandbox-*

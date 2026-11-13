@@ -89,8 +89,8 @@
       # too, then OOM-kills the largest process.
       MemoryMax = "20G";
 
-      # A little swap lets reclaim page out tmpfs.
-      MemorySwapMax = "4G";
+      # Idle agents and display stacks compress well in zram, which beats OOM-killing a build.
+      MemorySwapMax = "8G";
     };
   };
 

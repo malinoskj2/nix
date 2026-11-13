@@ -30,6 +30,10 @@ screenshots=/tmp/screenshot
 media=/tmp/agent-media
 media_share=/mnt/media3/agent-sandbox
 orca_relay_dir=$runtime/agent-sandbox-orca
+codex_socket_dir=$runtime/agent-sandbox-codex
+# On disk: tmpfs is charged to the slice as shmem, which no OOM kill frees.
+tmp_root=$data/tmp
+container_tmp=$tmp_root/$$
 ssh_dir=$data/ssh
 host_wayland=
 for sock in "$runtime"/wayland-*; do
@@ -214,6 +218,12 @@ cleanup() {
   fi
   rm -f -- "$clipboard_dir/image" "$clipboard_dir/.change" "$clipboard_dir/watcher.log"
   rmdir -- "$clipboard_dir"
+  remove_tmp "$container_tmp"
+}
+
+remove_tmp() {
+  chmod -R u+w -- "$1" 2>/dev/null || true
+  rm -rf -- "$1"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -236,8 +246,20 @@ done
 mkdir -p "$screenshots" "$media"
 mkdir -p "$orca_relay_dir"
 chmod 700 "$orca_relay_dir"
+mkdir -p "$codex_socket_dir"
+# A launcher killed before its cleanup leaves its directory behind.
+mkdir -p "$tmp_root"
+for dir in "$tmp_root"/*/; do
+  dir=${dir%/}
+  if [[ ! ${dir##*/} =~ ^[0-9]+$ ]] || ! kill -0 "${dir##*/}" 2>/dev/null; then
+    remove_tmp "$dir"
+  fi
+done
+mkdir -p "$container_tmp"
 configure_ssh
 write_accounts
+# The one Codex app-server every sandbox's codex-image shares; a host without the unit has none.
+systemctl --user start --no-block agent-sandbox-codex-server.service 2>/dev/null || true
 
 if ! docker image inspect "$image_ref" >/dev/null 2>&1; then
   "$AGENT_SANDBOX_IMAGE" | docker load >/dev/null
@@ -273,9 +295,7 @@ args=(
   --cpuset-cpus "8-15,24-31"
   --shm-size 2g
   --device nvidia.com/gpu=all
-  # tmpfs is charged to the slice as shmem, and killing processes doesn't free
-  # it. Uncapped, an agent filling it starves every sandbox of the slice limit.
-  --tmpfs "/tmp:exec,mode=1777,size=4g"
+  --volume "$container_tmp:/tmp"
   --tmpfs "$runtime:mode=0700,uid=$uid,gid=$gid"
   --volume /nix/store:/nix/store:ro
   --volume /nix/var/nix/daemon-socket:/nix/var/nix/daemon-socket
@@ -340,6 +360,7 @@ args+=(
   --volume "$screenshots:$screenshots:ro"
   --volume "$media:$media"
   --volume "$orca_relay_dir:$orca_relay_dir"
+  --volume "$codex_socket_dir:/run/agent-sandbox-codex:ro"
   --volume "$clipboard_dir:/run/host-clipboard:ro"
   --volume "$ssh_dir/host_ed25519:/run/agent-sandbox-ssh/host_ed25519:ro"
   --volume "$ssh_dir/authorized_keys:/run/agent-sandbox-ssh/authorized_keys:ro"

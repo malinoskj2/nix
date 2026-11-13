@@ -7,7 +7,22 @@ description: Generate or edit raster images with Codex (gpt-6.1-sol, medium reas
 
 Generating an image takes about a minute. Batch related images into one call when they can share a prompt.
 
+## In the agent sandbox
+
+When `/run/agent-sandbox-codex` exists, you are in the agent sandbox. Generate only through `codex-image`, which sends the request to the one Codex app-server every sandbox shares:
+
+```sh
+codex-image [-i a.png,b.png] '<description>'
+```
+
+- It prints the absolute path of each generated image, one per line. Run it with a Bash timeout of 600000 ms.
+- `<description>` completes "Use $imagegen to generate …"; `codex-image` adds the no-shell and reply instructions.
+- If it fails, report its error to the human and don't generate the image. Never fall back to `codex exec` or any other generator in the sandbox.
+- The edit, prompt, copy and check rules below apply here too.
+
 ## Generate
+
+Outside the sandbox:
 
 ```sh
 out=$(mktemp -d)

@@ -230,6 +230,16 @@ let
   sandboxSteam = pythonScript "sandbox-steam" (python3.withPackages (ps: [
     ps.vdf
   ])) ./sandbox-steam.py;
+  codexImage = writeShellScriptBin "codex-image" ''
+    exec ${lib.getExe nodejs} ${./codex-image.mjs} "$@"
+  '';
+
+  codexServerEntrypoint = writeShellApplication {
+    name = "agent-sandbox-codex-server-entrypoint";
+    runtimeInputs = [ jq ];
+    runtimeEnv.CODEX = lib.getExe codex;
+    text = builtins.readFile ./codex-server-entrypoint.sh;
+  };
 
   # The desktop's pinned Hyprland, patched to nest in the headless sway on the NVIDIA GPU. Sway
   # offers xdg_wm_base 5, not the 6 Aquamarine asks for, and NVIDIA's GBM can neither allocate the
@@ -285,6 +295,7 @@ let
       claude
       clippy
       codex'
+      codexImage
       coreutils
       curl
       dbus
@@ -491,6 +502,13 @@ let
     };
   };
 
+  imageEnv = {
+    AGENT_SANDBOX_IMAGE = image;
+    # Prefix numeric-leading tags so ShellCheck does not mistake the generated
+    # environment assignment for arithmetic (SC2100).
+    AGENT_SANDBOX_TAG = "hash-${image.imageTag}";
+  };
+
   launcher = writeShellApplication {
     name = "agent-sandbox";
     runtimeInputs = [
@@ -505,16 +523,24 @@ let
       util-linux
       wl-clipboard
     ];
-    runtimeEnv = {
-      AGENT_SANDBOX_IMAGE = image;
-      # Prefix numeric-leading tags so ShellCheck does not mistake the generated
-      # environment assignment for arithmetic (SC2100).
-      AGENT_SANDBOX_TAG = "hash-${image.imageTag}";
+    runtimeEnv = imageEnv // {
       # The PATH an agent with an Orca hook bridge runs with: the curl shim leads,
       # so hook URLs route through the private relay socket.
       AGENT_SANDBOX_ORCA_PATH = "${orcaCurl}/bin:${env}/bin:/usr/bin";
     };
     text = builtins.readFile ./agent-sandbox.sh;
+  };
+
+  codexServer = writeShellApplication {
+    name = "agent-sandbox-codex-server";
+    runtimeInputs = [
+      coreutils
+      findutils
+    ];
+    runtimeEnv = imageEnv // {
+      AGENT_SANDBOX_CODEX_SERVER_ENTRYPOINT = lib.getExe codexServerEntrypoint;
+    };
+    text = builtins.readFile ./agent-sandbox-codex-server.sh;
   };
 
   sshProxy = writeShellApplication {
@@ -568,6 +594,7 @@ symlinkJoin {
   };
   paths = [
     launcher
+    codexServer
     execAgent
     resumeAgent
     unreal.installer

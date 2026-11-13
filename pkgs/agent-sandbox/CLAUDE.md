@@ -112,7 +112,7 @@ up a task, and report their size. See `docs/unreal-sandbox.md` in the Nix repo.
 
 ## Disk
 
-`~/projects` is on the host's disk, so anything you leave behind stays there.
+`~/projects` is on the host's disk, so anything you leave behind stays there. `/tmp` is on the host's disk too, and is deleted when the sandbox exits.
 
 Agents here run without permission prompts, but Claude Code still asks before an `rm` or `rmdir` that targets the working directory, one of its parents, `$HOME`, a top-level directory or a glob such as `dir/*`. Name the files or subdirectories to delete instead, for example `rm -rf target build` rather than `rm -rf ./*`.
 
