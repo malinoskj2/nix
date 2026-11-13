@@ -75,6 +75,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./agent-resume-wrapper.patch
     ./terminal-container-indicators.patch
     ./structured-sandbox-indicators.patch
+    ./pending-below-main.patch
   ];
 
   postPatch = ''
