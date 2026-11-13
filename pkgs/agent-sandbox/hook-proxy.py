@@ -81,6 +81,7 @@ def read_head(sock: socket.socket) -> bytes | None:
 
 def translate_transcript(body: bytes, content_type: str, container_home: Path, host_home: Path) -> bytes:
     """Translate only Codex's transcript field, using this launch's account mount."""
+
     def translate(payload):
         if not isinstance(payload, dict) or not isinstance(payload.get("transcript_path"), str):
             return False
@@ -231,6 +232,8 @@ class HookHandler(socketserver.BaseRequestHandler):
 
 if __name__ == "__main__":
     if len(sys.argv) != 6:
-        raise SystemExit("usage: hook-proxy <socket> <endpoint-file> <fallback-port> <container-codex-home> <host-codex-home>")
+        raise SystemExit(
+            "usage: hook-proxy <socket> <endpoint-file> <fallback-port> <container-codex-home> <host-codex-home>"
+        )
     with HookServer(sys.argv[1], sys.argv[2], int(sys.argv[3]), Path(sys.argv[4]), Path(sys.argv[5])) as proxy:
         proxy.serve_forever(poll_interval=0.2)

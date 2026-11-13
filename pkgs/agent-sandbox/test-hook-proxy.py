@@ -36,8 +36,9 @@ class TranscriptTest(unittest.TestCase):
         self.assertEqual(proxy.translate_transcript(body, "application/json", CONTAINER, CONTAINER), body)
 
     def test_other_paths_and_invalid_payloads_are_unchanged(self):
-        for body in [b"not json", b"null", b"[]", b'{}', b'{"transcript_path":null}'] + [
-            json.dumps(self.payload(path)).encode() for path in (
+        for body in [b"not json", b"null", b"[]", b"{}", b'{"transcript_path":null}'] + [
+            json.dumps(self.payload(path)).encode()
+            for path in (
                 "/another/account/" + TRANSCRIPT,
                 str(CONTAINER / "sessions-other/file.jsonl"),
                 str(CONTAINER / "sessions/../config.toml"),
@@ -57,8 +58,10 @@ class TranscriptTest(unittest.TestCase):
 
     def test_fragmented_request_updates_length_and_handles_expect_continue(self):
         body = json.dumps(self.payload(), ensure_ascii=False).encode()
-        head = (b"POST /hook/codex HTTP/1.1\r\nContent-Type: application/json; charset=utf-8\r\n"
-                b"X-Orca-Agent-Hook-Token: keep-token\r\nExpect: 100-continue\r\nContent-Length: " + str(len(body)).encode())
+        head = (
+            b"POST /hook/codex HTTP/1.1\r\nContent-Type: application/json; charset=utf-8\r\n"
+            b"X-Orca-Agent-Hook-Token: keep-token\r\nExpect: 100-continue\r\nContent-Length: " + str(len(body)).encode()
+        )
         reader, writer = socket.socketpair()
         with reader, writer:
             reader.settimeout(2)
@@ -105,8 +108,12 @@ class TranscriptTest(unittest.TestCase):
                     client.settimeout(3)
                     client.connect(path)
                     body = json.dumps(self.payload()).encode()
-                    client.sendall(b"POST /hook/codex HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: "
-                                   + str(len(body)).encode() + b"\r\n\r\n" + body)
+                    client.sendall(
+                        b"POST /hook/codex HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: "
+                        + str(len(body)).encode()
+                        + b"\r\n\r\n"
+                        + body
+                    )
                     upstream, _ = listener.accept()
                     with upstream:
                         upstream.settimeout(3)
