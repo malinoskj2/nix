@@ -45,7 +45,7 @@ if [[ -n $min_age_days && -e $stamp ]] &&
 fi
 
 running=$(docker ps --format '{{.Names}}' --filter name=^agent-sandbox-)
-if grep -qvx agent-sandbox-codex-server <<<"$running"; then
+if [[ -n $(grep -vx agent-sandbox-codex-server <<<"$running" || true) ]]; then
   echo 'agent-sandbox-clean: sandboxes are running; stop them with agent-sandbox-kill first' >&2
   exit 75
 fi
