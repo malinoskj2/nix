@@ -257,6 +257,7 @@ mkdir -p "$screenshots" "$media"
 mkdir -p "$orca_relay_dir"
 chmod 700 "$orca_relay_dir"
 mkdir -p "$codex_socket_dir"
+chmod 700 "$codex_socket_dir"
 # A launcher killed before its cleanup leaves its directory behind.
 mkdir -p "$tmp_root"
 for dir in "$tmp_root"/*/; do

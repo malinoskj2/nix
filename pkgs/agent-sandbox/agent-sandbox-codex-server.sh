@@ -16,6 +16,7 @@ fi
 
 # Sandboxes bind this directory at startup, so it is never replaced, only emptied.
 mkdir -p "$socket_dir" "$sandbox_home/.codex"
+chmod 700 "$socket_dir"
 find "$socket_dir" -mindepth 1 -delete
 
 if ! docker image inspect "$image_ref" >/dev/null 2>&1; then
