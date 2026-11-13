@@ -250,7 +250,15 @@ Treat a bump as a hardware change and test it on the device.
   defaults, lets its URL and token settings fall back to them (upstream reads
   those only from saved settings), turns off its panel rewrite and changes its
   generic details line to "Working in Orca ADE", all with
-  `--replace-fail` against `dist/main.js`. The `postPatch` also edits upstream source in place: it drops
+  `--replace-fail` against `dist/main.js`. It also adds
+  Etherll/orca-usage-insights pinned to one release commit, a full-access plugin that
+  reads local Claude, Codex and OpenCode transcripts. Orca never updates a
+  bundled plugin from its catalog. To move it, set `rev` to the new release tag's commit,
+  refresh its hash and review the new release's source before bundling it: check
+  what it fetches, spawns and writes. `usageInsightsSettings` becomes the
+  manifest's setting defaults, and an unknown key fails the build. `home` adds
+  the sandbox's Codex home there, since sandboxed Claude already shares
+  `~/.claude/projects`. The `postPatch` also edits upstream source in place: it drops
   the AppImage's glibc floor check and its downloaded Node runtime, skips the
   Docker build of the Wayland clipboard helper, which `buildPhase` compiles
   instead, turns on keeping the computer awake while agents run, and makes
@@ -282,6 +290,9 @@ Treat a bump as a hardware change and test it on the device.
   - check that Settings → Plugins lists Discord Rich Presence as Bundled and
     enabled without a consent prompt, and that Discord Presence: Show Status
     reports `connected=true` against arRPC with `detail=generic`;
+  - check that Settings → Plugins lists Usage Insights as Bundled and enabled
+    without a consent prompt, and that on `home` its panel lists the sandbox
+    Codex folder as a source;
   - check that Getting started shows Enable Orca CLI as done. It only looks
     for the `orca-cli`, `computer-use` and `orchestration` skills, which
     [`features/desktop.nix`](../users/jesse/features/desktop.nix) links from

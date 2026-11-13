@@ -54,10 +54,13 @@ let
         "muse"
       ] sandboxAgentCommand;
     };
-    approvedPlugins = [ "chron0.discord-presence" ];
+    approvedPlugins = [
+      "chron0.discord-presence"
+      "etherll.usage-insights"
+    ];
     # Generic keeps workspace, branch and machine names out of the activity.
     discordPresenceSettings.detailLevel = "generic";
-    inherit (config.orca) agentResumeWrapper;
+    inherit (config.orca) agentResumeWrapper usageInsightsSettings;
   };
   orcaSkills = [
     "computer-use"
@@ -85,6 +88,12 @@ in
     type = lib.types.nullOr lib.types.str;
     default = null;
     description = "Command that Orca's automatic Claude, Codex and Muse resumes in local workspaces run through.";
+  };
+
+  options.orca.usageInsightsSettings = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.listOf lib.types.str);
+    default = { };
+    description = "Default lines for the bundled Usage Insights plugin's multiline settings, by setting key.";
   };
 
   config = {

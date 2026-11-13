@@ -18,6 +18,8 @@
   globalSettings ? { },
   approvedPlugins ? [ ],
   discordPresenceSettings ? { },
+  # Setting key to its lines, e.g. { extraCodexFolders = [ "~/backup/.codex" ]; }.
+  usageInsightsSettings ? { },
   # Command that automatic Claude, Codex and Muse resumes in local workspaces run through, as
   # `<command> <agent> ...`.
   agentResumeWrapper ? null,
@@ -38,6 +40,13 @@ let
     repo = "orca-discord-presence";
     rev = "f0ac386a8f013ef89927dd42b9ad4ab6c8c05324";
     hash = "sha256-06QILPJFKilluXh8EaBXDtVRUyHirikBJLe7JRjZuZM=";
+  };
+  usage-insights = fetchFromGitHub {
+    owner = "Etherll";
+    repo = "orca-usage-insights";
+    # v1.2.1
+    rev = "eae3fa08f21323c5679a7dbbeced2a1777a272a1";
+    hash = "sha256-U2ptKTryfYbkP8Kbsnm1rEpXA0axxhO9zath37Mt4CU=";
   };
   sourceCommit = "27eb5e2a6c5017c6fdcba4fee16bf54256550c6f";
   arch = stdenv.hostPlatform.node.arch;
@@ -106,22 +115,31 @@ stdenv.mkDerivation (finalAttrs: {
     export const nixApprovedPlugins: readonly string[] = ${builtins.toJSON approvedPlugins}
     EOF
 
-    # Bundled, so Orca installs and updates it from the package like its own launch plugins.
-    plugin=resources/plugins/launch/chron0.discord-presence
-    mkdir $plugin
-    cp -r ${discord-presence}/{orca-plugin.json,README.md,dist,panel,assets} $plugin
-    chmod -R u+w $plugin
-    # Keep the installed identity and settings when upstream changes its publisher.
-    python3 - <<'PYTHON'
+    # Bundled, so Orca installs and updates them from the package like its own launch plugins.
+    launch=resources/plugins/launch
+    mkdir $launch/chron0.discord-presence $launch/etherll.usage-insights
+    cp -r ${discord-presence}/{orca-plugin.json,README.md,dist,panel,assets} $launch/chron0.discord-presence
+    cp -r ${usage-insights}/{orca-plugin.json,README.md,LICENSE,images,panel,src} $launch/etherll.usage-insights
+    chmod -R u+w $launch/chron0.discord-presence $launch/etherll.usage-insights
+    # Keep the installed identity and settings when upstream changes its publisher. Saved
+    # settings still win over manifest defaults.
+    python3 - ${lib.escapeShellArg (builtins.toJSON usageInsightsSettings)} <<'PYTHON'
     import json
+    import sys
     from pathlib import Path
-    path = Path("resources/plugins/launch/chron0.discord-presence/orca-plugin.json")
-    manifest = json.loads(path.read_text())
-    manifest["publisher"] = "chron0"
-    path.write_text(json.dumps(manifest, indent=2) + "\n")
+    launch = Path("resources/plugins/launch")
+    for key in ("chron0.discord-presence", "etherll.usage-insights"):
+        path = launch / key / "orca-plugin.json"
+        manifest = json.loads(path.read_text())
+        manifest["publisher"] = key.split(".")[0]
+        if key == "etherll.usage-insights":
+            settings = {s["key"]: s for s in manifest["contributes"]["settings"]}
+            for name, lines in json.loads(sys.argv[1]).items():
+                settings[name]["default"] = "\n".join(lines)
+        path.write_text(json.dumps(manifest, indent=2) + "\n")
     PYTHON
     # Saved settings still win over these defaults.
-    substituteInPlace $plugin/dist/main.js \
+    substituteInPlace $launch/chron0.discord-presence/dist/main.js \
       --replace-fail 'var BOOLEAN_FIELDS = ' ${lib.escapeShellArg "DEFAULT_SETTINGS = Object.freeze({ ...DEFAULT_SETTINGS, ...${builtins.toJSON discordPresenceSettings} }); var BOOLEAN_FIELDS = "} \
       --replace-fail 'normalizeOpenUrl(source.openUrl);' 'normalizeOpenUrl(source.openUrl ?? DEFAULT_SETTINGS.openUrl);' \
       --replace-fail 'normalizeBridgeUrl(source.bridgeUrl);' 'normalizeBridgeUrl(source.bridgeUrl ?? DEFAULT_SETTINGS.bridgeUrl);' \
@@ -130,15 +148,14 @@ stdenv.mkDerivation (finalAttrs: {
     node -e '
       const { readFileSync, writeFileSync } = require("node:fs")
       const { hashPackagedPluginTree } = require("./config/scripts/desktop-distribution/runtime-verification/verify-packaged-plugin-resources.cjs")
-      const [indexPath, plugin] = process.argv.slice(1)
+      const [launch, ...keys] = process.argv.slice(1)
+      const indexPath = launch + "/bundled-plugins.json"
       const index = JSON.parse(readFileSync(indexPath, "utf8"))
-      index.plugins.push({
-        pluginKey: "chron0.discord-presence",
-        path: "chron0.discord-presence",
-        contentHash: hashPackagedPluginTree(plugin)
-      })
+      for (const key of keys) {
+        index.plugins.push({ pluginKey: key, path: key, contentHash: hashPackagedPluginTree(launch + "/" + key) })
+      }
       writeFileSync(indexPath, JSON.stringify(index, null, 2))
-    ' resources/plugins/launch/bundled-plugins.json $plugin
+    ' $launch chron0.discord-presence etherll.usage-insights
 
     # Official skill installs pin to the tag's commit, which upstream reads from a git checkout.
     substituteInPlace config/scripts/build-identity/build-source-commit.mjs \

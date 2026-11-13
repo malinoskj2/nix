@@ -10,6 +10,10 @@ in
 {
   # Orca resumes agents when it reopens; this resumes the ones `sandbox` started in a sandbox again.
   orca.agentResumeWrapper = "agent-sandbox-resume";
+  # Sandboxed Claude shares ~/.claude/projects, but sandboxed Codex keeps its own home.
+  orca.usageInsightsSettings.extraCodexFolders = [
+    "${config.xdg.dataHome}/agent-sandbox/home/.codex"
+  ];
 
   systemd.user.services."agent-sandbox@" = {
     Unit = {
