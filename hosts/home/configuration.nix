@@ -1,4 +1,21 @@
-{ inputs, pkgs, ... }:
+{
+  config,
+  inputs,
+  pkgs,
+  ...
+}:
+let
+  sandboxCpus = {
+    # Everything except two CCD0 cores and their SMT siblings, kept for the desktop.
+    idle = "2-15,18-31";
+    # CCD1 only, while GameMode pins a game to CCD0.
+    gaming = "8-15,24-31";
+  };
+  setSandboxCpus =
+    cpus:
+    "${config.systemd.package}/bin/systemctl set-property --runtime agent-sandbox.slice AllowedCPUs=${cpus}";
+  gamingUnit = "agent-sandbox-gaming.service";
+in
 {
   imports = [
     inputs.nix-index-database.nixosModules.nix-index
@@ -80,9 +97,7 @@
     # before the first container starts.
     wantedBy = [ "multi-user.target" ];
     sliceConfig = {
-      # CCD1 has 32 MiB L3, without V-Cache. Include its SMT siblings and
-      # constrain every container in this slice; the desktop can use both CCDs.
-      AllowedCPUs = "8-15,24-31";
+      AllowedCPUs = sandboxCpus.idle;
 
       # No MemoryHigh: once swap is full it can't reclaim anon memory and throttles
       # every sandbox indefinitely instead of killing anything. MemoryMax reclaims
@@ -92,6 +107,39 @@
       # Idle agents and display stacks compress well in zram, which beats OOM-killing a build.
       MemorySwapMax = "8G";
     };
+  };
+
+  # The desktop isn't capped, so this only decides who gets reclaimed first
+  # when the sandboxes and nix-daemon together outgrow RAM.
+  systemd.slices.user.sliceConfig.MemoryLow = "6G";
+
+  systemd.services.agent-sandbox-gaming = {
+    description = "Keep agent sandboxes off the V-Cache CCD while a game runs";
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = setSandboxCpus sandboxCpus.gaming;
+      ExecStop = setSandboxCpus sandboxCpus.idle;
+    };
+  };
+
+  # GameMode's hooks run in jesse's user daemon.
+  security.polkit.extraConfig = ''
+    polkit.addRule(function (action, subject) {
+      if (
+        action.id == "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") == "${gamingUnit}" &&
+        ["start", "stop"].indexOf(action.lookup("verb")) >= 0 &&
+        subject.user == "jesse"
+      ) {
+        return polkit.Result.YES;
+      }
+    });
+  '';
+
+  programs.gamemode.settings.custom = {
+    start = "${config.systemd.package}/bin/systemctl --no-ask-password start ${gamingUnit}";
+    end = "${config.systemd.package}/bin/systemctl --no-ask-password stop ${gamingUnit}";
   };
 
   programs.nix-index-database.comma.enable = true;

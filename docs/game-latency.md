@@ -49,26 +49,31 @@ The topology was checked against sysfs L3 cache sizes and SMT siblings:
 | --- | --- | --- |
 | Desktop and host services | `0-31` | Both CCDs |
 | Registered GameMode games | `0-7,16-23` | CCD0, 96 MiB L3 / V-Cache |
-| Agent sandbox containers | `8-15,24-31` | CCD1, 32 MiB L3 |
+| Agent sandbox containers, no game running | `2-15,18-31` | All but two CCD0 cores |
+| Agent sandbox containers, game running | `8-15,24-31` | CCD1, 32 MiB L3 |
 
 `hosts/home/gaming.nix` sets GameMode's explicit `pin_cores` list and disables
 core parking. This sets thread affinity for registered games, rather than a
 cgroup boundary; games that do not register with GameMode are unaffected.
-The desktop still shares each CCD with its restricted workload.
+The desktop still shares each CCD with its restricted workload, and CPUs
+`0,1,16,17` are never available to sandboxes, so the desktop always has idle
+cores under a full sandbox load.
 
 `hosts/home/configuration.nix` limits the entire `agent-sandbox.slice` with
-`AllowedCPUs`, and `pkgs/agent-sandbox/agent-sandbox.sh` sets the matching Docker
-cpuset. Nix builds requested from containers use the host Nix daemon, so they
-retain access to all cores.
+`AllowedCPUs`. GameMode's custom start and end hooks start and stop
+`agent-sandbox-gaming.service`, which narrows the slice to CCD1 with a runtime
+`systemctl set-property` and widens it again when the last game exits; a polkit
+rule lets jesse start and stop only that unit. Containers set no Docker cpuset,
+so a change to the slice reaches running sandboxes. Nix builds requested from
+containers use the host Nix daemon, so they retain access to all cores.
 
-After activation, check the slice's `EffectiveCPUs` and each container's actual
-`cpuset.cpus.effective`; existing containers can retain their old Docker cpuset
-setting while inheriting the narrower slice limit. Recreating a sandbox picks
-up the new launcher setting but stops its running agents. Check actual game
-thread affinity with the diagnostic after GameMode reloads its configuration.
-Building alone does not apply any of these limits.
+After activation, check the slice's `EffectiveCPUs` with and without a game
+running, and each container's `cpuset.cpus.effective`. Containers started
+before this change keep their own `8-15,24-31` Docker cpuset until they are
+recreated. Check actual game thread affinity with the diagnostic after GameMode
+reloads its configuration. Building alone does not apply any of these limits.
 
-After the user's switch on 1 October 2026, live checks confirmed all three running
+Under the earlier CCD1-only layout, live checks on 1 October 2026 confirmed all three running
 sandboxes had Docker and effective cgroup CPU sets of `8-15,24-31`. The physical
 desktop Hyprland and Firefox processes retained `0-31`. Every inspected thread
 of all 19 registered GameMode clients used `0-7,16-23`, including all 198 threads

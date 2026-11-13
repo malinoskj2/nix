@@ -36,7 +36,7 @@ exec docker run \
   --security-opt no-new-privileges \
   --pids-limit 1024 \
   --cgroup-parent agent-sandbox.slice \
-  --cpuset-cpus "8-15,24-31" \
+  --oom-score-adj 500 \
   --tmpfs "/tmp:mode=1777,size=256m" \
   --volume "$socket_dir:/tmp/codex-daemon-$uid" \
   --volume /nix/store:/nix/store:ro \

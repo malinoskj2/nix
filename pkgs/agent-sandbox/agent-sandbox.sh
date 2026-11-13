@@ -301,9 +301,10 @@ args=(
   --cgroup-parent agent-sandbox.slice
   # The container's cgroup namespace hides the shared parent limit and usage.
   --mount "type=bind,src=/sys/fs/cgroup/agent.slice/agent-sandbox.slice,dst=/run/agent-sandbox-cgroup,readonly"
-  # Only the non-V-Cache CCD1, including its SMT siblings. The desktop can
-  # still use all cores; GameMode pins registered games to CCD0 separately.
-  --cpuset-cpus "8-15,24-31"
+  # No Docker cpuset: the slice's AllowedCPUs changes while a game runs, and a
+  # container's own cpuset would pin it to whatever was set at launch.
+  # Under host-wide OOM, kill sandbox processes before the desktop's.
+  --oom-score-adj 500
   --shm-size 2g
   --device nvidia.com/gpu=all
   --volume "$container_tmp:/tmp"
