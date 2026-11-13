@@ -74,6 +74,8 @@ prune() {
     elif [[ -n $descend && -d $entry && ! -L $entry ]]; then
       prune "$entry" "$path"
     else
+      # Orca uploads read-only directories.
+      [[ -d $entry && ! -L $entry ]] && chmod -R u+w -- "$entry"
       rm -rf -- "$entry"
     fi
   done
@@ -81,6 +83,7 @@ prune() {
 
 before=$(du -sb "$home" 2>/dev/null | cut -f1)
 [[ -d $home ]] && prune "$home" ''
+chmod -R u+w -- "$data"/tmp
 rm -rf -- "$data"/tmp/*
 after=$(du -sb "$home" 2>/dev/null | cut -f1)
 touch "$stamp"
