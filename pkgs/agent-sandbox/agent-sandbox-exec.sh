@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 
+launcher_args=()
+if [[ ${1:-} == --display ]]; then
+  launcher_args+=(--display)
+  shift
+fi
+
 if [[ $# -lt 1 ]]; then
-  echo 'usage: agent-sandbox-exec <claude|codex|muse> [agent arguments...]' >&2
+  echo 'usage: agent-sandbox-exec [--display] <claude|codex|muse> [agent arguments...]' >&2
   exit 2
 fi
 
@@ -102,4 +108,4 @@ if [[ -n ${ORCA_PANE_KEY:-} && -n ${ORCA_AGENT_HOOK_PORT:-} && -n ${ORCA_AGENT_H
   start_hook_bridge
 fi
 
-AGENT_SANDBOX_NAME=$instance "$AGENT_SANDBOX_LAUNCHER" "--$agent" "$@"
+AGENT_SANDBOX_NAME=$instance "$AGENT_SANDBOX_LAUNCHER" "${launcher_args[@]}" "--$agent" "$@"

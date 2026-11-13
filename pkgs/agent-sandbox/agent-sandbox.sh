@@ -6,14 +6,24 @@ user=$(id -un)
 group=$(id -gn)
 runtime=/run/user/$uid
 
-# Without an agent flag, the arguments are the container's command, Claude by default.
+# --display brings up the headless displays at startup; without it, agents start them with
+# sandbox-display. Without an agent flag, the arguments are the container's command, Claude by default.
+display=
 agent=
-case ${1:-} in
-  --claude | --codex | --muse)
-    agent=${1#--}
-    shift
-    ;;
-esac
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --display)
+      display=1
+      shift
+      ;;
+    --claude | --codex | --muse)
+      agent=${1#--}
+      shift
+      break
+      ;;
+    *) break ;;
+  esac
+done
 
 data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
 sandbox_home=$data/home
@@ -310,6 +320,7 @@ args=(
   --env COLORTERM
   --env AGENT_SANDBOX_INSTANCE="${AGENT_SANDBOX_NAME:-}"
   --env AGENT_SANDBOX_RENDERERS
+  --env AGENT_SANDBOX_DISPLAY="$display"
   --env XDG_RUNTIME_DIR="$runtime"
   --env DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"
   --env SWAYSOCK="$runtime/sway.sock"
@@ -497,6 +508,9 @@ fi
 
 echo "agent-sandbox: VNC on 127.0.0.1:$vnc_port, nested Hyprland on 127.0.0.1:$hyprland_vnc_port" >&2
 echo "agent-sandbox: VNC in the browser at $novnc_url" >&2
+if [[ -z $display ]]; then
+  echo "agent-sandbox: displays start when an agent runs sandbox-display up; launch with --display to start them now" >&2
+fi
 if [[ -n $host_wayland ]]; then
   echo "agent-sandbox: host display on $runtime/host-wayland-1" >&2
 fi

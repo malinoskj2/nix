@@ -15,7 +15,9 @@ The rest of the home directory belongs to the sandbox, not the host. The NVIDIA 
 
 ## Display
 
-A headless sway Wayland session runs on `$WAYLAND_DISPLAY` with a single 1280x800 output, `HEADLESS-1`. Xwayland is enabled for X11-only apps. The human can watch and drive it over VNC, or in a browser at `$AGENT_SANDBOX_VNC_URL`, a link that opens on the host. `$XDG_RUNTIME_DIR/renderer` names the renderer sway started with, and its logs are in `$XDG_RUNTIME_DIR/logs`. A PulseAudio server with only a null sink gives apps an audio device; nothing is audible.
+The displays below aren't running unless the sandbox was launched with `--display`. Before anything that needs one (`swaymsg`, `grim`, a window, the Playwright MCP's browser, Steam), run `sandbox-display up`, or `sandbox-display up --hyprland` for the nested Hyprland too; the `sandbox-wayland-display` skill covers it. It does nothing when they're already up, and `sandbox-display status` reports them. The Unreal editor wrapper starts the sway display itself.
+
+A headless sway Wayland session serves `$WAYLAND_DISPLAY` with a single 1280x800 output, `HEADLESS-1`. Xwayland is enabled for X11-only apps. The human can watch and drive it over VNC, or in a browser at `$AGENT_SANDBOX_VNC_URL`, a link that opens on the host. `$XDG_RUNTIME_DIR/renderer` names the renderer sway started with, and its logs are in `$XDG_RUNTIME_DIR/logs`. A PulseAudio server with only a null sink gives apps an audio device; nothing is audible.
 
 Work on this sandbox display unless the human explicitly asks you to use the host display.
 
@@ -25,7 +27,7 @@ The repository mounts make these files available at the same absolute host paths
 Before capturing, set `repo_root=$(git rev-parse --show-toplevel)` and run
 `mkdir -p "$repo_root/.tmp"`. Report each capture's absolute host path.
 
-If the display doesn't work, tell the user straight away instead of working around it: that includes `$XDG_RUNTIME_DIR/renderer` missing, `swaymsg` or `grim` failing, or an app failing to open a window. Also mention it if the renderer is `pixman`, which means the GPU renderer failed and the display is rendered on the CPU. Include the relevant lines from `$XDG_RUNTIME_DIR/logs`.
+If the display doesn't work, tell the user straight away instead of working around it: that includes `sandbox-display up` failing, `swaymsg` or `grim` failing, or an app failing to open a window. Also mention it if the renderer is `pixman`, which means the GPU renderer failed and the display is rendered on the CPU. Include the relevant lines from `$XDG_RUNTIME_DIR/logs`.
 
 - Launch an app: `swaymsg exec -- <command>`
 - Screenshot: `grim "$repo_root/.tmp/screen.png"`, then read the image. Coordinates in the image are output pixels.

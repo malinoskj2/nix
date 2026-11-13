@@ -32,6 +32,11 @@ The sandbox name is derived from the Git repository name: `j2bar` becomes
 main repository's name. Run the command inside a Git repository. The Zsh
 alias also lets you use `sandbox codex`, for example.
 
+Sandboxes start without their headless displays. `agent-sandbox-exec --display
+claude` (or `sandbox --display claude`) brings up sway and the nested Hyprland
+at startup; otherwise agents start them with `sandbox-display up` when a task
+needs one.
+
 The sandbox name is the suffix of the `agent-sandbox@<suffix>.service` user
 unit that the SSH helper still uses for its long-lived container.
 Every invocation creates its own fresh instance of

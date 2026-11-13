@@ -372,6 +372,7 @@ let
       rust-analyzer
       rustc
       rustfmt
+      sandboxDisplay
       sandboxSteam
       sccache
       socat
@@ -403,6 +404,12 @@ let
       zoxide
       zsh
     ];
+  };
+
+  sandboxDisplay = writeShellApplication {
+    name = "sandbox-display";
+    runtimeInputs = [ util-linux ];
+    text = builtins.readFile ./sandbox-display.sh;
   };
 
   entrypoint = writeShellApplication {

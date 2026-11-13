@@ -169,7 +169,7 @@ def run_editor(project: Path, args: list[str]) -> None:
     root = engine_root()
     project = prepare(project)
     runtime = Path(os.environ["XDG_RUNTIME_DIR"])
-    subprocess.run(["swaymsg", "-t", "get_version"], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(["sandbox-display", "up"], check=True, stdout=subprocess.DEVNULL)
     env = runtime_environment()
     env["SDL_VIDEODRIVER"] = "x11"
     sockets = sorted(Path("/tmp/.X11-unix").glob("X*"))

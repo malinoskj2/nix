@@ -58,6 +58,7 @@ in
       rust-build-jesse = ./skills/rust-build-jesse;
       rust-design-jesse = ./skills/rust-design-jesse;
       rust-review-jesse = ./skills/rust-review-jesse;
+      sandbox-wayland-display = ./skills/sandbox-wayland-display;
     };
     rules = {
       media = ./rules/media.md;
