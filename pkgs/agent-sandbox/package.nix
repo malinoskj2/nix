@@ -62,6 +62,7 @@
   jq,
   killall,
   ktx-tools,
+  last30days,
   less,
   lib,
   liberation_ttf,
@@ -72,6 +73,7 @@
   man-db,
   markdown-to-pdf,
   media-gallery,
+  media-transcribe,
   mediainfo,
   mold,
   mpv,
@@ -136,6 +138,7 @@
   wtype,
   xwayland,
   xz,
+  yt-dlp,
   zip,
   zoxide,
   zsh,
@@ -336,6 +339,7 @@ let
       jq
       killall
       ktx-tools
+      last30days
       less
       libva-utils
       lldb
@@ -343,6 +347,7 @@ let
       man-db
       markdown-to-pdf
       media-gallery
+      media-transcribe
       mediainfo
       mold
       mpv
@@ -402,6 +407,7 @@ let
       wtype
       xwayland
       xz
+      yt-dlp
       zip
       zoxide
       zsh

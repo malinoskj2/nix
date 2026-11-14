@@ -47,6 +47,7 @@ in
       rust-reviewer = ./agents/rust-reviewer.md;
     };
     skills = {
+      audio-transcribe = ./skills/audio-transcribe;
       codex-image = ./codex-image;
       game-latency = ./skills/game-latency;
       gauntlet = ./skills/gauntlet;
@@ -59,6 +60,9 @@ in
       rust-design-jesse = ./skills/rust-design-jesse;
       rust-review-jesse = ./skills/rust-review-jesse;
       sandbox-wayland-display = ./skills/sandbox-wayland-display;
+      tiktok-search = ./skills/tiktok-search;
+      video-download = ./skills/video-download;
+      youtube-search = ./skills/youtube-search;
     };
     rules = {
       gpu = ./rules/gpu.md;

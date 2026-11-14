@@ -3,11 +3,13 @@
 You are running inside a Docker sandbox. You may read anything you can find in the container, including the directories mapped from the host:
 
 - `~/projects`, `~/nix` and `~/orca/workspaces` (Orca's worktrees), read-write, at the same paths as on the host
+- `~/Downloads`, read-write: the host's Downloads directory, at the same path as on the host
 - `/tmp/screenshot`, read-only: the human's screenshots
 - `~/.local/share/unreal-engine`, read-write: Epic's Linux Unreal Engine builds
 - `~/.cache/img2char3d`, read-write: model weights for `~/projects/img2char3d`
 - `~/.local/share/Steam/steamapps/common`, read-write: installed Steam games, at the same path as on the host. Its Proton, Steam Linux Runtime and Steamworks Shared folders are the sandbox's own, so updating them leaves the host's untouched
 - `/mnt/media3/agent-sandbox`, read-write: the sandbox's directory on the media server's NFS share, at the same path as on the host. Use it to archive large files off the host's disk. It is missing when the media server was unreachable at startup. It is a soft mount, so a long copy can fail with I/O errors; copy with `rsync`, compare, and only then delete the source
+- `/mnt/media3/agent`, read-write: inactive project assets, stored under the main repository's name. Keep active assets local, archive inactive assets here with verified copies, and retrieve them locally when needed again. The shared asset-storage rule describes indexing and verification. This mount is absent if the share was unavailable at startup.
 - `~/.claude/projects`, read-write: auto-memory and session transcripts, shared with the human's sessions outside the sandbox
 - `/nix/store`, read-only, shared with the host
 
@@ -58,6 +60,13 @@ Don't delete sockets or lock files in `$XDG_RUNTIME_DIR`: the sway and Hyprland 
 Each sandbox publishes five preview ports on every host interface, so other devices on the LAN can open them. Choose an unused port from `$AGENT_PREVIEW_PORTS` (`8080` through `8084`) and bind the server to `0.0.0.0`. If it is occupied, try another listed port; disable any automatic fallback outside this range. The matching `$AGENT_PREVIEW_URL_8080` through `$AGENT_PREVIEW_URL_8084` URL uses the host's LAN address and works in the sandbox, on the host and on the human's other devices: use it for sandbox browser checks and give it to the human, including any required path. The host port can differ from the sandbox port. Keep the server running; links last only while the server and sandbox are running.
 
 ## Tools
+
+`last30days` searches YouTube and TikTok through the shared search skills;
+an existing host `~/.config/last30days/.env` is mounted read-only for API keys.
+`yt-dlp` downloads videos with FFmpeg and its JavaScript runtime supplied by Nix.
+`media-transcribe` runs local faster-whisper transcription only when invoked,
+then exits and releases its model. It has no background service. Follow the
+`audio-transcribe` skill for GPU reservations and output paths.
 
 The sandbox includes the host's Rust toolchain, Clang and LLDB, Nix tooling, media and texture tools (FFmpeg/ffprobe, ImageMagick, MediaInfo, KTX, mpv), document converters, archive utilities, and network and graphics diagnostics. Use commands on `PATH`; there is no need to search `/nix/store` for these executables. `mpvpaper` and `swaybg` are available for testing wallpapers on the sandbox display. GCC remains the default C compiler; invoke `clang` explicitly when needed.
 

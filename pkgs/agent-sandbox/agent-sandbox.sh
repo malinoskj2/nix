@@ -31,6 +31,7 @@ steam_common=$HOME/.local/share/Steam/steamapps/common
 shared=(
   "$HOME/projects"
   "$HOME/nix"
+  "$HOME/Downloads"
   "$HOME/orca/workspaces"
   "$HOME/.cache/img2char3d"
   "$steam_common"
@@ -39,6 +40,7 @@ shared=(
 screenshots=/tmp/screenshot
 media=/tmp/agent-media
 media_share=/mnt/media3/agent-sandbox
+asset_archive=/mnt/media3/agent
 orca_relay_dir=$runtime/agent-sandbox-orca
 codex_socket_dir=$runtime/agent-sandbox-codex
 gpu_lease_dir=$runtime/gpu-scheduler
@@ -387,6 +389,11 @@ args+=(
 if timeout 15 test -d "$media_share"; then
   args+=(--volume "$media_share:$media_share")
 fi
+if timeout 15 test -d /mnt/media3 &&
+  findmnt -rn -T /mnt/media3 -t nfs,nfs4 >/dev/null &&
+  timeout 15 mkdir -p "$asset_archive"; then
+  args+=(--mount "type=bind,src=$asset_archive,dst=$asset_archive")
+fi
 # The NVIDIA CDI spec mounts only the 64-bit driver; Steam's 32-bit client needs the other half.
 if [[ -e /run/opengl-driver-32 ]]; then
   args+=(--volume /run/opengl-driver-32:/run/opengl-driver-32:ro)
@@ -397,6 +404,7 @@ if [[ -n $host_wayland ]]; then
 fi
 
 mount_readonly "$HOME/.config/git"
+mount_readonly "$HOME/.config/last30days/.env"
 # Orca's CLI reads its runtime metadata and connects to the desktop's Unix
 # socket from this directory. Keep Orca's mutable workspace state host-owned.
 mount_readonly "$HOME/.config/orca"

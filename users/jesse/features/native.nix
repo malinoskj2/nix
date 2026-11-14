@@ -7,8 +7,11 @@ in
     clang
     ghidra
     gitleaks
+    last30days
     lldb
+    media-transcribe
     mold
+    yt-dlp
   ];
 
   programs.codex.settings.mcp_servers.ghidra = ghidraMcp // {
