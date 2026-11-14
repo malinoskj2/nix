@@ -2,7 +2,7 @@
 
 You are running inside a Docker sandbox. You may read anything you can find in the container, including the directories mapped from the host:
 
-- `~/projects`, `~/nix` and `~/orca/workspaces` (Orca's worktrees), read-write, at the same paths as on the host
+- `~/projects`, `~/projects-archive`, `~/nix` and `~/orca/workspaces` (Orca's worktrees), read-write, at the same paths as on the host. Missing shared directories are created by the launcher.
 - `~/Downloads`, read-write: the host's Downloads directory, at the same path as on the host
 - `/tmp/screenshot`, read-only: the human's screenshots
 - `~/.local/share/unreal-engine`, read-write: Epic's Linux Unreal Engine builds

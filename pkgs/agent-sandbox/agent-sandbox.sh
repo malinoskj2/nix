@@ -30,6 +30,7 @@ sandbox_home=$data/home
 steam_common=$HOME/.local/share/Steam/steamapps/common
 shared=(
   "$HOME/projects"
+  "$HOME/projects-archive"
   "$HOME/nix"
   "$HOME/Downloads"
   "$HOME/orca/workspaces"
