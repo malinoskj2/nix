@@ -1,17 +1,17 @@
 diff --git a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-saved-status.ts b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-saved-status.ts
-index 66223e46..1e7043fa 100644
+index 6f0fdf9f..550cc015 100644
 --- a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-saved-status.ts
 +++ b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-saved-status.ts
-@@ -51,6 +51,7 @@ export function savedStructuredAgentSessionStatus(
+@@ -54,6 +54,7 @@ export function savedStructuredAgentSessionStatus(
      ...(isAgentChatPermissionMode(record.permissionMode)
        ? { permissionMode: record.permissionMode }
        : {}),
 +    sandboxLaunch: record.sandboxLaunch,
      ...(launchDirectory ? { launchDirectory } : {}),
+     ...structuredSummaryHostProgram(record),
      ...structuredSummaryConversationNaming(record, undefined),
-     ...(typeof record.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
 diff --git a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary-equality.ts b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary-equality.ts
-index 76c480f8..d7acc370 100644
+index 548af5dd..5ae44b34 100644
 --- a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary-equality.ts
 +++ b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary-equality.ts
 @@ -11,6 +11,7 @@ export function structuredStatusSummariesEqual(
@@ -23,10 +23,10 @@ index 76c480f8..d7acc370 100644
      a.usageLimitContinue?.resetsAt === b.usageLimitContinue?.resetsAt &&
      a.usageLimitContinue?.state === b.usageLimitContinue?.state &&
 diff --git a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary.ts b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary.ts
-index edb8af2a..95309e20 100644
+index 5534c7ec..f16b78b9 100644
 --- a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary.ts
 +++ b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary.ts
-@@ -70,6 +70,7 @@ export function structuredAgentSessionStatusSummary({
+@@ -71,6 +71,7 @@ export function structuredAgentSessionStatusSummary({
    const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
    return {
      sessionId,
@@ -87,7 +87,7 @@ index 00000000..267d4aa9
 +  return { ORCA_SANDBOX_LAUNCH: sandbox ? '1' : '0' }
 +}
 diff --git a/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts b/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
-index 4d6e5db4..386d6c93 100644
+index c59f1d36..3c93cd1c 100644
 --- a/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
 +++ b/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
 @@ -1,3 +1,4 @@
@@ -95,24 +95,39 @@ index 4d6e5db4..386d6c93 100644
  import { ensureStructuredAgentModelCatalogOwner } from '../model-catalog/structured-agent-model-catalog-wiring'
  import type { StructuredAgentModelCatalogDeps } from './structured-agent-runtime-registration-types'
  import { resolveStructuredCodexAccountKind } from '../environment/structured-agent-account-home'
-@@ -23,11 +24,13 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
+@@ -29,11 +30,15 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
    /** Apply the host-owning desktop's account overlay to configured agent environment. */
    protected structuredAgentLaunchEnv(
      agent: StructuredAgentId,
 -    settings: Pick<GlobalSettings, 'agentDefaultEnv'>
-+    settings: Pick<GlobalSettings, 'agentDefaultEnv'> &
-+      Partial<Pick<GlobalSettings, 'agentCmdOverrides'>>
++    settings: Pick<GlobalSettings, 'agentDefaultEnv'> & Partial<Pick<GlobalSettings, 'agentCmdOverrides'>>
    ) {
-     return {
-       ...resolveTuiAgentLaunchEnv(agent, settings),
--      ...this.accounts.hostLaunchEnvFor(agent)
-+      ...this.accounts.hostLaunchEnvFor(agent),
-+      ...nixSandboxLaunchEnvironment(agent, settings)
-     }
+     return overlayEnvironmentVariables(
+-      overlayEnvironmentVariables({}, resolveTuiAgentLaunchEnv(agent, settings), process.platform),
+-      this.accounts.hostLaunchEnvFor(agent),
++      overlayEnvironmentVariables(
++        overlayEnvironmentVariables({}, resolveTuiAgentLaunchEnv(agent, settings), process.platform),
++        this.accounts.hostLaunchEnvFor(agent),
++        process.platform
++      ),
++      nixSandboxLaunchEnvironment(agent, settings),
+       process.platform
+     )
    }
-
+diff --git a/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts b/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
+index c583ebb4..0c389405 100644
+--- a/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
++++ b/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
+@@ -81,6 +81,7 @@ export async function installOnJournal(
+     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
+     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
+     resolveWorkspacePath: deps.resolveWorkspacePath,
++    ...(deps.resolveAgentLaunchEnv ? { resolveLaunchEnv: deps.resolveAgentLaunchEnv } : {}),
+     logger: deps.logger,
+     ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
+     observeCommittedRows: observePRWatchCommittedRows,
 diff --git a/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts b/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts
-index 330ed4df..acc4364e 100644
+index d6c402cb..81756ad3 100644
 --- a/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts
 +++ b/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts
 @@ -1,3 +1,4 @@
@@ -120,16 +135,21 @@ index 330ed4df..acc4364e 100644
  import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
  import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
  import type { GlobalSettings } from '../../../../shared/global-settings-types'
-@@ -103,7 +104,8 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
+@@ -103,8 +104,12 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
+   settings: LaunchEnvironmentSettings
  ): Promise<Record<string, string>> {
-   return {
-     ...(await resolveHostAgentBaseEnvironment(settings)),
--    ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : {})
-+    ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : {}),
-+    ...nixSandboxLaunchEnvironment(agent, settings)
-   }
+   return overlayEnvironmentVariables(
+-    await resolveHostAgentBaseEnvironment(settings),
+-    isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : undefined,
++    overlayEnvironmentVariables(
++      await resolveHostAgentBaseEnvironment(settings),
++      isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : undefined,
++      process.platform
++    ),
++    nixSandboxLaunchEnvironment(agent, settings),
+     process.platform
+   )
  }
-
 diff --git a/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts b/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts
 index acab3283..fa5d4fdf 100644
 --- a/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts
@@ -218,10 +238,10 @@ index acab3283..fa5d4fdf 100644
 +  expect(resumed.record.sandboxLaunch).toBe(false)
 +})
 diff --git a/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.ts b/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.ts
-index 4c4fc4c5..cdadfe42 100644
+index c0803faa..6857a4fc 100644
 --- a/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.ts
 +++ b/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.ts
-@@ -325,6 +325,13 @@ function reserveWithOperationRow(
+@@ -324,6 +324,13 @@ function reserveWithOperationRow(
    legacyIds: readonly string[] = []
  ): AgentSessionReserveResult {
    const result = applyAgentSessionReservation(state, request, leaseTtlMs, legacyIds)
@@ -235,9 +255,54 @@ index 4c4fc4c5..cdadfe42 100644
    state.operations.set(agentSessionOperationKey(row.callerKey, row.operationId), row)
    state.records.set(result.record.sessionId, result.record)
    return { ...result, operationRow: row }
+diff --git a/src/main/runtime/agent-session/structured-agent-session-integration.test.ts b/src/main/runtime/agent-session/structured-agent-session-integration.test.ts
+index fb1bcb5a..d4a740be 100644
+--- a/src/main/runtime/agent-session/structured-agent-session-integration.test.ts
++++ b/src/main/runtime/agent-session/structured-agent-session-integration.test.ts
+@@ -201,6 +201,7 @@ let root: string
+ let dispatcher: RpcDispatcher
+ let bootEnvironmentReads: number
+ let codexOverrideReads: number
++let configuredSandboxLaunch: string
+ let configuredCodexProfile: string
+ let shellEnvironmentPolicy: NativeChatShellEnvironmentPolicy
+ 
+@@ -240,6 +241,7 @@ beforeEach(async () => {
+   codex = fakeCodex()
+   bootEnvironmentReads = 0
+   codexOverrideReads = 0
++  configuredSandboxLaunch = '0'
+   configuredCodexProfile = 'configured'
+   shellEnvironmentPolicy = { inheritAll: true, names: [] }
+   const runtime = {
+@@ -283,7 +285,7 @@ beforeEach(async () => {
+             return {}
+           }
+           codexOverrideReads += 1
+-          return { CODEX_PROFILE: configuredCodexProfile }
++          return { CODEX_PROFILE: configuredCodexProfile, ORCA_SANDBOX_LAUNCH: configuredSandboxLaunch }
+         },
+         ...scriptedCodexTransport(codex.openConnection)
+       }).then(() => undefined),
+@@ -304,6 +306,15 @@ afterEach(async () => {
+ })
+ 
+ describe('a structured codex session over agentSession.*', () => {
++  it.each(['1', '0'])('records and publishes sandbox launch %s through runtime wiring', async (marker) => {
++    configuredSandboxLaunch = marker
++    await ok<{ fence: number }>('agentSession.create', createIntentParams())
++    const host = getStructuredAgentSessionHost()!
++    expect(codex.live().launch.env.ORCA_SANDBOX_LAUNCH).toBe(marker)
++    expect(host.deps.store.getRecord(SESSION)?.sandboxLaunch).toBe(marker === '1')
++    expect(host.readStatusSummary(SESSION)?.sandboxLaunch).toBe(marker === '1')
++  })
++
+   it('joins final deferred writes before runtime teardown completes', async () => {
+     await ok<{ fence: number }>('agentSession.create', createIntentParams())
+     codex.notify('turn/started', { threadId: THREAD, turn: { id: TURN } })
 diff --git a/src/renderer/src/components/StructuredSessionSandboxBadge.test.tsx b/src/renderer/src/components/StructuredSessionSandboxBadge.test.tsx
 new file mode 100644
-index 00000000..f13a6db3
+index 00000000..07e81031
 --- /dev/null
 +++ b/src/renderer/src/components/StructuredSessionSandboxBadge.test.tsx
 @@ -0,0 +1,58 @@
@@ -251,12 +316,12 @@ index 00000000..f13a6db3
 +  listeners: new Set<() => void>()
 +}))
 +vi.mock('@/store', () => ({ useAppStore: (select: (state: unknown) => unknown) => select({}) }))
-+vi.mock('@/lib/structured-chat-tab-index', () => ({ structuredChatTabById: () => fixture.tab }))
-+vi.mock('@/runtime/structured-agent-session-owner', () => ({
++vi.mock('@/lib/agent-session/tab-identity/structured-chat-tab-index', () => ({ structuredChatTabById: () => fixture.tab }))
++vi.mock('@/runtime/native-chat/session-ownership/structured-agent-session-owner', () => ({
 +  structuredAgentSessionOwnerForTab: () => 'local',
 +  structuredAgentSessionTargetForHost: () => ({ kind: 'local' })
 +}))
-+vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
++vi.mock('@/runtime/native-chat/status/structured-agent-session-status-feed', () => ({
 +  getStructuredAgentSessionStatusFeed: () => ({
 +    activate: () => () => {},
 +    subscribeSession: (_id: string, listener: () => void) => {
@@ -301,19 +366,19 @@ index 00000000..f13a6db3
 +})
 diff --git a/src/renderer/src/components/StructuredSessionSandboxBadge.tsx b/src/renderer/src/components/StructuredSessionSandboxBadge.tsx
 new file mode 100644
-index 00000000..9f01b761
+index 00000000..78020580
 --- /dev/null
 +++ b/src/renderer/src/components/StructuredSessionSandboxBadge.tsx
 @@ -0,0 +1,50 @@
 +import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 +import { Box } from 'lucide-react'
 +import { useAppStore } from '@/store'
-+import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
++import { structuredChatTabById } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
 +import {
 +  structuredAgentSessionOwnerForTab,
 +  structuredAgentSessionTargetForHost
-+} from '@/runtime/structured-agent-session-owner'
-+import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
++} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
++import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 +
 +/** Read the session's recorded launch, never today's Command setting or permission mode. */
 +export function StructuredSessionSandboxBadge({
@@ -356,15 +421,15 @@ index 00000000..9f01b761
 +  )
 +}
 diff --git a/src/renderer/src/components/dashboard/DashboardAgentRow.tsx b/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
-index 687887a3..43eafc6e 100644
+index 93d62860..ed21fea2 100644
 --- a/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
 +++ b/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
 @@ -1,3 +1,4 @@
 +import { StructuredSessionSandboxBadge } from '@/components/StructuredSessionSandboxBadge'
  import { PaneContainerBadge } from '@/components/TerminalContainerBadge'
  import React, { useState, useCallback } from 'react'
- import { cn } from '@/lib/utils'
-@@ -319,7 +320,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
+ import { cn } from '@/lib/class-names'
+@@ -327,7 +328,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
              <AgentTypeIcon agentType={agent.agentType} size={14} />
            </span>
          )}
@@ -379,7 +444,7 @@ index 687887a3..43eafc6e 100644
          <span
            className={cn(
 diff --git a/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx b/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
-index e33f4c74..2b1235f8 100644
+index 0d89a636..e8ad2776 100644
 --- a/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
 +++ b/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
 @@ -1,3 +1,4 @@
@@ -387,7 +452,7 @@ index e33f4c74..2b1235f8 100644
  import { PaneContainerBadge } from '@/components/TerminalContainerBadge'
  import React, { useCallback, useEffect, useRef } from 'react'
  import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
-@@ -238,7 +239,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
+@@ -242,7 +243,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
              tooltipSide="right"
              progress={presentation.progress}
            />
@@ -405,7 +470,7 @@ index e33f4c74..2b1235f8 100644
              <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
                <AgentTypeIcon agentType={agent.agentType} size={13} />
 diff --git a/src/renderer/src/components/tab-bar/SortableTab.tsx b/src/renderer/src/components/tab-bar/SortableTab.tsx
-index 001f7833..ebececd7 100644
+index d766ffc0..9178caa8 100644
 --- a/src/renderer/src/components/tab-bar/SortableTab.tsx
 +++ b/src/renderer/src/components/tab-bar/SortableTab.tsx
 @@ -1,3 +1,4 @@
@@ -413,7 +478,7 @@ index 001f7833..ebececd7 100644
  import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
  import { useCallback, useEffect } from 'react'
  import { useSortable } from '@dnd-kit/sortable'
-@@ -255,6 +256,7 @@ export default function SortableTab({
+@@ -256,6 +257,7 @@ export default function SortableTab({
          isActive={isActive}
          progress={programProgress}
        />
@@ -422,18 +487,18 @@ index 001f7833..ebececd7 100644
          <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
        )}
 diff --git a/src/shared/agent-session/agent-session-wire.ts b/src/shared/agent-session/agent-session-wire.ts
-index a8c564b3..12a31789 100644
+index 2ad59b03..537ac803 100644
 --- a/src/shared/agent-session/agent-session-wire.ts
 +++ b/src/shared/agent-session/agent-session-wire.ts
-@@ -251,6 +251,8 @@ export type AgentSessionStatusSummary = {
-   sleptAt?: number
-   /** Host-path directory the session is held to regardless of its workspace's current directory
-    *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
+@@ -249,6 +249,8 @@ export type AgentSessionStatusSummary = {
+   /** The chat runs a program the host already has, so it needs no Orca-installed runtime.
+    *  Absent from older hosts. */
+   hostProgram?: true
 +  /** Provenance of the most recent reserved launch; absent on older hosts. */
 +  sandboxLaunch?: boolean
+   /** Host-path directory the session is held to regardless of its workspace's current directory
+    *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
    launchDirectory?: string
-   updatedAt: number
-   /** Date the lead status by its own lifecycle edge, never updatedAt (child rows change it). Missing/older-host dates leave readers tracking time themselves. */
 diff --git a/src/shared/agent-session/lifecycle/agent-session-record.ts b/src/shared/agent-session/lifecycle/agent-session-record.ts
 index 0732f967..1e980f31 100644
 --- a/src/shared/agent-session/lifecycle/agent-session-record.ts
@@ -455,58 +520,3 @@ index 0732f967..1e980f31 100644
        (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
        !Object.hasOwn(record, 'launchEnv') &&
        isPersistedAgentSessionObservationLease(record.lease) &&
-diff --git a/src/main/runtime/agent-session/structured-agent-session-integration.test.ts b/src/main/runtime/agent-session/structured-agent-session-integration.test.ts
---- a/src/main/runtime/agent-session/structured-agent-session-integration.test.ts
-+++ b/src/main/runtime/agent-session/structured-agent-session-integration.test.ts
-@@ -202,6 +202,7 @@
- let dispatcher: RpcDispatcher
- let bootEnvironmentReads: number
- let codexOverrideReads: number
-+let configuredSandboxLaunch: string
- let configuredCodexProfile: string
- let shellEnvironmentPolicy: NativeChatShellEnvironmentPolicy
-
-@@ -241,6 +242,7 @@
-   codex = fakeCodex()
-   bootEnvironmentReads = 0
-   codexOverrideReads = 0
-+  configuredSandboxLaunch = '0'
-   configuredCodexProfile = 'configured'
-   shellEnvironmentPolicy = { inheritAll: true, names: [] }
-   const runtime = {
-@@ -284,7 +286,7 @@
-             return {}
-           }
-           codexOverrideReads += 1
--          return { CODEX_PROFILE: configuredCodexProfile }
-+          return { CODEX_PROFILE: configuredCodexProfile, ORCA_SANDBOX_LAUNCH: configuredSandboxLaunch }
-         },
-         ...scriptedCodexTransport(codex.openConnection)
-       }).then(() => undefined),
-@@ -305,6 +307,15 @@
- })
-
- describe('a structured codex session over agentSession.*', () => {
-+  it.each(['1', '0'])('records and publishes sandbox launch %s through runtime wiring', async (marker) => {
-+    configuredSandboxLaunch = marker
-+    await ok<{ fence: number }>('agentSession.create', createIntentParams())
-+    const host = getStructuredAgentSessionHost()!
-+    expect(codex.live().launch.env.ORCA_SANDBOX_LAUNCH).toBe(marker)
-+    expect(host.deps.store.getRecord(SESSION)?.sandboxLaunch).toBe(marker === '1')
-+    expect(host.readStatusSummary(SESSION)?.sandboxLaunch).toBe(marker === '1')
-+  })
-+
-   it('joins final deferred writes before runtime teardown completes', async () => {
-     await ok<{ fence: number }>('agentSession.create', createIntentParams())
-     codex.notify('turn/started', { threadId: THREAD, turn: { id: TURN } })
-diff --git a/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts b/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
---- a/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
-+++ b/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
-@@ -80,6 +80,7 @@
-     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
-     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
-     resolveWorkspacePath: deps.resolveWorkspacePath,
-+    ...(deps.resolveAgentLaunchEnv ? { resolveLaunchEnv: deps.resolveAgentLaunchEnv } : {}),
-     logger: deps.logger,
-     ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
-     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),

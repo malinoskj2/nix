@@ -1,5 +1,5 @@
 diff --git a/src/renderer/src/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup.ts b/src/renderer/src/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup.ts
-index df75501b..fdb80df9 100644
+index 99e7d26d..9647765c 100644
 --- a/src/renderer/src/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup.ts
 +++ b/src/renderer/src/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup.ts
 @@ -1,8 +1,11 @@
@@ -9,28 +9,28 @@ index df75501b..fdb80df9 100644
  import {
    getConnectionIdForWorktreeCopy,
    getConnectionIdFromState
- } from '@/lib/connection-owner-resolution'
+ } from '@/lib/workspace/ownership/connection-owner-resolution'
 -import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
 +import { normalizeExecutionHostId, parseExecutionHostId } from '../../../../../../shared/execution-host'
  import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
  import { useAppStore } from '@/store/index'
  import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
-@@ -112,8 +115,12 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
+@@ -113,8 +116,12 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
      const startupPlan = buildAgentResumeStartupPlan({
        agent,
        providerSession,
 -      cmdOverrides: state.settings?.agentCmdOverrides ?? {},
--      ...resolveResumeLaunchRecipe(launchConfig),
+-      ...resolveResumeLaunchRecipe(launchConfig, agent, providerSession),
 +      ...withAgentResumeWrapper(
 +        agent,
 +        !connectionId && parseExecutionHostId(session.executionHostId)?.kind === 'local',
 +        state.settings?.agentCmdOverrides ?? {},
-+        resolveResumeLaunchRecipe(launchConfig)
++        resolveResumeLaunchRecipe(launchConfig, agent, providerSession)
 +      ),
        platform: resumeTarget.platform,
        agentHostPlatform: resumeTarget.agentHostPlatform,
        shell: resumeTarget.shell,
-@@ -158,6 +165,38 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
+@@ -159,6 +166,38 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
    }
  }
  

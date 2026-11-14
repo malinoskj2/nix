@@ -205,7 +205,12 @@ Treat a bump as a hardware change and test it on the device.
   and `nodejs_24` on the majors the release's `package.json` names in
   `electron` and `engines.node`. Its `packageManager` is pnpm 12, which
   `nixpkgs-unstable` doesn't have yet, so `pnpm_11` builds it until `pnpm_12`
-  lands. Rebase
+  lands. The Vulkan transcription backend also needs `vulkan-loader` during
+  ELF fixup; discard Koffi's bundled musl variant on these glibc systems.
+  The package build runs the sandbox launch, container indicator, theme and
+  runtime tests before packaging. Build the configured Home Manager package
+  as well as the default package to check declarative settings and plugins.
+  Rebase
   [`catppuccin.patch`](../pkgs/orca-ade/catppuccin.patch), which maps Orca's
   dark application tokens and every Monaco editor surface to Catppuccin Mocha.
   Upstream may add new dark-mode variables or Monaco call sites, so search for

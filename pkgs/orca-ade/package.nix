@@ -10,10 +10,12 @@
   autoPatchelfHook,
   makeBinaryWrapper,
   glib,
+  git,
   gsettings-desktop-schemas,
   gtk3,
   python3,
   wayland,
+  vulkan-loader,
   unstable,
   globalSettings ? { },
   approvedPlugins ? [ ],
@@ -48,18 +50,18 @@ let
     rev = "eae3fa08f21323c5679a7dbbeced2a1777a272a1";
     hash = "sha256-U2ptKTryfYbkP8Kbsnm1rEpXA0axxhO9zath37Mt4CU=";
   };
-  sourceCommit = "27eb5e2a6c5017c6fdcba4fee16bf54256550c6f";
+  sourceCommit = "c91a7a6ee3dc76090cafb33943961ae2235246d6";
   arch = stdenv.hostPlatform.node.arch;
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "orca-ade";
-  version = "1.4.253";
+  version = "1.4.258";
 
   src = fetchFromGitHub {
     owner = "stablyai";
     repo = "orca";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-kqm3C8ErQ3i3gR7gqizlm6qparI3PIADgmP9T2DANoo=";
+    hash = "sha256-v9cTSTJ5442a5CfEYHNvO3R75ztx0RxIuW7mNGYQyuE=";
   };
 
   patches = [
@@ -96,11 +98,11 @@ stdenv.mkDerivation (finalAttrs: {
       -e 's/^  }$/  }, nixGlobalSettings)/' \
       src/shared/default-global-settings.ts
     # Loading re-normalizes some saved fields after spreading them, so the overrides wrap the result.
-    sed -i "1i import { nixGlobalSettings } from '../../../shared/nix-global-settings'" \
-      src/main/persistence/loading-store/normalize-loaded-global-settings.ts
-    substituteInPlace src/main/persistence/loading-store/normalize-loaded-global-settings.ts \
+    sed -i "1i import { nixGlobalSettings } from '../../../../shared/nix-global-settings'" \
+      src/main/persistence/loading-store/profile-loading/normalize-loaded-global-settings.ts
+    substituteInPlace src/main/persistence/loading-store/profile-loading/normalize-loaded-global-settings.ts \
       --replace-fail 'export function normalizeLoadedGlobalSettings(' 'function normalizeLoadedGlobalSettingsUpstream('
-    cat >> src/main/persistence/loading-store/normalize-loaded-global-settings.ts <<'EOF'
+    cat >> src/main/persistence/loading-store/profile-loading/normalize-loaded-global-settings.ts <<'EOF'
     export function normalizeLoadedGlobalSettings(
       ...args: Parameters<typeof normalizeLoadedGlobalSettingsUpstream>
     ): PersistedState['settings'] {
@@ -177,7 +179,7 @@ stdenv.mkDerivation (finalAttrs: {
     PYTHON
 
     # Uploaded bundles come from the read-only store, and Orca writes into them after extracting.
-    substituteInPlace src/main/ssh/system-transport/system-ssh-file-transfer.ts \
+    substituteInPlace src/main/ssh/system-transport/file-transfer/system-ssh-file-transfer.ts \
       --replace-fail 'tar -xzf - -C ''${quotePosixShell(remoteDir)}`' \
         'tar -xzf - -C ''${quotePosixShell(remoteDir)} && chmod -R u+w ''${quotePosixShell(remoteDir)}`'
   '';
@@ -187,7 +189,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     inherit (finalAttrs) env;
     fetcherVersion = 4;
-    hash = "sha256-vUQ/owOXyBFFB1sLKmktmltDsGNg6FLdvrDUJB1zGc4=";
+    hash = "sha256-+ts4iOZiXu8TNI5Yzfxh6F0kD6bA1ucCOx9Uw4dXlF8=";
   };
 
   mobilePnpmDeps = fetchPnpmDeps {
@@ -196,12 +198,13 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     sourceRoot = "${finalAttrs.src.name}/mobile";
     fetcherVersion = 4;
-    hash = "sha256-tFEW5EBiql6mSiTRJSJsC+Tq7/7TV8slmPqajoehswU=";
+    hash = "sha256-RIiK06S4mQxPr7e6srBR/H5cPknpLdoQKwcVnuFelNI=";
   };
 
   nativeBuildInputs = [
     autoPatchelfHook
     copyDesktopItems
+    git
     makeBinaryWrapper
     nodejs_24
     pnpm
@@ -212,6 +215,7 @@ stdenv.mkDerivation (finalAttrs: {
   buildInputs = [
     (lib.getLib stdenv.cc.cc)
     wayland
+    vulkan-loader
   ];
 
   # Electron dlopens libGL, Vulkan, PipeWire and libsecret through its rpath.
@@ -243,7 +247,13 @@ stdenv.mkDerivation (finalAttrs: {
       src/main/native-chat/nix-sandbox-launch-environment.test.ts \
       src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts \
       src/main/runtime/agent-session/structured-agent-session-integration.test.ts \
-      src/renderer/src/components/StructuredSessionSandboxBadge.test.tsx
+      src/renderer/src/components/StructuredSessionSandboxBadge.test.tsx \
+      src/renderer/src/components/TerminalContainerBadge.test.tsx \
+      src/renderer/src/lib/terminal-container-state.test.ts \
+      src/shared/terminal/output/terminal-container-report.test.ts \
+      src/shared/terminal/output/terminal-container-relay.test.ts \
+      src/renderer/src/hooks/use-monaco-theme.test.tsx \
+      src/main/runtime/construction/orca-runtime.test.ts
     pnpm exec tsc -p config/tsconfig.build.cli.json --outDir out --composite false --incremental false
     node config/scripts/cli-build/verify-cli-bin.mjs --fix-executable --fix-package-json
     pnpm run build:electron-vite
@@ -273,6 +283,9 @@ stdenv.mkDerivation (finalAttrs: {
     mkdir -p $out/libexec $out/bin
     cp -r dist/linux-unpacked $out/libexec/orca-ade
     find $out/libexec/orca-ade/resources -type d -path '*/node-pty/prebuilds' -prune -exec rm -r {} +
+    # Koffi ships both libc variants; this package runs on glibc.
+    find $out/libexec/orca-ade/resources -type d -path '*/@koromix/koffi-linux-*/musl_*' \
+      -prune -exec rm -r {} +
     find $out/libexec/orca-ade/resources -path '*/agent-browser/bin/agent-browser-*' \
       ! -name 'agent-browser-linux-${arch}' -delete
     ln -s ${finalAttrs.passthru.orcadTemplate} $out/libexec/orca-ade/resources/orcad-template
@@ -309,7 +322,7 @@ stdenv.mkDerivation (finalAttrs: {
       {
         src = fetchurl {
           url = "https://github.com/stablyai/orca/releases/download/v${finalAttrs.version}/orca-ide_${finalAttrs.version}_amd64.deb";
-          hash = "sha256-mC/CWxgF3IvmYJa5oevK8LVe7DlmtcbuYGkZeXJj1XI=";
+          hash = "sha256-zHAKpeFXQrG6KUTp1IqCYyYR1uMqwFPR9Uu+gaX/Aeo=";
         };
         nativeBuildInputs = [ dpkg ];
       }

@@ -1,8 +1,8 @@
 diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index 7de3ba4..6691e24 100644
+index e4462748..94520949 100644
 --- a/src/renderer/src/assets/main.css
 +++ b/src/renderer/src/assets/main.css
-@@ -313,28 +313,28 @@
+@@ -320,28 +320,28 @@
  }
  
  .dark {
@@ -53,9 +53,9 @@ index 7de3ba4..6691e24 100644
    --chat-canvas-mix: 5%;
    --chat-foreground-mix: 78%;
    --chat-strong-mix: 90%;
-@@ -350,59 +350,59 @@
-   --chat-composer-base: transparent;
+@@ -358,59 +358,59 @@
    --chat-composer-border-mix: 9%;
+   --chat-selection-mix: 40%;
    --chat-content-max-width: 46rem;
 -  --card: #171717;
 -  --card-foreground: #f0f0f0;
@@ -166,7 +166,7 @@ index 7de3ba4..6691e24 100644
    --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
    --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
    --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
-@@ -410,24 +410,32 @@
+@@ -418,24 +418,32 @@
    --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
    --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
    --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
@@ -212,7 +212,7 @@ index 7de3ba4..6691e24 100644
  /* Status and diff colors follow the chat scheme without copying the app palette. */
  :root,
  .native-chat-appearance[data-native-chat-scheme='light'] {
-@@ -470,28 +478,27 @@
+@@ -478,28 +486,27 @@
  .dark,
  .native-chat-appearance[data-native-chat-scheme='dark'] {
    color-scheme: dark;
@@ -255,18 +255,18 @@ index 7de3ba4..6691e24 100644
    --diff-removed: var(--git-decoration-deleted);
    --diff-added-background: color-mix(in srgb, var(--diff-added) 16%, transparent);
 diff --git a/src/renderer/src/hooks/use-monaco-theme.ts b/src/renderer/src/hooks/use-monaco-theme.ts
-index 57fbc12..ccde538 100644
+index 57187807..14aff5e4 100644
 --- a/src/renderer/src/hooks/use-monaco-theme.ts
 +++ b/src/renderer/src/hooks/use-monaco-theme.ts
 @@ -1,6 +1,7 @@
  import { useEffect, useState } from 'react'
  import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
- import { useCodeEditorThemeStore } from '@/store/code-editor-theme'
+ import { useCodeEditorThemeStore } from '@/store/appearance/code-editor-theme'
 +import { CATPPUCCIN_MOCHA_MONACO_THEME } from '@/lib/monaco-catppuccin-mocha-theme'
  
  const definedThemes = new Set<string>()
  
-@@ -32,5 +33,9 @@ export function useMonacoTheme(isDarkOverride?: boolean): string {
+@@ -46,5 +47,9 @@ export function useMonacoTheme(isDarkOverride?: boolean): string {
    }, [pluginTheme])
  
    // Why the built-in until defined: Monaco silently ignores a theme name it doesn't know yet.
@@ -277,11 +277,11 @@ index 57fbc12..ccde538 100644
 +      ? CATPPUCCIN_MOCHA_MONACO_THEME
 +      : 'vs'
  }
-diff --git a/src/renderer/src/lib/code-editor-theme.ts b/src/renderer/src/lib/code-editor-theme.ts
-index 5d6eb6e..ca0f90c 100644
---- a/src/renderer/src/lib/code-editor-theme.ts
-+++ b/src/renderer/src/lib/code-editor-theme.ts
-@@ -34,10 +34,10 @@ const BUILT_IN_COLORS: Record<ThemeBase, CodeEditorColors> = {
+diff --git a/src/renderer/src/lib/editor/appearance/code-editor-theme.ts b/src/renderer/src/lib/editor/appearance/code-editor-theme.ts
+index a903f2b6..ec82056d 100644
+--- a/src/renderer/src/lib/editor/appearance/code-editor-theme.ts
++++ b/src/renderer/src/lib/editor/appearance/code-editor-theme.ts
+@@ -37,10 +37,10 @@ const BUILT_IN_COLORS: Record<ThemeBase, CodeEditorColors> = {
      border: '#c8c8c8'
    },
    dark: {
@@ -296,15 +296,38 @@ index 5d6eb6e..ca0f90c 100644
    }
  }
  
+diff --git a/src/renderer/src/lib/editor/monaco/monaco-setup.ts b/src/renderer/src/lib/editor/monaco/monaco-setup.ts
+index fbe14dcb..455dbbd4 100644
+--- a/src/renderer/src/lib/editor/monaco/monaco-setup.ts
++++ b/src/renderer/src/lib/editor/monaco/monaco-setup.ts
+@@ -30,6 +30,7 @@ import { installMonacoDiffViewportTokenization } from './monaco-diff-viewport-to
+ import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
+ import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
+ import { runMonacoSetupSteps } from './monaco-setup-steps'
++import { CATPPUCCIN_MOCHA_MONACO_THEME, catppuccinMochaTheme } from '../../monaco-catppuccin-mocha-theme'
+ import { installMonacoTsWorkerIdleStop } from './monaco-ts-worker-idle-stop'
+ import { onPluginFontLoadsChanged } from '@/store/plugins/appearance/plugin-fonts'
+ 
+@@ -75,6 +76,10 @@ monacoTS.javascriptDefaults.setCompilerOptions({
+ })
+ 
+ runMonacoSetupSteps([
++  [
++    'Catppuccin Mocha theme registration',
++    () => monaco.editor.defineTheme(CATPPUCCIN_MOCHA_MONACO_THEME, catppuccinMochaTheme)
++  ],
+   ['Vue language registration', () => registerVueLanguage(monaco)],
+   ['Svelte language registration', () => registerSvelteLanguage(monaco)],
+   ['Astro language registration', () => registerAstroLanguage(monaco)],
 diff --git a/src/renderer/src/lib/monaco-catppuccin-mocha-theme.ts b/src/renderer/src/lib/monaco-catppuccin-mocha-theme.ts
 new file mode 100644
-index 0000000..f976191
+index 00000000..b2d93124
 --- /dev/null
 +++ b/src/renderer/src/lib/monaco-catppuccin-mocha-theme.ts
 @@ -0,0 +1,139 @@
 +import type * as Monaco from 'monaco-editor'
 +import type { PluginThemeTokenColorRule } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
-+import { pluginMonacoTokenRules } from './plugin-monaco-token-rules'
++import { pluginMonacoTokenRules } from './editor/appearance/plugin-monaco-token-rules'
 +
 +export const CATPPUCCIN_MOCHA_MONACO_THEME = 'catppuccin-mocha'
 +
@@ -442,83 +465,75 @@ index 0000000..f976191
 +  }
 +}
 diff --git a/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts b/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts
-index 0f37936..9eb05ac 100644
+index 8c134d3c..326f8df1 100644
 --- a/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts
 +++ b/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts
-@@ -4,6 +4,10 @@ import type { IToken } from 'shiki/textmate'
+@@ -2,12 +2,14 @@ import type * as Monaco from 'monaco-editor'
+ import type { IToken } from 'shiki/textmate'
  import type { BundledLanguageInfo } from 'shiki/types'
+ import {
++  markdownTokenRules,
+   MARKDOWN_THEMABLE_SCOPES,
+   MARKDOWN_TOKEN_PREFIX
+ } from '../editor/appearance/plugin-monaco-token-rules'
  import { COLD_GRAMMAR_LINE_ATTEMPTS } from '../syntax-highlighting/textmate-core'
+ import { loadBuiltInMarkdownRules, matchesPrefix } from './markdown-monaco-theme-rules'
  import { createTokensProvider, loadEditorCore } from './textmate-token-provider'
-+import {
-+  CATPPUCCIN_MOCHA_MONACO_THEME,
-+  catppuccinMochaTheme
-+} from '../monaco-catppuccin-mocha-theme'
++import { CATPPUCCIN_MOCHA_MONACO_THEME, catppuccinMochaTheme } from '../monaco-catppuccin-mocha-theme'
  
  type MonacoModule = {
    editor: Pick<typeof Monaco.editor, 'defineTheme'>
-@@ -80,18 +84,20 @@ function fenceLanguagesByLabel(
- export async function createMarkdownTokensProvider(
-   monaco: MonacoModule
- ): Promise<Monaco.languages.TokensProvider> {
--  const [editorCore, { default: markdownGrammars }, { bundledLanguagesInfo }, dark, light] =
-+  const [editorCore, { default: markdownGrammars }, { bundledLanguagesInfo }, dark, light, mocha] =
-     await Promise.all([
-       loadEditorCore(),
-       import('shiki/langs/markdown.mjs'),
-       import('shiki/langs'),
-       import('shiki/themes/dark-plus.mjs'),
--      import('shiki/themes/light-plus.mjs')
-+      import('shiki/themes/light-plus.mjs'),
-+      import('shiki/themes/catppuccin-mocha.mjs')
-     ])
+@@ -58,13 +60,15 @@ export async function createMarkdownTokensProvider(
+     { default: markdownGrammars },
+     { bundledLanguagesInfo },
+     { rules: darkRules },
+-    { rules: lightRules }
++    { rules: lightRules },
++    { default: mocha }
+   ] = await Promise.all([
+     loadEditorCore(),
+     import('shiki/langs/markdown.mjs'),
+     import('shiki/langs'),
+     loadBuiltInMarkdownRules('dark'),
+-    loadBuiltInMarkdownRules('light')
++    loadBuiltInMarkdownRules('light'),
++    import('shiki/themes/catppuccin-mocha.mjs')
+   ])
    await editorCore.core.loadLanguage(...markdownGrammars)
  
-   const darkRules = markdownThemeRules(dark.default)
-   const lightRules = markdownThemeRules(light.default)
-+  const mochaRules = markdownThemeRules(mocha.default)
-   // Why: Orca's editors all use the built-in theme names; redefining them keeps every setTheme caller unchanged.
-   monaco.editor.defineTheme('vs-dark', {
-     base: 'vs-dark',
-@@ -100,9 +106,15 @@ export async function createMarkdownTokensProvider(
+@@ -76,9 +80,14 @@ export async function createMarkdownTokensProvider(
      colors: {}
    })
    monaco.editor.defineTheme('vs', { base: 'vs', inherit: true, rules: lightRules, colors: {} })
++  const mochaRules = markdownTokenRules(mocha.tokenColors ?? [], (value) => value)
 +  monaco.editor.defineTheme(CATPPUCCIN_MOCHA_MONACO_THEME, {
 +    ...catppuccinMochaTheme,
 +    rules: [...catppuccinMochaTheme.rules, ...mochaRules]
 +  })
    const mapScopes = createScopeMapper(
-     new Set(
--      [...darkRules, ...lightRules].map((rule) => rule.token.slice(MARKDOWN_TOKEN_PREFIX.length))
-+      [...darkRules, ...lightRules, ...mochaRules].map((rule) =>
-+        rule.token.slice(MARKDOWN_TOKEN_PREFIX.length)
-+      )
-     )
-   )
+     new Set([
+-      ...[...darkRules, ...lightRules].map((rule) =>
++      ...[...darkRules, ...lightRules, ...mochaRules].map((rule) =>
+         rule.token.slice(MARKDOWN_TOKEN_PREFIX.length)
+       ),
+       ...MARKDOWN_THEMABLE_SCOPES
+diff --git a/src/renderer/src/hooks/use-monaco-theme.test.tsx b/src/renderer/src/hooks/use-monaco-theme.test.tsx
+index d9b84cae..3d53c583 100644
+--- a/src/renderer/src/hooks/use-monaco-theme.test.tsx
++++ b/src/renderer/src/hooks/use-monaco-theme.test.tsx
+@@ -14,7 +14,7 @@ afterEach(() => {
  
-diff --git a/src/renderer/src/lib/monaco-setup.ts b/src/renderer/src/lib/monaco-setup.ts
-index 6f719ad..631d924 100644
---- a/src/renderer/src/lib/monaco-setup.ts
-+++ b/src/renderer/src/lib/monaco-setup.ts
-@@ -29,6 +29,10 @@ import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-dispo
- import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
- import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
- import { runMonacoSetupSteps } from './monaco-setup-steps'
-+import {
-+  CATPPUCCIN_MOCHA_MONACO_THEME,
-+  catppuccinMochaTheme
-+} from './monaco-catppuccin-mocha-theme'
- import { installMonacoTsWorkerIdleStop } from './monaco-ts-worker-idle-stop'
+ it('uses the built-in theme until the plugin theme is defined, then switches to it', async () => {
+   const { result, rerender } = renderHook(() => useMonacoTheme())
+-  expect(result.current).toBe('vs-dark')
++  expect(result.current).toBe('catppuccin-mocha')
  
- globalThis.MonacoEnvironment = {
-@@ -73,6 +77,10 @@ monacoTS.javascriptDefaults.setCompilerOptions({
+   const data = { base: 'vs-dark' as const, inherit: true, rules: [], colors: {} }
+   useCodeEditorThemeStore.setState({ monaco: { name: 'orca-plugin-test', data } })
+@@ -30,5 +30,5 @@ it('uses the built-in theme until the plugin theme is defined, then switches to
+ 
+   useCodeEditorThemeStore.setState({ monaco: null, override: null })
+   rerender()
+-  expect(result.current).toBe('vs-dark')
++  expect(result.current).toBe('catppuccin-mocha')
  })
- 
- runMonacoSetupSteps([
-+  [
-+    'Catppuccin Mocha theme registration',
-+    () => monaco.editor.defineTheme(CATPPUCCIN_MOCHA_MONACO_THEME, catppuccinMochaTheme)
-+  ],
-   ['Vue language registration', () => registerVueLanguage(monaco)],
-   ['Svelte language registration', () => registerSvelteLanguage(monaco)],
-   ['Astro language registration', () => registerAstroLanguage(monaco)],
