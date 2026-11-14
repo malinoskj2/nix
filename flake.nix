@@ -118,6 +118,7 @@
           "game-workspace-audio"
           "git-commitu"
           "git-open-branch"
+          "gpu-scheduler"
           "htop-vim-navigation"
           "hy3dgen"
           "hyprglass"

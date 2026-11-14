@@ -61,6 +61,7 @@ in
       sandbox-wayland-display = ./skills/sandbox-wayland-display;
     };
     rules = {
+      gpu = ./rules/gpu.md;
       media = ./rules/media.md;
       rust = ./rules/rust.md;
       sandbox-display = ./rules/sandbox-display.md;

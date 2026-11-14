@@ -26,6 +26,7 @@
         hostChecks
         // {
           devshell = self'.devShells.default;
+          gpu-scheduler = self'.packages.gpu-scheduler.tests.scheduler;
         }
         // lib.optionalAttrs (system == "x86_64-linux") {
           unreal-sandbox = self'.packages.agent-sandbox.unrealTests;

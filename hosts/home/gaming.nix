@@ -83,6 +83,7 @@ in
     };
     steam = {
       enable = true;
+      extraPackages = [ pkgs.gpu-scheduler ];
       package = pkgs.steam.override {
         # Preserve the independent GameMode client and privileged CPU policy.
         extraLibraries = packageSet: [

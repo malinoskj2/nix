@@ -167,6 +167,7 @@ in
 
   environment.systemPackages = with pkgs; [
     agent-sandbox
+    gpu-scheduler
     switch-and-reset-sandboxes
     libva-utils
 

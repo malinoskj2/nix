@@ -51,6 +51,7 @@
   gnutar,
   gobject-introspection,
   grim,
+  gpu-scheduler,
   gzip,
   htop-vim-navigation,
   hy3dgen,
@@ -324,6 +325,7 @@ let
       gnupg
       gnused
       gnutar
+      gpu-scheduler
       grim
       gzip
       htop-vim-navigation
@@ -457,7 +459,11 @@ let
       ln -s ${caBundle} etc/ssl/certs/ca-certificates.crt
       ln -s ${./sway.conf} etc/sway/config
       ln -s ${./nested-sway.conf} etc/sway/nested
-      ln -s ${./CLAUDE.md} etc/claude-code/CLAUDE.md
+      ln -s ${
+        writeText "agent-sandbox-instructions.md" (
+          builtins.readFile ./CLAUDE.md + "\n" + builtins.readFile ../../users/jesse/claude/rules/gpu.md
+        )
+      } etc/claude-code/CLAUDE.md
       ln -s ${claudeManagedSettings} etc/claude-code/managed-settings.json
       echo 'hosts: files dns' > etc/nsswitch.conf
     '';
