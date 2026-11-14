@@ -61,7 +61,10 @@ Each sandbox publishes five preview ports on every host interface, so other devi
 
 ## Tools
 
-`last30days` searches YouTube and TikTok through the shared search skills;
+`tiktok-search` collects TikTok video links and metadata through Chromium, with
+local date and popularity filters. It runs only when invoked; use the
+`tiktok-search` skill for limits, browser-session requirements and coverage.
+`last30days` provides YouTube research and optional paid TikTok search;
 an existing host `~/.config/last30days/.env` is mounted read-only for API keys.
 `yt-dlp` downloads videos with FFmpeg and its JavaScript runtime supplied by Nix.
 `media-transcribe` runs local faster-whisper transcription only when invoked,

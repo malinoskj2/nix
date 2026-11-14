@@ -63,6 +63,7 @@
   killall,
   ktx-tools,
   last30days,
+  tiktok-search,
   less,
   lib,
   liberation_ttf,
@@ -340,6 +341,7 @@ let
       killall
       ktx-tools
       last30days
+      tiktok-search
       less
       libva-utils
       lldb

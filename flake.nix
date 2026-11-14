@@ -136,6 +136,7 @@
           "pubip"
           "pyghidra-mcp"
           "switch-and-reset-sandboxes"
+          "tiktok-search"
           "wallpaper-autopause"
           "wallpaper-outputs"
           "wallpaper-play"

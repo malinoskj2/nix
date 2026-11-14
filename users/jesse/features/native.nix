@@ -11,6 +11,7 @@ in
     lldb
     media-transcribe
     mold
+    tiktok-search
     yt-dlp
   ];
 
