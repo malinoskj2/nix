@@ -55,7 +55,7 @@ function historyInsights(jobs) {
 }
 const terminal = (job) => ['completed', 'failed', 'cancelled'].includes(job.state);
 function navigation(tab, jobs) {
-  const tabs = [['queue', 'Queue', jobs.filter((job) => !terminal(job)).length], ['resources', 'Resources'], ['history', 'History', jobs.filter(terminal).length]];
+  const tabs = [['queue', 'Queue', jobs.filter((job) => !terminal(job)).length], ['resources', 'Resources'], ['history', 'History', jobs.filter(terminal).length], ['controls', 'Controls']];
   return `<nav class="tabs" role="tablist" aria-label="Resource Queue views">${tabs.map(([id, label, count]) => `<button type="button" role="tab" id="tab-${id}" data-tab="${id}" aria-controls="panel-${id}" aria-selected="${tab === id}" tabindex="${tab === id ? 0 : -1}">${label}${count == null ? '' : `<span class="count">${count}</span>`}</button>`).join('')}</nav>`;
 }
 function toolbar(state, jobs) {
@@ -65,7 +65,7 @@ export function render(state, now = Date.now()) {
   const snapshot = state.snapshot;
   const status = state.error ? (snapshot ? 'stale' : 'disconnected') : freshness(snapshot, now);
   const live = status === 'live';
-  const tab = ['resources', 'history'].includes(state.tab) ? state.tab : 'queue';
+  const tab = ['resources', 'history', 'controls'].includes(state.tab) ? state.tab : 'queue';
   const header = `<header><div class="brand-mark" aria-hidden="true">▥</div><div><p class="eyebrow">SHARED HOST · SLURM</p><h1>Resource Queue</h1></div><div class="header-actions">${badge(state.fixture ? 'Fixture preview' : live ? '● Live' : titleCase(status), live ? 'success' : 'warning')}${button('refresh', 'Refresh', state.loading ? 'disabled' : '')}</div></header>`;
   if (!snapshot) return `${header}<div class="empty" role="status"><div class="empty-icon" aria-hidden="true">${state.loading ? '◌' : '⌁'}</div><h2>${state.loading ? 'Connecting to the host' : 'Scheduler unavailable'}</h2><p>${e(state.error || 'Reading the queue…')}</p></div>`;
   const jobs = orderJobs(filterJobs(snapshot.jobs, state.filters));
@@ -78,7 +78,9 @@ export function render(state, now = Date.now()) {
   const modeNames = { normal: 'Sharing available capacity', manual_hold: 'New admissions paused', pressure_hold: 'Protecting desktop headroom', game_pending: 'Game waiting for GPU access', game_running: 'Game has exclusive GPU access', exclusive_pending: 'Exclusive job waiting', exclusive_running: 'Exclusive GPU job running' };
   const mode = `<section class="mode"><h2>${e(snapshot.mode === 'normal' && snapshot.capacity.cpu.gameActive ? 'Game protection active' : modeNames[snapshot.mode])}</h2><div class="mode-actions">${globalActions.includes(snapshot.mode === 'manual_hold' ? 'resume' : 'pause') ? button(snapshot.mode === 'manual_hold' ? 'resume' : 'pause', snapshot.mode === 'manual_hold' ? 'Resume admissions' : 'Pause admissions', state.pending || state.fixture ? 'disabled' : '') : ''}</div></section>`;
   let content;
-  if (tab === 'resources') {
+  if (tab === 'controls') {
+    content = mode;
+  } else if (tab === 'resources') {
     content = `<section class="capacity-grid" aria-label="Host resources">${Object.entries(snapshot.capacity).map(([key, item]) => capacityCard(key, item)).join('')}</section><section class="observations"><h2>Memory trends</h2><div class="trend-grid">${resourceTrend(state.samples, 'ram', 'Host RAM')}${resourceTrend(state.samples, 'vram', 'GPU VRAM')}</div><p class="quiet chart-caption"><span class="legend reserved"></span>Reserved <span class="legend run"></span>Measured</p></section><p class="updated quiet">Updated <time datetime="${e(snapshot.at)}">${e(new Date(snapshot.at).toLocaleTimeString())}</time></p>`;
   } else {
     const queue = tab === 'history'
@@ -86,7 +88,7 @@ export function render(state, now = Date.now()) {
       : `${attention.length ? section('Needs attention', attention, state.selected, now, '') : ''}${section('Running', running, state.selected, now, 'No matching jobs are running.')}${section('Waiting', waiting, state.selected, now, 'No matching jobs are waiting.')}`;
     content = `${toolbar(state, snapshot.jobs)}<div class="content-grid ${inspected ? 'has-inspector' : ''}"><div class="queue">${queue}</div>${inspected ? inspector(inspected, snapshot, state, now) : ''}</div>`;
   }
-  return `${header}${navigation(tab, snapshot.jobs)}${state.fixture ? '<div class="notice warning" role="status">Fixture preview · Controls disabled</div>' : ''}${!live ? `<div class="notice warning" role="alert"><strong>${state.error ? 'Connection interrupted' : 'Telemetry is stale'}.</strong> ${e(state.error || 'The last reading is older than 15 seconds.')} Controls are disabled.</div>` : ''}${state.actionMessage ? `<div class="notice" role="status">${e(state.actionMessage)}</div>` : ''}${mode}${snapshot.limitations.length ? `<details class="notice warning"><summary>Partial telemetry · ${snapshot.limitations.length} ${snapshot.limitations.length === 1 ? 'notice' : 'notices'}</summary><ul>${snapshot.limitations.map((text) => `<li>${e(text)}</li>`).join('')}</ul></details>` : ''}<section role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}" tabindex="0">${content}</section>${state.confirm ? confirmation(state.confirm, state.pending) : ''}`;
+  return `${header}${navigation(tab, snapshot.jobs)}${state.fixture ? '<div class="notice warning" role="status">Fixture preview · Controls disabled</div>' : ''}${!live ? `<div class="notice warning" role="alert"><strong>${state.error ? 'Connection interrupted' : 'Telemetry is stale'}.</strong> ${e(state.error || 'The last reading is older than 15 seconds.')} Controls are disabled.</div>` : ''}${state.actionMessage ? `<div class="notice" role="status">${e(state.actionMessage)}</div>` : ''}${snapshot.limitations.length ? `<details class="notice warning"><summary>Partial telemetry · ${snapshot.limitations.length} ${snapshot.limitations.length === 1 ? 'notice' : 'notices'}</summary><ul>${snapshot.limitations.map((text) => `<li>${e(text)}</li>`).join('')}</ul></details>` : ''}<section role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}" tabindex="0">${content}</section>${state.confirm ? confirmation(state.confirm, state.pending) : ''}`;
 }
 
 function inspector(job, snapshot, state, now) {

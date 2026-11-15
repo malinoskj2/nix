@@ -63,7 +63,7 @@ test('gaming protection errors are visible; external games do not look like ordi
   raw.mode = 'normal'; // External game discovery can activate protection without a queued game.
   raw.telemetry.cpu.game_protection_errors = ['Slurm CPU cgroup unavailable for test-job'];
   const snapshot = adaptStatus(raw);
-  const html = render(state(snapshot), now);
+  const html = render({ ...state(snapshot), tab: 'controls' }, now);
   assert.match(html, /Game protection active/);
   assert.match(capacityCard('cpu', snapshot.capacity.cpu), /protection degraded/);
   assert.match(html, /Slurm CPU cgroup unavailable for test-job/);

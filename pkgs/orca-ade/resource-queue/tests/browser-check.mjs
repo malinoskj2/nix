@@ -6,6 +6,8 @@ export async function check() {
   const press = async (selector) => { const el = document.querySelector(selector); assert(!!el, `Found ${selector}`); el.click(); await settle(); };
   await settle();
   assert(document.body.textContent.includes('● Live'), 'Live test bridge renders connected');
+  assert(document.querySelectorAll('[role="tab"]').length === 4, 'Four views are available');
+  assert(!document.querySelector('.mode'), 'Queue omits global admission controls');
   await press('[data-tab="resources"]');
   assert(document.querySelector('.capacity-grid') && !document.querySelector('.toolbar'), 'Resources separates capacity from the queue');
   await press('[data-action="refresh"]');
@@ -41,6 +43,8 @@ export async function check() {
   window.testBridge.reconnect();
   await press('[data-action="refresh"]');
   assert(document.body.textContent.includes('● Live'), 'Reconnect recovers live view');
+  await press('[data-tab="controls"]');
+  assert(document.querySelector('#panel-controls .mode'), 'Controls contains scheduler admission status');
   await press('[data-action="pause"]');
   await press('[data-action="confirm"]');
   assert(document.body.textContent.includes('New admissions paused'), 'Confirmed admission hold rendered');

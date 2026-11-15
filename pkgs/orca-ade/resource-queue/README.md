@@ -30,8 +30,10 @@ agent/session identifier and links the containing worktree when it is resolvable
 
 ## Panel layout
 
-Queue, Resources and History tabs separate active work, capacity readings and
-completed jobs. Tabs support arrow keys, Home and End, and survive status refreshes.
+Queue, Resources, History and Controls tabs separate active work, capacity readings,
+completed jobs and scheduler admission controls. Controls contains the sharing status
+and pause/resume action; cancel/terminate remain in the job inspector. Tabs support
+arrow keys, Home and End, and survive status refreshes.
 Job inspection opens on selection. Routine disclaimers, the host pressure expander
 and diagnostics export controls are omitted. Connection errors and actual backend
 telemetry failures remain visible.

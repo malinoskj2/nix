@@ -91,7 +91,7 @@ async function execute() {
     if (result.accepted !== true) throw new Error('Scheduler did not confirm acceptance. Refresh before trying again.');
     state.snapshot = result.snapshot;
     state.confirm = null;
-    state.actionMessage = 'Scheduler accepted the request. The queue below shows its confirmed state.';
+    state.actionMessage = 'Scheduler accepted the request. The panel shows its confirmed state.';
     state.error = '';
   } catch (error) {
     state.actionMessage = `Action failed: ${error.message}`;
