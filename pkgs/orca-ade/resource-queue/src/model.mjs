@@ -1,0 +1,48 @@
+// A small presentation model; only adapter.mjs understands the backend wire format.
+export const MAX_JOBS = 200;
+export const MAX_EVENTS = 100;
+export const STALE_MS = 15_000;
+export const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+export const amount = (value, unit = 'GiB') => Number.isFinite(value) ? `${new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(value)}${unit ? ` ${unit}` : ''}` : 'Unknown';
+export const duration = (seconds) => !Number.isFinite(seconds) ? 'Unknown' : seconds < 60 ? `${Math.floor(seconds)}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m ${Math.floor(seconds % 60)}s` : `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m`;
+export const freshness = (snapshot, now = Date.now()) => {
+  if (!snapshot) return 'disconnected';
+  const times = [snapshot.at, ...(snapshot.sampledAt ? [snapshot.sampledAt] : [])];
+  return times.some((at) => !Number.isFinite(Date.parse(at)) || now - Date.parse(at) > STALE_MS || Date.parse(at) > now + 5000) ? 'stale' : 'live';
+};
+export function filterJobs(jobs, filters) {
+  const search = (filters.search ?? '').trim().toLowerCase();
+  return jobs.filter((j) => (!search || [j.label, j.id, j.owner.agent, j.owner.worktree, j.owner.project, j.model?.name].join(' ').toLowerCase().includes(search))
+    && (!filters.state || j.state === filters.state)
+    && (!filters.project || j.owner.project === filters.project)
+    && (!filters.worktree || j.owner.worktree === filters.worktree)
+    && (!filters.agent || j.owner.agent === filters.agent)
+    && (!filters.host || j.owner.host === filters.host)
+    && (!filters.resource || (filters.resource === 'gpu' ? j.request.vram > 0 || j.exclusive : j.request[filters.resource] > 0)));
+}
+export function orderJobs(jobs) {
+  return [...jobs].sort((a, b) => (Date.parse(a.submittedAt) || 0) - (Date.parse(b.submittedAt) || 0) || a.id.localeCompare(b.id));
+}
+export function eligibleActions(snapshot, job, now = Date.now()) {
+  if (freshness(snapshot, now) !== 'live') return [];
+  return (job?.actions ?? snapshot.actions ?? []).filter((action) => ['cancel', 'terminate', 'priority', 'unload', 'pause', 'resume', 'game'].includes(action));
+}
+export function journalQuery(id) {
+  // Quote the field value for a shell; never insert command labels or raw arguments.
+  return `journalctl RESOURCE_JOB_ID='${String(id).replace(/'/g, "'\\''")}' -o json-pretty`;
+}
+export function diagnostic(snapshot, job) {
+  // Explicit allowlist: no raw command, environment, prompts or arbitrary metadata.
+  const safeJob = (j) => ({ id: j.id, label: j.label, state: j.state, owner: j.owner, request: j.request, measured: j.measured, wait: j.wait, submittedAt: j.submittedAt, startedAt: j.startedAt, finishedAt: j.finishedAt, exit: j.exit, allocation: j.allocation, unit: j.unit, cleanup: j.cleanup, admission: j.admission, events: j.events?.slice(-MAX_EVENTS) });
+  return { schemaVersion: 1, exportedAt: new Date().toISOString(), at: snapshot.at, policy: snapshot.policy, host: snapshot.host, mode: snapshot.mode, limitations: snapshot.limitations, jobs: (job ? [job] : snapshot.jobs).slice(0, MAX_JOBS).map(safeJob) };
+}
+
+export const resolveWorkspace = (workspaces, identity) => workspaces.find((workspace) => workspace.id === identity || workspace.path === identity || identity.endsWith(`::${workspace.path}`));
+export function historyMetrics(jobs) {
+  const terminal = jobs.filter((job) => ['completed', 'failed', 'cancelled'].includes(job.state));
+  const delays = terminal.filter((job) => job.startedAt && job.submittedAt).map((job) => Math.max(0, (Date.parse(job.startedAt) - Date.parse(job.submittedAt)) / 1000));
+  const ram = terminal.filter((job) => job.request.ram > 0 && Number.isFinite(job.measured.ram)).map((job) => job.measured.ram / job.request.ram * 100);
+  const vram = terminal.filter((job) => job.request.vram > 0 && Number.isFinite(job.measured.vram)).map((job) => job.measured.vram / job.request.vram * 100);
+  const mean = (values) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+  return { count: terminal.length, queueSamples: delays.length, queueMean: mean(delays), ramSamples: ram.length, ramRatio: mean(ram), vramSamples: vram.length, vramRatio: mean(vram) };
+}

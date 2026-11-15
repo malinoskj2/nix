@@ -19,6 +19,8 @@
   unstable,
   globalSettings ? { },
   approvedPlugins ? [ ],
+  # Canonical host clients used by the bundled Resource Queue worker.
+  resourceSchedulerPackage ? null,
   discordPresenceSettings ? { },
   # Setting key to its lines, e.g. { extraCodexFolders = [ "~/backup/.codex" ]; }.
   usageInsightsSettings ? { },
@@ -129,7 +131,17 @@ stdenv.mkDerivation (finalAttrs: {
     mkdir $launch/chron0.discord-presence $launch/etherll.usage-insights
     cp -r ${discord-presence}/{orca-plugin.json,README.md,dist,panel,assets} $launch/chron0.discord-presence
     cp -r ${usage-insights}/{orca-plugin.json,README.md,LICENSE,images,panel,src} $launch/etherll.usage-insights
-    chmod -R u+w $launch/chron0.discord-presence $launch/etherll.usage-insights
+    cp -r ${./resource-queue} $launch/jesse.resource-queue
+    chmod -R u+w $launch/chron0.discord-presence $launch/etherll.usage-insights $launch/jesse.resource-queue
+    # Test fixtures never enter the production plugin; it cannot simulate live state.
+    rm -rf $launch/jesse.resource-queue/tests
+    cat > $launch/jesse.resource-queue/src/config.mjs <<'EOF'
+    export const commands = Object.freeze(${builtins.toJSON {
+      status = if resourceSchedulerPackage == null then "resource-status" else "${resourceSchedulerPackage}/bin/resource-status";
+      control = if resourceSchedulerPackage == null then "resource-control" else "${resourceSchedulerPackage}/bin/resource-control";
+    }});
+    EOF
+    node --test ${./resource-queue}/tests/*.test.mjs
     # Keep the installed identity and settings when upstream changes its publisher. Saved
     # settings still win over manifest defaults.
     python3 - ${lib.escapeShellArg (builtins.toJSON usageInsightsSettings)} <<'PYTHON'
@@ -164,7 +176,7 @@ stdenv.mkDerivation (finalAttrs: {
         index.plugins.push({ pluginKey: key, path: key, contentHash: hashPackagedPluginTree(launch + "/" + key) })
       }
       writeFileSync(indexPath, JSON.stringify(index, null, 2))
-    ' $launch chron0.discord-presence etherll.usage-insights
+    ' $launch chron0.discord-presence etherll.usage-insights jesse.resource-queue
 
     # Official skill installs pin to the tag's commit, which upstream reads from a git checkout.
     substituteInPlace config/scripts/build-identity/build-source-commit.mjs \

@@ -1,0 +1,182 @@
+import { render } from './view.mjs';
+import { diagnostic, journalQuery, freshness, eligibleActions } from '../src/model.mjs';
+const app = document.getElementById('app');
+const state = { snapshot: null, loading: true, error: '', filters: {}, selected: null, showFilters: false, samples: [], identities: [], logs: [], logsError: '', logsPaused: false, pending: false, confirm: null, fixture: false };
+let timer, attempt = 0, loading = false, disposed = false, lastFocus;
+function draw() {
+  const active = document.activeElement;
+  const focus = active?.id;
+  const focusSelector = active?.dataset.action ? `[data-action="${CSS.escape(active.dataset.action)}"]` : active?.dataset.job ? `[data-job="${CSS.escape(active.dataset.job)}"]` : active?.dataset.filter ? `[data-filter="${CSS.escape(active.dataset.filter)}"]` : null;
+  const range = active?.selectionStart == null ? null : [active.selectionStart, active.selectionEnd];
+  const inspectorScroll = app.querySelector('.inspector')?.scrollTop;
+  const history = app.querySelector('.history');
+  if (history) state.showHistory = history.open;
+  app.innerHTML = render(state);
+  app.setAttribute('aria-busy', String(state.loading));
+  if (state.confirm) for (const child of app.children) child.inert = !child.classList.contains('dialog-backdrop');
+  if (focus) {
+    const next = document.getElementById(focus);
+    next?.focus({ preventScroll: true });
+    if (range) next?.setSelectionRange?.(...range);
+  }
+  if (!focus && focusSelector) app.querySelector(focusSelector)?.focus({ preventScroll: true });
+  if (state.confirm && !app.querySelector('[role="dialog"]')?.contains(document.activeElement)) {
+    (app.querySelector('[role="dialog"] button:not(:disabled)') || app.querySelector('[role="dialog"]'))?.focus({ preventScroll: true });
+  }
+  const inspector = app.querySelector('.inspector');
+  if (inspector && inspectorScroll) inspector.scrollTop = inspectorScroll;
+}
+const request = (name, input = {}) => {
+  if (!globalThis.orca?.plugin) return Promise.reject(new Error('Open this panel in Orca to connect to the scheduler.'));
+  return orca.plugin.request(name, input, { timeoutMs: 12_000 });
+};
+function observe(snapshot) {
+  const last = state.samples.at(-1);
+  if (last?.at === snapshot.at) return;
+  if (last && Date.parse(snapshot.at) - Date.parse(last.at) > 10_000) state.samples.push({ at: snapshot.at, gap: true });
+  state.samples.push({ at: snapshot.at, running: snapshot.jobs.filter((j) => j.state === 'running').length, waiting: snapshot.jobs.filter((j) => j.state === 'waiting').length, ramReserved: snapshot.capacity.ram.reserved, ramActual: snapshot.capacity.ram.actual, vramReserved: snapshot.capacity.gpu.reserved, vramActual: snapshot.capacity.gpu.actual });
+  state.samples = state.samples.slice(-60);
+}
+async function refresh() {
+  if (loading || state.fixture || disposed) return;
+  loading = true;
+  try {
+    const snapshot = await request('queue.status');
+    state.snapshot = snapshot;
+    state.error = '';
+    state.loading = false;
+    attempt = 0;
+    observe(snapshot);
+    if (state.selected && !snapshot.jobs.some((j) => j.id === state.selected)) { state.selected = null; state.confirm = null; }
+    if (state.selected && !state.logsPaused) await readLogs();
+  } catch (error) {
+    state.error = error.message;
+    state.loading = false;
+    attempt = Math.min(attempt + 1, 4);
+    if (!state.samples.at(-1)?.gap) state.samples = [...state.samples, { at: new Date().toISOString(), gap: true }].slice(-60);
+  } finally { loading = false; draw(); }
+}
+// v1 has no event subscription. Poll only while visible, bounded 2s to 30s with backoff.
+async function poll() {
+  clearTimeout(timer);
+  if (disposed || state.fixture) return;
+  if (document.visibilityState !== 'hidden') await refresh();
+  timer = setTimeout(poll, Math.min(30_000, 2000 * 2 ** attempt));
+}
+async function readLogs() {
+  const job = state.snapshot?.jobs.find((item) => item.id === state.selected);
+  state.logs = job?.logs?.slice(-100) ?? [];
+  state.logsError = state.logs.length ? '' : 'No retained lifecycle events for this job. Use the journal query for older records.';
+}
+function confirm(action) {
+  const job = state.snapshot.jobs.find((j) => j.id === state.selected);
+  if (state.fixture || state.error || freshness(state.snapshot) !== 'live') return;
+  if (!eligibleActions(state.snapshot, ['cancel', 'terminate'].includes(action) ? job : null).includes(action)) return;
+  const info = {
+    cancel: { title: `Cancel “${job?.label}”?`, description: 'Remove this queued workload from admission.', consequence: 'The submitting command will receive the scheduler cancellation result.' },
+    terminate: { title: `Terminate “${job?.label}”?`, description: 'Ask the scheduler to stop this running workload and its tracked descendants.', consequence: 'In-progress work may be lost. Resources remain reserved until the scheduler confirms cleanup.' },
+    pause: { title: 'Pause new admissions?', description: 'Jobs already running will continue. Waiting jobs remain queued.', consequence: 'This does not suspend processes or reclaim memory.' },
+    resume: { title: 'Resume new admissions?', description: 'Let the scheduler admit eligible queued work again.', consequence: 'Resource and desktop headroom checks still apply.' }
+  }[action];
+  state.confirm = { ...info, action, ...(['cancel', 'terminate'].includes(action) ? { id: job.id, revision: job.revision, owner: `${job.owner.agent} / ${job.owner.worktree}` } : {}) };
+  lastFocus = document.activeElement;
+  draw();
+  app.querySelector('[data-action="dismiss"]')?.focus();
+}
+async function execute() {
+  if (!state.confirm || state.pending || state.fixture) return;
+  state.pending = true;
+  draw();
+  try {
+    const { action, id, revision } = state.confirm;
+    const result = await request('queue.control', { action, ...(id ? { id, revision } : {}), confirm: true });
+    if (result.accepted !== true) throw new Error('Scheduler did not confirm acceptance. Refresh before trying again.');
+    state.snapshot = result.snapshot;
+    state.confirm = null;
+    state.actionMessage = 'Scheduler accepted the request. The queue below shows its confirmed state.';
+    state.error = '';
+  } catch (error) {
+    state.actionMessage = `Action failed: ${error.message}`;
+    state.confirm = null;
+    await refresh();
+  } finally { state.pending = false; draw(); }
+}
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); state.actionMessage = 'Copied to clipboard.'; }
+  catch { state.actionMessage = 'Clipboard unavailable. Select the job ID or journal query to copy it.'; }
+  draw();
+}
+async function exportData(job) {
+  const data = JSON.stringify(diagnostic(state.snapshot, job), null, 2);
+  try {
+    if (globalThis.orca?.files) await orca.files.saveAs({ suggestedName: `resource-${job?.id || 'queue'}.json`, data, mimeType: 'application/json' });
+    else {
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+      link.download = `resource-${job?.id || 'queue'}.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+  } catch (error) { state.actionMessage = `Export failed: ${error.message}`; draw(); }
+}
+app.addEventListener('click', async (event) => {
+  const row = event.target.closest('[data-job], [data-related]');
+  if (row) {
+    state.selected = row.dataset.job || row.dataset.related;
+    state.logs = [];
+    state.logSearch = '';
+    await readLogs();
+    draw();
+    app.querySelector('.inspector')?.scrollIntoView({ block: 'nearest' });
+    return;
+  }
+  const control = event.target.closest('[data-action]');
+  if (!control || control.disabled) return;
+  const action = control.dataset.action;
+  const job = state.snapshot?.jobs.find((j) => j.id === state.selected);
+  switch (action) {
+    case 'refresh': await refresh(); break;
+    case 'filters': state.showFilters = !state.showFilters; draw(); break;
+    case 'clearFilters': state.filters = {}; draw(); break;
+    case 'closeInspector': state.selected = null; draw(); break;
+    case 'copyId': await copy(job.id); break;
+    case 'copyJournal': await copy(journalQuery(job.id)); break;
+    case 'export': await exportData(); break;
+    case 'exportJob': await exportData(job); break;
+    case 'openOwner': try { await request('queue.openOwner', { path: job.owner.worktree }); } catch (error) { state.actionMessage = error.message; draw(); } break;
+    case 'logs': state.logsPaused = !state.logsPaused; if (!state.logsPaused) await readLogs(); draw(); break;
+    case 'refreshLogs': await readLogs(); draw(); break;
+    case 'dismiss': state.confirm = null; draw(); lastFocus?.focus(); break;
+    case 'confirm': await execute(); break;
+    default: if (['cancel', 'terminate', 'pause', 'resume'].includes(action)) confirm(action);
+  }
+});
+app.addEventListener('input', (event) => {
+  if (event.target.id === 'job-search') { state.filters.search = event.target.value; draw(); }
+  if (event.target.id === 'log-search') { state.logSearch = event.target.value; draw(); }
+});
+app.addEventListener('change', (event) => { if (event.target.dataset.filter) { state.filters[event.target.dataset.filter] = event.target.value; draw(); } });
+document.addEventListener('keydown', (event) => {
+  if (!state.confirm) return;
+  if (event.key === 'Escape' && !state.pending) { state.confirm = null; draw(); lastFocus?.focus(); }
+  if (event.key === 'Tab') {
+    const buttons = [...app.querySelectorAll('[role="dialog"] button:not(:disabled)')];
+    const first = buttons[0], last = buttons.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  }
+});
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void poll(); else clearTimeout(timer); });
+window.addEventListener('pagehide', () => { disposed = true; clearTimeout(timer); });
+// Fixture rendering has a separate entry page; the production panel never reads query parameters.
+export function showFixture(snapshot, options = {}) {
+  clearTimeout(timer);
+  Object.assign(state, { fixture: true, snapshot, loading: false, samples: [], error: '', ...options });
+  if (state.selected) void readLogs();
+  draw();
+}
+draw();
+if (globalThis.orca) {
+  request('queue.identities').then((result) => { state.identities = result.workspaces; draw(); }).catch(() => {});
+  void poll();
+} else { state.loading = false; state.error = 'Open this panel in Orca to connect to the scheduler.'; draw(); }

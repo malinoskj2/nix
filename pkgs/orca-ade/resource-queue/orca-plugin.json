@@ -1,0 +1,18 @@
+{
+  "manifestVersion": 2,
+  "id": "resource-queue",
+  "publisher": "jesse",
+  "name": "Resource Queue",
+  "version": "1.0.0",
+  "description": "Host resource reservations, Slurm queue, wait reasons and lifecycle diagnostics across projects and sandboxes.",
+  "execution": "trusted-worker",
+  "license": "MIT",
+  "engines": { "orca": ">=1.4.248" },
+  "pluginApi": 1,
+  "main": "src/worker.mjs",
+  "capabilities": [{ "kind": "workspace:read" }, { "kind": "workspace:write" }],
+  "contributes": {
+    "panels": [{ "id": "queue", "title": "Resource Queue", "icon": "gauge", "entry": "panel/index.html" }],
+    "commands": [{ "id": "toggleSidebar", "title": "Resource Queue: Show or hide the right sidebar", "action": "sidebar.right.toggle" }]
+  }
+}
