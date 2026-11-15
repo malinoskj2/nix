@@ -97,7 +97,9 @@ The policy never suspends processes or claims suspension frees memory.
 A single root daemon exposes `/run/resource-scheduler/control.sock`, mode0600 and
 owned by the configured workstation UID/GID. `SO_PEERCRED` enforces the owner for
 reads and controls. Sandboxes bind the socket directory, not Slurm credentials,
-Munge keys or controller ports. The partition permits root submissions only.
+Munge keys or controller ports. The partition uses `RootOnly=YES` with `EnforcePartLimits=ALL`; `AllowGroups=root`
+alone is insufficient because Slurm can otherwise accept an ineligible job into
+the pending queue.
 Clients cannot lower service policy or supply administrative Slurm arguments.
 All agents of that same UID are one security principal: they can inspect/cancel
 each other's jobs after an explicit confirmation and current job revision. Agent
@@ -254,7 +256,8 @@ Single-node requirements: Slurm `select/cons_tres`, `CR_Core_Memory`,
 `gres.conf` entries for the same NVIDIA device (one shard=1MiB), task/cgroup,
 proctrack/cgroup and cgroupv2 core/RAM/device constraints, no swap, CPU controller
 enabled, jobacct_gather/cgroup, root-only resource partition, no preemption/requeue,
-and controller retention long enough for daemon recovery. Root bootstrap jobs
+`RootOnly=YES` plus `EnforcePartLimits=ALL`, and controller retention long enough
+for daemon recovery. Root bootstrap jobs
 must not run caller shell code before privilege drop. Do not expose Munge into
 sandboxes or create another CPU/GPU scheduling ledger.
 
@@ -281,10 +284,11 @@ control IDs/revisions, cancellation confirmation, recovery, native exit parsing,
 secret exclusion, malformed/oversized requests and worst-case public status bounds.
 The existing GPU scheduler tests remain unchanged and must pass.
 
-The expanded NixOS VM check passed against Slurm25.11.8 in58.72seconds. It uses
+The expanded NixOS VM check passed against Slurm25.11.8 in63.68seconds. It uses
 real Slurm, cgroupv2 and Docker with a fake
 non-GPU device to verify host/sandbox execution, privilege dropping, exact exit
-status, limits, cleanup, daemon restart and CPU gaming protection. It also
+status, limits, cleanup, daemon restart, nonroot raw-submission rejection,
+socket/key permissions and CPU gaming protection. It also
 verifies real Slurm shard/whole-GPU allocation exclusion using the fake
 device. It does not prove physical NVIDIA device behavior, actual VRAM attribution, desktop
 responsiveness, sustained pressure, or host deployment/migration. Real GPU
