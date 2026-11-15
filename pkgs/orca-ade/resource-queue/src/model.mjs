@@ -37,11 +37,13 @@ export function filterJobs(jobs, filters) {
     && (!filters.resource || (filters.resource === 'gpu' ? j.request.vram > 0 || j.exclusive : j.request[filters.resource] > 0)));
 }
 export function orderJobs(jobs) {
-  return [...jobs].sort((a, b) => (Date.parse(a.submittedAt) || 0) - (Date.parse(b.submittedAt) || 0) || a.id.localeCompare(b.id));
+  return [...jobs].sort((a, b) => Number(a.state === 'waiting') - Number(b.state === 'waiting')
+    || (a.state === 'waiting' ? (a.queuePosition ?? 0) - (b.queuePosition ?? 0) : 0)
+    || (Date.parse(a.submittedAt) || 0) - (Date.parse(b.submittedAt) || 0) || a.id.localeCompare(b.id));
 }
 export function eligibleActions(snapshot, job, now = Date.now()) {
   if (freshness(snapshot, now) !== 'live') return [];
-  return (job?.actions ?? snapshot.actions ?? []).filter((action) => ['cancel', 'terminate', 'priority', 'unload', 'pause', 'resume', 'game'].includes(action));
+  return (job?.actions ?? snapshot.actions ?? []).filter((action) => ['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'priority', 'unload', 'pause', 'resume', 'game'].includes(action));
 }
 export function journalQuery(id) {
   // Quote the field value for a shell; never insert command labels or raw arguments.
@@ -49,16 +51,17 @@ export function journalQuery(id) {
 }
 export function diagnostic(snapshot, job) {
   // Explicit allowlist: no raw command, environment, prompts or arbitrary metadata.
-  const safeJob = (j) => ({ id: j.id, label: j.label, state: j.state, owner: j.owner, request: j.request, effectiveBudget: j.effectiveBudget, model: j.model, vramEstimate: j.vramEstimate, measured: j.measured, wait: j.wait, submittedAt: j.submittedAt, startedAt: j.startedAt, finishedAt: j.finishedAt, exit: j.exit, allocation: j.allocation, unit: j.unit, cleanup: j.cleanup, admission: j.admission, events: j.events?.slice(-MAX_EVENTS) });
+  const safeJob = (j) => ({ id: j.id, label: j.label, state: j.state, execution: j.execution, hostPhase: j.hostPhase, queuePosition: j.queuePosition, owner: j.owner, request: j.request, effectiveBudget: j.effectiveBudget, model: j.model, vramEstimate: j.vramEstimate, measured: j.measured, wait: j.wait, submittedAt: j.submittedAt, startedAt: j.startedAt, finishedAt: j.finishedAt, exit: j.exit, allocation: j.allocation, unit: j.unit, cleanup: j.cleanup, admission: j.admission, events: j.events?.slice(-MAX_EVENTS) });
   return { schemaVersion: 1, exportedAt: new Date().toISOString(), at: snapshot.at, policy: snapshot.policy, host: snapshot.host, mode: snapshot.mode, capacity: snapshot.capacity, swap: snapshot.swap, limitations: snapshot.limitations, jobs: (job ? [job] : snapshot.jobs).slice(0, MAX_JOBS).map(safeJob) };
 }
 
 export const resolveWorkspace = (workspaces, identity) => workspaces.find((workspace) => workspace.id === identity || workspace.path === identity || identity.endsWith(`::${workspace.path}`));
 export function historyMetrics(jobs) {
   const terminal = jobs.filter((job) => ['completed', 'failed', 'cancelled'].includes(job.state));
-  const delays = terminal.filter((job) => job.startedAt && job.submittedAt).map((job) => Math.max(0, (Date.parse(job.startedAt) - Date.parse(job.submittedAt)) / 1000));
-  const ram = terminal.filter((job) => job.request.ram > 0 && Number.isFinite(job.measured.ram)).map((job) => job.measured.ram / job.request.ram * 100);
-  const vram = terminal.filter((job) => job.request.vram > 0 && Number.isFinite(job.measured.vram)).map((job) => job.measured.vram / job.request.vram * 100);
+  const reserved = terminal.filter((job) => job.execution !== 'host');
+  const delays = reserved.filter((job) => job.startedAt && job.submittedAt).map((job) => Math.max(0, (Date.parse(job.startedAt) - Date.parse(job.submittedAt)) / 1000));
+  const ram = reserved.filter((job) => job.request.ram > 0 && Number.isFinite(job.measured.ram)).map((job) => job.measured.ram / job.request.ram * 100);
+  const vram = reserved.filter((job) => job.request.vram > 0 && Number.isFinite(job.measured.vram)).map((job) => job.measured.vram / job.request.vram * 100);
   const mean = (values) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
   return { count: terminal.length, queueSamples: delays.length, queueMean: mean(delays), ramSamples: ram.length, ramRatio: mean(ram), vramSamples: vram.length, vramRatio: mean(vram) };
 }

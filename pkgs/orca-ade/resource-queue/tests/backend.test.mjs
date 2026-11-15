@@ -62,3 +62,27 @@ test('actual process boundary reports missing CLI and enforces bounded execution
   assert.equal(output, 'ok');
   await assert.rejects(runCommand(process.execPath, ['-e', 'process.stderr.write("denied");process.exit(2)']), /denied/);
 });
+
+test('run controls send exact confirmed actions, IDs and revisions', async () => {
+  for (const action of ['force-run', 'run-next', 'run-host']) {
+    const { backend, calls } = harness();
+    const result = await backend.control({ action, id: jobId(3), revision: 1, confirm: true });
+    assert.equal(result.accepted, true);
+    assert.deepEqual(calls[1].args, [action, jobId(3), '--revision', '1', '--confirm']);
+  }
+});
+
+test('run controls reject old backends, stale confirmation and already released jobs', async () => {
+  for (const action of ['force-run', 'run-next', 'run-host']) {
+    for (const kind of ['unsupported', 'stale', 'pending', 'running']) {
+      const { backend, calls, set } = harness();
+      const raw = fixture();
+      if (kind === 'unsupported') delete raw.capabilities[action.replace('-', '_')];
+      if (kind === 'pending') { raw.jobs[2].state = 'pending'; raw.jobs[2].released = true; }
+      if (kind === 'running') raw.jobs[2].state = 'running';
+      set(raw);
+      await assert.rejects(backend.control({ action, id: jobId(3), revision: kind === 'stale' ? 0 : 1, confirm: true }));
+      assert.equal(calls.length, 1);
+    }
+  }
+});

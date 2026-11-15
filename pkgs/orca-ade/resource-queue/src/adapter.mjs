@@ -16,7 +16,7 @@ export function adaptStatus(raw) {
   if (raw.connected !== true) throw new Error('Scheduler reports disconnected');
   if ((!Number.isSafeInteger(raw.revision) || raw.revision < 0) || !date(raw.generated_at) || !Array.isArray(raw.jobs) || !Array.isArray(raw.history) || !modes.has(raw.mode)) throw new Error('Malformed resource-status v1 response');
   const caps = raw.capabilities ?? {};
-  const actions = Object.keys(caps).filter((key) => caps[key] === true);
+  const actions = Object.keys(caps).filter((key) => caps[key] === true).map((key) => ({ force_run: 'force-run', run_next: 'run-next', run_host: 'run-host' })[key] || key);
   const toJob = (job) => {
     if (!job || !/^[a-f0-9]{32}$/.test(job.id) || (!Number.isSafeInteger(job.revision) || job.revision < 0) || !states.has(job.state)) throw new Error('Malformed job identity, revision or lifecycle state');
     const state = job.state === 'queued' || job.state === 'pending' ? 'waiting' : job.state;
@@ -32,13 +32,16 @@ export function adaptStatus(raw) {
       effectiveBudget: { cpu: metric(job.allocation?.cpu), ram: gib(job.allocation?.ram_mib), vram: gib(job.allocation?.vram_mib) },
       vramEstimate: text(job.vram_estimate, job.vram_auto ? 'all-available' : 'declared-peak'),
       measured: { cpu: metric(job.observed?.cpu_percent), ram: gib(job.observed?.ram_peak_mib), vram: gib(job.observed?.vram_peak_mib), confidence: text(job.observed?.attribution_confidence, 'Unavailable') },
+      queuePosition: Number.isSafeInteger(job.queue_position) && job.queue_position > 0 ? job.queue_position : null,
+      execution: job.execution === 'host' ? 'host' : 'slurm', hostPhase: text(job.host_phase),
+      runNextRequested: date(job.run_next_requested_at),
       exclusive: job.mode === 'exclusive', wait: text(job.wait_reason, state === 'waiting' ? 'Waiting for scheduler admission; detailed reason unavailable.' : ''),
       submittedAt: date(job.created_at), startedAt: date(job.started_at), finishedAt: date(job.ended_at), allocation: job.slurm_job_id == null ? null : String(job.slurm_job_id),
       unit: text(job.systemd_unit) || null, cleanup: text(job.cleanup) || null, exit: job.exit_code == null ? null : String(job.exit_code), model: reportedModel(job.model),
       events: lifecycle.length ? lifecycle : [{ at: date(job.created_at), label: 'Submitted' }, { at: date(job.started_at), label: 'Started' }, { at: date(job.ended_at), label: `Finished · ${state}` }].filter((e) => e.at).slice(-MAX_EVENTS),
       logs: lifecycle.map((event) => ({ at: event.at, event: event.label, message: event.message })),
       admission: [...lifecycle].reverse().find((event) => event.snapshot)?.snapshot ?? null,
-      actions: state === 'waiting' ? actions.filter((a) => a === 'cancel') : state === 'running' ? actions.filter((a) => a === 'terminate') : []
+      actions: job.execution === 'host' ? actions.filter((a) => job.state !== 'completed' && job.state !== 'failed' && job.state !== 'cancelled' && (a === 'terminate' || (a === 'cancel' && job.host_phase === 'cancelling-slurm'))) : state === 'waiting' ? actions.filter((a) => a === 'cancel' || (job.state === 'queued' && !job.released && job.cleanup !== 'cancellation-requested' && ['force-run', 'run-next', 'run-host'].includes(a))) : state === 'running' ? actions.filter((a) => a === 'terminate') : []
     };
   };
   const telemetry = raw.telemetry ?? {};

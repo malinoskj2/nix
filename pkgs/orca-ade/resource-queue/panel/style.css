@@ -871,3 +871,21 @@ thead th {
     font-size:28px;
   }
 }
+
+.job-entry {
+  border-bottom:1px solid var(--border)
+}
+.job-entry .job-row {
+  border-bottom:0
+}
+.waiting-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  padding:0 10px 12px
+}
+.job-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px
+}

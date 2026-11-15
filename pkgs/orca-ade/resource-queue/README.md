@@ -2,8 +2,8 @@
 
 The Nix-built Orca ships `jesse.resource-queue`, a dedicated gauge tab in the
 right activity bar, alongside Usage Insights. The panel reads the host's Slurm
-resource scheduler through the canonical clients. It never submits jobs or keeps
-an independent reservation ledger.
+resource scheduler through the canonical clients. It never creates an independent reservation ledger. Explicit run controls act on
+existing waiting jobs through the backend.
 
 ## Installation and authority
 
@@ -47,6 +47,15 @@ inconsistent attribution stays unknown. CPU uses the backend's `logical_cpus`,
 not the smaller Slurm admission capacity; older backends show unknown host capacity.
 Memory trends remain explicitly labeled queue reservations and queue measurements.
 
+Waiting rows offer **Run via Slurm**, **Run on host**, and **Run next**, each with
+named confirmation and revision checking. Run via Slurm bypasses admission policy
+but preserves Slurm allocation limits. Run on host confirms cancellation of the
+held Slurm job before starting an unmanaged host process, outside the sandbox;
+its badge and inspector explicitly say that requested budgets are not enforced.
+Both paths retain output and termination through the original job identity.
+Pending Slurm allocations cannot be launched again. Reordering follows backend
+`queue_position`; unsupported controls remain hidden on older backends.
+
 ## Wire contract and controls
 
 `src/adapter.mjs` is the only backend-format boundary. It accepts exactly
@@ -73,11 +82,14 @@ A zero exit from the control client confirms acceptance, and the following statu
 query determines the displayed outcome. An accepted termination is never presented
 as proof of descendant cleanup. No command output, environment or prompt is read.
 
-Supported initial controls:
+Supported controls (shown only when advertised by the backend):
 
 - `resource-control cancel ID --revision N --confirm`
 - `resource-control terminate ID --revision N --confirm`
 - `resource-control pause --confirm` and `resume --confirm`
+- `resource-control run-next ID --revision N --confirm`
+- `resource-control force-run ID --revision N --confirm`
+- `resource-control run-host ID --revision N --confirm`
 
 The inspector includes bounded searchable structured lifecycle events, follow/pause,
 known admission snapshots, requested versus measured peaks, exit/cleanup and a copyable `journalctl SYSLOG_IDENTIFIER=resource-scheduler RESOURCE_JOB_ID='…' -o json-pretty` query. Logs

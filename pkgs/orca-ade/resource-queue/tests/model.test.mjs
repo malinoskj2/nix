@@ -24,7 +24,7 @@ test('unknown readings remain unknown; capacity is not double counted', () => {
 test('stale and future snapshots disable all controls', () => {
   const data = snapshot();
   assert.equal(freshness(data, fixtureTime), 'live');
-  assert.deepEqual(eligibleActions(data, data.jobs[2], fixtureTime), ['cancel']);
+  assert.deepEqual(eligibleActions(data, data.jobs[2], fixtureTime), ['cancel', 'force-run', 'run-next', 'run-host']);
   assert.deepEqual(eligibleActions(data, data.jobs[0], fixtureTime), ['terminate']);
   assert.deepEqual(eligibleActions(data, data.jobs[0], fixtureTime + 20_000), []);
   assert.equal(freshness(data, fixtureTime - 20_000), 'stale');

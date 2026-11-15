@@ -62,10 +62,38 @@ class FakeSlurm:
         self.rows[job_id]["job_state"] = ["CANCELLED"]
 
 
+class FakeHost:
+    def __init__(self):
+        self.started, self.stopped, self.forgotten = [], [], []
+        self.units = {}
+
+    def start(self, job, directory):
+        self.started.append(job["id"])
+        self.units[job["systemd_unit"]] = dict(
+            LoadState="loaded",
+            ActiveState="active",
+            SubState="running",
+            Result="success",
+            ExecMainPID="123",
+            ExecMainStatus="0",
+            ExecMainCode="1",
+        )
+
+    def status(self, unit):
+        return self.units.get(unit, {"LoadState": "not-found"})
+
+    def stop(self, unit):
+        self.stopped.append(unit)
+
+    def forget(self, unit):
+        self.forgotten.append(unit)
+
+
 class SchedulerTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.slurm = FakeSlurm()
+        self.host = FakeHost()
         self.snapshot = snapshot()
         self.log = io.StringIO()
         self.stack = contextlib.ExitStack()
@@ -80,6 +108,7 @@ class SchedulerTests(unittest.TestCase):
             ),
             self.slurm,
             lambda: copy.deepcopy(self.snapshot),
+            host=self.host,
         )
 
     def tearDown(self):
@@ -117,6 +146,247 @@ class SchedulerTests(unittest.TestCase):
         return self.backend.handle(
             dict(version=1, action=action, id=job["id"], revision=job["revision"], confirm=True, **kwargs), os.getuid()
         )
+
+    def test_external_ram_shortage_allows_small_job_and_records_bypass(self):
+        self.snapshot["ram"]["available_mib"] = 9000
+        large = self.submit(ram=10000)
+        small = self.submit(ram=1000)
+        self.backend.tick()
+        self.assertEqual(large["state"], "queued")
+        self.assertIn("smaller jobs may pass", large["wait_reason"])
+        self.assertEqual(small["state"], "pending")
+        self.assertEqual(small["events"][-1]["bypassed_job_ids"], [large["id"]])
+
+    def test_running_completion_preserves_barrier_when_it_can_supply_ram(self):
+        active = self.submit(ram=5000)
+        self.backend.tick()
+        self.snapshot["cgroups"][active["slurm_job_id"]] = {"memory.current": 5000}
+        self.snapshot["ram"]["available_mib"] = 9000
+        large = self.submit(ram=9000)
+        small = self.submit(ram=500)
+        self.backend.tick()
+        self.assertEqual(small["state"], "queued")
+        self.assertIn(large["id"], small["wait_reason"])
+        self.snapshot["cgroups"][active["slurm_job_id"]]["memory.current"] = 1000
+        self.backend.tick()
+        self.assertEqual(small["state"], "pending")
+
+    def test_external_vram_and_missing_gpu_telemetry_allow_cpu_work(self):
+        large = self.submit(vram=16000)
+        small = self.submit(ram=1000)
+        self.snapshot["gpu"]["free_mib"] = 8000
+        self.backend.tick()
+        self.assertIn("VRAM shortage", large["wait_reason"])
+        self.assertEqual(small["state"], "pending")
+        self.snapshot["gpu"]["free_mib"] = None
+        self.backend.tick()
+        self.assertIn("GPU telemetry unavailable", large["wait_reason"])
+
+    def test_unknown_and_pending_allocations_never_allow_backfill(self):
+        head = self.submit(ram=30000)
+        active = self.submit(ram=1000)
+        for state in ("unknown", "pending"):
+            active["state"] = state
+            self.assertIsNone(rs.external_block_reason(head, [head, active], self.snapshot, self.backend.config))
+        active["state"] = "running"
+        active["observed"]["ram_mib"] = None
+        self.assertIsNone(rs.external_block_reason(head, [head, active], self.snapshot, self.backend.config))
+
+    def test_backfill_respects_pause_and_pressure(self):
+        self.submit(ram=30000)
+        small = self.submit(ram=1000)
+        self.backend.state["paused"] = True
+        self.backend.tick()
+        self.assertEqual(small["state"], "queued")
+        self.backend.state["paused"] = False
+        self.snapshot["pressure"]["memory"] = {"full": {"avg10": 2}}
+        self.backend.tick()
+        self.assertEqual(small["state"], "queued")
+
+    def test_run_next_changes_order_but_keeps_admission_checks(self):
+        first = self.submit()
+        next_job = self.submit()
+        self.control("run-next", next_job)
+        self.assertFalse(self.slurm.released)
+        self.backend.tick()
+        self.assertEqual(self.slurm.released, [next_job["slurm_job_id"]])
+        self.assertEqual(first["state"], "queued")
+
+    def test_force_run_releases_now_without_weakening_requested_budget(self):
+        self.submit(ram=30000)
+        job = self.submit(ram=10000, mode="exclusive")
+        budget = dict(job["requested"])
+        self.backend.state["paused"] = True
+        self.snapshot["ram"]["available_mib"] = 1
+        self.control("force-run", job)
+        self.assertEqual(job["state"], "pending")
+        self.assertEqual(self.slurm.released, [job["slurm_job_id"]])
+        self.assertEqual(job["requested"], budget)
+        self.assertTrue(job["events"][-1]["forced"])
+        self.backend.tick()
+        self.assertEqual(job["state"], "running")
+
+    def test_force_run_lost_reply_does_not_release_twice(self):
+        job = self.submit()
+        with patch.object(self.slurm, "release", side_effect=OSError("lost reply")) as release:
+            with self.assertRaises(OSError):
+                self.control("force-run", job)
+            self.assertEqual(job["state"], "unknown")
+            self.backend.tick()
+            self.assertEqual(release.call_count, 1)
+            with self.assertRaises(ValueError):
+                self.control("force-run", job)
+
+    def test_queue_controls_require_confirmation_revision_and_queued_identity(self):
+        for action in ("force-run", "run-next", "run-host"):
+            job = self.submit()
+            for changes in ({"confirm": False}, {"revision": 0}):
+                request = dict(version=1, action=action, id=job["id"], revision=job["revision"], confirm=True)
+                request.update(changes)
+                with self.assertRaises(ValueError):
+                    self.backend.handle(request, os.getuid())
+            self.slurm.rows[job["slurm_job_id"]]["job_state"] = ["RUNNING"]
+            with self.assertRaises(ValueError):
+                self.control(action, job)
+            self.slurm.rows[job["slurm_job_id"]]["name"] = "different-job"
+            with self.assertRaises(ValueError):
+                self.control(action, job)
+        self.assertFalse(self.host.started)
+        self.assertFalse(self.slurm.released)
+
+    def test_host_handoff_confirms_slurm_cancellation_before_launch(self):
+        job = self.submit(vram=1000)
+        self.control("run-host", job)
+        self.assertFalse(self.host.started)
+        self.assertEqual(job["execution"], "host")
+        self.assertEqual(self.backend.public_telemetry()["ram"]["reserved_mib"], 0)
+        self.slurm.rows[job["slurm_job_id"]]["job_state"] = ["COMPLETING"]
+        self.backend.tick()
+        self.assertFalse(self.host.started)
+        self.slurm.rows[job["slurm_job_id"]]["job_state"] = ["CANCELLED"]
+        self.backend.tick()
+        self.assertEqual(self.host.started, [job["id"]])
+        self.assertEqual(job["state"], "running")
+        self.assertIsNone(self.backend.public_job(job)["allocation"])
+        payload = json.loads((Path(self.temp.name) / job["id"] / "payload.json").read_text())
+        self.assertEqual(payload["execution"], "host")
+        self.backend.tick()
+        self.assertEqual(len(self.host.started), 1)
+
+    def test_host_cancel_during_handoff_does_not_launch(self):
+        job = self.submit()
+        self.control("run-host", job)
+        self.control("cancel", job)
+        self.backend.tick()
+        self.assertEqual(job["state"], "cancelled")
+        self.assertFalse(self.host.started)
+
+    def test_host_completion_retains_output_result_and_cleans_payload(self):
+        job = self.submit()
+        self.control("run-host", job)
+        self.backend.tick()
+        directory = Path(self.temp.name) / job["id"]
+        (directory / "stdout").write_text("host output")
+        rs.atomic(directory / "result.json", {"exit_code": 7})
+        self.host.units[job["systemd_unit"]].update(
+            ActiveState="failed", SubState="failed", Result="exit-code", ExecMainStatus="7"
+        )
+        self.slurm.fail = True
+        self.backend.tick()
+        self.assertEqual(job["state"], "failed")
+        self.assertEqual(job["exit_code"], 7)
+        self.assertEqual(job["cleanup"], "systemd-terminal")
+        self.assertFalse((directory / "payload.json").exists())
+        response = self.backend.handle(dict(version=1, action="output", id=job["id"]), os.getuid())
+        self.assertEqual(response["stdout"], "host output")
+
+    def test_host_termination_waits_for_systemd_cleanup(self):
+        job = self.submit()
+        self.control("run-host", job)
+        self.backend.tick()
+        self.control("terminate", job)
+        self.assertEqual(self.host.stopped, [job["systemd_unit"]])
+        self.assertEqual(job["state"], "running")
+        self.host.units[job["systemd_unit"]].update(
+            ActiveState="inactive", SubState="dead", Result="signal", ExecMainCode="2", ExecMainStatus="15"
+        )
+        self.backend.tick()
+        self.assertEqual(job["state"], "cancelled")
+        self.assertEqual(job["exit_code"], 143)
+
+    def test_host_lost_start_reply_is_reconciled_without_relaunch(self):
+        job = self.submit()
+        self.control("run-host", job)
+        with patch.object(self.host, "start", side_effect=OSError("lost")) as start:
+            self.backend.tick()
+            self.assertEqual(job["state"], "unknown")
+            self.backend.tick()
+            self.assertEqual(start.call_count, 1)
+        os.close(self.backend.lock_fd)
+        self.backend = rs.Backend(self.backend.config, self.slurm, lambda: copy.deepcopy(self.snapshot), host=self.host)
+        self.backend.tick()
+        self.assertFalse(self.host.started)
+
+    def test_unmanaged_environment_has_no_reservation_or_sandbox_markers(self):
+        payload = dict(
+            id="a" * 32,
+            execution="host",
+            env={
+                "RESOURCE_JOB_ID": "old",
+                "GPU_LEASE_ID": "old",
+                "RESOURCE_RAM_MIB": "123",
+                "AGENT_SANDBOX_INSTANCE": "sandbox",
+                "ORCA_WORKTREE_ID": "real-card",
+                "PATH": "/bin",
+            },
+        )
+        env = rs.execution_environment(payload)
+        self.assertEqual(env["RESOURCE_EXECUTION_MODE"], "unmanaged-host")
+        self.assertEqual(env["RESOURCE_HOST_JOB_ID"], payload["id"])
+        self.assertEqual(env["ORCA_WORKTREE_ID"], "real-card")
+        for key in ("RESOURCE_JOB_ID", "GPU_LEASE_ID", "RESOURCE_RAM_MIB", "AGENT_SANDBOX_INSTANCE"):
+            self.assertNotIn(key, env)
+
+    def test_host_service_launch_uses_only_trusted_bootstrap_arguments(self):
+        runner = rs.HostRunner()
+        job = {"id": "a" * 32, "systemd_unit": "resource-host-" + "a" * 32 + ".service"}
+        with patch.object(rs, "checked", return_value="") as call:
+            runner.start(job, Path("/private/state") / job["id"])
+        argv = call.call_args.args[0]
+        self.assertEqual(argv[0], "systemd-run")
+        self.assertIn("--property=KillMode=control-group", argv)
+        self.assertIn("--property=RemainAfterExit=yes", argv)
+        self.assertIn("host-step", argv)
+        self.assertNotIn("secret-argument", " ".join(argv))
+        self.assertNotIn("--user", argv)
+        self.assertEqual(call.call_args.kwargs, {})
+
+    def test_host_inactive_without_a_started_process_is_not_completion(self):
+        job = self.submit()
+        self.control("run-host", job)
+        with patch.object(self.host, "start"):
+            self.host.units[job["systemd_unit"]] = dict(
+                LoadState="loaded",
+                ActiveState="inactive",
+                SubState="dead",
+                Result="success",
+                ExecMainPID="0",
+                ExecMainCode="0",
+                ExecMainStatus="0",
+            )
+            self.backend.tick()
+        self.assertEqual(job["state"], "pending")
+        self.assertTrue((Path(self.temp.name) / job["id"] / "payload.json").exists())
+
+    def test_reordering_is_immediately_visible_and_latest_request_wins(self):
+        first, second = self.submit(), self.submit()
+        with patch.object(rs.time, "time", return_value=100):
+            self.control("run-next", second)
+        with patch.object(rs.time, "time", return_value=101):
+            self.control("run-next", first)
+        positions = {job["id"]: job["queue_position"] for job in self.backend.status()["jobs"]}
+        self.assertEqual(positions[first["id"]], 1)
+        self.assertEqual(positions[second["id"]], 2)
 
     def test_joint_reservations_and_no_small_job_overtaking(self):
         first = self.submit(ram=10000, vram=10000)
@@ -475,7 +745,7 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(event["allocation"]["vram_mib"], job["requested"]["vram_mib"])
 
     def test_interactive_priority_aging_protects_large_background(self):
-        background = self.submit(ram=18000)
+        background = self.submit(ram=10000)
         interactive = self.submit(ram=1000, priority="interactive")
         self.backend.tick()
         self.assertEqual(interactive["state"], "pending")
@@ -484,7 +754,7 @@ class SchedulerTests(unittest.TestCase):
         newer = self.submit(priority="interactive")
         self.backend.tick()
         self.assertEqual(newer["state"], "queued")
-        self.assertIn(background["id"], newer["wait_reason"])
+        self.assertEqual(background["state"], "pending")
 
     def test_external_game_mode_blocks_gpu_admission_even_when_vram_fits(self):
         marker = Path(self.temp.name) / "external-game"

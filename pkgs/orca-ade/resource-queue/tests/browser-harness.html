@@ -12,7 +12,13 @@ window.orca = { plugin: { async request(name, input) {
   if (name === 'queue.control') {
     controls.push(input);
     const job = raw.jobs.find((j) => j.id === input.id);
-    if (job) { job.state = input.action === 'cancel' ? 'cancelled' : 'failed'; job.revision++; }
+    if (job) {
+      if (input.action === 'run-host') { job.execution = 'host'; job.host_phase = 'cancelling-slurm'; job.state = 'pending'; }
+      else if (input.action === 'run-next') { job.run_next_requested_at = Date.now()/1000; for (const other of raw.jobs.filter(j => j.state === 'queued')) other.queue_position = other === job ? 1 : 2; }
+      else if (input.action === 'force-run') { job.state = 'pending'; job.released = true; }
+      else job.state = input.action === 'cancel' ? 'cancelled' : 'failed';
+      job.revision++;
+    }
     if (input.action === 'pause') raw.mode = 'manual_hold';
     if (input.action === 'resume') raw.mode = 'normal';
     raw.revision++;

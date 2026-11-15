@@ -8,6 +8,7 @@
   docker,
   util-linux,
   coreutils,
+  systemd,
 }:
 let
   source = runCommand "resource-scheduler-source" { } ''
@@ -19,6 +20,7 @@ let
           docker
           util-linux
           coreutils
+          systemd
         ]
       }:/run/opengl-driver/bin:/run/current-system/sw/bin'
   '';

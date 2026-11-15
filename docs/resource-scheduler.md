@@ -17,6 +17,9 @@ resource-run --cpu 8 --ram 8GiB --exclusive --priority game --category game --na
 resource-status --json
 resource-control cancel FULL_JOB_ID --revision JOB_REVISION --confirm
 resource-control terminate FULL_JOB_ID --revision JOB_REVISION --confirm
+resource-control run-next FULL_JOB_ID --revision JOB_REVISION --confirm
+resource-control force-run FULL_JOB_ID --revision JOB_REVISION --confirm
+resource-control run-host FULL_JOB_ID --revision JOB_REVISION --confirm
 resource-control pause --confirm
 resource-control resume --confirm
 ```
@@ -74,8 +77,16 @@ request; device aggregate usage still counts against the next admission.
 Games go ahead of queued background work; active work is not preempted. Interactive
 priority goes ahead of recent background jobs, while a non-game job waiting 60
 seconds gains an age fence ahead of newly arriving interactive jobs. Within that
-ordering the head job blocks backfill, protecting large/exclusive jobs from
-indefinite overtaking by smaller work. This is FIFO/aging across identities, not
+ordering the head job protects its place when running jobs finishing could make
+it fit. When measured available RAM/VRAM plus attributable running-job memory
+would still be insufficient, smaller eligible jobs may pass it. CPU-only work
+may also pass a GPU job blocked by external GameMode or missing GPU telemetry.
+The game CPU cap still applies. Unknown managed allocations or missing relevant
+memory attribution preserve the barrier. All automatic admissions retain pressure,
+stability, capacity and headroom checks, and release at most one job per tick.
+Each admission records `bypassed_job_ids`; blocked jobs explain why they allow
+backfill. The decision is recalculated every tick, so a job regains its place as
+soon as host conditions improve. This is FIFO/aging across identities, not
 Slurm account fair-share: all actual Slurm bootstrap jobs run as root and original
 agent/worktree identities are retained in the API and journal.
 
@@ -92,6 +103,44 @@ The root GameMode service owns `/run/resource-scheduler-game-active`;
 while present it also blocks new GPU admissions. Missing/unwritable Slurm CPU
 controllers during gaming produces explicit status errors and stops admissions.
 The policy never suspends processes or claims suspension frees memory.
+
+## Explicit waiting-job controls
+
+All three controls require the immutable ID, current revision, owner authorization
+and explicit confirmation. Only unreleased queued Slurm jobs are eligible:
+
+- `run-next` moves a job to the front, keeping all admission checks. The latest
+  explicit reorder wins; `queue_position` exposes the resulting waiting order.
+- `force-run` releases it to Slurm immediately, bypassing queue order, manual
+  admission pause, pressure and headroom policy. Requested resource budgets remain
+  intact, and Slurm can still leave it pending if its hard allocation limits do
+  not fit. An unknown-size exclusive GPU job retains the full configured usable
+  GPU budget when forced. This is not proof that the command started.
+- `run-host` cancels the held Slurm job and waits for Slurm to confirm cancellation,
+  then launches an **unmanaged host process**, outside Slurm and outside the
+  submitting sandbox. It runs as the original unprivileged UID/GID, with the
+  original working directory, command and environment; those dependencies must
+  exist on the host. No CPU/RAM/VRAM admission budget or headroom protection applies.
+
+Unmanaged processes run in a unique root-created transient systemd service using
+an immutable privileged bootstrap, followed by privilege drop and `no_new_privs`.
+No submitted command or environment enters systemd unit arguments. The subreaper
+and systemd control group retain descendant lifetime and termination, but do not
+reserve resource capacity. The same job ID, bounded stdout/stderr stream and files
+remain available to the submitting CLI and plugin. `execution: "host"` and
+`systemd_unit` identify this mode; its `allocation` is null. Its usage is external
+to Slurm, and it never contributes to queue reservation totals or game CPU quotas.
+Original submission origin remains recorded. Processes receive
+`RESOURCE_EXECUTION_MODE=unmanaged-host` and `RESOURCE_HOST_JOB_ID`, not reservation
+or sandbox-instance markers. Runtime files and output stay on the host.
+
+Launch intent is persisted before systemd submission. A lost response or missing
+unit produces Unknown, never an automatic second launch. Cancel during the Slurm
+handoff prevents launch; terminate after launch stops the whole service and waits
+for authoritative terminal state. Payloads are removed only after confirmed
+completion. These controls are explicit human overrides, never an automatic agent
+fallback for unavailable resources. A service restart reconciles existing host
+units rather than launching replacements.
 
 ## Execution and trust boundary
 
@@ -123,8 +172,9 @@ and UID, enables `no_new_privs`, then restores caller environment/cwd and starts
 the command. A subreaper inside the destination PID namespace waits for all
 adopted descendants, including detached children. Slurm retains cgroup ownership
 and performs cancellation cleanup. Host execution uses the same privilege drop
-without namespace entry. A missing or mismatched sandbox fails the job instead
-of executing its command on the host.
+without namespace entry. A missing or mismatched sandbox fails normal Slurm execution instead
+of falling back to the host. The explicit `run-host` control above is a separate
+user-authorized execution mode.
 
 Keep model servers in the foreground under this allocation until unload/exit.
 Servers started by an independent Docker/Nix/systemd daemon can escape the job

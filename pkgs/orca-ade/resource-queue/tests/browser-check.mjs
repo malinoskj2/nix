@@ -21,15 +21,21 @@ export async function check() {
   assert(!document.querySelector('[data-action="export"], [data-action="exportJob"], .pressure, .capacity-note'), 'Removed controls and disclaimers stay absent');
   await press('[data-tab="queue"]');
 
+  const initialControls = window.testBridge.controls.length;
+  await press('[data-action="run-next"][data-queue-job="00000000000000000000000000000004"]');
+  assert(window.testBridge.controls.length === initialControls, 'Reorder waits for confirmation');
+  await press('[data-action="confirm"]');
+  assert(document.querySelector('[aria-label="Waiting"] .job-row').dataset.job.endsWith('04'), 'Run next moves the selected waiting row to the top');
+  const afterReorder = window.testBridge.controls.length;
   await press('[data-job="00000000000000000000000000000003"]');
   assert(document.querySelector('.inspector').textContent.includes('Needs 10 GiB RAM'), 'Inspector retains exact wait reason');
   await press('[data-action="cancel"]');
-  assert(window.testBridge.controls.length === 0, 'Opening confirmation sends no command');
+  assert(window.testBridge.controls.length === afterReorder, 'Opening confirmation sends no command');
   assert(document.querySelector('[role="dialog"]'), 'Disruptive action requires confirmation');
   assert(document.activeElement.dataset.action === 'dismiss', 'Focus starts on safe dismissal');
   await press('[data-action="confirm"]');
-  assert(window.testBridge.controls.length === 1, 'Confirmed action sends one command');
-  assert(window.testBridge.controls[0].revision === 1, 'Confirmed command carries job revision');
+  assert(window.testBridge.controls.length === afterReorder + 1, 'Confirmed action sends one command');
+  assert(window.testBridge.controls[afterReorder].revision === 1, 'Confirmed command carries job revision');
   assert(document.querySelector('.inspector').textContent.includes('Cancelled'), 'Confirmed lifecycle replaces queued state');
   assert(!document.querySelector('.inspector [data-action="cancel"]'), 'Terminal job has no cancellation control');
   const input = document.getElementById('job-search');
@@ -51,6 +57,19 @@ export async function check() {
   await press('[data-action="confirm"]');
   assert(document.body.textContent.includes('New admissions paused'), 'Confirmed admission hold rendered');
   assert(document.querySelector('[data-action="resume"]'), 'Resume appears only after confirmed hold');
+  await press('[data-tab="queue"]');
+  await press('[data-action="force-run"][data-queue-job="00000000000000000000000000000004"]');
+  assert(document.querySelector('[role="dialog"]').textContent.includes('Slurm allocation limits still apply'), 'Slurm run explains remaining allocation limits');
+  await press('[data-action="confirm"]');
+  assert(!document.querySelector('[data-action="force-run"][data-queue-job="00000000000000000000000000000004"]'), 'Released Slurm allocation cannot be launched twice');
+  const raw = window.testBridge.raw;
+  raw.jobs.push({ ...structuredClone(raw.jobs[2]), id:'00000000000000000000000000000007', state:'queued', label:'Host launch check', revision:1, released:false, cleanup:null });
+  await press('[data-action="refresh"]');
+  await press('[data-action="run-host"][data-queue-job="00000000000000000000000000000007"]');
+  assert(document.querySelector('[role="dialog"]').textContent.includes('outside the sandbox and Slurm'), 'Host run explicitly discloses execution boundary');
+  await press('[data-action="confirm"]');
+  assert(document.querySelector('.inspector').textContent.includes('Host · unmanaged'), 'Host handoff is visibly unmanaged');
+  assert(document.querySelector('.inspector').textContent.includes('not enforced'), 'Host execution never claims a resource reservation');
   assert(document.documentElement.scrollWidth <= window.innerWidth, 'No horizontal overflow');
   return { passed: results.length, results };
 }

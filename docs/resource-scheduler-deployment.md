@@ -14,7 +14,7 @@ After the validation and drain below, enable the normal host path with:
 services.resourceScheduler = {
   enable = true;
   cpuCapacity = 28;
-  policyVersion = "2";
+  policyVersion = "3";
 };
 ```
 
