@@ -24,7 +24,7 @@ resource-control resume --confirm
 CPU units are **Slurm CPUs**, governed by the configured node topology and
 `CR_Core_Memory`, not a claim of physical core-equivalents. On an SMT node core
 allocation can round a thread request up to a whole core. `--ram` and `--vram`
-accept positive decimal MiB/GiB and round upward to MiB; RAM is required. Labels
+accept positive decimal MiB/GiB and round upward to MiB; RAM is required. Labels (up to160 UTF-8 bytes)
 are required and must exclude secrets. Raw command arguments and environments
 never appear in status, lifecycle events or the Slurm job name/script.
 
@@ -232,7 +232,12 @@ removes old output/result directories. Output is not included in exported status
 Export compact summaries before the bounded store/journal rotates when long-term
 analysis is required. Sampling can miss short GPU peaks; memory.peak and cpu.stat
 are collected from the job cgroup where available, including final bootstrap
-readings. Unknown metrics/gaps remain explicit. There is no automatic policy tuning.
+readings. Host CPU activity uses `/proc/stat` deltas across two samples; managed
+CPU activity comes from cgroup CPU time deltas divided by elapsed time. Both use
+logical CPU-seconds per second, not physical core performance. External CPU is
+derived only when both measurements are available. GPU `external_mib` is device
+usage minus measured managed compute-process usage when attributable. Swap
+`pages_in`/`pages_out` are cumulative kernel counters, not invented rates. Unknown metrics/gaps remain explicit. There is no automatic policy tuning.
 
 ## Nix service and migration contract
 
@@ -276,10 +281,12 @@ control IDs/revisions, cancellation confirmation, recovery, native exit parsing,
 secret exclusion, malformed/oversized requests and worst-case public status bounds.
 The existing GPU scheduler tests remain unchanged and must pass.
 
-The separate NixOS VM check passed against Slurm25.11.8 in45.13seconds. It uses real Slurm, cgroupv2 and Docker with a fake
+The expanded NixOS VM check passed against Slurm25.11.8 in58.72seconds. It uses
+real Slurm, cgroupv2 and Docker with a fake
 non-GPU device to verify host/sandbox execution, privilege dropping, exact exit
-status, limits, cleanup, daemon restart and CPU gaming protection. This check does
-not prove NVIDIA shard/whole-GPU exclusion, actual VRAM attribution, desktop
+status, limits, cleanup, daemon restart and CPU gaming protection. It also
+verifies real Slurm shard/whole-GPU allocation exclusion using the fake
+device. It does not prove physical NVIDIA device behavior, actual VRAM attribution, desktop
 responsiveness, sustained pressure, or host deployment/migration. Real GPU
 acceptance must use the existing shared GPU reservation and an isolated test
 configuration; production admission stays on the existing authority until the

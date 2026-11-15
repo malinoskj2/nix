@@ -112,8 +112,8 @@ def checked(argv, **kwargs):
 
 
 def clean_label(value):
-    if not isinstance(value, str) or not 1 <= len(value) <= 160 or any(ord(c) < 32 for c in value):
-        raise ValueError("Supply a safe workload label of 1 to 160 characters")
+    if not isinstance(value, str) or not 1 <= len(value.encode("utf-8")) <= 160 or any(ord(c) < 32 for c in value):
+        raise ValueError("Supply a safe workload label of 1 to 160 UTF-8 bytes")
     return value
 
 
@@ -175,6 +175,19 @@ def pressure(root=Path("/proc/pressure")):
 
 def telemetry():
     result = {"sampled_at": time.time(), "errors": [], "pressure": pressure()}
+    try:
+        counters = [int(value) for value in Path("/proc/stat").read_text().splitlines()[0].split()[1:9]]
+        result["cpu"] = {
+            "total_ticks": sum(counters),
+            "busy_ticks": sum(counters) - counters[3] - counters[4],
+            "logical_cpus": os.cpu_count(),
+            "host_actual": None,
+        }
+        vmstat = dict(line.split() for line in Path("/proc/vmstat").read_text().splitlines())
+        result["swap"] = {"pages_in": int(vmstat["pswpin"]), "pages_out": int(vmstat["pswpout"])}
+    except (OSError, ValueError, KeyError, IndexError):
+        result["cpu"] = {"host_actual": None}
+        result["swap"] = {"pages_in": None, "pages_out": None}
     try:
         fields = {
             line.split(":")[0]: int(line.split()[1]) // 1024
@@ -427,6 +440,7 @@ class Backend:
         self.last_sample_event = 0
         self.game_protection_errors = []
         self.game_active = False
+        self.previous_cpu = None
         self.save()
 
     def save(self):
@@ -487,9 +501,12 @@ class Backend:
         if sum(j["state"] not in TERMINAL for j in self.state["jobs"]) >= 256:
             raise ValueError("Queue limit reached; wait for existing jobs")
         req = request["requested"]
+        if not isinstance(req, dict):
+            raise ValueError("Resource budgets must be an object")
         for name in ("cpu", "ram_mib", "vram_mib"):
             if type(req.get(name)) is not int or req[name] < (0 if name == "vram_mib" else 1):
                 raise ValueError("Invalid resource budget")
+        req = {key: req[key] for key in ("cpu", "ram_mib", "vram_mib")}
         if req["cpu"] > self.config["cpu_capacity"]:
             raise ValueError("CPU request exceeds configured background capacity")
         mode = request.get("mode", "shared")
@@ -596,6 +613,19 @@ class Backend:
     def tick(self):
         self.errors = []
         self.snapshot = self.sample()
+        current_cpu = self.snapshot.get("cpu", {})
+        previous_cpu = self.previous_cpu
+        if (
+            previous_cpu
+            and current_cpu.get("total_ticks", 0) > previous_cpu.get("total_ticks", 0)
+            and current_cpu.get("busy_ticks", -1) >= previous_cpu.get("busy_ticks", 0)
+        ):
+            current_cpu["host_actual"] = (
+                (current_cpu["busy_ticks"] - previous_cpu["busy_ticks"])
+                / (current_cpu["total_ticks"] - previous_cpu["total_ticks"])
+                * current_cpu["logical_cpus"]
+            )
+        self.previous_cpu = dict(current_cpu)
         self.snapshot["game_active"] = Path(self.config["game_marker_path"]).exists()
         now = time.time()
         try:
@@ -841,15 +871,25 @@ class Backend:
         running = [j for j in self.state["jobs"] if j["state"] in ACTIVE]
         ram_actual = [j["observed"]["ram_mib"] for j in running]
         gpu_actual = [j["observed"]["vram_mib"] for j in running if j["requested"]["vram_mib"]]
+        cpu_samples = [j["observed"]["cpu_percent"] for j in running]
+        cpu_actual = sum(cpu_samples) / 100 if all(v is not None for v in cpu_samples) else None
+        host_actual = snapshot.get("cpu", {}).get("host_actual")
+        gpu_managed = sum(gpu_actual) if all(v is not None for v in gpu_actual) else None
+        gpu_used = snapshot["gpu"].get("used_mib")
         return dict(
             sampled_at=snapshot["sampled_at"],
             errors=snapshot["errors"],
             pressure=snapshot["pressure"],
+            swap=snapshot.get("swap", {"pages_in": None, "pages_out": None}),
             cpu=dict(
                 capacity=self.config["cpu_capacity"],
                 reserved=sum(j["requested"]["cpu"] for j in running),
-                actual=None,
-                external=None,
+                actual=cpu_actual,
+                external=max(0, host_actual - cpu_actual)
+                if host_actual is not None and cpu_actual is not None
+                else None,
+                host_actual=host_actual,
+                attribution_confidence="sampled-kernel-counters" if cpu_actual is not None else "unavailable",
                 unit="Slurm CPU",
                 effective_background_capacity=self.config["game_cpu_capacity"]
                 if self.game_active
@@ -869,7 +909,10 @@ class Backend:
                     **snapshot["gpu"],
                     "headroom_mib": self.config["vram_headroom_mib"],
                     "reserved_mib": sum(j["requested"]["vram_mib"] for j in running),
-                    "managed_actual_mib": sum(gpu_actual) if all(v is not None for v in gpu_actual) else None,
+                    "managed_actual_mib": gpu_managed,
+                    "external_mib": max(0, gpu_used - gpu_managed)
+                    if gpu_used is not None and gpu_managed is not None
+                    else None,
                 }.items()
                 if k != "allocations_mib"
             },
@@ -897,7 +940,9 @@ class Backend:
             generated_at=time.time(),
             connected=True,
             mode=mode,
-            capabilities=dict(cancel=True, terminate=True, pause=True, resume=True, priority=False, unload=False),
+            capabilities=dict(
+                cancel=True, terminate=True, pause=True, resume=True, priority=False, unload=False, model_reports=True
+            ),
             telemetry=self.public_telemetry(),
             jobs=[self.public_job(j) for j in jobs if j["state"] not in TERMINAL],
             history=[self.public_job(j) for j in reversed(jobs) if j["state"] in TERMINAL],
@@ -905,11 +950,11 @@ class Backend:
         )
         value["truncated"] = {"history": 0, "events": False}
         # Preserve ALL active jobs; compact events before shedding oldest history.
-        if len(json.dumps(value).encode()) > 900000:
+        if len(json.dumps(value, ensure_ascii=False).encode()) > 900000:
             for job in value["jobs"] + value["history"]:
                 job["events"] = []
             value["truncated"]["events"] = True
-        while len(json.dumps(value).encode()) > 900000 and value["history"]:
+        while len(json.dumps(value, ensure_ascii=False).encode()) > 900000 and value["history"]:
             value["history"].pop()
             value["truncated"]["history"] += 1
         return value
@@ -1072,7 +1117,7 @@ def daemon(config_path):
                         "error": "Request rejected, stale revision, or Slurm unavailable; inspect resource-status",
                     }
                 try:
-                    client.sendall(json.dumps(result, allow_nan=False).encode() + b"\n")
+                    client.sendall(json.dumps(result, allow_nan=False, ensure_ascii=False).encode() + b"\n")
                 except OSError:
                     pass
 
@@ -1261,7 +1306,10 @@ def run(args):
             priority=args.priority,
             category=args.category,
             origin=os.environ.get("AGENT_SANDBOX_INSTANCE") or "host",
-            agent=os.environ.get("ORCA_SESSION_ID") or os.environ.get("ORCA_TERMINAL_HANDLE") or "unknown",
+            agent=os.environ.get("ORCA_AGENT_SESSION_ID")
+            or os.environ.get("ORCA_SESSION_ID")
+            or os.environ.get("ORCA_TERMINAL_HANDLE")
+            or "unknown",
             worktree=os.environ.get("ORCA_WORKTREE_ID") or "unknown",
             project=args.project or "unknown",
             payload=dict(command=command, cwd=os.getcwd(), env=dict(os.environ)),
@@ -1414,7 +1462,7 @@ def main():
         return 0
     value = rpc(dict(action="status"))
     if args.json:
-        print(json.dumps(value, separators=(",", ":")))
+        print(json.dumps(value, separators=(",", ":"), ensure_ascii=False))
     else:
         print(f"Slurm resource queue: {value['mode']}, policy {value['policy_version']}, revision {value['revision']}")
         for job in value["jobs"]:

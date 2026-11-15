@@ -8,6 +8,7 @@ import socket
 import subprocess
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import resource_scheduler as rs
@@ -319,7 +320,8 @@ class SchedulerTests(unittest.TestCase):
         self.backend.tick()
         value = self.backend.status()
         self.assertEqual(value["schema_version"], 1)
-        self.assertIsNone(value["telemetry"]["cpu"]["actual"])
+        self.assertIsNone(value["telemetry"]["cpu"]["host_actual"])
+        self.assertEqual(value["telemetry"]["cpu"]["actual"], 0)
         self.assertFalse(value["capabilities"]["unload"])
         self.assertGreater(value["revision"], 0)
         json.dumps(value, allow_nan=False)
@@ -434,6 +436,8 @@ class SchedulerTests(unittest.TestCase):
         for index in range(256 + 500):
             item = copy.deepcopy(seed)
             item["id"] = f"{index:032x}"
+            for field in ("label", "agent", "worktree", "project"):
+                item[field] = "😀" * 40
             item["state"] = "queued" if index < 256 else "completed"
             item["events"] = [
                 dict(event="waiting", timestamp=1, reason="x" * 5000, snapshot={"value": "x" * 5000}) for _ in range(64)
@@ -441,7 +445,7 @@ class SchedulerTests(unittest.TestCase):
             self.backend.state["jobs"].append(item)
         value = self.backend.status()
         self.assertEqual(len(value["jobs"]), 256)
-        self.assertLess(len(json.dumps(value).encode()), 900001)
+        self.assertLess(len(json.dumps(value, ensure_ascii=False).encode()), 900001)
         self.assertTrue(value["truncated"]["events"])
 
     def test_model_events_reported_duration_do_not_claim_unload_support(self):
@@ -522,6 +526,53 @@ class SchedulerTests(unittest.TestCase):
             rs.compat(["game", "--name", "game", "--", "true"])
             self.assertEqual(run.call_args.args[0].priority, "game")
             self.assertTrue(run.call_args.args[0].exclusive)
+
+    def test_cpu_host_actual_requires_two_kernel_counter_samples(self):
+        self.snapshot["cpu"] = dict(total_ticks=1000, busy_ticks=500, logical_cpus=32, host_actual=None)
+        self.backend.tick()
+        self.assertIsNone(self.backend.status()["telemetry"]["cpu"]["host_actual"])
+        self.snapshot["cpu"].update(total_ticks=2000, busy_ticks=750)
+        self.backend.tick()
+        value = self.backend.status()["telemetry"]["cpu"]
+        self.assertEqual(value["host_actual"], 8)
+        self.assertEqual(value["external"], 8)
+
+    def test_unknown_resource_metadata_does_not_enter_public_or_journal(self):
+        request = self.request()
+        request["requested"]["private"] = "credential" * 1000
+        self.backend.handle(request, os.getuid())
+        self.assertNotIn("credential", json.dumps(self.backend.status()) + self.log.getvalue())
+        for value in ([], None, 1):
+            with self.assertRaises(ValueError):
+                self.backend.handle({**self.request(), "requested": value}, os.getuid())
+
+    def test_unicode_label_byte_bound(self):
+        self.assertEqual(rs.clean_label("😀" * 40), "😀" * 40)
+        with self.assertRaises(ValueError):
+            rs.clean_label("😀" * 41)
+
+    def test_client_prefers_actual_orca_agent_session_identity(self):
+        args = SimpleNamespace(
+            cpu=1,
+            ram=64,
+            vram=None,
+            exclusive=False,
+            priority="background",
+            category="build",
+            project=None,
+            name="safe",
+            command=["true"],
+        )
+        response = dict(
+            stdout="", stderr="", stdout_offset=0, stderr_offset=0, job=dict(state="completed", exit_code=7)
+        )
+        with patch.dict(
+            os.environ, {"ORCA_AGENT_SESSION_ID": "actual-session", "ORCA_SESSION_ID": "legacy-session"}, clear=True
+        ):
+            with patch.object(rs, "rpc", side_effect=[dict(id="a" * 32), response]) as rpc:
+                with contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(rs.run(args), 7)
+                self.assertEqual(rpc.call_args_list[0].args[0]["agent"], "actual-session")
 
 
 if __name__ == "__main__":
