@@ -1,0 +1,48 @@
+version = 1
+
+# Alternatives are review triggers, not claims that these crates are unsuitable.
+[[preferences]]
+preferred = "clap"
+purpose = "application CLI parsing (derive API)"
+alternatives = ["structopt", "argh", "gumdrop", "pico-args", "getopts", "lexopt"]
+
+[[preferences]]
+preferred = "confique"
+purpose = "typed, layered application configuration"
+alternatives = ["config", "figment"]
+
+[[preferences]]
+preferred = "rustix"
+purpose = "safe Unix/Linux system operations"
+alternatives = ["nix", "libc"]
+
+[[preferences]]
+preferred = "serde"
+purpose = "serialization and deserialization"
+# Format implementations such as serde_json are complementary, not alternatives.
+alternatives = ["rustc-serialize"]
+
+[[preferences]]
+preferred = "winnow"
+purpose = "parser combinators and structured text parsing"
+alternatives = ["nom", "combine", "chumsky", "pest"]
+
+[[preferences]]
+preferred = "thiserror + anyhow"
+purpose = "typed errors and report-only error boundaries, respectively"
+alternatives = ["eyre", "color-eyre", "error-chain", "failure", "snafu", "quick-error"]
+
+[[preferences]]
+preferred = "time"
+purpose = "dates, timestamps, parsing and formatting"
+alternatives = ["chrono", "jiff"]
+
+[[preferences]]
+preferred = "signal-hook"
+purpose = "process signal handling"
+alternatives = ["ctrlc"]
+
+[[preferences]]
+preferred = "xdg"
+purpose = "XDG configuration, data, cache and state directories"
+alternatives = ["dirs", "dirs-next", "directories", "directories-next"]

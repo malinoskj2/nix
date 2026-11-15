@@ -28,6 +28,7 @@
           local-models = self'.packages.local-models.tests.sync;
           devshell = self'.devShells.default;
           gpu-scheduler = self'.packages.gpu-scheduler.tests.scheduler;
+          cargo-preferences = self'.packages.cargo-preferences;
         }
         // lib.optionalAttrs (system == "x86_64-linux") {
           local-models-activation =

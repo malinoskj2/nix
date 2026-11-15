@@ -12,7 +12,9 @@
   callPackage,
   cargo,
   cargo-audit,
+  cargo-deny,
   cargo-nextest,
+  cargo-preferences,
   chromium,
   clang,
   claude-code,
@@ -295,7 +297,9 @@ let
       btop
       cargo
       cargo-audit
+      cargo-deny
       cargo-nextest
+      cargo-preferences
       chromium'
       (lib.lowPrio clang)
       claude

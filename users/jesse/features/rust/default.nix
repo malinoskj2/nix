@@ -4,7 +4,9 @@
     bacon
     cargo
     cargo-audit
+    cargo-deny
     cargo-nextest
+    cargo-preferences
     clippy
     rust-analyzer
     rustc
