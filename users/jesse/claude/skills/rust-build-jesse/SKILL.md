@@ -122,19 +122,28 @@ string replacement or lazy allocation solely to centralize fixed text.
 
 ## Dependency choices
 
-When choosing among dependencies for equivalent purposes, prefer these crates
-when they fit the task and remain maintained:
+The shared `cargo-preferences` tool owns the crate preference catalogue. Run
+`cargo preferences list` before choosing a dependency; run `cargo preferences
+check` against the workspace when adding or changing dependencies. It checks
+explicit alternatives among direct dependencies, including renamed, optional,
+target-specific, build and dev dependencies, without judging transitives. Unknown
+crates and handwritten replacements still need suitability review.
 
-- `clap` with its derive API for application CLI parsing.
-- `confique` for typed, layered application configuration.
-- `rustix` for safe wrappers around Unix/Linux system operations.
-- `serde` for serialization and deserialization.
-- `winnow` for parser combinators and structured text parsing.
-- `thiserror` for typed errors and `anyhow` for context and reporting at
-  executable or report-only orchestration boundaries.
-- `time` for dates, timestamps, parsing and formatting.
-- `signal-hook` for process signal handling.
-- `xdg` for XDG configuration, data, cache and state directories.
+When establishing project policy, read `cargo preferences guide`. Use a reviewed
+baseline to preserve suitable existing choices, and exact per-member exceptions
+with reasons for justified alternatives. Never refresh a baseline to hide new
+findings. Use project policy to require dependencies/features for actual roles
+(e.g. `clap` with `derive` for an application CLI) and forbid dependencies at
+explicit boundaries (e.g. `anyhow` in a domain-only crate). Do not require unused
+crates. A mixed library/binary package still needs source-level boundary review.
+
+Adopted projects run `cargo preferences check --deny-warnings` in CI alongside
+Clippy and tests. Before adoption, warnings identify choices to assess, not a
+mandate to migrate unrelated existing dependencies. Use Clippy's configured
+API bans where applicable, and cargo-deny only for actual graph-wide bans, not
+ordinary crate preferences. Do not modify policy during a review-only task.
+If the tool is unavailable, report that verification gap and follow established
+project policy; do not claim a pass or apply host configuration changes.
 
 Before adding or recommending a crate, check its current upstream maintenance
 status and compatibility with the project's MSRV, target platforms and required

@@ -102,6 +102,7 @@
           "pi"
         ];
         exportedPackages = [
+          "cargo-preferences"
           "agent-sandbox"
           "ai-usage"
           "ata-devs"

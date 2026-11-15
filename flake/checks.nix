@@ -26,6 +26,7 @@
         hostChecks
         // {
           devshell = self'.devShells.default;
+          cargo-preferences = self'.packages.cargo-preferences;
         }
         // lib.optionalAttrs (system == "x86_64-linux") {
           unreal-sandbox = self'.packages.agent-sandbox.unrealTests;
