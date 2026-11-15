@@ -137,6 +137,7 @@
           "playwright-browsers"
           "pubip"
           "pyghidra-mcp"
+          "resource-scheduler"
           "switch-and-reset-sandboxes"
           "tiktok-search"
           "wallpaper-autopause"
@@ -159,6 +160,7 @@
         ];
 
         flake.nixosConfigurations = lib.genAttrs nixosHosts mkHost.nixos;
+        flake.nixosModules.resource-scheduler = import ./hosts/common/optional/resource-scheduler.nix;
 
         perSystem =
           { pkgs, ... }:

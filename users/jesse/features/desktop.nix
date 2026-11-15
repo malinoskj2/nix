@@ -57,7 +57,9 @@ let
     approvedPlugins = [
       "chron0.discord-presence"
       "etherll.usage-insights"
+      "jesse.resource-queue"
     ];
+    resourceSchedulerPackage = pkgs.resource-scheduler;
     # Generic keeps workspace, branch and machine names out of the activity.
     discordPresenceSettings.detailLevel = "generic";
     inherit (config.orca) agentResumeWrapper codexAccountHomes usageInsightsSettings;

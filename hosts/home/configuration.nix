@@ -1,6 +1,7 @@
 {
   config,
   inputs,
+  lib,
   pkgs,
   ...
 }:
@@ -26,6 +27,7 @@ in
     ../common/optional/hyprland.nix
     ../common/optional/nh.nix
     ../common/optional/pipewire.nix
+    ../common/optional/resource-scheduler.nix
     ../common/optional/workstation.nix
     ../common/users/jesse
     ../common/users/jesse/interactive.nix
@@ -120,6 +122,8 @@ in
       RemainAfterExit = true;
       ExecStart = setSandboxCpus sandboxCpus.gaming;
       ExecStop = setSandboxCpus sandboxCpus.idle;
+      ExecStartPost = lib.mkIf config.services.resourceScheduler.enable "${pkgs.coreutils}/bin/touch /run/resource-scheduler-game-active";
+      ExecStopPost = lib.mkIf config.services.resourceScheduler.enable "${pkgs.coreutils}/bin/rm -f /run/resource-scheduler-game-active";
     };
   };
 

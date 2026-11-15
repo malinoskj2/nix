@@ -92,6 +92,12 @@ until told.
 
 ### Working here
 
+The shared resource scheduler is staged behind
+`services.resourceScheduler.enable`; keep existing GPU admission authoritative
+until the drained cutover. Follow the installed shared resource guidance for
+heavy work after cutover, and read `docs/resource-scheduler-deployment.md` before
+changing scheduler deployment or migration configuration.
+
 Format and lint with `nix fmt` (treefmt: deadnix, statix and nixfmt for Nix,
 shellcheck and shfmt for shell, ruff for Python, StyLua for Lua and Luau).
 `nix flake check` also builds every host whose system matches (including its

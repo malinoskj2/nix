@@ -289,10 +289,11 @@ configure_codex
 configure_muse
 configure_steam
 
+sandbox_instance=${AGENT_SANDBOX_NAME:-agent-sandbox-$(basename "$workdir")-$$}
 args=(
   --rm
   --init
-  --name "${AGENT_SANDBOX_NAME:-agent-sandbox-$(basename "$workdir")-$$}"
+  --name "$sandbox_instance"
   --hostname agent-sandbox
   --user "$uid:$gid"
   --cap-drop ALL
@@ -333,13 +334,26 @@ args=(
   --env USER="$user"
   --env TERM
   --env COLORTERM
-  --env AGENT_SANDBOX_INSTANCE="${AGENT_SANDBOX_NAME:-}"
+  --env AGENT_SANDBOX_INSTANCE="$sandbox_instance"
   --env AGENT_SANDBOX_RENDERERS
   --env AGENT_SANDBOX_DISPLAY="$display"
   --env XDG_RUNTIME_DIR="$runtime"
   --env DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"
   --env SWAYSOCK="$runtime/sway.sock"
 )
+
+# Authority changes only at the explicit drained host cutover. Bind the directory
+# rather than the socket inode, so daemon reconnects survive socket replacement.
+if [[ -f /etc/resource-scheduler/mode ]]; then
+  args+=(--mount "type=bind,src=/etc/resource-scheduler,dst=/etc/resource-scheduler,readonly")
+  if [[ $(</etc/resource-scheduler/mode) == slurm ]]; then
+    if [[ -d /run/resource-scheduler ]]; then
+      args+=(--mount "type=bind,src=/run/resource-scheduler,dst=/run/resource-scheduler,readonly")
+    else
+      echo 'agent-sandbox: resource scheduler unavailable; heavy work must wait for host service recovery' >&2
+    fi
+  fi
+fi
 
 # Forward only the specific Orca fields agents and hook scripts use, not the
 # host environment. With a hook bridge socket, PATH switches to the Orca curl

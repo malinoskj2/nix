@@ -54,6 +54,7 @@
   gobject-introspection,
   grim,
   gpu-scheduler,
+  resource-scheduler,
   gzip,
   htop-vim-navigation,
   hy3dgen,
@@ -334,6 +335,7 @@ let
       gnused
       gnutar
       gpu-scheduler
+      resource-scheduler
       grim
       gzip
       htop-vim-navigation
@@ -473,7 +475,11 @@ let
       ln -s ${./nested-sway.conf} etc/sway/nested
       ln -s ${
         writeText "agent-sandbox-instructions.md" (
-          builtins.readFile ./CLAUDE.md + "\n" + builtins.readFile ../../users/jesse/claude/rules/gpu.md
+          builtins.readFile ./CLAUDE.md
+          + "\n"
+          + builtins.readFile ../../users/jesse/claude/rules/gpu.md
+          + "\n"
+          + builtins.readFile ../../users/jesse/claude/rules/resources.md
         )
       } etc/claude-code/CLAUDE.md
       ln -s ${claudeManagedSettings} etc/claude-code/managed-settings.json

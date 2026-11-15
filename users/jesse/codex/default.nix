@@ -91,6 +91,7 @@ in
       lib.concatMapStringsSep "\n" builtins.readFile [
         ../claude/rules/worktrees.md
         ../claude/rules/gpu.md
+        ../claude/rules/resources.md
         ../claude/rules/local-models.md
         ../claude/rules/media.md
         ../claude/rules/sandbox-display.md

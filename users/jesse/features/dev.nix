@@ -5,7 +5,10 @@
   ...
 }:
 {
-  imports = [ ./unreal-mcp.nix ];
+  imports = [
+    ./unreal-mcp.nix
+    ../muse.nix
+  ];
 
   home.packages = with pkgs; [
     deepsec

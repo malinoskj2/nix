@@ -66,6 +66,7 @@ in
     };
     rules = {
       gpu = ./rules/gpu.md;
+      resources = ./rules/resources.md;
       local-models = ./rules/local-models.md;
       media = ./rules/media.md;
       rust = ./rules/rust.md;

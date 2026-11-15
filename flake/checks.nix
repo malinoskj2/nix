@@ -29,8 +29,48 @@
           devshell = self'.devShells.default;
           gpu-scheduler = self'.packages.gpu-scheduler.tests.scheduler;
           cargo-preferences = self'.packages.cargo-preferences;
+          resource-scheduler = self'.packages.resource-scheduler.tests.scheduler;
         }
         // lib.optionalAttrs (system == "x86_64-linux") {
+          resource-scheduler-vm = pkgs.testers.runNixOSTest (
+            import ../hosts/home/resource-scheduler-test.nix { inherit pkgs; }
+          );
+          resource-scheduler-config =
+            let
+              staged =
+                (self.nixosConfigurations.home.extendModules {
+                  modules = [ { services.resourceScheduler.enable = true; } ];
+                }).config;
+            in
+            pkgs.runCommand "resource-scheduler-config-tests"
+              {
+                nativeBuildInputs = [
+                  pkgs.python3
+                  staged.services.slurm.package
+                ];
+                POLICY = staged.environment.etc."resource-scheduler/config.json".source;
+                SLURM_CONFIG = staged.services.slurm.etcSlurm;
+                DAEMON = pkgs.writeText "resource-scheduler-service.json" (
+                  builtins.toJSON staged.systemd.services.resource-scheduler.serviceConfig
+                );
+                GAME_SERVICE = pkgs.writeText "resource-scheduler-game-service.json" (
+                  builtins.toJSON staged.systemd.services.agent-sandbox-gaming.serviceConfig
+                );
+                MUSE_MERGER = ../users/jesse/muse-resources.py;
+                GUIDANCE = ../users/jesse/claude/rules/resources.md;
+              }
+              ''
+                python ${../hosts/home/test_resource_scheduler_config.py}
+                # Parse with native Slurm without starting a controller. The
+                # isolated builder has no slurm account; only that identity is
+                # substituted. All scheduling/plugin syntax remains generated.
+                cp -rL "$SLURM_CONFIG" config
+                chmod -R u+w config
+                sed -i 's/^SlurmUser=slurm$/SlurmUser=root/' config/slurm.conf
+                SLURM_CONF="$PWD/config/slurm.conf" scontrol show hostnames home > nodes
+                test "$(cat nodes)" = home
+                touch "$out"
+              '';
           local-models-activation =
             let
               home = self.nixosConfigurations.home.config.home-manager.users.jesse;
