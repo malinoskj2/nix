@@ -66,8 +66,8 @@ async function readLogs() {
   state.logs = job?.logs?.slice(-100) ?? [];
   state.logsError = state.logs.length ? '' : 'No lifecycle events retained.';
 }
-function confirm(action) {
-  const job = state.snapshot.jobs.find((j) => j.id === state.selected);
+function confirm(action, jobId = state.selected) {
+  const job = state.snapshot.jobs.find((j) => j.id === jobId);
   if (state.fixture || state.error || freshness(state.snapshot) !== 'live') return;
   if (!eligibleActions(state.snapshot, ['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'run-sandbox'].includes(action) ? job : null).includes(action)) return;
   const info = {
@@ -134,7 +134,6 @@ app.addEventListener('click', async (event) => {
   const control = event.target.closest('[data-action]');
   if (!control || control.disabled) return;
   const action = control.dataset.action;
-  if (control.dataset.queueJob) state.selected = control.dataset.queueJob;
   const job = state.snapshot?.jobs.find((j) => j.id === state.selected);
   switch (action) {
     case 'refresh': await refresh(); break;
@@ -149,7 +148,7 @@ app.addEventListener('click', async (event) => {
     case 'refreshLogs': await readLogs(); draw(); break;
     case 'dismiss': state.confirm = null; draw(); lastFocus?.focus(); break;
     case 'confirm': await execute(); break;
-    default: if (['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'run-sandbox', 'pause', 'resume'].includes(action)) confirm(action);
+    default: if (['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'run-sandbox', 'pause', 'resume'].includes(action)) confirm(action, control.dataset.queueJob);
   }
 });
 app.addEventListener('keydown', (event) => {
