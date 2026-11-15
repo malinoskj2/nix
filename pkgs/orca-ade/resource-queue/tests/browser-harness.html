@@ -8,6 +8,7 @@ window.testBridge = { disconnect: () => { disconnected = true; }, reconnect: () 
 window.orca = { plugin: { async request(name, input) {
   if (name === 'queue.identities') return { workspaces: [] };
   if (name === 'queue.status') { if (disconnected) throw new Error('Test socket disconnected'); return adaptStatus(raw); }
+  if (name === 'queue.ackNotification') { raw.notifications = raw.notifications.filter(n => n.id !== input.id); raw.notification_count = raw.notifications.length; return { snapshot: adaptStatus(raw) }; }
   if (name === 'queue.logs') return { events: [], unsupported: 'Test backend has no journal access.' };
   if (name === 'queue.control') {
     controls.push(input);

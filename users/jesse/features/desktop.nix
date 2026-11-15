@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  osConfig ? { },
   ...
 }:
 let
@@ -119,6 +120,22 @@ in
       vulkan-tools
       wl-clipboard
     ];
+
+    systemd.user.services.resource-job-notifications =
+      lib.mkIf (pkgs.stdenv.isLinux && (osConfig.services.resourceScheduler.enable or false))
+        {
+          Unit = {
+            Description = "Deliver resource job completions to their submitting Orca sessions";
+            After = [ "graphical-session.target" ];
+            PartOf = [ "graphical-session.target" ];
+          };
+          Service = {
+            ExecStart = "${pkgs.resource-scheduler}/bin/resource-notify --orca ${orca-ade}/bin/orca-ide";
+            Restart = "on-failure";
+            RestartSec = 10;
+          };
+          Install.WantedBy = [ "graphical-session.target" ];
+        };
 
     home.file = skillsFor "claude" // skillsFor "codex";
 

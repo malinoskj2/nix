@@ -31,6 +31,11 @@ export function createBackend({ run = runCommand, now = Date.now } = {}) {
       })();
       try { return await pending; } finally { pending = null; }
     },
+    async acknowledge(input) {
+      if (input?.confirm !== true || !/^[a-f0-9]{32}$/.test(input.id)) throw new Error('Confirm a specific completion notification.');
+      await run(commands.job, ['ack', input.id, '--confirm']);
+      return { snapshot: await this.status() };
+    },
     async control(input) {
       if (!input || input.confirm !== true) throw new Error('Action must be explicitly confirmed.');
       const live = await this.status();

@@ -3,6 +3,7 @@ import { resolveWorkspace } from './model.mjs';
 export default function activate(orca) {
   const backend = createBackend();
   orca.panels.handle('queue.status', async () => backend.status());
+  orca.panels.handle('queue.ackNotification', async (input) => backend.acknowledge(input));
   orca.panels.handle('queue.control', async (input) => backend.control(input));
   orca.panels.handle('queue.identities', async () => {
     const result = await orca.host.call('workspace.list');

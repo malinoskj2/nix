@@ -136,10 +136,25 @@ stdenv.mkDerivation (finalAttrs: {
     # Test fixtures never enter the production plugin; it cannot simulate live state.
     rm -rf $launch/jesse.resource-queue/tests
     cat > $launch/jesse.resource-queue/src/config.mjs <<'EOF'
-    export const commands = Object.freeze(${builtins.toJSON {
-      status = if resourceSchedulerPackage == null then "resource-status" else "${resourceSchedulerPackage}/bin/resource-status";
-      control = if resourceSchedulerPackage == null then "resource-control" else "${resourceSchedulerPackage}/bin/resource-control";
-    }});
+    export const commands = Object.freeze(${
+      builtins.toJSON {
+        status =
+          if resourceSchedulerPackage == null then
+            "resource-status"
+          else
+            "${resourceSchedulerPackage}/bin/resource-status";
+        control =
+          if resourceSchedulerPackage == null then
+            "resource-control"
+          else
+            "${resourceSchedulerPackage}/bin/resource-control";
+        job =
+          if resourceSchedulerPackage == null then
+            "resource-job"
+          else
+            "${resourceSchedulerPackage}/bin/resource-job";
+      }
+    });
     EOF
     node --test ${./resource-queue}/tests/*.test.mjs
     # Keep the installed identity and settings when upstream changes its publisher. Saved

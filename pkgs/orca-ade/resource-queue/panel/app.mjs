@@ -120,9 +120,10 @@ function selectTab(tab) {
 app.addEventListener('click', async (event) => {
   const tab = event.target.closest('[data-tab]');
   if (tab) { selectTab(tab.dataset.tab); return; }
-  const row = event.target.closest('[data-job], [data-related]');
+  const row = event.target.closest('[data-job], [data-related], [data-notification-job]');
   if (row) {
-    state.selected = row.dataset.job || row.dataset.related;
+    if (row.dataset.notificationJob) state.tab = 'history';
+    state.selected = row.dataset.job || row.dataset.related || row.dataset.notificationJob;
     state.logs = [];
     state.logSearch = '';
     await readLogs();
@@ -137,6 +138,7 @@ app.addEventListener('click', async (event) => {
   const job = state.snapshot?.jobs.find((j) => j.id === state.selected);
   switch (action) {
     case 'refresh': await refresh(); break;
+    case 'ackNotification': try { await request('queue.ackNotification', { id: control.dataset.notificationId, confirm: true }); await refresh(); } catch (error) { state.actionMessage = error.message; draw(); } break;
     case 'filters': state.showFilters = !state.showFilters; draw(); break;
     case 'clearFilters': state.filters = {}; draw(); break;
     case 'closeInspector': state.selected = null; draw(); break;

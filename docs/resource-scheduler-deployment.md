@@ -214,3 +214,12 @@ estimate. Preserve the designated verifier and scratch-isolation requirements.
 This inventory covers the named main-checkout helpers and top-level guidance,
 not every linked worktree, archived project, binary or private automation. Check
 active project launchers and older worktree instructions during future rollouts.
+
+Job introspection adds `resource-job` to the scheduler package. Home Manager enables
+`resource-job-notifications.service` for the graphical session only when the
+NixOS resource scheduler is enabled. It runs the pinned `resource-notify` and
+Orca CLI as the user, separate from the privileged scheduler. After an authorized
+switch, check `systemctl --user status resource-job-notifications`; disconnected
+Orca delivery remains visible through `resource-job notifications`. Rebuild old
+sandboxes to receive the updated clients. Implementation commits do not activate
+this service or switch the running system.

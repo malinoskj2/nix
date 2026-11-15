@@ -384,7 +384,8 @@ usage minus measured managed compute-process usage when attributable. Swap
 ## Nix service and migration contract
 
 `pkgs.callPackage ./pkgs/resource-scheduler/package.nix {}` supplies
-`resource-run`, `resource-status`, `resource-control`, `resource-model` and
+`resource-run`, `resource-status`, `resource-control`, `resource-model`,
+`resource-profile`, `resource-job`, `resource-notify` and
 `resource-scheduler`. The daemon entrypoint is
 `resource-scheduler daemon --config /path/to/policy.json`. JSON keys/defaults are
 listed in `DEFAULTS` in `resource_scheduler.py`; privileged settings come only
@@ -436,3 +437,51 @@ responsiveness, sustained pressure, or host deployment/migration. Real GPU
 acceptance must use the existing shared GPU reservation and an isolated test
 configuration; production admission stays on the existing authority until the
 explicit cutover. Do not infer real-device safety from simulated telemetry.
+
+## Job inspection and completion delivery
+
+`resource-run` prints the immutable job ID, final state, actual exit code and an
+inspection command. It returns the command's exit code. Reattach to an existing
+job without resubmitting:
+
+```sh
+resource-job inspect JOB_ID
+resource-job inspect JOB_ID --json
+resource-job logs JOB_ID --follow
+resource-job logs JOB_ID --stream stderr
+resource-job wait JOB_ID --timeout 120 --json
+resource-job notifications
+resource-job ack JOB_ID --confirm
+```
+
+Inspection includes requests, allocation, observed usage, outcome, lifecycle
+events and output metadata. Logs preserve stdout/stderr and support byte offsets
+(`--stdout-offset`, `--stderr-offset`). `logs --json` emits newline-delimited
+response objects with chunks, next offsets and output metadata. Stored output is
+capped at 8 MiB per stream; metadata reports known truncation. Output is retained
+with the job, not an unlimited archive. Successful log reads exit zero; `wait`
+returns the job's exit code. Observation timeout returns 124 without cancelling
+or resubmitting the job.
+
+New submissions preserve the submitting Orca session identity. The foreground
+client heartbeats a 30-second waiter lease and acknowledges terminal results;
+normal foreground completions do not generate redundant notifications. A detached
+completion becomes eligible after both that lease and a 10-second completion
+grace expire. `resource-job wait` can reattach and acknowledge the result.
+
+The unprivileged `resource-job-notifications` user service resolves the exact
+local structured Orca session and sends a completion message with inspection
+commands. It never launches a replacement agent or retries the workload. Session
+matching does not use project names, paths or terminal titles. Terminal-only,
+missing or ambiguous sessions fall back to the plugin's **Completions to review**
+inbox. Delivery acceptance is not proof the agent has read or acted on a message.
+
+The scheduler persists a delivery claim before contacting Orca. A lost receipt
+or restart during sending leaves an uncertain outcome in the inbox rather than
+blindly waking the agent again. Orca being unavailable before a send leaves the
+notification pending for a later attempt. Pre-upgrade history is not replayed.
+Use **Mark reviewed** or `resource-job ack` after handling an inbox outcome.
+Unresolved outcomes retain their job and output through normal history pruning;
+500 unresolved outcomes block new submissions until reviewed (already admitted
+jobs can still finish). This is bounded retention, not an exactly-once transport
+guarantee. Notifications do not authorize retries or resuming cancelled tasks.

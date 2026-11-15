@@ -369,6 +369,7 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(record["recommendation"]["vram_mib"], 5376)
         self.backend.tick()
         self.assertEqual(self.profile()["runs"], 1)
+        self.backend.handle(dict(version=1, action="notification-ack", id=probe["id"], confirm=True), os.getuid())
         for _ in range(4):
             other = self.submit(ram=1024)
             self.finish(other)
@@ -461,6 +462,123 @@ class SchedulerTests(unittest.TestCase):
             rs.gpu_process_allocations(xml, "GPU-other", proc)
         with self.assertRaises(ValueError):
             rs.gpu_process_allocations("broken xml", "GPU-test", proc)
+
+    def test_inspect_and_output_are_read_only_private_payload_is_never_exposed(self):
+        job = self.submit()
+        job["waiter_token"] = "b" * 32
+        directory = Path(self.temp.name) / job["id"]
+        (directory / "stdout").write_text("first output")
+        revision = self.backend.state["revision"]
+        result = self.backend.handle(dict(version=1, action="inspect", id=job["id"]), os.getuid())
+        self.assertEqual(result["output"]["stdout"]["bytes"], 12)
+        self.assertEqual(self.backend.state["revision"], revision)
+        for value in ("secret-argument", "credential", "b" * 32):
+            self.assertNotIn(value, json.dumps(result))
+        output = self.backend.handle(dict(version=1, action="output", id=job["id"], stdout_offset=6), os.getuid())
+        self.assertEqual(output["stdout"], "output")
+        with self.assertRaises(ValueError):
+            self.backend.handle(dict(version=1, action="output", id=job["id"], stdout_offset=-1), os.getuid())
+        with self.assertRaises(PermissionError):
+            self.backend.handle(dict(version=1, action="inspect", id=job["id"]), os.getuid() + 1)
+
+    def test_notification_waiter_heartbeat_ack_and_claim_are_persisted(self):
+        job = self.submit()
+        token = "b" * 32
+        self.backend.handle(dict(version=1, action="watch", id=job["id"], token=token), os.getuid())
+        self.finish(job, "FAILED", 7)
+        self.assertEqual(job["notification"]["state"], "pending")
+        with self.assertRaises(ValueError):
+            self.backend.handle(dict(version=1, action="notification-claim", id=job["id"]), os.getuid())
+        with self.assertRaises(ValueError):
+            self.backend.handle(dict(version=1, action="notification-ack", id=job["id"]), os.getuid())
+        self.backend.handle(dict(version=1, action="notification-ack", id=job["id"], token=token), os.getuid())
+        self.assertEqual(self.backend.notification_inbox(), [])
+        os.close(self.backend.lock_fd)
+        self.backend = rs.Backend(self.backend.config, self.slurm, lambda: copy.deepcopy(self.snapshot), host=self.host)
+        self.assertEqual(self.backend.notification_inbox(), [])
+
+    def test_expired_waiter_claim_survives_restart_without_duplicate_delivery(self):
+        job = self.submit()
+        self.finish(job)
+        with patch.object(rs.time, "time", return_value=job["ended_at"] + 31):
+            claim = self.backend.handle(dict(version=1, action="notification-claim", id=job["id"]), os.getuid())
+        self.assertEqual(job["notification"]["state"], "sending")
+        os.close(self.backend.lock_fd)
+        self.backend = rs.Backend(self.backend.config, self.slurm, lambda: copy.deepcopy(self.snapshot), host=self.host)
+        with self.assertRaises(ValueError):
+            self.backend.handle(dict(version=1, action="notification-claim", id=job["id"]), os.getuid())
+        with self.assertRaises(ValueError):
+            self.backend.handle(
+                dict(version=1, action="notification-finish", id=job["id"], token="wrong", state="delivered"),
+                os.getuid(),
+            )
+        self.backend.handle(
+            dict(version=1, action="notification-finish", id=job["id"], token=claim["token"], state="delivered"),
+            os.getuid(),
+        )
+        self.assertEqual(self.backend.notification_inbox(), [])
+
+    def test_unreviewed_completion_pins_output_until_acknowledged(self):
+        first = self.submit()
+        self.finish(first)
+        directory = Path(self.temp.name) / first["id"]
+        (directory / "stderr").write_text("diagnostic")
+        for _ in range(4):
+            self.finish(self.submit())
+        self.assertTrue(directory.exists())
+        self.backend.handle(dict(version=1, action="notification-ack", id=first["id"], confirm=True), os.getuid())
+        self.backend.tick()
+        self.assertFalse(directory.exists())
+
+    def test_resource_job_logs_streams_bounded_chunks_and_wait_returns_actual_exit(self):
+        job = self.submit()
+        directory = Path(self.temp.name) / job["id"]
+        (directory / "stdout").write_text("x" * 40000)
+        self.finish(job, "FAILED", 7)
+        args = SimpleNamespace(
+            operation="logs",
+            id=job["id"],
+            json=False,
+            follow=False,
+            stream="stdout",
+            stdout_offset=0,
+            stderr_offset=0,
+            timeout=None,
+        )
+        output = io.StringIO()
+        with (
+            patch.object(
+                rs, "rpc", side_effect=lambda request: self.backend.handle({"version": 1, **request}, os.getuid())
+            ),
+            contextlib.redirect_stdout(output),
+        ):
+            self.assertEqual(rs.resource_job(args), 0)
+            self.assertEqual(len(output.getvalue()), 40000)
+            args.operation = "wait"
+            self.assertEqual(rs.resource_job(args), 7)
+        self.assertEqual(job["notification"]["state"], "acknowledged")
+
+    def test_resource_job_wait_timeout_does_not_cancel_or_resubmit(self):
+        job = self.submit()
+        args = SimpleNamespace(
+            operation="wait",
+            id=job["id"],
+            json=False,
+            follow=False,
+            stream="both",
+            stdout_offset=0,
+            stderr_offset=0,
+            timeout=1,
+        )
+        with (
+            patch.object(
+                rs, "rpc", side_effect=lambda request: self.backend.handle({"version": 1, **request}, os.getuid())
+            ),
+            patch.object(rs.time, "monotonic", side_effect=[0, 2]),
+        ):
+            self.assertEqual(rs.resource_job(args), 124)
+        self.assertEqual(job["state"], "queued")
+        self.assertEqual(self.slurm.cancelled, [])
 
     def test_external_ram_shortage_allows_small_job_and_records_bypass(self):
         self.snapshot["ram"]["available_mib"] = 9000
@@ -996,6 +1114,8 @@ class SchedulerTests(unittest.TestCase):
             job = self.submit()
             self.slurm.rows[job["slurm_job_id"]]["job_state"] = ["COMPLETED"]
             self.backend.tick()
+            self.backend.handle(dict(version=1, action="notification-ack", id=job["id"], confirm=True), os.getuid())
+        self.backend.tick()
         status = self.backend.status()
         self.assertEqual(len(status["history"]), 3)
         self.assertEqual(len(list(Path(self.temp.name).glob("*/payload.json"))), 0)

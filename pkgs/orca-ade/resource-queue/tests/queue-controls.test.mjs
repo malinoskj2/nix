@@ -106,3 +106,24 @@ test('exploratory profiles and outcomes are visible without claiming a peak guar
   raw.jobs[0].profile.name = '<img src=x onerror=alert(1)>';
   assert.doesNotMatch(page(adaptStatus(raw), { selected: job.id }), /<img src=x/);
 });
+
+test('completion inbox hides active waiters, escapes output and exposes uncertain delivery', () => {
+  const raw = fixture(), id = raw.jobs[0].id;
+  assert.deepEqual(adaptStatus(raw).notifications, []);
+  raw.notifications = [
+    { id, label: '<script>bad</script>', state: 'failed', exit_code: 7, notification: { state: 'sending' } },
+    { id: raw.jobs[1].id, ready: false, notification: { state: 'pending' } },
+    { id: 'bad-id', ready: true, notification: { state: 'unavailable' } },
+  ];
+  raw.notification_count = 3;
+  const snapshot = adaptStatus(raw);
+  assert.equal(snapshot.notifications.length, 1);
+  const html = page(snapshot);
+  assert.match(html, /Completions to review/);
+  assert.match(html, /Exit 7/);
+  assert.match(html, /Delivery may have been interrupted/);
+  assert.match(html, /data-notification-job=/);
+  assert.match(html, /Mark reviewed/);
+  assert.doesNotMatch(html, /<script>bad/);
+  assert.match(page(snapshot, { error: 'offline' }), /data-action="ackNotification"[^>]*disabled/);
+});

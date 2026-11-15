@@ -700,6 +700,14 @@ class Backend:
     def submit(self, request, uid):
         if request.get("nested"):
             raise ValueError("Nested reservations are forbidden; run within the existing budget")
+        if (
+            sum(
+                j.get("notification", {}).get("state") in ("pending", "sending", "unavailable")
+                for j in self.state["jobs"]
+            )
+            >= 500
+        ):
+            raise ValueError("Completion inbox is full; review resource-job notifications and acknowledge outcomes")
         if sum(j["state"] not in TERMINAL for j in self.state["jobs"]) >= 256:
             raise ValueError("Queue limit reached; wait for existing jobs")
         req = request["requested"]
@@ -762,6 +770,12 @@ class Backend:
                 )
             if explore and any(j.get("profile") == profile and j["state"] not in TERMINAL for j in self.state["jobs"]):
                 raise ValueError("This workload profile already has active work; wait without resubmitting")
+        session = request.get("notify_session")
+        if session is not None and (not isinstance(session, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,160}", session)):
+            raise ValueError("Invalid submitting session identity")
+        waiter = request.get("waiter_token")
+        if waiter is not None and (not isinstance(waiter, str) or not ID_RE.fullmatch(waiter)):
+            raise ValueError("Invalid waiter identity")
         job_id = uuid.uuid4().hex
         job = dict(
             id=job_id,
@@ -769,6 +783,9 @@ class Backend:
             label=clean_label(request["label"]),
             explore=explore,
             profile=profile,
+            notification={"state": "waiting", "session": session},
+            waiter_token=waiter,
+            waiter_until=time.time() + 30 if waiter else 0,
             owner_uid=uid,
             agent=clean_label(request.get("agent") or "unknown"),
             worktree=clean_label(request.get("worktree") or "unknown"),
@@ -926,6 +943,7 @@ class Backend:
                     if result_path.exists():
                         summary = json.loads(result_path.read_text())
                         job["exit_code"] = summary["exit_code"]
+                        job["output_truncated"] = summary.get("output_truncated", {})
                         for key, value in summary.get("observed", {}).items():
                             if value is not None:
                                 job["observed"][key] = (
@@ -1044,7 +1062,11 @@ class Backend:
         terminal = [j for j in self.state["jobs"] if j["state"] in TERMINAL]
         for job in terminal:
             self.record_profile(job)
+            self.prepare_notification(job)
         keep = {j["id"] for j in terminal[-self.config["history_limit"] :]}
+        keep.update(
+            j["id"] for j in terminal if j.get("notification", {}).get("state") in ("pending", "sending", "unavailable")
+        )
         for job in terminal:
             if job["id"] not in keep:
                 directory = self.directory / job["id"]
@@ -1053,6 +1075,38 @@ class Backend:
                 directory.rmdir()
         self.state["jobs"] = [j for j in self.state["jobs"] if j["state"] not in TERMINAL or j["id"] in keep]
         self.save()
+
+    def prepare_notification(self, job):
+        notice = job.get("notification")
+        # Pre-upgrade jobs do not generate a burst of historical notifications.
+        if notice and notice["state"] == "waiting" and job["state"] in TERMINAL:
+            notice.update(state="pending", created_at=time.time())
+
+    def notification_inbox(self):
+        return [
+            {
+                "id": j["id"],
+                "label": j["label"],
+                "state": j["state"],
+                "exit_code": j["exit_code"],
+                "failure": j.get("failure"),
+                "project": j["project"],
+                "notification": {k: v for k, v in j["notification"].items() if k != "token"},
+                "ready": time.time() >= max(j.get("waiter_until", 0), (j.get("ended_at") or time.time()) + 10),
+            }
+            for j in self.state["jobs"]
+            if j.get("notification", {}).get("state") in ("pending", "sending", "unavailable")
+        ]
+
+    def output_metadata(self, job):
+        result = {}
+        for name in ("stdout", "stderr"):
+            path = self.directory / job["id"] / name
+            result[name] = {
+                "bytes": path.stat().st_size if path.exists() else 0,
+                "truncated": job.get("output_truncated", {}).get(name),
+            }
+        return result
 
     def protect_exploration(self):
         """Only stop opted-in probes; never sacrifice another workload to fit one."""
@@ -1173,6 +1227,7 @@ class Backend:
                     if status.get("Result") != "success" and code == 0:
                         code = 1
                 job["observed"].update(result.get("observed", {}))
+                job["output_truncated"] = result.get("output_truncated", {})
                 state = "cancelled" if job.get("host_cancel_requested") else "completed" if code == 0 else "failed"
                 self.finish_host_job(job, state, code, "systemd-terminal", now)
                 with contextlib.suppress(OSError, subprocess.SubprocessError):
@@ -1201,6 +1256,7 @@ class Backend:
         self.event(job, "completion", exit_code=code, cleanup=cleanup, execution=job["execution"])
         (self.directory / job["id"] / "payload.json").unlink(missing_ok=True)
         self.record_profile(job)
+        self.prepare_notification(job)
         self.changed(job)
 
     def release_job(self, job, *, force=False, bypassed=()):
@@ -1263,10 +1319,12 @@ class Backend:
     @staticmethod
     def public_job(job):
         result = {
-            **job,
+            **{k: v for k, v in job.items() if k != "waiter_token"},
             "requested": dict(job["requested"]),
             "events": [{k: v for k, v in event.items() if k != "snapshot"} for event in job["events"][-8:]],
         }
+        if job.get("notification"):
+            result["notification"] = {k: v for k, v in job["notification"].items() if k != "token"}
         effective = job["requested"]["vram_mib"] if job.get("released") or job["state"] == "running" else None
         result["allocation"] = {
             "cpu": job["requested"]["cpu"],
@@ -1377,6 +1435,8 @@ class Backend:
                 run_sandbox=True,
                 exploration=True,
                 profiles=True,
+                job_inspection=True,
+                completion_notifications=True,
                 pause=True,
                 resume=True,
                 priority=False,
@@ -1391,6 +1451,8 @@ class Backend:
             ],
             history=[self.public_job(j) for j in reversed(jobs) if j["state"] in TERMINAL],
             errors=self.errors,
+            notifications=self.notification_inbox()[:100],
+            notification_count=len(self.notification_inbox()),
         )
         value["truncated"] = {"history": 0, "events": False}
         # Preserve ALL active jobs; compact events before shedding oldest history.
@@ -1411,6 +1473,8 @@ class Backend:
         action = request.get("action")
         if action == "status":
             return self.status()
+        if action == "notifications":
+            return {"notifications": self.notification_inbox()}
         if action == "profiles":
             identity = profile_identity(request)
             project = request.get("project")
@@ -1440,6 +1504,47 @@ class Backend:
         job = next((j for j in self.state["jobs"] if j["id"] == job_id), None)
         if job is None or job["owner_uid"] != uid:
             raise PermissionError("Job is unavailable to this owner")
+        if action == "inspect":
+            return {"job": self.public_job(job), "events": job["events"], "output": self.output_metadata(job)}
+        if action == "watch":
+            token = request.get("token")
+            if not isinstance(token, str) or not ID_RE.fullmatch(token):
+                raise ValueError("Invalid waiter identity")
+            job["waiter_token"], job["waiter_until"] = token, time.time() + 30
+            self.save()
+            return {"id": job_id}
+        if action in ("notification-claim", "notification-finish", "notification-ack"):
+            notice = job.get("notification")
+            if job["state"] not in TERMINAL or not notice:
+                raise ValueError("No completion notification")
+            if action == "notification-claim":
+                due = max(job.get("waiter_until", 0), (job.get("ended_at") or time.time()) + 10)
+                if notice["state"] != "pending" or time.time() < due:
+                    raise ValueError("Notification is claimed or has an active waiter")
+                # Durable intent BEFORE contacting Orca. A lost response never causes a second wake.
+                notice.update(state="sending", token=uuid.uuid4().hex)
+                self.save()
+                return {"token": notice["token"]}
+            if action == "notification-finish":
+                if notice["state"] != "sending" or request.get("token") != notice.get("token"):
+                    raise ValueError("Notification claim mismatch")
+                state = request.get("state")
+                if state not in ("delivered", "unavailable"):
+                    raise ValueError("Invalid notification outcome")
+                notice.update(state=state, detail=clean_label(request.get("detail", state)))
+                notice.pop("token", None)
+            else:
+                if (
+                    not (request.get("token") and request["token"] == job.get("waiter_token"))
+                    and request.get("confirm") is not True
+                ):
+                    raise ValueError("Acknowledge with --confirm or the active waiter token")
+                if notice["state"] == "sending" and request.get("confirm") is not True:
+                    return {"id": job_id, "state": "sending"}
+                notice.update(state="acknowledged")
+                notice.pop("token", None)
+            self.save()
+            return {"id": job_id, "state": notice["state"]}
         if action == "model-event":
             if job["state"] != "running":
                 raise ValueError("Model events require a running reservation")
@@ -1474,6 +1579,13 @@ class Backend:
             self.changed(job)
             return {"id": job_id, "revision": job["revision"], "model": model}
         if action == "output":
+            if (
+                request.get("waiter_token")
+                and request["waiter_token"] == job.get("waiter_token")
+                and job.get("waiter_until", 0) < time.time() + 20
+            ):
+                job["waiter_until"] = time.time() + 30
+                self.save()
             result = {}
             for name in ("stdout", "stderr"):
                 offset = request.get(name + "_offset", 0)
@@ -1487,7 +1599,8 @@ class Backend:
                     result[name + "_offset"] = offset + len(data)
                 except FileNotFoundError:
                     result[name], result[name + "_offset"] = "", offset
-            result["job"] = job
+            result["job"] = self.public_job(job)
+            result["output"] = self.output_metadata(job)
             return result
         if action not in ("cancel", "terminate", "force-run", "run-next", "run-host", "run-sandbox"):
             raise ValueError("Unsupported control action")
@@ -1711,6 +1824,7 @@ def step(directory, host=False, sandbox=False):
         )
         pipes = {child.stdout: streams["stdout"], child.stderr: streams["stderr"]}
         totals = {stream: 0 for stream in streams.values()}
+        truncated = {stream: False for stream in streams.values()}
         while pipes:
             ready, _, _ = select.select(list(pipes), [], [], 1)
             for pipe in ready:
@@ -1721,6 +1835,7 @@ def step(directory, host=False, sandbox=False):
                     continue
                 stream = pipes[pipe]
                 remaining = max(0, 8 * MAX_MESSAGE - totals[stream])
+                truncated[stream] = truncated[stream] or len(chunk) > remaining
                 stream.write(chunk[:remaining])
                 stream.flush()
                 totals[stream] += len(chunk[:remaining])
@@ -1747,6 +1862,7 @@ def step(directory, host=False, sandbox=False):
                 "exit_code": code if code >= 0 else 128 - code,
                 "ended_at": time.time(),
                 "cleanup": "step-supervisor-complete",
+                "output_truncated": {name: truncated[stream] for name, stream in streams.items()},
                 "observed": observed,
             },
         )
@@ -1855,9 +1971,12 @@ def run(args):
     )
     if getattr(args, "explore", False) and (identity is None or not os.environ.get("AGENT_SANDBOX_INSTANCE")):
         raise ValueError("Exploration requires a sandbox and --project, --profile and --variant")
+    waiter_token = uuid.uuid4().hex
     result = rpc(
         dict(
             action="submit",
+            waiter_token=waiter_token,
+            notify_session=os.environ.get("ORCA_AGENT_SESSION_ID") or os.environ.get("ORCA_SESSION_ID"),
             label=args.name,
             requested=budgets,
             explore=getattr(args, "explore", False),
@@ -1890,7 +2009,7 @@ def run(args):
     previous = {sig: signal.signal(sig, interrupt) for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)}
     try:
         while True:
-            result = rpc(dict(action="output", id=job_id, **offsets))
+            result = rpc(dict(action="output", id=job_id, waiter_token=waiter_token, **offsets))
             for name, stream in (("stdout", sys.stdout), ("stderr", sys.stderr)):
                 stream.write(result[name])
                 stream.flush()
@@ -1900,6 +2019,13 @@ def run(args):
                 # Drain output already written before Slurm terminal state.
                 if not result["stdout"] and not result["stderr"]:
                     code = job["exit_code"]
+                    if job.get("notification"):
+                        with contextlib.suppress(OSError, RuntimeError):
+                            rpc(dict(action="notification-ack", id=job_id, token=waiter_token))
+                    print(
+                        f"resource-run: {job_id} {job['state']}; exit={code}; outcome={job.get('failure') or job['state']}; inspect: resource-job inspect {job_id}",
+                        file=sys.stderr,
+                    )
                     if job.get("profile"):
                         print(
                             "resource-run: profile "
@@ -1948,6 +2074,79 @@ def run(args):
     finally:
         for sig, handler in previous.items():
             signal.signal(sig, handler)
+
+
+def resource_job(args):
+    if args.operation == "notifications":
+        result = rpc(dict(action="notifications"))
+        print(json.dumps(result, indent=2))
+        return 0
+    if not args.id or not ID_RE.fullmatch(args.id):
+        raise ValueError("Supply the full job ID")
+    if args.operation == "ack":
+        print(json.dumps(rpc(dict(action="notification-ack", id=args.id, confirm=args.confirm))))
+        return 0
+    if args.operation == "inspect":
+        result = rpc(dict(action="inspect", id=args.id))
+        if args.json:
+            print(json.dumps(result, indent=2))
+        else:
+            job = result["job"]
+            for label, value in (
+                ("Job", job["id"]),
+                ("Name", job["label"]),
+                ("State", job["state"]),
+                ("Exit", job.get("exit_code")),
+                ("Outcome", job.get("failure")),
+                ("Waiting", job.get("wait_reason")),
+                ("Request", job["requested"]),
+                ("Observed", job["observed"]),
+                ("Notification", job.get("notification")),
+            ):
+                print(f"{label}: {value if value is not None else 'unknown'}")
+            print(f"Output: resource-job logs {args.id}")
+        return 0
+    if any(value < 0 for value in (args.stdout_offset, args.stderr_offset)):
+        raise ValueError("Output offsets must be nonnegative")
+    if args.timeout is not None and (not math.isfinite(args.timeout) or args.timeout <= 0):
+        raise ValueError("Wait timeout must be positive and finite")
+    token = uuid.uuid4().hex if args.operation == "wait" else None
+    if token:
+        rpc(dict(action="watch", id=args.id, token=token))
+    offsets = dict(stdout_offset=args.stdout_offset, stderr_offset=args.stderr_offset)
+    start = time.monotonic()
+    while True:
+        result = rpc(dict(action="output", id=args.id, waiter_token=token, **offsets))
+        job = result["job"]
+        if args.operation == "logs":
+            if args.json:
+                print(json.dumps(result), flush=True)
+            else:
+                for name, stream in (("stdout", sys.stdout), ("stderr", sys.stderr)):
+                    if args.stream in ("both", name):
+                        stream.write(result[name])
+                        stream.flush()
+        offsets = {name + "_offset": result[name + "_offset"] for name in ("stdout", "stderr")}
+        drained = not result["stdout"] and not result["stderr"]
+        if job["state"] in TERMINAL and drained:
+            if token and job.get("notification"):
+                with contextlib.suppress(OSError, RuntimeError):
+                    rpc(dict(action="notification-ack", id=args.id, token=token))
+            if args.operation == "wait":
+                print(
+                    json.dumps(job)
+                    if args.json
+                    else f"{args.id}: {job['state']}; exit={job['exit_code']}; outcome={job.get('failure') or job['state']}"
+                )
+                return job["exit_code"] if job["exit_code"] is not None else 130 if job["state"] == "cancelled" else 1
+            return 0
+        if args.operation == "logs" and drained and not args.follow:
+            return 0
+        if args.timeout is not None and time.monotonic() - start >= args.timeout:
+            print("resource-job: observation timed out; job remains unchanged", file=sys.stderr)
+            return 124
+        if drained:
+            time.sleep(0.5)
 
 
 def compat(argv):
@@ -2022,6 +2221,16 @@ def main():
     control.add_argument("id", nargs="?")
     control.add_argument("--revision", type=int)
     control.add_argument("--confirm", action="store_true")
+    job = actions.add_parser("job")
+    job.add_argument("operation", choices=("inspect", "logs", "wait", "notifications", "ack"))
+    job.add_argument("id", nargs="?")
+    job.add_argument("--json", action="store_true")
+    job.add_argument("--follow", action="store_true")
+    job.add_argument("--stream", choices=("both", "stdout", "stderr"), default="both")
+    job.add_argument("--stdout-offset", type=int, default=0)
+    job.add_argument("--stderr-offset", type=int, default=0)
+    job.add_argument("--timeout", type=float)
+    job.add_argument("--confirm", action="store_true")
     model = actions.add_parser("model")
     model.add_argument("state", choices=("loading", "ready", "busy", "idle", "unloaded"))
     model.add_argument("--name", required=True)
@@ -2032,6 +2241,8 @@ def main():
     actions.add_parser("sandbox-step").add_argument("directory")
     actions.add_parser("step-exec").add_argument("fd", type=int)
     args = parser.parse_args()
+    if args.action == "job":
+        return resource_job(args)
     if args.action == "profile":
         print(
             json.dumps(

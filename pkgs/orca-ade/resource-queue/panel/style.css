@@ -901,3 +901,13 @@ thead th {
   flex-wrap:wrap;
   gap:8px
 }
+
+.completion-item {
+  display:grid;
+  gap:5px;
+  padding:12px 0;
+  border-top:1px solid var(--border);
+  overflow-wrap:anywhere
+}
+.completion-inbox>p { margin:6px 0 12px }
+.completion-item code { white-space:normal }

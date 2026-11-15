@@ -22,6 +22,16 @@ export async function check() {
   assert(!document.querySelector('[data-action="export"], [data-action="exportJob"], .pressure, .capacity-note'), 'Removed controls and disclaimers stay absent');
   await press('[data-tab="queue"]');
 
+  window.testBridge.raw.notifications = [{ id: '00000000000000000000000000000001', label: 'Detached completion', state: 'failed', exit_code: 7, notification: { state: 'unavailable', detail: 'Session unavailable' }, ready: true }];
+  window.testBridge.raw.notification_count = 1;
+  await press('[data-action="refresh"]');
+  assert(document.querySelector('.completion-inbox').textContent.includes('Exit 7'), 'Completion inbox shows failure');
+  await press('[data-notification-job]');
+  assert(document.querySelector('.inspector'), 'Completion opens job inspection');
+  await press('[data-action="ackNotification"]');
+  assert(!document.querySelector('.completion-inbox'), 'Reviewed completion leaves inbox');
+  await press('[data-tab="queue"]');
+
   const initialControls = window.testBridge.controls.length;
   await press('[data-action="run-next"][data-queue-job="00000000000000000000000000000004"]');
   assert(window.testBridge.controls.length === initialControls, 'Reorder waits for confirmation');

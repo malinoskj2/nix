@@ -86,3 +86,13 @@ test('run controls reject old backends, stale confirmation and already released 
     }
   }
 });
+
+test('completion acknowledgement requires confirmation and exact identity', async () => {
+  const { backend, calls } = harness();
+  await assert.rejects(backend.acknowledge({ id: jobId(1) }));
+  await assert.rejects(backend.acknowledge({ id: 'invalid; command', confirm: true }));
+  assert.equal(calls.length, 0);
+  await backend.acknowledge({ id: jobId(1), confirm: true });
+  assert.equal(calls[0].command, 'resource-job');
+  assert.deepEqual(calls[0].args, ['ack', jobId(1), '--confirm']);
+});
