@@ -62,7 +62,8 @@ actual usage twice. GPU compute utilization is a separate reading, not a proxy
 for free VRAM or reserved compute.
 
 Defaults are 4GiB RAM headroom, 3GiB VRAM headroom, 12 background Slurm CPUs and a
-10-second healthy interval. Memory PSI full avg10 >=1 percent or RAM below the
+10-second healthy interval. The home host overrides normal CPU capacity to 28,
+matching the idle sandbox pool's logical CPU count. Memory PSI full avg10 >=1 percent or RAM below the
 margin holds new admissions. Existing allocations remain reserved. Pressure is
 sampled every two seconds; this is admission policy, not protection from every
 external allocation between samples. Slurm cgroups enforce CPU placement and RAM,

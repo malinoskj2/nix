@@ -19,6 +19,34 @@
       "compatibility": "unverified",
       "loader": "llama.cpp GGUF; chat template and tool use require runtime validation"
     },
+    "qwen3.8-27b-uncensored": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "gated": true,
+      "files": [
+        {
+          "repository": "orcarouter/Qwen3.8-27B-Uncensored-GGUF",
+          "revision": "b2e5cef033c0832fff1cc8c4937865abab9455f4",
+          "path": "Qwen3.8-27B-Uncensored-Q5_K_M.gguf",
+          "target": "Qwen3.8-27B-Uncensored-Q5_K_M.gguf",
+          "size": 19535701376,
+          "sha256": "0e42ef33bcf9974730119fa59ff6b065fdd52080a664728afa0902cb358a301b",
+          "imports": []
+        },
+        {
+          "repository": "orcarouter/Qwen3.8-27B-Uncensored-GGUF",
+          "revision": "b2e5cef033c0832fff1cc8c4937865abab9455f4",
+          "path": "mmproj-Qwen3.8-27B-Uncensored-f16.gguf",
+          "target": "mmproj-Qwen3.8-27B-Uncensored-f16.gguf",
+          "size": 931145984,
+          "sha256": "add205b7bfdb3f71f6da36b0a82aa20928dd829a920878c602628cdfbebc5288",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "llama.cpp GGUF; use the bundled mmproj file for vision; chat template, tool use and peak VRAM require runtime validation"
+    },
     "qwen-image": {
       "enabled": true,
       "kind": "checkpoint",

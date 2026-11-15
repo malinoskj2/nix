@@ -16,7 +16,7 @@ assert policy == {
     "allowed_uid": 1000,
     "allowed_gid": 100,
     "partition": "resource",
-    "cpu_capacity": 12,
+    "cpu_capacity": 28,
     "game_cpu_capacity": 4,
     "game_marker_path": "/run/resource-scheduler-game-active",
     "ram_headroom_mib": 4096,
@@ -25,7 +25,7 @@ assert policy == {
     "poll_seconds": 2,
     "stability_seconds": 10,
     "history_limit": 500,
-    "policy_version": "1",
+    "policy_version": "2",
 }
 
 config = Path(os.environ["SLURM_CONFIG"])
@@ -34,7 +34,7 @@ for required in (
     "AllowGroups=root",
     "RootOnly=YES",
     "EnforcePartLimits=ALL",
-    "MaxCPUsPerNode=12",
+    "MaxCPUsPerNode=28",
     "RealMemory=24576",
     "Gres=gpu:1,shard:32768",
     "ProctrackType=proctrack/cgroup",

@@ -1,7 +1,7 @@
 # Resource scheduler deployment and migration
 
 The `home` host enables the shared scheduler with
-`services.resourceScheduler.enable = true`. Applying this configuration activates
+`services.resourceScheduler.enable = true` and a 28-CPU admission ceiling. Applying this configuration activates
 Slurm and replaces legacy GPU admission; follow the drained cutover below before
 switching. Editing or building the configuration does not activate it.
 The exported `nixosModules.resource-scheduler` module is also available to consumers.
@@ -11,7 +11,11 @@ The exported `nixosModules.resource-scheduler` module is also available to consu
 After the validation and drain below, enable the normal host path with:
 
 ```nix
-services.resourceScheduler.enable = true;
+services.resourceScheduler = {
+  enable = true;
+  cpuCapacity = 28;
+  policyVersion = "2";
+};
 ```
 
 This installs the backend, starts a single-node Slurm controller and executor,
@@ -35,13 +39,13 @@ Do not add `PrivateUsers`, a private `/tmp`, restricted `/proc` or capability li
 without testing the namespace bootstrap. Untrusted environment and commands must
 only become effective after privilege drop; review this boundary before rollout.
 
-The starting policy is 12 Slurm CPU units, a 24576 MiB static Slurm RAM ceiling,
+The home policy is 28 Slurm CPU units, matching the idle sandbox pool's logical CPU count, a 24576 MiB static Slurm RAM ceiling,
 4096 MiB additional RAM headroom, 3072 MiB additional VRAM headroom, and a 32768 MiB
 cooperative VRAM shard pool. The JSON policy is generated at
 `/etc/resource-scheduler/config.json`. The backend samples every two seconds and
 requires ten stable seconds before resuming admissions. It retains 500 recent jobs.
 CPU requests use Slurm accounting units with SMT/core allocation rounding, not a
-promise of 12 physical cores. During a managed game or external GameMode session,
+promise of 28 physical cores. During a managed game or external GameMode session,
 background admission and aggregate CPU quota fall to four units. Existing background
 jobs receive proportional cgroup CPU quotas and lower weight; game allocations keep
 their own Slurm CPU limits. Quotas/weights restore when gaming ends, including after

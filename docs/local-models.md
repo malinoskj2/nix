@@ -76,6 +76,7 @@ the Nix store or model storage. Accept access to:
 - [Pixel upscaler LoRA](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler)
 - [SAM 3](https://huggingface.co/facebook/sam3)
 - [SAM 3.1](https://huggingface.co/facebook/sam3.1)
+- [Qwen3.8-27B Uncensored GGUF](https://huggingface.co/orcarouter/Qwen3.8-27B-Uncensored-GGUF)
 
 The user unit uses `LoadCredential` with a non-secret `SetCredential=hf-token:unconfigured` fallback. This
 makes an absent source nonfatal, as documented by
@@ -104,6 +105,7 @@ Claude rules and Codex context share the same discovery/readiness policy.
 | Voice service | Add `-f ~/.config/local-models/voice-compose.yaml` to local voice Compose commands. It mounts both `/models` and the complete root at its same absolute path so snapshot/view links resolve. Existing remote `deploy.sh` exports its own model store; production deployment remains unchanged. |
 | ComfyUI | Pass `--extra-model-paths-config ~/.config/local-models/comfyui.yaml`; shared H3 and LTX adapter paths are declared. Runtime/plugins are separate. |
 | Qwen3.8 coding/chat | `by-name/qwen3.8-27b/Qwen3.8-27B-Q5_K_M.gguf`; llama.cpp from the locked nixpkgs is the candidate runtime. Validate embedded chat template, tool calls and peak VRAM under a GPU reservation before choosing context size. No serving daemon added. |
+| Qwen3.8 uncensored | `by-name/qwen3.8-27b-uncensored/Qwen3.8-27B-Uncensored-Q5_K_M.gguf`; the same alias includes `mmproj-Qwen3.8-27B-Uncensored-f16.gguf` for vision. Gated Hub access is required; llama.cpp loading, tools and peak VRAM remain unverified. |
 | SAM 3 / SAM 3.1 | Pass the selected `.pt` file explicitly to the separately pinned Meta implementation; preserve its bundled BPE. Do not use a Transformers safetensors loader on these files. Video/object-count memory checks remain required. |
 | BiRefNet | Snapshot includes pinned custom code/configuration. Review that code in a separate runtime; verify offline loading does not fetch a pretrained backbone. No automatic requirements installation. |
 | SkinTokens / UniRig / Diff3F | Catalog files are available through aliases; configure upstream local paths and validate separate Python/CUDA/Blender environments. SkinTokens preserves `models/Qwen3-0.6B/`; UniRig includes OPT-350m configuration only, with `llm.pretrained_model_name_or_path` pointing at its `opt-350m/` view. Diff3F remains unresolved until DINOv2's published artifact is verified. |
