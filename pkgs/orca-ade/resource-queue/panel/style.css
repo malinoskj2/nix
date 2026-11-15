@@ -882,3 +882,22 @@ footer details p {
 .history-insights .detail-facts {
   max-width:500px
 }
+
+.capacity-more {
+  display: none;
+}
+@media (max-width: 470px) {
+  .capacity > .capacity-facts {
+    display: none;
+  }
+  .capacity-more {
+    display: block;
+  }
+  .capacity-more summary {
+    font-size: 10px;
+    color: var(--quiet);
+  }
+  .capacity-more .capacity-facts {
+    margin-top: 8px;
+  }
+}
