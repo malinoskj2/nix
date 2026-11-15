@@ -76,6 +76,9 @@ test('copied journal selector matches fields emitted by the actual backend nativ
   assert.equal(native.RESOURCE_JOB_ID, event.job_id);
   assert.equal(native.SYSLOG_IDENTIFIER, 'resource-scheduler');
   assert.equal(native.RESOURCE_EVENT, 'submission');
+  assert.equal(event.requested.vram_mib, null);
+  assert.equal(event.vram_estimate, 'all-available');
+  assert.equal(event.allocation, null);
   const query = journalQuery(event.job_id);
   assert.match(query, /SYSLOG_IDENTIFIER=resource-scheduler/);
   assert.ok(query.includes(`RESOURCE_JOB_ID='${native.RESOURCE_JOB_ID}'`));

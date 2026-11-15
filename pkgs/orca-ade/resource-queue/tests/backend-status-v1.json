@@ -1,7 +1,7 @@
 {
   "provenance": {
     "generator": "capture-backend-status.py",
-    "backend_sha256": "258f1e2e1523d5b5ab14c634f70c157eb9452f3256af6383b042432b5ffd55a6",
+    "backend_sha256": "62b448faca72b18975eb8074b36edc15ac832d0c2b04f19b80864b55be09108c",
     "execution": "Real Backend.submit/tick/status serializer; simulated Slurm and deterministic host telemetry; captured native journal datagrams"
   },
   "scenarios": {
@@ -94,6 +94,7 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "pending",
+          "model": null,
           "events": [
             {
               "schema_version": 1,
@@ -110,7 +111,9 @@
                 "cpu": 2,
                 "ram_mib": 4096,
                 "vram_mib": null
-              }
+              },
+              "vram_estimate": "all-available",
+              "allocation": null
             },
             {
               "schema_version": 1,
@@ -128,7 +131,12 @@
                 "ram_mib": 4096,
                 "vram_mib": null
               },
-              "reason": null
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              }
             },
             {
               "schema_version": 1,
@@ -145,6 +153,12 @@
                 "cpu": 2,
                 "ram_mib": 4096,
                 "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
               },
               "queue_seconds": 0
             }
@@ -254,6 +268,7 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "pending",
+          "model": null,
           "events": [
             {
               "schema_version": 1,
@@ -270,7 +285,9 @@
                 "cpu": 6,
                 "ram_mib": 4096,
                 "vram_mib": 0
-              }
+              },
+              "vram_estimate": "declared-peak",
+              "allocation": null
             },
             {
               "schema_version": 1,
@@ -288,7 +305,12 @@
                 "ram_mib": 4096,
                 "vram_mib": 0
               },
-              "reason": null
+              "vram_estimate": "declared-peak",
+              "allocation": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              }
             },
             {
               "schema_version": 1,
@@ -302,6 +324,12 @@
               "category": "build",
               "slurm_job_id": "2",
               "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "vram_estimate": "declared-peak",
+              "allocation": {
                 "cpu": 6,
                 "ram_mib": 4096,
                 "vram_mib": 0
@@ -354,6 +382,7 @@
           "wait_reason": "Awaiting headroom policy",
           "exit_code": null,
           "cleanup": "pending",
+          "model": null,
           "events": [
             {
               "schema_version": 1,
@@ -370,7 +399,9 @@
                 "cpu": 2,
                 "ram_mib": 4096,
                 "vram_mib": null
-              }
+              },
+              "vram_estimate": "all-available",
+              "allocation": null
             }
           ],
           "allocation": {
@@ -420,6 +451,7 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "slurm-terminal",
+          "model": null,
           "events": [
             {
               "schema_version": 1,
@@ -436,7 +468,9 @@
                 "cpu": 2,
                 "ram_mib": 4096,
                 "vram_mib": null
-              }
+              },
+              "vram_estimate": "all-available",
+              "allocation": null
             },
             {
               "schema_version": 1,
@@ -454,7 +488,12 @@
                 "ram_mib": 4096,
                 "vram_mib": null
               },
-              "reason": null
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              }
             },
             {
               "schema_version": 1,
@@ -471,6 +510,12 @@
                 "cpu": 2,
                 "ram_mib": 4096,
                 "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
               },
               "queue_seconds": 0
             },
@@ -489,6 +534,12 @@
                 "cpu": 2,
                 "ram_mib": 4096,
                 "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
               },
               "exit_code": null,
               "cleanup": "slurm-terminal",
@@ -612,6 +663,7 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "pending",
+          "model": null,
           "events": [
             {
               "schema_version": 1,
@@ -628,7 +680,9 @@
                 "cpu": 2,
                 "ram_mib": 4096,
                 "vram_mib": null
-              }
+              },
+              "vram_estimate": "all-available",
+              "allocation": null
             },
             {
               "schema_version": 1,
@@ -646,7 +700,12 @@
                 "ram_mib": 4096,
                 "vram_mib": null
               },
-              "reason": null
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              }
             },
             {
               "schema_version": 1,
@@ -663,6 +722,12 @@
                 "cpu": 2,
                 "ram_mib": 4096,
                 "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
               },
               "queue_seconds": 0
             }
@@ -715,6 +780,7 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "slurm-terminal",
+          "model": null,
           "events": [
             {
               "schema_version": 1,
@@ -731,7 +797,9 @@
                 "cpu": 6,
                 "ram_mib": 4096,
                 "vram_mib": 0
-              }
+              },
+              "vram_estimate": "declared-peak",
+              "allocation": null
             },
             {
               "schema_version": 1,
@@ -749,7 +817,12 @@
                 "ram_mib": 4096,
                 "vram_mib": 0
               },
-              "reason": null
+              "vram_estimate": "declared-peak",
+              "allocation": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              }
             },
             {
               "schema_version": 1,
@@ -763,6 +836,12 @@
               "category": "build",
               "slurm_job_id": "2",
               "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "vram_estimate": "declared-peak",
+              "allocation": {
                 "cpu": 6,
                 "ram_mib": 4096,
                 "vram_mib": 0
@@ -781,6 +860,12 @@
               "category": "build",
               "slurm_job_id": "2",
               "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "vram_estimate": "declared-peak",
+              "allocation": {
                 "cpu": 6,
                 "ram_mib": 4096,
                 "vram_mib": 0
@@ -849,6 +934,7 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "slurm-terminal",
+          "model": null,
           "events": [
             {
               "schema_version": 1,
@@ -865,7 +951,9 @@
                 "cpu": 2,
                 "ram_mib": 4096,
                 "vram_mib": null
-              }
+              },
+              "vram_estimate": "all-available",
+              "allocation": null
             },
             {
               "schema_version": 1,
@@ -883,7 +971,12 @@
                 "ram_mib": 4096,
                 "vram_mib": null
               },
-              "reason": null
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              }
             },
             {
               "schema_version": 1,
@@ -900,6 +993,12 @@
                 "cpu": 2,
                 "ram_mib": 4096,
                 "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
               },
               "queue_seconds": 0
             },
@@ -918,6 +1017,12 @@
                 "cpu": 2,
                 "ram_mib": 4096,
                 "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
               },
               "exit_code": null,
               "cleanup": "slurm-terminal",
@@ -954,7 +1059,7 @@
     }
   },
   "journal_submission": {
-    "MESSAGE": "{\"schema_version\":1,\"policy_version\":\"1\",\"timestamp\":1794747600,\"event\":\"submission\",\"job_id\":\"00000000000000000000000000000001\",\"label\":\"Unknown-size exclusive GPU workload\",\"agent\":\"fixture-agent\",\"worktree\":\"fixture-worktree\",\"category\":\"build\",\"slurm_job_id\":null,\"requested\":{\"cpu\":2,\"ram_mib\":4096,\"vram_mib\":29696}}",
+    "MESSAGE": "{\"schema_version\":1,\"policy_version\":\"1\",\"timestamp\":1794747600,\"event\":\"submission\",\"job_id\":\"00000000000000000000000000000001\",\"label\":\"Unknown-size exclusive GPU workload\",\"agent\":\"fixture-agent\",\"worktree\":\"fixture-worktree\",\"category\":\"build\",\"slurm_job_id\":null,\"requested\":{\"cpu\":2,\"ram_mib\":4096,\"vram_mib\":null},\"vram_estimate\":\"all-available\",\"allocation\":null}",
     "SYSLOG_IDENTIFIER": "resource-scheduler",
     "RESOURCE_EVENT": "submission",
     "RESOURCE_JOB_ID": "00000000000000000000000000000001",
