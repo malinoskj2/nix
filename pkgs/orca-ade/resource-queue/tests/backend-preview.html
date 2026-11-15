@@ -10,5 +10,5 @@ const raw = capture.scenarios[query.get('scenario') || 'exclusive_running'];
 Date.now = () => raw.generated_at * 1000;
 const snapshot = adaptStatus(raw);
 if (query.get('theme') === 'light') document.documentElement.className = 'light';
-showFixture(snapshot, { selected: snapshot.jobs.find((job) => job.exclusive)?.id });
+showFixture(snapshot, { selected: snapshot.jobs.find((job) => job.exclusive && ['running', 'waiting'].includes(job.state))?.id ?? snapshot.jobs[0]?.id });
 </script></body></html>

@@ -67,7 +67,7 @@ come from allowlisted fields in status, never arbitrary journald messages.
 
 ## Scope and honest limitations
 
-The initial backend does not support priority changes, managed model unload, model
+The initial backend does not support priority changes, managed model unload, verified model
 residency/active-request telemetry or game requests from this panel. These are named
 in the UI. Game/exclusive/pressure/manual modes and their real wait reasons are
 visible; games can be submitted through the canonical CLI by an authorized owner.
@@ -163,3 +163,27 @@ The capture also records a real native journal datagram through an intercepted
 socket, allowing contract tests to verify the copied selector against the backend's
 actual structured field names. No credentials, environment, command arguments or
 real host paths are present in the captured public fixture.
+
+## Sampled telemetry and owner-reported models
+
+Managed CPU actual, whole-host actual and external CPU are shown as **CPU equiv.**:
+logical CPU-seconds per second, where 1 means one fully busy logical CPU. These
+readings are separate from configured/reserved Slurm CPU counts and do not measure
+physical-core performance. Per-job CPU percent retains its own unit (100% = one
+CPU). Host CPU requires two `/proc/stat` samples; cgroup CPU requires two valid
+job counter samples. Missing samples/attribution remain Unknown, and the frontend
+never derives an external value from incomplete measurements. Attribution is shown.
+
+GPU external use comes directly from `external_mib` and is converted to GiB;
+managed compute memory, device-wide used memory, reservations and GPU compute
+percent remain separate. Swap used is GiB; `telemetry.swap.pages_in/pages_out`
+are cumulative pages since boot, never rates or extra admission capacity.
+
+`capabilities.model_reports=true` advertises owner reporting even with no reports.
+A validated `job.model` has a model label, loading/ready/busy/idle/unloaded state,
+load-start/ready/unloaded timestamps, load seconds and the explicit provenance
+`owner-reported`. Rows, search, inspector and allowlisted exports retain that
+provenance. Busy/idle/residency are not observed or verified by this report. A
+reported unload does not verify memory release or end the reservation, and no
+unload control is offered. Missing/invalid provenance is displayed as no validated
+report; the presence of a nullable model field alone does not establish support.
