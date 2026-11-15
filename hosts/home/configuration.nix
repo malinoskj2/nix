@@ -52,6 +52,8 @@ in
     firewall.enable = false;
   };
 
+  services.resourceScheduler.enable = true;
+
   swapDevices = [
     {
       device = "/swapfile";

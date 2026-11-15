@@ -37,10 +37,7 @@
           );
           resource-scheduler-config =
             let
-              staged =
-                (self.nixosConfigurations.home.extendModules {
-                  modules = [ { services.resourceScheduler.enable = true; } ];
-                }).config;
+              staged = self.nixosConfigurations.home.config;
             in
             pkgs.runCommand "resource-scheduler-config-tests"
               {

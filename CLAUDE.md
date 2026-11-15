@@ -92,9 +92,9 @@ until told.
 
 ### Working here
 
-The shared resource scheduler is staged behind
+The `home` host enables the shared resource scheduler through
 `services.resourceScheduler.enable`; keep existing GPU admission authoritative
-until the drained cutover. Follow the installed shared resource guidance for
+until the drained cutover is applied. Follow the installed shared resource guidance for
 heavy work after cutover, and read `docs/resource-scheduler-deployment.md` before
 changing scheduler deployment or migration configuration.
 

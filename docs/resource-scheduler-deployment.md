@@ -1,8 +1,9 @@
 # Resource scheduler deployment and migration
 
-The implementation is staged for review. Nothing in this change activates Slurm,
-restarts Orca, stops workloads or replaces a running GPU reservation. The `home`
-host imports the module with `services.resourceScheduler.enable = false` by default.
+The `home` host enables the shared scheduler with
+`services.resourceScheduler.enable = true`. Applying this configuration activates
+Slurm and replaces legacy GPU admission; follow the drained cutover below before
+switching. Editing or building the configuration does not activate it.
 The exported `nixosModules.resource-scheduler` module is also available to consumers.
 
 ## Declared deployment
@@ -113,7 +114,7 @@ nix build .#checks.x86_64-linux.resource-scheduler-vm
 nix build .#nixosConfigurations.home.config.system.build.toplevel
 ```
 
-The configuration check evaluates an enabled extension of the normal home host,
+The configuration check evaluates the enabled home host directly,
 checks generated policy/service/Slurm/cgroup/GRES files and parses the Slurm config
 with the packaged native CLI. It does not start host services or touch GPU leases.
 The VM check starts real Slurm and Docker with CPU-only probes and simulated GPU
@@ -165,7 +166,7 @@ fresh clients. Disabling the module while new allocations still run can strand
 their supervision. Never erase controller/backend state to make rollback appear
 clean. This change does not grant permission to perform either activation.
 
-## External repository follow-up (read-only inventory)
+## External repository helper migration
 
 Inspected the top-level `AGENTS.md`/`CLAUDE.md` files under `/home/jesse/projects`.
 The matching CPU-slot policy is in
@@ -176,17 +177,30 @@ verification” section. Its authoritative helper paths are:
 - `/home/jesse/projects/e-day-ports/.tmp/shared-resource-slots/run-slot`
 - `/home/jesse/projects/e-day-ports/.tmp/shared-resource-slots/pick-slot`
 
-The current `light` mode polls three numbered locks and takes a shared global
-lock; `heavy` takes the global lock exclusively. `pick-slot` sets
-`CARGO_BUILD_JOBS=3` and `CARGO_INCREMENTAL=0`; `run-slot` delegates to light mode.
-These are fixed concurrency locks, not resource budgets. The follow-up must replace
-these admissions with shared resource requests using measured conservative RAM
-estimates, preserve the existing Cargo environment settings, propagate exact exit
-codes/signals, forbid nesting, and retain repository-specific verifier ownership
-and scratch-isolation rules. Drain both the numbered and global locks first.
-Do not invent a `heavy` RAM budget from the old slot count.
+The 2026-11-15 cutover migrated these existing local helpers in place after
+confirming their numbered and global locks were drained. Originals are retained
+under `.tmp/shared-resource-slots/pre-slurm-2026-11-15/` in that checkout.
 
-No external project was modified. This inventory is limited to those top-level
-guidance files and the named e-day helpers; it does not claim a scan of every
-linked worktree, archived project, binary or private automation. Validate each
-active project's guidance during rollout, including older worktree instructions.
+`cargo-slot` now submits through `resource-run --project e-day-ports --category
+build`. Callers must set `RESOURCE_SLOT_RAM` to their conservative peak; there is
+no implicit RAM budget for either mode. `RESOURCE_SLOT_CPU` defaults to three and
+sets the matching `CARGO_BUILD_JOBS`; `CARGO_INCREMENTAL=0` remains enforced.
+`pick-slot` and `run-slot` delegate to `cargo-slot light`. The global shared/exclusive
+lock remains solely for shared verifier scratch protection, inside the resource
+allocation; numbered resource-slot admission is removed. Nested reservations and
+pre-cutover/missing-service execution fail without a legacy fallback. The main
+checkout's compute guidance was updated while preserving unrelated local changes.
+
+For example, declare a suitable measured RAM peak before invoking a helper:
+
+```sh
+RESOURCE_SLOT_RAM=8GiB .tmp/shared-resource-slots/cargo-slot light cargo check
+```
+
+The example is a declared budget, not evidence that every build fits 8 GiB.
+Exclusive verifier batches still use `heavy` and need their own conservative RAM
+estimate. Preserve the designated verifier and scratch-isolation requirements.
+
+This inventory covers the named main-checkout helpers and top-level guidance,
+not every linked worktree, archived project, binary or private automation. Check
+active project launchers and older worktree instructions during future rollouts.
