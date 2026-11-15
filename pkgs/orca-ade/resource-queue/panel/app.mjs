@@ -3,7 +3,25 @@ import { journalQuery, freshness, eligibleActions } from '../src/model.mjs';
 const app = document.getElementById('app');
 const state = { snapshot: null, loading: true, error: '', tab: 'queue', filters: {}, selected: null, showFilters: false, samples: [], identities: [], logs: [], logsError: '', logsPaused: false, pending: false, confirm: null, fixture: false };
 let timer, attempt = 0, loading = false, disposed = false, lastFocus;
+// Keep pointer targets alive through mouse-up/click when a poll completes mid-press.
+const activePointers = new Set();
+let redrawDeferred = false;
+app.addEventListener('pointerdown', (event) => activePointers.add(event.pointerId));
+function releasePointer(event) {
+  activePointers.delete(event.pointerId);
+  if (!activePointers.size && redrawDeferred) requestAnimationFrame(() => {
+    if (redrawDeferred && !disposed) draw();
+  });
+}
+window.addEventListener('pointerup', releasePointer);
+window.addEventListener('pointercancel', releasePointer);
+window.addEventListener('blur', () => {
+  activePointers.clear();
+  if (redrawDeferred && !disposed) draw();
+});
 function draw() {
+  if (activePointers.size) { redrawDeferred = true; return; }
+  redrawDeferred = false;
   const active = document.activeElement;
   const focus = active?.id;
   const focusSelector = active?.dataset.action ? `[data-action="${CSS.escape(active.dataset.action)}"]` : active?.dataset.job ? `[data-job="${CSS.escape(active.dataset.job)}"]` : active?.dataset.filter ? `[data-filter="${CSS.escape(active.dataset.filter)}"]` : null;

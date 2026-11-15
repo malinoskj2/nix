@@ -69,7 +69,14 @@ export async function check() {
   assert(document.body.textContent.includes('New admissions paused'), 'Confirmed admission hold rendered');
   assert(document.querySelector('[data-action="resume"]'), 'Resume appears only after confirmed hold');
   await press('[data-tab="queue"]');
-  await press('[data-action="force-run"][data-queue-job="00000000000000000000000000000004"]');
+  const runButton = document.querySelector('[data-action="force-run"][data-queue-job="00000000000000000000000000000004"]');
+  runButton.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }));
+  await press('[data-action="refresh"]');
+  assert(runButton.isConnected, 'Polling preserves the button between pointer down and click');
+  runButton.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+  runButton.click();
+  await settle();
+
   assert(!document.querySelector('.inspector'), 'Slurm run opens only confirmation');
   assert(document.querySelector('[role="dialog"]').textContent.includes('Slurm allocation limits still apply'), 'Slurm run explains remaining allocation limits');
   await press('[data-action="confirm"]');
