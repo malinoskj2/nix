@@ -177,6 +177,10 @@ Status fields:
   `vram_mib`, `vram_peak_mib`, `gpu_utilization_percent`, `oom_kill`,
   `attribution_confidence`, and sample timestamp. Device utilization is not
   attributed to a job; `gpu_utilization_percent` stays null without evidence.
+- CPU telemetry includes `logical_cpus` for whole-host usage gauges, separate from
+  the configured Slurm `capacity` and `effective_background_capacity`. Missing
+  host topology remains null. `host_actual`, `actual` and `external` are logical
+  CPU equivalents, not percentages or reserved CPU counts.
 - `telemetry`: `sampled_at`, `errors`, CPU/RAM/GPU readings, PSI CPU/memory/I/O,
   swap used, declared reservations and managed actual usage. CPU also exposes
   configured `capacity`, `effective_background_capacity`, `game_active` and

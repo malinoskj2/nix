@@ -10,6 +10,8 @@ export async function check() {
   assert(!document.querySelector('.mode'), 'Queue omits global admission controls');
   await press('[data-tab="resources"]');
   assert(document.querySelector('.capacity-grid') && !document.querySelector('.toolbar'), 'Resources separates capacity from the queue');
+  assert(document.querySelectorAll('.resource-legend').length === 1, 'Resources has one shared usage legend');
+  assert(document.querySelector('.capacity-grid').textContent.includes('Queue reserved'), 'Reservations remain separate from actual usage');
   await press('[data-action="refresh"]');
   assert(document.querySelector('#tab-resources').getAttribute('aria-selected') === 'true', 'Refresh preserves the selected tab');
   document.querySelector('#tab-resources').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));

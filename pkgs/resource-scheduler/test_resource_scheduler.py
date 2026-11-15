@@ -534,6 +534,7 @@ class SchedulerTests(unittest.TestCase):
         self.snapshot["cpu"].update(total_ticks=2000, busy_ticks=750)
         self.backend.tick()
         value = self.backend.status()["telemetry"]["cpu"]
+        self.assertEqual(value["logical_cpus"], 32)
         self.assertEqual(value["host_actual"], 8)
         self.assertEqual(value["external"], 8)
 

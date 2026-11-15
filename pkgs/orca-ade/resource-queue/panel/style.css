@@ -191,6 +191,7 @@ header {
   font-weight:450
 }
 .meter {
+  display:flex;
   height:6px;
   border-radius:3px;
   background:var(--muted);
@@ -201,11 +202,29 @@ header {
   display:block;
   height:100%;
   background:var(--ring);
-  border-radius:3px;
+  flex-shrink:0;
   max-width:100%
 }
+.resource-legend {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 16px;
+  margin-bottom:14px
+}
+.resource-legend>span {
+  display:inline-flex;
+  align-items:center
+}
+.usage-managed,.meter .usage-managed {
+  background:var(--good)
+}
+.usage-external,.meter .usage-external {
+  background:var(--warn)
+}
+.usage-unattributed,.meter .usage-unattributed,.meter .unknown-meter {
+  background:repeating-linear-gradient(135deg,var(--quiet) 0,var(--quiet) 2px,var(--muted) 2px,var(--muted) 5px)
+}
 .meter .unknown-meter {
-  background:repeating-linear-gradient(90deg,var(--border) 0,var(--border) 5px,transparent 5px,transparent 8px);
   width:100%
 }
 .capacity-facts {

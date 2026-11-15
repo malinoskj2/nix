@@ -50,8 +50,8 @@ test('real gaming fixture presents total reservations and effective background l
   assert.equal(snapshot.capacity.cpu.effectiveBackground, 4);
   assert.equal(snapshot.capacity.cpu.gameActive, true);
   const card = capacityCard('cpu', snapshot.capacity.cpu);
-  assert.match(card, /2<small> \/ 12/);
-  assert.match(card, /All job reservations \/ configured capacity/);
+  assert.match(card, /Queue reserved<\/dt><dd>2 Slurm CPUs/);
+  assert.match(card, /Queue CPU capacity<\/dt><dd>12 Slurm CPUs/);
   assert.match(card, /Game protection: background limit 4/);
   assert.doesNotMatch(card, /2<small> \/ 4/);
   // Total CPU reservations include game allocations: never use 4 as their denominator.

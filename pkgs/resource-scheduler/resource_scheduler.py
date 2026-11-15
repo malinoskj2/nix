@@ -889,6 +889,7 @@ class Backend:
                 if host_actual is not None and cpu_actual is not None
                 else None,
                 host_actual=host_actual,
+                logical_cpus=snapshot.get("cpu", {}).get("logical_cpus"),
                 attribution_confidence="sampled-kernel-counters" if cpu_actual is not None else "unavailable",
                 unit="Slurm CPU",
                 effective_background_capacity=self.config["game_cpu_capacity"]

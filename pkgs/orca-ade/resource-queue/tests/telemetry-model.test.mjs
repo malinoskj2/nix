@@ -12,6 +12,7 @@ test('actual two-sample backend counters retain correct CPU-equivalent and GPU G
   const snapshot = adaptStatus(raw('telemetry_measured'));
   assert.equal(snapshot.capacity.cpu.actual, 1);
   assert.equal(snapshot.capacity.cpu.hostActual, 9.6);
+  assert.equal(snapshot.capacity.cpu.hostTotal, 16);
   assert.equal(snapshot.capacity.cpu.external, 8.6);
   assert.equal(snapshot.capacity.cpu.attribution, 'sampled-kernel-counters');
   assert.equal(snapshot.jobs[0].measured.cpu, 100);

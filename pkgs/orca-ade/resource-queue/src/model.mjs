@@ -10,6 +10,22 @@ export const freshness = (snapshot, now = Date.now()) => {
   const times = [snapshot.at, ...(snapshot.sampledAt ? [snapshot.sampledAt] : [])];
   return times.some((at) => !Number.isFinite(Date.parse(at)) || now - Date.parse(at) > STALE_MS || Date.parse(at) > now + 5000) ? 'stale' : 'live';
 };
+export function resourceUsage(key, item) {
+  const total = key === 'cpu' ? item.hostTotal : item.total;
+  const used = key === 'cpu' ? item.hostActual : key === 'gpu' ? item.used
+    : Number.isFinite(total) && Number.isFinite(item.available) && item.available <= total ? total - item.available : null;
+  let managed = item.actual;
+  let external = key === 'ram'
+    ? Number.isFinite(used) && Number.isFinite(managed) && managed <= used ? used - managed : null
+    : item.external;
+  // Independently sampled counters can disagree; do not invent a partition.
+  if (!Number.isFinite(used) || (managed ?? 0) + (external ?? 0) > used + 1e-6) {
+    managed = null;
+    external = null;
+  }
+  const unattributed = Number.isFinite(used) ? Math.max(0, used - (managed ?? 0) - (external ?? 0)) : null;
+  return { total, used, managed, external, unattributed };
+}
 export function filterJobs(jobs, filters) {
   const search = (filters.search ?? '').trim().toLowerCase();
   return jobs.filter((j) => (!search || [j.label, j.id, j.owner.agent, j.owner.worktree, j.owner.project, j.model?.name].join(' ').toLowerCase().includes(search))

@@ -38,6 +38,15 @@ Job inspection opens on selection. Routine disclaimers, the host pressure expand
 and diagnostics export controls are omitted. Connection errors and actual backend
 telemetry failures remain visible.
 
+The resource cards show whole-host CPU, host RAM and device VRAM usage. A shared
+legend identifies queue usage (green), other/system usage (amber) and unattributed
+usage (striped). Reservations remain separate facts, never stacked onto usage.
+RAM in use is total minus Linux MemAvailable, excluding reclaimable memory; its
+other/system amount is the remainder after measured queue usage. Incomplete or
+inconsistent attribution stays unknown. CPU uses the backend's `logical_cpus`,
+not the smaller Slurm admission capacity; older backends show unknown host capacity.
+Memory trends remain explicitly labeled queue reservations and queue measurements.
+
 ## Wire contract and controls
 
 `src/adapter.mjs` is the only backend-format boundary. It accepts exactly
@@ -141,9 +150,9 @@ exclusive allocations, and is never reconstructed from unknown request fields.
 
 CPU `capacity` is the configured Slurm capacity and `reserved` includes all active
 job allocations, including game jobs. `effective_background_capacity` is a separate
-background admission/protection limit. The CPU card keeps total reservations over
-configured capacity and names the reduced background limit independently, including
-in the compact view. `game_active` can reflect external game discovery even when
+background admission/protection limit. The CPU card shows whole-host usage over the host logical CPU count. Queue
+reservations, configured Slurm capacity and the reduced background limit remain
+separate facts, including in the compact view. `game_active` can reflect external game discovery even when
 queue mode is normal. Protection errors are visible as degraded protection and
 partial telemetry notices; no successful throttling is inferred from game mode.
 
