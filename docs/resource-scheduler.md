@@ -249,7 +249,8 @@ usage minus measured managed compute-process usage when attributable. Swap
 `resource-scheduler daemon --config /path/to/policy.json`. JSON keys/defaults are
 listed in `DEFAULTS` in `resource_scheduler.py`; privileged settings come only
 from that root-owned configuration. Required binaries are pinned by the package:
-Python, Slurm CLI, Docker and util-linux; NVIDIA tools use the host driver path.
+Python, Slurm CLI, Docker and util-linux; NVIDIA tools use the host driver path
+or `/run/current-system/sw/bin`, where NixOS installs `nvidia-smi`.
 
 Single-node requirements: Slurm `select/cons_tres`, `CR_Core_Memory`,
 `GresTypes=gpu,shard`, node `Gres=gpu:1,shard:<physicalMiB>`, paired GPU/shard

@@ -20,7 +20,7 @@ let
           util-linux
           coreutils
         ]
-      }:/run/opengl-driver/bin'
+      }:/run/opengl-driver/bin:/run/current-system/sw/bin'
   '';
   command =
     name: action:
