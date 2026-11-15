@@ -2,10 +2,21 @@
 export async function check() {
   const results = [];
   const assert = (value, message) => { if (!value) throw new Error(message); results.push(message); };
-  const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(requestAnimationFrame); };
+  const settle = async () => { await new Promise((resolve) => setTimeout(resolve, 40)); };
   const press = async (selector) => { const el = document.querySelector(selector); assert(!!el, `Found ${selector}`); el.click(); await settle(); };
   await settle();
   assert(document.body.textContent.includes('● Live'), 'Live test bridge renders connected');
+  await press('[data-tab="resources"]');
+  assert(document.querySelector('.capacity-grid') && !document.querySelector('.toolbar'), 'Resources separates capacity from the queue');
+  await press('[data-action="refresh"]');
+  assert(document.querySelector('#tab-resources').getAttribute('aria-selected') === 'true', 'Refresh preserves the selected tab');
+  document.querySelector('#tab-resources').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  await settle();
+  assert(document.activeElement.id === 'tab-history' && document.querySelector('#panel-history'), 'Arrow keys switch tabs and retain focus');
+  assert(document.querySelector('.queue-section').textContent.includes('Recent history'), 'History shows completed jobs');
+  assert(!document.querySelector('[data-action="export"], [data-action="exportJob"], .pressure, .capacity-note'), 'Removed controls and disclaimers stay absent');
+  await press('[data-tab="queue"]');
+
   await press('[data-job="00000000000000000000000000000003"]');
   assert(document.querySelector('.inspector').textContent.includes('Needs 10 GiB RAM'), 'Inspector retains exact wait reason');
   await press('[data-action="cancel"]');

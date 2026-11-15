@@ -25,7 +25,6 @@ test('real backend exclusive fixture keeps unknown requested VRAM separate from 
   assert.equal(job.measured.vram, null);
   const html = render(state(snapshot, job.id), now);
   assert.match(html, /VRAM peak unknown · 15 GiB reserved/);
-  assert.match(html, /VRAM peak is unknown/);
   assert.match(html, /<th>GPU VRAM<\/th><td>Unknown<\/td><td>15 GiB<\/td><td>Unknown<\/td>/);
   const exported = diagnostic(snapshot, job).jobs[0];
   assert.equal(exported.request.vram, null);
@@ -66,7 +65,7 @@ test('gaming protection errors are visible; external games do not look like ordi
   const snapshot = adaptStatus(raw);
   const html = render(state(snapshot), now);
   assert.match(html, /Game protection active/);
-  assert.match(html, /protection degraded/);
+  assert.match(capacityCard('cpu', snapshot.capacity.cpu), /protection degraded/);
   assert.match(html, /Slurm CPU cgroup unavailable for test-job/);
 });
 

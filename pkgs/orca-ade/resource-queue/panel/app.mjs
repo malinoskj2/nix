@@ -1,7 +1,7 @@
 import { render } from './view.mjs';
-import { diagnostic, journalQuery, freshness, eligibleActions } from '../src/model.mjs';
+import { journalQuery, freshness, eligibleActions } from '../src/model.mjs';
 const app = document.getElementById('app');
-const state = { snapshot: null, loading: true, error: '', filters: {}, selected: null, showFilters: false, samples: [], identities: [], logs: [], logsError: '', logsPaused: false, pending: false, confirm: null, fixture: false };
+const state = { snapshot: null, loading: true, error: '', tab: 'queue', filters: {}, selected: null, showFilters: false, samples: [], identities: [], logs: [], logsError: '', logsPaused: false, pending: false, confirm: null, fixture: false };
 let timer, attempt = 0, loading = false, disposed = false, lastFocus;
 function draw() {
   const active = document.activeElement;
@@ -9,8 +9,6 @@ function draw() {
   const focusSelector = active?.dataset.action ? `[data-action="${CSS.escape(active.dataset.action)}"]` : active?.dataset.job ? `[data-job="${CSS.escape(active.dataset.job)}"]` : active?.dataset.filter ? `[data-filter="${CSS.escape(active.dataset.filter)}"]` : null;
   const range = active?.selectionStart == null ? null : [active.selectionStart, active.selectionEnd];
   const inspectorScroll = app.querySelector('.inspector')?.scrollTop;
-  const history = app.querySelector('.history');
-  if (history) state.showHistory = history.open;
   app.innerHTML = render(state);
   app.setAttribute('aria-busy', String(state.loading));
   if (state.confirm) for (const child of app.children) child.inert = !child.classList.contains('dialog-backdrop');
@@ -66,7 +64,7 @@ async function poll() {
 async function readLogs() {
   const job = state.snapshot?.jobs.find((item) => item.id === state.selected);
   state.logs = job?.logs?.slice(-100) ?? [];
-  state.logsError = state.logs.length ? '' : 'No retained lifecycle events for this job. Use the journal query for older records.';
+  state.logsError = state.logs.length ? '' : 'No lifecycle events retained.';
 }
 function confirm(action) {
   const job = state.snapshot.jobs.find((j) => j.id === state.selected);
@@ -106,20 +104,18 @@ async function copy(text) {
   catch { state.actionMessage = 'Clipboard unavailable. Select the job ID or journal query to copy it.'; }
   draw();
 }
-async function exportData(job) {
-  const data = JSON.stringify(diagnostic(state.snapshot, job), null, 2);
-  try {
-    if (globalThis.orca?.files) await orca.files.saveAs({ suggestedName: `resource-${job?.id || 'queue'}.json`, data, mimeType: 'application/json' });
-    else {
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
-      link.download = `resource-${job?.id || 'queue'}.json`;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-    }
-  } catch (error) { state.actionMessage = `Export failed: ${error.message}`; draw(); }
+function selectTab(tab) {
+  state.tab = tab;
+  state.selected = null;
+  state.logs = [];
+  state.logSearch = '';
+  state.actionMessage = '';
+  draw();
+  document.getElementById(`tab-${tab}`)?.focus({ preventScroll: true });
 }
 app.addEventListener('click', async (event) => {
+  const tab = event.target.closest('[data-tab]');
+  if (tab) { selectTab(tab.dataset.tab); return; }
   const row = event.target.closest('[data-job], [data-related]');
   if (row) {
     state.selected = row.dataset.job || row.dataset.related;
@@ -141,8 +137,6 @@ app.addEventListener('click', async (event) => {
     case 'closeInspector': state.selected = null; draw(); break;
     case 'copyId': await copy(job.id); break;
     case 'copyJournal': await copy(journalQuery(job.id)); break;
-    case 'export': await exportData(); break;
-    case 'exportJob': await exportData(job); break;
     case 'openOwner': try { await request('queue.openOwner', { path: job.owner.worktree }); } catch (error) { state.actionMessage = error.message; draw(); } break;
     case 'logs': state.logsPaused = !state.logsPaused; if (!state.logsPaused) await readLogs(); draw(); break;
     case 'refreshLogs': await readLogs(); draw(); break;
@@ -150,6 +144,15 @@ app.addEventListener('click', async (event) => {
     case 'confirm': await execute(); break;
     default: if (['cancel', 'terminate', 'pause', 'resume'].includes(action)) confirm(action);
   }
+});
+app.addEventListener('keydown', (event) => {
+  if (!event.target.matches('[role="tab"]')) return;
+  const tabs = [...app.querySelectorAll('[role="tab"]')];
+  const index = tabs.indexOf(event.target);
+  const next = { ArrowRight: (index + 1) % tabs.length, ArrowLeft: (index + tabs.length - 1) % tabs.length, Home: 0, End: tabs.length - 1 }[event.key];
+  if (next == null) return;
+  event.preventDefault();
+  selectTab(tabs[next].dataset.tab);
 });
 app.addEventListener('input', (event) => {
   if (event.target.id === 'job-search') { state.filters.search = event.target.value; draw(); }

@@ -41,8 +41,8 @@ test('all deterministic scenarios render without claiming unsupported live actio
   for (const scenario of ['empty','overlap','ram','vram','exclusive','game','resident','partial','hold']) {
     const html = render(state(snapshot(scenario)), fixtureTime);
     assert.match(html, /Resource Queue/);
-    assert.match(html, /Backend support/);
-    assert.match(html, /Managed model unloading/);
+    assert.match(html, /role="tablist"/);
+    assert.doesNotMatch(html, /Reservations are budgets|Export diagnostics|Host pressure &amp; telemetry/);
     assert.doesNotMatch(html, /data-action="unload"|data-action="priority"|data-action="game"/);
     assert.ok(!html.includes('NaN'));
   }
@@ -54,7 +54,7 @@ test('inspector escapes every backend label and shows exact wait reason', () => 
   assert.ok(!html.includes('<img'));
   assert.match(html, /&lt;img/);
   assert.match(html, /Needs 10 GiB RAM/);
-  assert.match(html, /Unknown peaks are not zero/);
+  assert.match(html, /<td>Unknown<\/td>/);
   assert.match(html, /job inspector/i);
 });
 test('failed query preserves stale queue instead of claiming empty or live', () => {
@@ -82,7 +82,7 @@ test('fresh responses cannot disguise stale telemetry and unknown jobs are not h
   data.jobs[0].state = 'unknown';
   const html = render(state(data), fixtureTime);
   assert.match(html, /Needs attention/);
-  assert.match(html, /Recent history <span class="count">2/);
+  assert.match(render(state(data, { tab: 'history' }), fixtureTime), /Recent history <span class="count">2/);
 });
 test('bounded lifecycle logs and admission snapshots use only allowlisted fields', () => {
   const raw = fixture();

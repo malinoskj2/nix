@@ -20,7 +20,7 @@ test('actual two-sample backend counters retain correct CPU-equivalent and GPU G
   assert.match(capacityCard('cpu', snapshot.capacity.cpu), /1 CPU equiv\./);
   assert.match(capacityCard('cpu', snapshot.capacity.cpu), /9\.6 CPU equiv\./);
   assert.doesNotMatch(capacityCard('cpu', snapshot.capacity.cpu), /100 %/);
-  assert.match(html(snapshot), /100% equals one CPU/);
+  assert.match(html(snapshot), /<td>100 %<\/td>/);
 });
 
 test('first sample and missing attribution remain unknown rather than invented zero or external usage', () => {
@@ -44,9 +44,7 @@ test('swap values are cumulative pages and used GiB, never rates or admission ca
   const snapshot = adaptStatus(raw('telemetry_measured'));
   assert.deepEqual(snapshot.swap, { pagesIn: 13, pagesOut: 7 });
   assert.equal(snapshot.capacity.ram.swapUsed, 0.5);
-  assert.match(html(snapshot), /Swap pages in · since boot/);
-  assert.match(html(snapshot), /13 pages/);
-  assert.match(html(snapshot), /cumulative pages, not rates or extra admission capacity/);
+  assert.match(capacityCard('ram', snapshot.capacity.ram), /0.5 GiB/);
   const input = raw('telemetry_measured'); delete input.telemetry.swap;
   assert.deepEqual(adaptStatus(input).swap, { pagesIn: null, pagesOut: null });
 });
@@ -63,7 +61,7 @@ test('all actual model lifecycle states retain owner-reported provenance and kno
     assert.ok(!snapshot.unsupported.includes('Model residency telemetry'));
     const page = html(snapshot);
     assert.match(page, /Model lifecycle · owner-reported/);
-    assert.match(page, /not measured model residency/);
+    assert.match(page, /Owner-reported/);
     assert.doesNotMatch(page, /data-action="unload"|data-action="model"/);
   }
 });
@@ -73,7 +71,7 @@ test('reported unload does not release the visible reservation or assert verifie
   assert.equal(snapshot.jobs[0].state, 'running');
   assert.equal(snapshot.capacity.gpu.reserved, 4);
   assert.equal(snapshot.capacity.gpu.actual, 4);
-  assert.match(html(snapshot), /Reported unload does not verify memory release/);
+  assert.match(html(snapshot), /Reported unloaded/);
   assert.ok(snapshot.unsupported.includes('Managed model unloading'));
   assert.equal(filterJobs(snapshot.jobs, { search: 'Fixture model' }).length, 1);
   const exported = diagnostic(snapshot, snapshot.jobs[0]);
@@ -88,7 +86,7 @@ test('supported-but-empty reports and malformed provenance remain explicit unkno
   let snapshot = adaptStatus(input);
   assert.equal(snapshot.jobs[0].model, null);
   assert.ok(!snapshot.unsupported.includes('Model residency telemetry'));
-  assert.match(html(snapshot), /No validated owner-reported model lifecycle/);
+  assert.doesNotMatch(html(snapshot), /class="model-report"/);
   input.jobs[0].model = { label: 'untrusted', state: 'ready', attribution_confidence: 'observed' };
   snapshot = adaptStatus(input);
   assert.equal(snapshot.jobs[0].model, null);

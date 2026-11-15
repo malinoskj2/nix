@@ -153,14 +153,14 @@ header {
   justify-content:space-between;
   gap:16px;
   border-left:3px solid var(--good);
-  padding:14px 18px;
+  padding:12px 16px;
   background:var(--card);
   border-radius:0 9px 9px 0;
   margin-bottom:16px
 }
 .mode h2 {
-  font-size:17px;
-  margin:3px 0 4px;
+  font-size:14px;
+  margin:0;
   letter-spacing:-.25px
 }
 .mode-actions {
@@ -231,20 +231,6 @@ dd {
   font-variant-numeric:tabular-nums;
   overflow-wrap:anywhere
 }
-.capacity-note {
-  margin:10px 0 8px;
-  font-size:10px;
-  max-width:1050px
-}
-.telemetry-meta {
-  display:flex;
-  justify-content:space-between;
-  flex-wrap:wrap;
-  gap:4px;
-  color:var(--quiet);
-  font-size:10px;
-  margin-bottom:20px
-}
 .notice {
   border:1px solid var(--border);
   border-radius:8px;
@@ -283,9 +269,12 @@ dd {
 }
 .content-grid {
   display:grid;
-  grid-template-columns:minmax(0,1fr) 340px;
+  grid-template-columns:minmax(0,1fr);
   gap:22px;
   align-items:start
+}
+.content-grid.has-inspector {
+  grid-template-columns:minmax(0,1fr) 340px;
 }
 .queue {
   min-width:0
@@ -375,12 +364,6 @@ dd {
   color:var(--quiet);
   font-size:20px
 }
-.ordering {
-  font-size:10px;
-  max-width:650px;
-  margin-top:-10px;
-  margin-bottom:22px
-}
 .empty {
   padding:50px 22px;
   text-align:center;
@@ -409,10 +392,6 @@ dd {
   color:var(--quiet);
   border-radius:8px
 }
-.history {
-  border-top:1px solid var(--border);
-  padding-top:14px
-}
 summary {
   cursor:pointer;
   font-size:12px;
@@ -421,9 +400,6 @@ summary {
 }
 summary .count {
   margin-left:6px
-}
-.history .job-row {
-  margin-top:8px
 }
 .observations {
   margin-top:24px;
@@ -501,15 +477,6 @@ summary .count {
   max-height:calc(100vh - 24px);
   overflow:auto;
   scrollbar-width:thin
-}
-.inspector.placeholder {
-  padding:40px 24px;
-  text-align:center;
-  border-style:dashed;
-  background:transparent
-}
-.inspector.placeholder h2 {
-  margin-bottom:10px
 }
 .inspector .section-heading button {
   font-size:10px;
@@ -632,24 +599,6 @@ thead th {
 .danger-button {
   color:var(--danger)
 }
-.action-note {
-  margin-top:18px
-}
-footer {
-  margin-top:26px;
-  border-top:1px solid var(--border);
-  padding:14px 0;
-  color:var(--quiet);
-  font-size:10px
-}
-footer summary {
-  font-size:10px;
-  margin-top:5px
-}
-footer details p {
-  max-width:900px;
-  margin-top:6px
-}
 .dialog-backdrop {
   position:fixed;
   inset:0;
@@ -689,7 +638,7 @@ footer details p {
   border:0
 }
 @media(min-width:1250px) {
-  .content-grid {
+  .content-grid.has-inspector {
     grid-template-columns:minmax(0,1fr) 380px;
     gap:28px
   }
@@ -704,27 +653,18 @@ footer details p {
   main {
     padding:16px
   }
-  .content-grid {
+  .content-grid.has-inspector {
     grid-template-columns:1fr
   }
   .inspector {
     position:static;
     max-height:none
   }
-  .inspector.placeholder {
-    display:none
-  }
   .capacity {
     padding:13px
   }
   .big-number {
     font-size:25px
-  }
-  .capacity-facts .fact {
-    display:block
-  }
-  .capacity-facts dd {
-    text-align:left
   }
   .job-numbers {
     max-width:44%
@@ -759,14 +699,11 @@ footer details p {
     letter-spacing:1px
   }
   .mode {
-    padding:12px;
-    display:block
-  }
-  .mode-actions {
-    margin-top:10px
+    padding:10px 12px;
+    flex-wrap:wrap
   }
   .mode h2 {
-    font-size:16px
+    font-size:14px
   }
   .capacity-grid {
     gap:7px
@@ -781,17 +718,13 @@ footer details p {
     font-size:21px
   }
   .big-number small {
-    display:block;
-    font-size:10px
+    font-size:12px
   }
   .capacity .quiet {
-    font-size:9px
+    font-size:11px
   }
   .capacity-facts dt,.capacity-facts dd {
-    font-size:9px
-  }
-  .capacity-note {
-    line-height:1.6
+    font-size:11px
   }
   .toolbar {
     flex-wrap:wrap;
@@ -825,9 +758,6 @@ footer details p {
   .filter select {
     max-width:180px
   }
-  .telemetry-meta {
-    font-size:9px
-  }
 }
 @media(prefers-reduced-motion:reduce) {
   * {
@@ -835,28 +765,6 @@ footer details p {
     animation:none!important;
     transition:none!important
   }
-}
-.pressure {
-  margin:-4px 0 14px;
-  color:var(--quiet)
-}
-.pressure summary {
-  font-size:10px
-}
-.pressure-facts {
-  display:flex;
-  gap:20px;
-  flex-wrap:wrap;
-  margin:10px 0
-}
-.pressure-facts .fact {
-  gap:8px
-}
-.observations details {
-  margin:12px 0
-}
-.observations details summary {
-  font-size:11px
 }
 .resource-trend {
   margin:12px 0
@@ -883,25 +791,64 @@ footer details p {
   max-width:500px
 }
 
-.capacity-more {
-  display: none;
-}
-@media (max-width: 470px) {
-  .capacity > .capacity-facts {
-    display: none;
-  }
-  .capacity-more {
-    display: block;
-  }
-  .capacity-more summary {
-    font-size: 10px;
-    color: var(--quiet);
-  }
-  .capacity-more .capacity-facts {
-    margin-top: 8px;
-  }
-}
 .model-report,
 .model-report-row {
   overflow-wrap: anywhere;
+}
+
+.tabs {
+  display:flex;
+  gap:4px;
+  border-bottom:1px solid var(--border);
+  margin:0 0 18px;
+}
+.tabs button {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  flex:1;
+  padding:11px 8px;
+  border:0;
+  border-bottom:2px solid transparent;
+  border-radius:6px 6px 0 0;
+  background:transparent;
+  color:var(--quiet);
+  font-weight:600;
+}
+.tabs button:hover {
+  background:var(--muted);
+}
+.tabs button[aria-selected="true"] {
+  color:var(--fg);
+  border-bottom-color:var(--ring);
+}
+.tabs button[aria-selected="true"] .count {
+  color:var(--ring);
+  background:var(--accent);
+}
+.trend-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:20px;
+}
+.updated {
+  margin-top:14px;
+}
+.legend.reserved {
+  background:var(--ring);
+}
+.history-insights {
+  padding:0 0 8px;
+}
+@media(max-width:650px) {
+  .capacity-grid,.trend-grid {
+    grid-template-columns:minmax(0,1fr);
+  }
+  .capacity {
+    padding:16px;
+  }
+  .big-number {
+    font-size:28px;
+  }
 }

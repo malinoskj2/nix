@@ -28,6 +28,14 @@ removed worktrees retain their historical identity. This Orca API has no action 
 focus a specific historical agent session, so the inspector displays its stable
 agent/session identifier and links the containing worktree when it is resolvable.
 
+## Panel layout
+
+Queue, Resources and History tabs separate active work, capacity readings and
+completed jobs. Tabs support arrow keys, Home and End, and survive status refreshes.
+Job inspection opens on selection. Routine disclaimers, the host pressure expander
+and diagnostics export controls are omitted. Connection errors and actual backend
+telemetry failures remain visible.
+
 ## Wire contract and controls
 
 `src/adapter.mjs` is the only backend-format boundary. It accepts exactly
@@ -61,15 +69,13 @@ Supported initial controls:
 - `resource-control pause --confirm` and `resume --confirm`
 
 The inspector includes bounded searchable structured lifecycle events, follow/pause,
-known admission snapshots, requested versus measured peaks, exit/cleanup, safe JSON
-exports and a copyable `journalctl SYSLOG_IDENTIFIER=resource-scheduler RESOURCE_JOB_ID='…' -o json-pretty` query. Logs
+known admission snapshots, requested versus measured peaks, exit/cleanup and a copyable `journalctl SYSLOG_IDENTIFIER=resource-scheduler RESOURCE_JOB_ID='…' -o json-pretty` query. Logs
 come from allowlisted fields in status, never arbitrary journald messages.
 
 ## Scope and honest limitations
 
 The initial backend does not support priority changes, managed model unload, verified model
-residency/active-request telemetry or game requests from this panel. These are named
-in the UI. Game/exclusive/pressure/manual modes and their real wait reasons are
+residency/active-request telemetry or game requests from this panel. Unsupported controls are omitted. Game/exclusive/pressure/manual modes and their real wait reasons are
 visible; games can be submitted through the canonical CLI by an authorized owner.
 The current machine has one GPU and the v1 schema describes one device. No idle model
 is inferred from device utilization. Managed/external attribution remains unknown
@@ -126,7 +132,7 @@ An all-available exclusive GPU job exposes `requested.vram_mib = null` and
 `vram_estimate = "all-available"`. The peak estimate stays **Unknown**. The separate
 `allocation.vram_mib` is null before admission and becomes the frozen effective
 admission budget when released. Rows and the inspector distinguish that allocation
-from requested peaks and measured use; diagnostic exports preserve all three.
+from requested peaks and measured use.
 Unknown requested peaks are excluded from peak/request accuracy statistics. The
 GPU reservation total comes directly from `telemetry.gpu.reserved_mib`, including
 exclusive allocations, and is never reconstructed from unknown request fields.
