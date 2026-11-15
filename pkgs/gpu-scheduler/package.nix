@@ -19,6 +19,7 @@ symlinkJoin {
     (command "gpu-run" "run")
     (command "gpu-game" "game")
     (command "gpu-status" "status")
+    (command "gpu-scheduler-telemetry" "serve-telemetry")
   ];
   passthru.tests.scheduler =
     runCommand "gpu-scheduler-tests"

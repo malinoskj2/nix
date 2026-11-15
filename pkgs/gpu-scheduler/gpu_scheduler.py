@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import shlex
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -76,7 +77,7 @@ class Scheduler:
         os.ftruncate(fd, len(data))
 
 
-def admission_reason(job, jobs, memory, headroom):
+def admission_reason(job, jobs, memory, headroom, allocations=None):
     total, used = memory
     capacity = total - headroom
     requested = capacity if job["mode"] == "exclusive" else job["vram_mib"]
@@ -98,11 +99,17 @@ def admission_reason(job, jobs, memory, headroom):
             return f"{used} MiB still in use; exclusive admission needs at most {headroom} MiB in use"
     else:
         reserved = sum(item["vram_mib"] for item in active)
-        # Existing grants may still allocate their full budget, while measured usage
-        # may belong to unmanaged processes. Without reliable per-lease attribution,
-        # count both conservatively rather than risk granting the same memory twice.
-        if max(used, headroom) + reserved + requested > total:
-            return f"insufficient VRAM ({used} MiB measured, {reserved} MiB reserved, {headroom} MiB headroom)"
+        # Credit only memory attributed to a live lease. Keep each lease's unused
+        # peak budget reserved for inference, and charge overruns in full.
+        allocations = allocations or {}
+        managed = sum(allocations.get(item["id"], 0) for item in active)
+        peaks = sum(max(item["vram_mib"], allocations.get(item["id"], 0)) for item in active)
+        unmanaged = max(headroom, used - managed)
+        if unmanaged + peaks + requested > total:
+            return (
+                f"insufficient VRAM ({used} MiB measured, {managed} MiB attributed, "
+                f"{reserved} MiB reserved, {unmanaged} MiB outside leases/headroom)"
+            )
     return None
 
 
@@ -118,6 +125,95 @@ def gpu_memory():
     if total <= 0 or not 0 <= used <= total:
         raise ValueError("Invalid GPU memory telemetry")
     return total, used
+
+
+def host_gpu_snapshot():
+    """Read host PIDs: container /proc cannot identify other containers' GPU workers."""
+    result = subprocess.run(
+        ["nvidia-smi", "--query-compute-apps=gpu_uuid,pid,used_gpu_memory", "--format=csv,noheader,nounits"],
+        check=True, capture_output=True, text=True, timeout=3,
+    )
+    processes = result.stdout.splitlines()
+    result = subprocess.run(
+        ["nvidia-smi", "--id=0", "--query-gpu=uuid,memory.total,memory.used", "--format=csv,noheader,nounits"],
+        check=True, capture_output=True, text=True, timeout=3,
+    )
+    gpu, total, used = (value.strip() for value in result.stdout.strip().split(","))
+    allocations = {}
+    seen = set()
+    for row in processes:
+        if not row.strip():
+            continue
+        device, pid, amount = (value.strip() for value in row.split(","))
+        if device != gpu:
+            continue
+        # Missing per-process metrics grant no credit; aggregate usage still counts.
+        if not pid.isdecimal() or not amount.isdecimal() or pid in seen:
+            continue
+        seen.add(pid)
+        try:
+            path = Path("/proc") / pid
+            if path.stat().st_uid != os.getuid():
+                continue
+            with (path / "environ").open("rb") as environment:
+                fields = environment.read(1024 * 1024).split(b"\0")
+        except OSError:
+            continue
+        lease = next((field[13:].decode("ascii", errors="replace") for field in fields
+                      if field.startswith(b"GPU_LEASE_ID=")), "")
+        if re.fullmatch(r"[0-9a-f]{32}", lease):
+            allocations[lease] = allocations.get(lease, 0) + int(amount)
+    return validate_snapshot({"total_mib": int(total), "used_mib": int(used), "allocations_mib": allocations})
+
+
+def validate_snapshot(value):
+    total, used, allocations = value["total_mib"], value["used_mib"], value["allocations_mib"]
+    if (type(total) is not int or type(used) is not int or total <= 0 or not 0 <= used <= total
+            or not isinstance(allocations, dict)
+            or any(not re.fullmatch(r"[0-9a-f]{32}", key) or type(amount) is not int or amount < 0
+                   for key, amount in allocations.items())
+            or sum(allocations.values()) > used):
+        raise ValueError("Invalid GPU attribution telemetry")
+    return value
+
+
+def gpu_snapshot(scheduler):
+    """An unavailable/older host falls back to double-counting, never optimistic admission."""
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(8)
+            client.connect(str(scheduler.directory / "telemetry.sock"))
+            data = bytearray()
+            while True:
+                chunk = client.recv(65536)
+                if not chunk:
+                    break
+                data.extend(chunk)
+                if len(data) > 1024 * 1024:
+                    raise ValueError("GPU telemetry response exceeds limit")
+        value = validate_snapshot(json.loads(data))
+        return (value["total_mib"], value["used_mib"]), value["allocations_mib"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return gpu_memory(), None
+
+
+def serve_telemetry():
+    # systemd owns the socket and its permissions. No client commands or paths are accepted.
+    if os.environ.get("LISTEN_PID") != str(os.getpid()) or os.environ.get("LISTEN_FDS") != "1":
+        raise RuntimeError("GPU telemetry requires its systemd user socket")
+    with socket.socket(fileno=3) as listener:
+        while True:
+            client, _ = listener.accept()
+            with client:
+                client.settimeout(8)
+                try:
+                    value = host_gpu_snapshot()
+                except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError) as error:
+                    value = {"error": str(error)}
+                try:
+                    client.sendall(json.dumps(value).encode())
+                except OSError:
+                    pass
 
 
 def memory_size(value):
@@ -150,11 +246,11 @@ def run(scheduler, args):
             with scheduler.locked():
                 jobs = scheduler.jobs(job["id"])
                 try:
-                    memory = gpu_memory()
+                    memory, allocations = gpu_snapshot(scheduler)
                 except (OSError, subprocess.SubprocessError, ValueError) as error:
                     reason = f"GPU telemetry unavailable: {error}"
                 else:
-                    reason = admission_reason(job, jobs, memory, scheduler.headroom)
+                    reason = admission_reason(job, jobs, memory, scheduler.headroom, allocations)
                 if reason is None:
                     job["state"] = "running"
                     scheduler.write(fd, job)
@@ -213,15 +309,23 @@ def status(scheduler, as_json):
     with scheduler.locked():
         jobs = scheduler.jobs()
         try:
-            total, used = gpu_memory()
-            memory = {"total_mib": total, "used_mib": used, "headroom_mib": scheduler.headroom}
+            (total, used), allocations = gpu_snapshot(scheduler)
+            attribution_available = allocations is not None
+            allocations = allocations or {}
+            memory = {
+                "total_mib": total, "used_mib": used, "headroom_mib": scheduler.headroom,
+                "attributed_mib": sum(allocations.get(job["id"], 0) for job in jobs if job["state"] == "running"),
+                "attribution_available": attribution_available,
+            }
             error = None
         except (OSError, subprocess.SubprocessError, ValueError) as problem:
             memory, error = None, str(problem)
         for job in jobs:
+            if memory:
+                job["allocated_mib"] = allocations.get(job["id"], 0)
             if job["state"] == "waiting" and memory:
                 try:
-                    job["reason"] = admission_reason(job, jobs, (total, used), scheduler.headroom)
+                    job["reason"] = admission_reason(job, jobs, (total, used), scheduler.headroom, allocations)
                 except ValueError as problem:
                     job["reason"] = str(problem)
             elif job["state"] == "waiting":
@@ -231,11 +335,15 @@ def status(scheduler, as_json):
         return
     if memory:
         print(f"GPU 0: {used}/{total} MiB in use; {scheduler.headroom} MiB desktop headroom")
+        if not memory["attribution_available"]:
+            print("Host attribution unavailable; using conservative aggregate accounting.")
     else:
         print(f"GPU telemetry unavailable: {error}")
     for job in sorted(jobs, key=lambda item: (item["state"] != "running", not item["game"], item["created_ns"])):
         budget = "exclusive" if job["mode"] == "exclusive" else f"{job['vram_mib']} MiB"
         print(f"{job['state']:7} {job['id'][:8]} {budget:12} {job['label']} ({job['origin']}, PID {job['pid']})")
+        if job.get("allocated_mib"):
+            print(f"        {job['allocated_mib']} MiB attributed to this lease")
         if job.get("reason"):
             print(f"        {job['reason']}")
     if not jobs:
@@ -250,13 +358,17 @@ def main():
         mode = action.add_mutually_exclusive_group(required=name == "run")
         mode.add_argument("--exclusive", action="store_true", default=name == "game")
         if name == "run":
-            mode.add_argument("--vram", type=memory_size)
+            mode.add_argument("--vram", type=memory_size, help="Peak VRAM including weights, inference caches and working memory")
         action.set_defaults(vram=None)
         action.add_argument("--name", help="Human-readable workload name")
         action.add_argument("--timeout", type=float, help="Maximum queue wait in seconds")
         action.add_argument("command", nargs=argparse.REMAINDER)
     actions.add_parser("status").add_argument("--json", action="store_true")
+    actions.add_parser("serve-telemetry")
     args = parser.parse_args()
+    if args.action == "serve-telemetry":
+        serve_telemetry()
+        return
     # A single deployment setting, never a per-request override that agents can lower.
     directory = os.environ.get("GPU_SCHEDULER_DIR", f"/run/user/{os.getuid()}/gpu-scheduler")
     scheduler = Scheduler(directory)

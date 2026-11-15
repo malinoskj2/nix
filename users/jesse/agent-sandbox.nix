@@ -18,6 +18,27 @@ in
     "${config.xdg.dataHome}/agent-sandbox/home/.codex"
   ];
 
+  # Host /proc can attribute NVIDIA's host PIDs across every sandbox namespace.
+  # The existing shared scheduler mount exposes only this read-only telemetry API.
+  systemd.user.sockets.gpu-scheduler-telemetry = {
+    Unit.Description = "GPU reservation memory telemetry";
+    Socket = {
+      ListenStream = "%t/gpu-scheduler/telemetry.sock";
+      SocketMode = "0600";
+      DirectoryMode = "0700";
+      RemoveOnStop = true;
+    };
+    Install.WantedBy = [ "sockets.target" ];
+  };
+  systemd.user.services.gpu-scheduler-telemetry = {
+    Unit.Description = "Attribute GPU memory to reservations across sandboxes";
+    Service = {
+      ExecStart = lib.getExe' pkgs.gpu-scheduler "gpu-scheduler-telemetry";
+      NoNewPrivileges = true;
+      Restart = "on-failure";
+    };
+  };
+
   systemd.user.services."agent-sandbox@" = {
     Unit = {
       Description = "Agent sandbox %i";

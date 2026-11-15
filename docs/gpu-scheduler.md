@@ -1,7 +1,7 @@
 # GPU reservations
 
 `gpu-run` coordinates the home desktop's GPU 0 across the host and all agent
-sandboxes. It allows concurrent small workloads with declared peak VRAM budgets,
+sandboxes. It allows concurrent workloads with declared peak VRAM budgets,
 and exclusive workloads for video generation and demanding games. It is
 cooperative admission control: programs that bypass the launcher can still use
 the GPU, and a reservation does not impose a driver memory limit.
@@ -14,8 +14,11 @@ gpu-status
 gpu-status --json
 ```
 
-Use a conservative peak estimate, including weights, caches and temporary
-allocations. Unknown or large workloads should use `--exclusive`. An oversized
+Use a conservative peak estimate, including weights, inference/KV caches,
+activations, temporary allocations and a safety margin for the chosen context,
+batch size or resolution. The scheduler does not estimate these for you. Known
+peaks can use shared reservations even for larger models; unknown workloads and
+video generation should use `--exclusive`. An oversized
 shared request fails rather than waiting forever. `--timeout 60` limits time in
 the queue; otherwise a request waits until admitted or interrupted. Commands
 inside an existing reservation run directly; nested reservations are rejected.
@@ -37,21 +40,33 @@ responsible for CPU policy; its hooks cannot gate GPU allocations before launch.
   work, and blocks new model admissions until its turn is over. Games are FIFO
   among themselves; ordinary requests are FIFO. An exclusive request at the head
   blocks later shared requests, so a stream of small jobs cannot starve it.
-- Shared requests are admitted only when both declared reservations and measured
-  total GPU memory use leave room. A new grant is accounted immediately, even if
-  the model has not started allocating. Actual usage also catches memory held by
-  programs that do not participate in the scheduler. Admission conservatively
-  adds active budgets to measured usage (or the desktop allowance, whichever is
-  larger), then adds the new budget. This can leave VRAM unused once active jobs
-  allocate their budgets, but avoids treating unmanaged memory and unallocated
-  reservations as the same bytes. Budgets are not inferred from current usage.
+- Shared admission counts each active job at the greater of its declared peak
+  budget and attributed GPU usage. Unused budget remains reserved for inference,
+  even while the model is idle or has not loaded yet. Memory outside active
+  leases is counted separately, with a minimum 4096 MiB desktop allowance.
+  For example, on a 32 GiB GPU, a model using 20 GiB with a 24 GiB peak budget
+  can share with a 2 GiB job: 24 + 2 + 4 = 30 GiB. Loading more weights or
+  inference buffers does not consume another reservation for the same job.
+- A socket-activated host user service queries NVIDIA compute-process memory and
+  reads each same-user process's `GPU_LEASE_ID` from host `/proc`. Workers from
+  all sandbox PID namespaces can therefore be attributed without exposing host
+  `/proc` inside containers. Only memory tagged with a currently running lease
+  gets credit. Unknown processes, retired leases, missing metrics and unreadable
+  process environments remain outside the leases. The socket accepts no commands
+  or client-supplied paths and is accessible only to the user.
+- If the host attribution service is unavailable or its response is invalid,
+  admission falls back to adding all active peak budgets to measured GPU usage
+  (or desktop headroom, whichever is larger). This deliberately double-counts
+  loaded models until attribution is restored. If aggregate telemetry also
+  fails, admission waits. Existing older clients keep their conservative policy.
 - 4096 MiB is reserved for desktop use. Exclusive admission requires no active
   leases and measured usage at or below that allowance. The desktop, browser,
   OBS and display servers continue to run; exclusive means exclusive among
   participating workloads. It does not guarantee the entire physical VRAM.
-- NVIDIA telemetry is checked under the admission lock before each grant. Failed
-  or invalid telemetry blocks admission. `gpu-status` reports memory, running
-  reservations, waiting jobs and the reason each job is blocked.
+- NVIDIA telemetry is checked under the admission lock before each grant.
+  `gpu-status` reports memory, attributed allocations, running reservations,
+  waiting jobs and the reason each job is blocked. Telemetry is a snapshot,
+  not hardware isolation: jobs must honor their peak budgets.
 
 Keep the command running until GPU cleanup is complete. Persistent model servers
 must run inside their reservation for their whole resident lifetime. For a
@@ -96,6 +111,9 @@ Build and apply the `home` configuration through the normal NixOS workflow, then
 restart sandboxes to pick up the package and shared mount, restart agent sessions
 to load the instructions, and set launch options on demanding Steam games.
 Building alone does not activate these changes.
+The `gpu-scheduler-telemetry.socket` user unit must be active for attribution;
+an updated host and newly started sandboxes use it through the shared scheduler
+directory. `systemctl --user status gpu-scheduler-telemetry.socket` checks it.
 
 ## Verification
 
