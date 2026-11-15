@@ -10,7 +10,7 @@
   programs = {
     ssh = {
       startAgent = true;
-      agentTimeout = "4h";
+      agentTimeout = "24h";
       extraConfig = ''
         AddKeysToAgent yes
       '';

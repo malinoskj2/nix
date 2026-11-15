@@ -4,6 +4,12 @@
 - When showing me three or more images or videos at once, or asking me to look at or choose between media, present them with `media-gallery` (see its skill), with anything that needs my decision under Needs review. I reply in chat by `#id`.
 - Give me each file's absolute path on the host. In the agent sandbox, keep the repository or worktree under a shared project directory so its `.tmp/` files are available at the same host paths.
 
+## One-off file sharing
+
+- `/mnt/media3/agent-share/` on the media host is available for sharing a one-off file only when I explicitly request it. Copy only the requested files there and preserve the local originals.
+- Verify that the destination is on the mounted NFS share before writing. If it is unavailable, report the failure; never create a local fallback under the mount path.
+- Use a descriptive, unique filename or task directory, never overwrite a different existing file, and copy with `rsync -a --partial`. After a successful transfer, give me the absolute shared path. Do not automatically archive or delete these shared files.
+
 ## Asset storage
 
 - Keep assets actively used by the current task or application on the host. Archive old assets that are no longer actively used to `/mnt/media3/agent/$REPO_NAME/`, including inactive assets in `.tmp/` and other output directories. Use the main repository's name for `REPO_NAME`, not a linked worktree's name; derive it from the parent of `git rev-parse --path-format=absolute --git-common-dir` for a normal or linked checkout.
