@@ -37,6 +37,7 @@ symlinkJoin {
     (command "resource-status" "status")
     (command "resource-control" "control")
     (command "resource-model" "model")
+    (command "resource-profile" "profile")
     (command "resource-scheduler" "")
   ];
   passthru.tests.scheduler =

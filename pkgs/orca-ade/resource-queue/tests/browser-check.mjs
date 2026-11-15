@@ -18,6 +18,7 @@ export async function check() {
   await settle();
   assert(document.activeElement.id === 'tab-history' && document.querySelector('#panel-history'), 'Arrow keys switch tabs and retain focus');
   assert(document.querySelector('.queue-section').textContent.includes('Recent history'), 'History shows completed jobs');
+  assert([...document.querySelectorAll('#panel-history .badge.success')].some((badge) => badge.textContent === 'Completed'), 'History completed badge is green');
   assert(!document.querySelector('[data-action="export"], [data-action="exportJob"], .pressure, .capacity-note'), 'Removed controls and disclaimers stay absent');
   await press('[data-tab="queue"]');
 
@@ -82,6 +83,13 @@ export async function check() {
   assert(document.querySelector('.inspector').textContent.includes('Sandbox · unmanaged'), 'Sandbox handoff is visibly unmanaged');
   assert(document.querySelector('.inspector').textContent.includes('not enforced'), 'Sandbox execution never claims a reservation');
   assert(!document.querySelector('[data-action="run-sandbox"][data-queue-job="00000000000000000000000000000008"]'), 'Sandbox handoff cannot launch twice');
+  Object.assign(raw.jobs[0], { explore: true, profile: { project: 'nix', name: 'trial', variant: 'v1' }, failure: 'gpu_oom_reported' });
+  await press('[data-action="refresh"]');
+  await press('[data-job="00000000000000000000000000000001"]');
+  assert(document.querySelector('.inspector').textContent.includes('Exploratory'), 'Trial badge appears in inspector');
+  assert(document.querySelector('.inspector').textContent.includes('not a measured peak'), 'Trial budget is not presented as a measured peak');
+  assert(document.querySelector('.inspector').textContent.includes('nix / trial / v1'), 'Profile settings identity appears in inspector');
+  assert(document.querySelector('.inspector').textContent.includes('gpu oom reported'), 'Classified outcome appears in inspector');
   assert(document.documentElement.scrollWidth <= window.innerWidth, 'No horizontal overflow');
   return { passed: results.length, results };
 }

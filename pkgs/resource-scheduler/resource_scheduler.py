@@ -18,6 +18,7 @@ import subprocess
 import sys
 import time
 import uuid
+import xml.etree.ElementTree as ET
 
 VERSION = 1
 MAX_MESSAGE = 1024 * 1024
@@ -173,6 +174,28 @@ def pressure(root=Path("/proc/pressure")):
     return result
 
 
+def gpu_process_allocations(xml, gpu_uuid, proc_root=Path("/proc")):
+    """Include graphics as well as compute contexts; unknown memory stays unknown."""
+    try:
+        devices = [gpu for gpu in ET.fromstring(xml).findall("gpu") if gpu.findtext("uuid") == gpu_uuid]
+    except ET.ParseError as error:
+        raise ValueError("Invalid GPU process telemetry") from error
+    if len(devices) != 1 or devices[0].find("processes") is None:
+        raise ValueError("GPU process list unavailable")
+    amounts, seen = {}, set()
+    for process in devices[0].findall("processes/process_info"):
+        pid = process.findtext("pid", "")
+        memory = re.fullmatch(r"(\d+) MiB", process.findtext("used_memory", ""))
+        if not pid.isdecimal() or memory is None or pid in seen:
+            raise ValueError("Unknown or duplicate GPU process memory")
+        seen.add(pid)
+        group = (proc_root / pid / "cgroup").read_text()
+        match = re.search(r"(?:/|_)job[_-](\d+)(?:/|\b)", group)
+        if match:
+            amounts[match[1]] = amounts.get(match[1], 0) + int(memory[1])
+    return amounts
+
+
 def telemetry():
     result = {"sampled_at": time.time(), "errors": [], "pressure": pressure()}
     try:
@@ -229,25 +252,12 @@ def telemetry():
             raise ValueError("Invalid GPU telemetry")
         result["gpu"].update(total_mib=total, used_mib=used, free_mib=total - used, utilization_percent=utilization)
         # Attribute by kernel cgroup path, not an environment marker clients can forge.
-        rows = checked(
-            ["nvidia-smi", "--query-compute-apps=gpu_uuid,pid,used_gpu_memory", "--format=csv,noheader,nounits"]
-        )
-        amounts, seen = {}, set()
-        for line in rows.splitlines():
-            device, pid, amount = (item.strip() for item in line.split(","))
-            if device != gpu or not pid.isdecimal() or not amount.isdecimal() or pid in seen:
-                continue
-            seen.add(pid)
-            try:
-                group = Path(f"/proc/{pid}/cgroup").read_text()
-            except OSError:
-                continue
-            match = re.search(r"(?:/|_)job[_-](\d+)(?:/|\b)", group)
-            if match:
-                amounts[match[1]] = amounts.get(match[1], 0) + int(amount)
+        amounts = gpu_process_allocations(checked(["nvidia-smi", "--id=0", "--query", "--xml-format"]), gpu)
         if sum(amounts.values()) > used:
             raise ValueError("GPU attribution exceeds device usage")
-        result["gpu"].update(allocations_mib=amounts, attribution_confidence="cgroup-compute-processes")
+        result["gpu"].update(
+            allocations_mib=amounts, attribution_confidence="cgroup-gpu-processes", process_inventory_complete=True
+        )
     except (OSError, ValueError, subprocess.SubprocessError):
         result["errors"].append("GPU telemetry or process attribution unavailable")
     # Cgroup v2 high-water marks are authoritative where available; missing stays null.
@@ -311,6 +321,8 @@ def admission_reason(job, jobs, snapshot, config):
     if snapshot.get("game_active"):
         return "External GameMode is active; waiting for exclusive GPU access"
     gpu_jobs = [item for item in running if item["requested"]["vram_mib"]]
+    if any(item.get("explore") for item in gpu_jobs):
+        return "GPU exploration is measuring its peak; CPU-only jobs may pass"
     if any(item["mode"] == "exclusive" for item in gpu_jobs):
         return "Exclusive GPU workload remains active"
     if job["mode"] == "exclusive" and gpu_jobs:
@@ -360,6 +372,98 @@ def external_block_reason(job, jobs, snapshot, config):
     return None
 
 
+def profile_identity(request):
+    profile = request.get("profile")
+    if profile is None:
+        if request.get("variant") is not None:
+            raise ValueError("Variant requires a profile")
+        return None
+    identity = {"project": request.get("project"), "name": profile, "variant": request.get("variant")}
+    if any(
+        not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}", value)
+        for value in identity.values()
+    ):
+        raise ValueError(
+            "Profiles require explicit project, profile and variant identifiers (1-80 safe characters each)"
+        )
+    return identity
+
+
+def new_profile(identity):
+    return dict(
+        identity=identity,
+        runs=0,
+        successes=0,
+        failures=0,
+        consecutive_probe_failures=0,
+        ram_peak_mib=None,
+        vram_peak_mib=None,
+        last=None,
+    )
+
+
+def public_profile(record):
+    last = record["last"] or {}
+    usable = last.get("state") == "completed" and last.get("exit_code") == 0 and not last.get("failure")
+
+    def budget(value):
+        return math.ceil(max(value * 1.25, value + 512) / 256) * 256 if value is not None else None
+
+    return {
+        **record,
+        "recommendation": {
+            "ram_mib": budget(record["ram_peak_mib"]) if usable else None,
+            "vram_mib": (
+                0
+                if not last.get("gpu_requested")
+                else budget(record["vram_peak_mib"])
+                if last.get("gpu_complete")
+                else None
+            )
+            if usable
+            else None,
+            "mode": "shared",
+            "margin": "25% or 512 MiB, whichever is larger; rounded up to 256 MiB",
+            "advisory": "Observed workload settings only; sampled GPU peaks can miss short spikes. Review before declaring budgets.",
+        },
+    }
+
+
+def failure_kind(job, directory):
+    if job.get("exploration_stop_reason"):
+        return "exploration_headroom"
+    if job["state"] == "cancelled":
+        return "cancelled"
+    terminal = job.get("slurm_terminal_state", [])
+    if isinstance(terminal, str):
+        terminal = [terminal]
+    if "OUT_OF_MEMORY" in terminal or (job["observed"].get("oom_kill") or 0) > 0:
+        return "ram_oom"
+    if "TIMEOUT" in terminal:
+        return "time_limit"
+    if job["state"] == "completed" and job.get("exit_code") == 0:
+        return None
+    # Diagnostic hints, never classify every nonzero exit or SIGKILL as an OOM.
+    try:
+        with (directory / "stderr").open("rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            stream.seek(max(0, stream.tell() - 65536))
+            stderr = stream.read(65536).decode(errors="replace").lower()
+        if any(
+            text in stderr
+            for text in (
+                "cuda out of memory",
+                "cuda error: out of memory",
+                "torch.outofmemoryerror",
+                "vk_error_out_of_device_memory",
+            )
+        ):
+            return "gpu_oom_reported"
+    except OSError:
+        pass
+    return "command_failed"
+
+
 def queue_key(job, now):
     return (
         0 if job.get("run_next_requested_at") is not None else 1,
@@ -396,6 +500,8 @@ class Slurm:
             f"--output={directory}/stdout",
             f"--error={directory}/stderr",
         ]
+        if job.get("explore"):
+            argv.append("--time=00:30:00")
         if req["vram_mib"]:
             argv.append("--gres=gpu:1" if job["mode"] == "exclusive" else f"--gres=shard:{req['vram_mib']}")
         script = (
@@ -526,6 +632,7 @@ class Backend:
             if self.state_path.exists()
             else {"revision": 0, "paused": False, "jobs": []}
         )
+        self.state.setdefault("profiles", {})
         self.slurm = slurm or Slurm(self.config)
         self.host = host or HostRunner()
         self.sample = sample
@@ -638,11 +745,30 @@ class Backend:
         origin = request.get("origin", "host")
         if origin != "host" and not re.fullmatch(r"agent-sandbox-[A-Za-z0-9_.-]{1,128}", origin):
             raise ValueError("Invalid sandbox identity")
+        explore = request.get("explore", False)
+        if type(explore) is not bool:
+            raise ValueError("Invalid exploration mode")
+        profile = profile_identity(request)
+        if explore and (profile is None or origin == "host" or mode != "shared" or request["priority"] == "game"):
+            raise ValueError("Exploration requires a sandbox, project/profile/variant and shared non-game priority")
+        if profile:
+            key = json.dumps(profile, sort_keys=True)
+            record = self.state["profiles"].get(key)
+            if record is None and len(self.state["profiles"]) >= 128:
+                raise ValueError("Profile limit reached; reuse an existing workload profile")
+            if explore and record and record.get("consecutive_probe_failures", 0) >= 3:
+                raise ValueError(
+                    "Three exploration failures; inspect the profile and use explicit budgets or changed workload settings"
+                )
+            if explore and any(j.get("profile") == profile and j["state"] not in TERMINAL for j in self.state["jobs"]):
+                raise ValueError("This workload profile already has active work; wait without resubmitting")
         job_id = uuid.uuid4().hex
         job = dict(
             id=job_id,
             revision=1,
             label=clean_label(request["label"]),
+            explore=explore,
+            profile=profile,
             owner_uid=uid,
             agent=clean_label(request.get("agent") or "unknown"),
             worktree=clean_label(request.get("worktree") or "unknown"),
@@ -672,6 +798,8 @@ class Backend:
             wait_reason="Submitting held Slurm allocation",
             exit_code=None,
             cleanup="pending",
+            gpu_samples=0,
+            gpu_missing_samples=0,
             model=None,
             events=[],
         )
@@ -686,10 +814,13 @@ class Backend:
                 "uid": uid,
                 "gid": self.config["allowed_gid"],
                 "budget": dict(req),
+                "explore": explore,
                 "stdout": str(directory / "stdout"),
                 "stderr": str(directory / "stderr"),
             },
         )
+        if profile:
+            self.state["profiles"].setdefault(key, new_profile(profile))
         self.state["jobs"].append(job)
         self.save()  # Persist UUID before submitting; interrupted submission is reconciled by name.
         self.event(job, "submission")
@@ -790,13 +921,18 @@ class Backend:
                     job["exit_code"] = slurm_exit(exit_value)
                     # A terminal Slurm state (not mere PID absence) proves its cgroup cleanup.
                     job["cleanup"] = "slurm-terminal"
+                    job["slurm_terminal_state"] = row.get("job_state")
                     result_path = self.directory / job["id"] / "result.json"
                     if result_path.exists():
                         summary = json.loads(result_path.read_text())
                         job["exit_code"] = summary["exit_code"]
                         for key, value in summary.get("observed", {}).items():
                             if value is not None:
-                                job["observed"][key] = value
+                                job["observed"][key] = (
+                                    max(job["observed"].get(key) or 0, value)
+                                    if key.endswith("peak_mib") or key == "oom_kill"
+                                    else value
+                                )
                     job["wait_reason"] = None
                     self.event(
                         job,
@@ -827,11 +963,21 @@ class Backend:
                 observed["sampled_at"] = now
                 observed["oom_kill"] = metrics.get("oom_kill")
                 observed["cpu_set"] = metrics.get("cpu_set")
-                amount = self.snapshot["gpu"].get("allocations_mib", {}).get(job["slurm_job_id"])
+                amount = (
+                    self.snapshot["gpu"]
+                    .get("allocations_mib", {})
+                    .get(job["slurm_job_id"], 0 if self.snapshot["gpu"].get("process_inventory_complete") else None)
+                )
                 observed["vram_mib"] = amount
                 if amount is not None:
                     observed["vram_peak_mib"] = max(observed["vram_peak_mib"] or 0, amount)
-                    observed["attribution_confidence"] = "cgroup-compute-processes"
+                    observed["attribution_confidence"] = self.snapshot["gpu"].get(
+                        "attribution_confidence", "unavailable"
+                    )
+                if state == "running" and job["requested"]["vram_mib"]:
+                    field = "gpu_samples" if amount is not None else "gpu_missing_samples"
+                    job[field] = job.get(field, 0) + 1
+        self.protect_exploration()
         self.apply_game_protection()
         memory = self.snapshot["pressure"].get("memory")
         pressure_hold = bool(memory and memory.get("full", {}).get("avg10", 0) >= 1)
@@ -850,6 +996,7 @@ class Backend:
             key=lambda j: queue_key(j, now),
         )
         barrier = None
+        gpu_barrier = None
         bypassed = []
         for job in queued:
             if self.game_protection_errors:
@@ -862,11 +1009,21 @@ class Backend:
                 reason = "Waiting for Slurm cancellation"
             elif barrier:
                 reason = "Behind earlier job " + barrier["id"]
+            elif gpu_barrier and job["requested"]["vram_mib"]:
+                reason = "Behind earlier GPU job " + gpu_barrier["id"]
             else:
                 reason = admission_reason(job, self.state["jobs"], self.snapshot, self.config)
                 if reason:
                     external = external_block_reason(job, self.state["jobs"], self.snapshot, self.config)
-                    if external:
+                    if reason in (
+                        "Exclusive GPU workload remains active",
+                        "GPU exploration is measuring its peak; CPU-only jobs may pass",
+                    ):
+                        gpu_barrier = job
+                        if "CPU-only" not in reason:
+                            reason += "; CPU-only jobs may pass"
+                        bypassed.append(job["id"])
+                    elif external:
                         reason = external
                         bypassed.append(job["id"])
                     else:
@@ -885,6 +1042,8 @@ class Backend:
             self.event({}, "sample", snapshot=self.public_telemetry())
             self.last_sample_event = now
         terminal = [j for j in self.state["jobs"] if j["state"] in TERMINAL]
+        for job in terminal:
+            self.record_profile(job)
         keep = {j["id"] for j in terminal[-self.config["history_limit"] :]}
         for job in terminal:
             if job["id"] not in keep:
@@ -894,6 +1053,80 @@ class Backend:
                 directory.rmdir()
         self.state["jobs"] = [j for j in self.state["jobs"] if j["state"] not in TERMINAL or j["id"] in keep]
         self.save()
+
+    def protect_exploration(self):
+        """Only stop opted-in probes; never sacrifice another workload to fit one."""
+        memory = self.snapshot["pressure"].get("memory")
+        ram = self.snapshot["ram"].get("available_mib")
+        free = self.snapshot["gpu"].get("free_mib")
+        for job in self.state["jobs"]:
+            if (
+                not job.get("explore")
+                or not managed(job)
+                or job["state"] != "running"
+                or job.get("cleanup") == "cancellation-requested"
+            ):
+                continue
+            reason = None
+            if (
+                ram is None
+                or ram < self.config["ram_headroom_mib"]
+                or (memory and memory.get("full", {}).get("avg10", 0) >= 1)
+            ):
+                reason = "Host RAM headroom or pressure interrupted exploration"
+            elif job["requested"]["vram_mib"] and (free is None or free < self.config["vram_headroom_mib"]):
+                reason = "GPU headroom or unavailable telemetry interrupted exploration"
+            if reason:
+                try:
+                    self.slurm.cancel(job["slurm_job_id"])
+                    job["cleanup"] = "cancellation-requested"
+                    job["exploration_stop_reason"] = reason
+                    self.event(job, "exploration_interrupted", reason=reason)
+                    self.changed(job, reason=reason + "; awaiting Slurm cleanup")
+                except (OSError, subprocess.SubprocessError):
+                    self.errors.append("Exploration cancellation needs reconciliation: " + job["id"])
+
+    def record_profile(self, job):
+        if job.get("profile_recorded"):
+            return
+        job["failure"] = failure_kind(job, self.directory / job["id"])
+        job["profile_recorded"] = True
+        if not job.get("profile") or not managed(job):
+            return
+        key = json.dumps(job["profile"], sort_keys=True)
+        record = self.state["profiles"].setdefault(key, new_profile(job["profile"]))
+        success = job["state"] == "completed" and job.get("exit_code") == 0 and not job["failure"]
+        record["runs"] += 1
+        record["successes" if success else "failures"] += 1
+        if success:
+            record["consecutive_probe_failures"] = 0
+            for field in ("ram_peak_mib", "vram_peak_mib"):
+                value = job["observed"].get(field)
+                if value is not None:
+                    record[field] = max(record[field] or 0, value)
+        elif job.get("explore"):
+            record["consecutive_probe_failures"] += 1
+        gpu_complete = (
+            job.get("gpu_samples", 0) >= 2
+            and (job["observed"].get("vram_peak_mib") or 0) > 0
+            and job.get("gpu_missing_samples", 0) == 0
+            and job["observed"].get("attribution_confidence") == "cgroup-gpu-processes"
+        )
+        record["last"] = dict(
+            job_id=job["id"],
+            state=job["state"],
+            exit_code=job["exit_code"],
+            failure=job["failure"],
+            requested=dict(job["requested"]),
+            ram_peak_mib=job["observed"].get("ram_peak_mib"),
+            vram_peak_mib=job["observed"].get("vram_peak_mib"),
+            gpu_complete=gpu_complete,
+            gpu_requested=bool(job["requested"]["vram_mib"]),
+            gpu_samples=job.get("gpu_samples", 0),
+            gpu_missing_samples=job.get("gpu_missing_samples", 0),
+            ended_at=job.get("ended_at"),
+        )
+        self.event(job, "profile_recorded", failure=job["failure"], profile=job["profile"])
 
     def tick_host_job(self, job, now):
         # Both unmanaged destinations use the host service lifecycle. Keep the
@@ -967,6 +1200,7 @@ class Backend:
         job.update(state=state, exit_code=code, cleanup=cleanup, ended_at=now, wait_reason=None)
         self.event(job, "completion", exit_code=code, cleanup=cleanup, execution=job["execution"])
         (self.directory / job["id"] / "payload.json").unlink(missing_ok=True)
+        self.record_profile(job)
         self.changed(job)
 
     def release_job(self, job, *, force=False, bypassed=()):
@@ -1141,6 +1375,8 @@ class Backend:
                 run_next=True,
                 run_host=True,
                 run_sandbox=True,
+                exploration=True,
+                profiles=True,
                 pause=True,
                 resume=True,
                 priority=False,
@@ -1175,6 +1411,20 @@ class Backend:
         action = request.get("action")
         if action == "status":
             return self.status()
+        if action == "profiles":
+            identity = profile_identity(request)
+            project = request.get("project")
+            if project is not None and (
+                not isinstance(project, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}", project)
+            ):
+                raise ValueError("Invalid profile project identifier")
+            profiles = [
+                public_profile(p)
+                for p in self.state["profiles"].values()
+                if (identity is None or p["identity"] == identity)
+                and (project is None or p["identity"]["project"] == project)
+            ]
+            return {"profiles": sorted(profiles, key=lambda p: json.dumps(p["identity"], sort_keys=True)), "limit": 128}
         if action == "submit":
             return self.submit(request, uid)
         if action in ("pause", "resume"):
@@ -1519,6 +1769,7 @@ def execution_environment(payload):
             "RESOURCE_CPUSET",
             "RESOURCE_HOST_JOB_ID",
             "RESOURCE_SANDBOX_JOB_ID",
+            "RESOURCE_EXPLORATORY",
         ):
             environment.pop(key, None)
         target = payload["execution"]
@@ -1529,6 +1780,9 @@ def execution_environment(payload):
         environment[f"RESOURCE_{target.upper()}_JOB_ID"] = payload["id"]
         environment["RESOURCE_EXECUTION_MODE"] = "unmanaged-" + target
         return environment
+    environment.pop("RESOURCE_EXPLORATORY", None)
+    if payload.get("explore"):
+        environment["RESOURCE_EXPLORATORY"] = "1"
     environment.update(
         RESOURCE_JOB_ID=payload["id"], RESOURCE_CPUSET=",".join(str(cpu) for cpu in sorted(os.sched_getaffinity(0)))
     )
@@ -1574,17 +1828,41 @@ def step_exec(fd):
     return result if result >= 0 else 128 - result
 
 
+def run_budgets(args):
+    explore = getattr(args, "explore", False)
+    cpu = args.cpu if args.cpu is not None else 2 if explore else None
+    ram = args.ram if args.ram is not None else 4096 if explore else None
+    gpu = getattr(args, "gpu", False)
+    vram = args.vram if args.vram is not None else 1024 if explore and gpu else 0
+    if cpu is None or ram is None:
+        raise ValueError("Supply --cpu and --ram (only --explore supplies trial defaults)")
+    if gpu and not explore:
+        raise ValueError("--gpu is for exploration; normal runs must declare --vram or --exclusive")
+    if explore and (args.exclusive or args.priority == "game"):
+        raise ValueError("Exploration uses shared resources and non-game priority")
+    return dict(cpu=cpu, ram_mib=ram, vram_mib=vram)
+
+
 def run(args):
     if os.environ.get("RESOURCE_JOB_ID") or os.environ.get("GPU_LEASE_ID"):
         raise RuntimeError("Already inside a reservation; run directly within its existing budgets")
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if not command:
         raise ValueError("Supply a foreground command after --")
+    budgets = run_budgets(args)
+    identity = profile_identity(
+        dict(project=args.project, profile=getattr(args, "profile", None), variant=getattr(args, "variant", None))
+    )
+    if getattr(args, "explore", False) and (identity is None or not os.environ.get("AGENT_SANDBOX_INSTANCE")):
+        raise ValueError("Exploration requires a sandbox and --project, --profile and --variant")
     result = rpc(
         dict(
             action="submit",
             label=args.name,
-            requested=dict(cpu=args.cpu, ram_mib=args.ram, vram_mib=args.vram or 0),
+            requested=budgets,
+            explore=getattr(args, "explore", False),
+            profile=getattr(args, "profile", None),
+            variant=getattr(args, "variant", None),
             mode="exclusive" if args.exclusive else "shared",
             priority=args.priority,
             category=args.category,
@@ -1622,6 +1900,14 @@ def run(args):
                 # Drain output already written before Slurm terminal state.
                 if not result["stdout"] and not result["stderr"]:
                     code = job["exit_code"]
+                    if job.get("profile"):
+                        print(
+                            "resource-run: profile "
+                            + json.dumps(job["profile"])
+                            + "; outcome="
+                            + str(job.get("failure") or job["state"]),
+                            file=sys.stderr,
+                        )
                     if code is None:
                         return 130 if job["state"] == "cancelled" else 1
                     return code
@@ -1703,10 +1989,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     actions = parser.add_subparsers(dest="action", required=True)
     runner = actions.add_parser("run")
-    runner.add_argument("--cpu", type=int, required=True)
-    runner.add_argument("--ram", type=size, required=True)
+    runner.add_argument("--cpu", type=int)
+    runner.add_argument("--ram", type=size)
     runner.add_argument("--vram", type=size)
     runner.add_argument("--exclusive", action="store_true")
+    runner.add_argument(
+        "--explore", action="store_true", help="Bounded 30-minute sandbox trial; defaults to 2 CPUs and 4GiB RAM"
+    )
+    runner.add_argument(
+        "--gpu", action="store_true", help="Explore with an initial 1GiB shared GPU allocation, not a peak guarantee"
+    )
+    runner.add_argument("--profile", help="Stable workload name, without command arguments or secrets")
+    runner.add_argument("--variant", help="Explicit workload settings/version identifier")
     runner.add_argument("--name", required=True)
     runner.add_argument("--category", choices=("build", "inference", "render", "game", "other"), default="other")
     runner.add_argument("--priority", choices=("background", "interactive", "game"), default="background")
@@ -1716,6 +2010,10 @@ def main():
     )
     runner.add_argument("command", nargs=argparse.REMAINDER)
     actions.add_parser("status").add_argument("--json", action="store_true")
+    profiles = actions.add_parser("profile")
+    profiles.add_argument("--project")
+    profiles.add_argument("--profile")
+    profiles.add_argument("--variant")
     control = actions.add_parser("control")
     control.add_argument(
         "operation",
@@ -1734,6 +2032,13 @@ def main():
     actions.add_parser("sandbox-step").add_argument("directory")
     actions.add_parser("step-exec").add_argument("fd", type=int)
     args = parser.parse_args()
+    if args.action == "profile":
+        print(
+            json.dumps(
+                rpc(dict(action="profiles", project=args.project, profile=args.profile, variant=args.variant)), indent=2
+            )
+        )
+        return 0
     if args.action == "run":
         return run(args)
     if args.action == "daemon":

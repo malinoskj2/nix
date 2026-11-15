@@ -59,6 +59,13 @@ All run paths retain output and termination through the original job identity.
 Pending Slurm allocations cannot be launched again. Reordering follows backend
 `queue_position`; unsupported controls remain hidden on older backends.
 
+Exploratory jobs carry a visible trial badge and an inspector explanation of
+the bounded CPU/RAM allocation, cooperative GPU trial budget and 30-minute limit.
+Workload profile identifiers and classified failure outcomes are shown when
+available. Suggestions are retrieved using `resource-profile`; the panel does
+not silently resize allocations. Exploratory results are excluded from reservation
+accuracy metrics. Older backends remain supported without these optional fields.
+
 ## Wire contract and controls
 
 `src/adapter.mjs` is the only backend-format boundary. It accepts exactly

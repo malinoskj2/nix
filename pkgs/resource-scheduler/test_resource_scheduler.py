@@ -116,11 +116,25 @@ class SchedulerTests(unittest.TestCase):
         self.stack.close()
         self.temp.cleanup()
 
-    def request(self, cpu=2, ram=4096, vram=0, priority="background", mode="shared", origin="host"):
+    def request(
+        self,
+        cpu=2,
+        ram=4096,
+        vram=0,
+        priority="background",
+        mode="shared",
+        origin="host",
+        explore=False,
+        profile=None,
+        variant=None,
+    ):
         return dict(
             version=1,
             action="submit",
             label="safe build",
+            explore=explore,
+            profile=profile,
+            variant=variant,
             origin=origin,
             requested=dict(cpu=cpu, ram_mib=ram, vram_mib=vram),
             mode=mode,
@@ -147,6 +161,306 @@ class SchedulerTests(unittest.TestCase):
         return self.backend.handle(
             dict(version=1, action=action, id=job["id"], revision=job["revision"], confirm=True, **kwargs), os.getuid()
         )
+
+    def profiled(self, **kwargs):
+        return self.submit(
+            origin="agent-sandbox-test", explore=True, profile="runtime", variant="scene-1080p-v1", **kwargs
+        )
+
+    def profile(self):
+        return self.backend.handle(dict(version=1, action="profiles"), os.getuid())["profiles"][0]
+
+    def finish(self, job, state="COMPLETED", code=0):
+        self.slurm.rows[job["slurm_job_id"]].update(job_state=[state], exit_code={"return_code": code})
+        self.backend.tick()
+
+    def test_gpu_barrier_allows_cpu_work_but_preserves_gpu_order(self):
+        active = self.submit(mode="exclusive", vram=5000, priority="game")
+        self.backend.tick()
+        first = self.submit(vram=2000, ram=1024)
+        second = self.submit(vram=1000, ram=1024)
+        cpu = self.submit(ram=1024)
+        self.backend.tick()
+        self.assertEqual(active["state"], "running")
+        self.assertEqual(first["state"], "queued")
+        self.assertIn("CPU-only jobs may pass", first["wait_reason"])
+        self.assertIn(first["id"], second["wait_reason"])
+        self.assertEqual(cpu["state"], "pending")
+        self.assertEqual(cpu["events"][-1]["bypassed_job_ids"], [first["id"]])
+        self.finish(active)
+        self.assertEqual(first["state"], "pending")
+        self.assertEqual(second["state"], "queued")
+
+    def test_gpu_backfill_keeps_cpu_ram_pause_and_unknown_checks(self):
+        active = self.submit(mode="exclusive", vram=5000, priority="game")
+        self.backend.tick()
+        self.submit(vram=1000, ram=1024)
+        cpu = self.submit(cpu=5, ram=1024)
+        self.backend.tick()
+        self.assertEqual(cpu["state"], "queued")
+        self.assertIn("CPU", cpu["wait_reason"])
+        cpu["requested"]["cpu"] = 2
+        self.backend.state["paused"] = True
+        self.backend.tick()
+        self.assertEqual(cpu["state"], "queued")
+        self.backend.state["paused"] = False
+        self.snapshot["ram"]["available_mib"] = 4200
+        self.backend.tick()
+        self.assertEqual(cpu["state"], "queued")
+        self.snapshot["ram"]["available_mib"] = 20000
+        self.slurm.rows[active["slurm_job_id"]]["job_state"] = ["MYSTERY"]
+        self.backend.tick()
+        self.assertEqual(cpu["state"], "queued")
+
+    def test_exploration_requires_sandbox_profile_and_shared_non_game_mode(self):
+        for changes in (
+            {"origin": "host"},
+            {"profile": None},
+            {"variant": None},
+            {"mode": "exclusive"},
+            {"priority": "game"},
+            {"explore": "yes"},
+        ):
+            request = self.request(origin="agent-sandbox-test", explore=True, profile="runtime", variant="v1")
+            request.update(changes)
+            with self.assertRaises(ValueError):
+                self.backend.handle(request, os.getuid())
+        self.assertFalse(self.slurm.rows)
+
+    def test_cli_submits_exploration_and_preserves_output_exit_and_profile_lookup(self):
+        calls = []
+        identity = "a" * 32
+
+        def rpc(request):
+            calls.append(request)
+            if request["action"] == "submit":
+                return {"id": identity}
+            return dict(
+                stdout="",
+                stderr="",
+                stdout_offset=0,
+                stderr_offset=0,
+                job=dict(
+                    state="failed",
+                    exit_code=7,
+                    profile={"project": "project", "name": "runtime", "variant": "v1"},
+                    failure="command_failed",
+                ),
+            )
+
+        argv = [
+            "resource-scheduler",
+            "run",
+            "--explore",
+            "--gpu",
+            "--project",
+            "project",
+            "--profile",
+            "runtime",
+            "--variant",
+            "v1",
+            "--name",
+            "probe",
+            "--",
+            "echo",
+            "hello",
+        ]
+        with (
+            patch.dict(os.environ, {"AGENT_SANDBOX_INSTANCE": "agent-sandbox-test"}, clear=True),
+            patch.object(rs.sys, "argv", argv),
+            patch.object(rs, "rpc", side_effect=rpc),
+        ):
+            self.assertEqual(rs.main(), 7)
+        self.assertEqual(calls[0]["requested"], dict(cpu=2, ram_mib=4096, vram_mib=1024))
+        self.assertEqual(calls[0]["mode"], "shared")
+        self.assertEqual(calls[0]["payload"]["command"], ["echo", "hello"])
+        self.assertEqual(calls[0]["variant"], "v1")
+        self.assertTrue(calls[0]["explore"])
+        self.assertEqual(len([c for c in calls if c["action"] == "submit"]), 1)
+        with (
+            patch.object(
+                rs.sys,
+                "argv",
+                ["resource-scheduler", "profile", "--project", "project", "--profile", "runtime", "--variant", "v1"],
+            ),
+            patch.object(rs, "rpc", return_value={"profiles": []}) as lookup,
+        ):
+            self.assertEqual(rs.main(), 0)
+            self.assertEqual(
+                lookup.call_args.args[0], dict(action="profiles", project="project", profile="runtime", variant="v1")
+            )
+
+    def test_complete_gpu_inventory_distinguishes_idle_zero_from_missing(self):
+        job = self.profiled(vram=1024)
+        self.backend.tick()
+        self.snapshot["gpu"].update(process_inventory_complete=True, attribution_confidence="cgroup-gpu-processes")
+        self.backend.tick()
+        self.assertEqual(job["observed"]["vram_mib"], 0)
+        self.assertEqual(job["gpu_missing_samples"], 0)
+        self.snapshot["gpu"]["allocations_mib"] = {job["slurm_job_id"]: 1500}
+        self.backend.tick()
+        self.finish(job)
+        self.assertIsNotNone(self.profile()["recommendation"]["vram_mib"])
+
+    def test_exploration_defaults_are_bounded_and_explicit_gpu_only(self):
+        args = SimpleNamespace(
+            cpu=None, ram=None, vram=None, explore=True, gpu=False, exclusive=False, priority="background"
+        )
+        self.assertEqual(rs.run_budgets(args), dict(cpu=2, ram_mib=4096, vram_mib=0))
+        args.gpu = True
+        self.assertEqual(rs.run_budgets(args)["vram_mib"], 1024)
+        args.ram, args.vram = 8192, 2048
+        self.assertEqual(rs.run_budgets(args), dict(cpu=2, ram_mib=8192, vram_mib=2048))
+        args.explore = False
+        with self.assertRaises(ValueError):
+            rs.run_budgets(args)
+
+    def test_exploration_slurm_allocation_stays_shared_and_time_limited(self):
+        job = self.profiled(vram=1024)
+        with patch.object(rs, "checked", return_value="99") as call:
+            rs.Slurm(self.backend.config).submit(job, Path(self.temp.name))
+        argv = call.call_args.args[0]
+        self.assertIn("--time=00:30:00", argv)
+        self.assertIn("--mem=4096M", argv)
+        self.assertIn("--gres=shard:1024", argv)
+        self.assertNotIn("--gres=gpu:1", argv)
+
+    def test_gpu_exploration_blocks_following_gpu_launches_not_cpu(self):
+        probe = self.profiled(vram=1024)
+        self.backend.tick()
+        gpu = self.submit(vram=1024, ram=1024)
+        cpu = self.submit(ram=1024)
+        self.backend.tick()
+        self.assertEqual(probe["state"], "running")
+        self.assertIn("exploration", gpu["wait_reason"])
+        self.assertEqual(cpu["state"], "pending")
+
+    def test_headroom_intervention_only_cancels_exploration(self):
+        normal = self.submit(ram=1024)
+        self.backend.tick()
+        probe = self.profiled(vram=1024)
+        self.backend.tick()
+        self.backend.tick()
+        self.snapshot["gpu"]["free_mib"] = 1000
+        self.backend.tick()
+        self.assertEqual(self.slurm.cancelled, [probe["slurm_job_id"]])
+        self.assertEqual(normal["state"], "running")
+        self.assertEqual(probe["cleanup"], "cancellation-requested")
+        self.backend.tick()
+        self.assertEqual(probe["failure"], "exploration_headroom")
+        self.assertEqual(self.profile()["consecutive_probe_failures"], 1)
+        self.assertIsNone(self.profile()["recommendation"]["vram_mib"])
+
+    def test_profiles_retain_successful_peaks_and_survive_restart_and_history_pruning(self):
+        probe = self.profiled(vram=1024)
+        self.backend.tick()
+        self.snapshot["gpu"].update(
+            allocations_mib={probe["slurm_job_id"]: 4200}, attribution_confidence="cgroup-gpu-processes"
+        )
+        self.snapshot["cgroups"][probe["slurm_job_id"]] = {"memory.current": 3000, "memory.peak": 3500}
+        self.backend.tick()
+        self.backend.tick()
+        self.finish(probe)
+        record = self.profile()
+        self.assertEqual(record["runs"], 1)
+        self.assertEqual(record["ram_peak_mib"], 3500)
+        self.assertEqual(record["vram_peak_mib"], 4200)
+        self.assertEqual(record["recommendation"]["ram_mib"], 4608)
+        self.assertEqual(record["recommendation"]["vram_mib"], 5376)
+        self.backend.tick()
+        self.assertEqual(self.profile()["runs"], 1)
+        for _ in range(4):
+            other = self.submit(ram=1024)
+            self.finish(other)
+        self.assertNotIn(probe, self.backend.state["jobs"])
+        os.close(self.backend.lock_fd)
+        self.backend = rs.Backend(self.backend.config, self.slurm, lambda: copy.deepcopy(self.snapshot), host=self.host)
+        self.assertEqual(self.profile()["runs"], 1)
+        self.assertEqual(self.profile()["vram_peak_mib"], 4200)
+        self.assertNotIn("secret-argument", json.dumps(self.profile()))
+        self.assertNotIn("credential", json.dumps(self.profile()))
+
+    def test_profile_recommendations_do_not_use_missing_or_single_gpu_sample(self):
+        for samples, missing in ((0, 0), (1, 0), (2, 1)):
+            probe = self.profiled(vram=1024)
+            probe["gpu_samples"], probe["gpu_missing_samples"] = samples, missing
+            probe["observed"].update(vram_peak_mib=1000, attribution_confidence="cgroup-gpu-processes")
+            self.finish(probe)
+            self.assertIsNone(self.profile()["recommendation"]["vram_mib"])
+            self.assertIsNone(self.profile()["recommendation"]["ram_mib"])
+
+    def test_profile_failure_evidence_and_retry_bound(self):
+        for text, state, expected in (
+            ("not enough disk space", "FAILED", "command_failed"),
+            ("torch.OutOfMemoryError: CUDA out of memory", "FAILED", "gpu_oom_reported"),
+            ("", "OUT_OF_MEMORY", "ram_oom"),
+        ):
+            job = self.profiled(vram=1024)
+            (Path(self.temp.name) / job["id"] / "stderr").write_text(text)
+            self.finish(job, state, 1)
+            self.assertEqual(job["failure"], expected)
+            self.assertIsNone(self.profile()["recommendation"]["ram_mib"])
+        with self.assertRaisesRegex(ValueError, "Three exploration failures"):
+            self.profiled(vram=1024)
+        self.assertEqual(self.slurm.counter, 3)
+        # An explicitly budgeted successful run can establish a corrected profile.
+        explicit = self.submit(profile="runtime", variant="scene-1080p-v1", vram=4096)
+        self.finish(explicit)
+        self.assertEqual(self.profile()["consecutive_probe_failures"], 0)
+
+    def test_profile_keys_separate_workload_settings_and_reject_duplicates(self):
+        probe = self.profiled()
+        with self.assertRaisesRegex(ValueError, "active work"):
+            self.profiled()
+        different = self.submit(explore=True, origin="agent-sandbox-test", profile="runtime", variant="scene-4k-v1")
+        self.assertNotEqual(probe["profile"], different["profile"])
+        with self.assertRaises(ValueError):
+            self.submit(profile="bad\nname", variant="v1")
+        response = self.backend.handle(
+            dict(version=1, action="profiles", project="project", profile="runtime", variant="scene-4k-v1"), os.getuid()
+        )
+        self.assertEqual(len(response["profiles"]), 1)
+        with self.assertRaises(PermissionError):
+            self.backend.handle(dict(version=1, action="profiles"), os.getuid() + 1)
+
+    def test_profile_storage_is_bounded_and_unmanaged_results_do_not_train_it(self):
+        job = self.profiled()
+        self.control("run-host", job)
+        self.backend.tick()
+        self.host.units[job["systemd_unit"]].update(ActiveState="active", SubState="exited")
+        rs.atomic(Path(self.temp.name) / job["id"] / "result.json", {"exit_code": 0})
+        self.backend.tick()
+        self.assertEqual(self.profile()["runs"], 0)
+        for i in range(127):
+            identity = {"project": "project", "name": "extra", "variant": str(i)}
+            self.backend.state["profiles"][json.dumps(identity, sort_keys=True)] = rs.new_profile(identity)
+        with self.assertRaisesRegex(ValueError, "Profile limit"):
+            self.submit(profile="new", variant="v1")
+
+    def test_graphics_and_compute_memory_are_attributed_without_double_counting(self):
+        proc = Path(self.temp.name) / "proc"
+        for pid, group in (
+            ("10", "0::/system.slice/slurmstepd.scope/job_42/step_batch"),
+            ("11", "0::/system.slice/slurmstepd.scope/job_42/step_batch"),
+            ("12", "0::/user.slice/desktop"),
+        ):
+            (proc / pid).mkdir(parents=True)
+            (proc / pid / "cgroup").write_text(group)
+        xml = (
+            "<nvidia_smi_log><gpu><uuid>GPU-test</uuid><processes>"
+            + "".join(
+                f"<process_info><pid>{pid}</pid><type>{kind}</type><used_memory>{memory} MiB</used_memory></process_info>"
+                for pid, kind, memory in ((10, "G", 3000), (11, "C+G", 1000), (12, "G", 200))
+            )
+            + "</processes></gpu></nvidia_smi_log>"
+        )
+        self.assertEqual(rs.gpu_process_allocations(xml, "GPU-test", proc), {"42": 4000})
+        with self.assertRaises(ValueError):
+            rs.gpu_process_allocations(xml.replace("3000 MiB", "N/A"), "GPU-test", proc)
+        with self.assertRaises(ValueError):
+            rs.gpu_process_allocations(xml, "GPU-other", proc)
+        with self.assertRaises(ValueError):
+            rs.gpu_process_allocations("broken xml", "GPU-test", proc)
 
     def test_external_ram_shortage_allows_small_job_and_records_bypass(self):
         self.snapshot["ram"]["available_mib"] = 9000

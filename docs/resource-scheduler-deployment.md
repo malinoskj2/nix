@@ -6,6 +6,11 @@ Slurm and replaces legacy GPU admission; follow the drained cutover below before
 switching. Editing or building the configuration does not activate it.
 The exported `nixosModules.resource-scheduler` module is also available to consumers.
 
+Policy 4 adds CPU-only backfill around exclusive GPU work, explicit sandbox
+calibration and persistent workload profiles. It also attributes graphics GPU
+processes, not only compute contexts. Existing jobs retain their allocations;
+this is not live reservation resizing. No switch is performed by editing it.
+
 ## Declared deployment
 
 After the validation and drain below, enable the normal host path with:
@@ -14,7 +19,7 @@ After the validation and drain below, enable the normal host path with:
 services.resourceScheduler = {
   enable = true;
   cpuCapacity = 28;
-  policyVersion = "3";
+  policyVersion = "4";
 };
 ```
 

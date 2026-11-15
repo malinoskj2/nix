@@ -103,7 +103,79 @@ its allocation. Slurm CPU reservations do not promise a particular CCD.
 The root GameMode service owns `/run/resource-scheduler-game-active`;
 while present it also blocks new GPU admissions. Missing/unwritable Slurm CPU
 controllers during gaming produces explicit status errors and stops admissions.
+CPU-only jobs may pass a job blocked specifically by a running exclusive GPU
+allocation (or a GPU trial). GPU ordering is retained. All CPU/RAM, pressure, pause
+and unknown-allocation checks still apply; memory shortages do not gain this
+exception merely because a job also requests GPU resources.
+
 The policy never suspends processes or claims suspension frees memory.
+
+## Workload calibration and profiles
+
+Exploration is an explicit, repeatable sandbox trial, still supervised by Slurm.
+It does not require an accurate peak estimate and does not bypass the scheduler:
+
+```sh
+resource-run --explore --gpu --project e-day-ports \
+  --profile marcus-runtime --variant representative-scenes-1080p-v1 \
+  --ram 12GiB --name "Marcus calibration" --category game -- command
+resource-profile --project e-day-ports \
+  --profile marcus-runtime --variant representative-scenes-1080p-v1
+```
+
+Without overrides a trial requests 2 CPUs, 4GiB host RAM and, with `--gpu`, an
+initial 1GiB shared VRAM allocation. Without `--gpu` or `--vram`, it is CPU-only.
+CPU/RAM retain Slurm enforcement, swap is not added capacity, and the trial has a
+30-minute wall limit. GPU shards remain cooperative: a trial can exceed its initial
+VRAM allocation and affect another GPU user before the next sample. Existing shared
+work continues; only one GPU trial runs at a time and subsequent GPU admissions
+wait for it to establish its peak. CPU-only backfill remains available. No trial
+bypasses an existing exclusive allocation, a pressure hold or desktop headroom.
+The backend cancels only the trial if RAM/GPU headroom is breached, memory pressure
+rises, or required aggregate telemetry disappears, and waits for Slurm cleanup.
+This sampled intervention cannot promise protection from instantaneous GPU spikes.
+
+Inspect the result and adjust workload settings or the next request, rather than
+retrying every failure with more memory. `ram_oom` requires a Slurm OOM state or
+cgroup OOM-kill evidence. `gpu_oom_reported` means a recognized application error
+in captured stderr, not independently verified GPU exhaustion. Other outcomes are
+`command_failed`, `time_limit`, `cancelled` or `exploration_headroom`. There are no
+automatic reruns. Three unsuccessful exploratory attempts for the same variant
+block further probes; an explicitly budgeted successful run resets that count.
+Changed settings may use a new variant; an unchanged workload must not rotate
+identifiers to bypass the bound. Output and the actual exit status remain available.
+
+Profile identity is an explicit `(project, profile, variant)` tuple, using 1–80
+safe identifier characters per component. Include model/version, input dimensions,
+batch/context settings or representative scenes in the variant. No fuzzy command
+matching, command-line storage, environment capture or secrets enter profiles.
+The owner-authenticated `resource-profile` command lists profiles or looks up an
+exact tuple. Up to 128 profiles are retained in root-owned scheduler state, across
+restarts and job-history pruning; updates and completion bookkeeping are atomic.
+Normal runs can attach the same `--profile` and `--variant` to refine the evidence.
+
+Recommendations use the largest successful observed peak plus 25% or 512MiB,
+whichever is larger, rounded up to 256MiB. They are advisory: subsequent runs still
+declare their own CPU/RAM/VRAM requests. A latest failed run suppresses suggestions.
+RAM needs a measured peak; GPU needs at least two attributed samples with no missing
+running samples and full graphics/compute process attribution. Missing values and
+short unsampled jobs yield unknown recommendations, never zero GPU estimates.
+CPU-only runs suggest no GPU reservation. A GPU trial that never exercises the
+device does not produce a GPU budget suggestion. A complete process inventory
+can establish zero current usage during idle/loading phases; incomplete inventories
+remain unknown. GPU polling can still miss brief peaks;
+representative input coverage remains the caller's responsibility. Unmanaged host
+and sandbox overrides do not train profiles. Profile identifiers, trial badges and
+failure classifications appear in the plugin inspector; trial allocations are
+excluded from reservation-accuracy statistics.
+
+Automated runtime inspection is ordinary background shared work. Human game
+priority/exclusivity is reserved for actual interactive gaming or a genuine need
+for the entire device. Marcus's previous exclusive allocation cannot be silently
+converted or shrunk by these changes: future launches use a shared explicit budget
+or calibration, and an existing session must finish or be deliberately restarted.
+Riso's budget should similarly be established from representative measured work,
+not inferred from its name.
 
 ## Explicit waiting-job controls
 

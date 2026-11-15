@@ -25,7 +25,7 @@ assert policy == {
     "poll_seconds": 2,
     "stability_seconds": 10,
     "history_limit": 500,
-    "policy_version": "3",
+    "policy_version": "4",
 }
 
 config = Path(os.environ["SLURM_CONFIG"])

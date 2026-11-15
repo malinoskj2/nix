@@ -1,7 +1,7 @@
 {
   "provenance": {
     "generator": "capture-backend-status.py",
-    "backend_sha256": "7b64f7080ddb198507add048195ea63fa56aa423898f0ccc2587f451f682ecd0",
+    "backend_sha256": "e9e786c7a8d99b53681e017d350e3b272de91037b9e1d4c2647d5442eba25e1a",
     "execution": "Real Backend.submit/tick/status serializer; simulated Slurm and deterministic host telemetry; captured native journal datagrams"
   },
   "scenarios": {
@@ -19,6 +19,8 @@
         "run_next": true,
         "run_host": true,
         "run_sandbox": true,
+        "exploration": true,
+        "profiles": true,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -73,6 +75,8 @@
           "id": "00000000000000000000000000000001",
           "revision": 4,
           "label": "Unknown-size exclusive GPU workload",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -108,6 +112,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "pending",
+          "gpu_samples": 0,
+          "gpu_missing_samples": 1,
           "model": null,
           "events": [
             {
@@ -210,6 +216,8 @@
         "run_next": true,
         "run_host": true,
         "run_sandbox": true,
+        "exploration": true,
+        "profiles": true,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -264,6 +272,8 @@
           "id": "00000000000000000000000000000002",
           "revision": 4,
           "label": "Existing CPU build",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -299,6 +309,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "pending",
+          "gpu_samples": 0,
+          "gpu_missing_samples": 0,
           "model": null,
           "events": [
             {
@@ -383,6 +395,8 @@
           "id": "00000000000000000000000000000003",
           "revision": 1,
           "label": "Game session",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -416,6 +430,8 @@
           "wait_reason": "Awaiting headroom policy",
           "exit_code": null,
           "cleanup": "pending",
+          "gpu_samples": 0,
+          "gpu_missing_samples": 0,
           "model": null,
           "events": [
             {
@@ -452,6 +468,8 @@
           "id": "00000000000000000000000000000001",
           "revision": 5,
           "label": "Unknown-size exclusive GPU workload",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -487,6 +505,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "slurm-terminal",
+          "gpu_samples": 0,
+          "gpu_missing_samples": 1,
           "model": null,
           "events": [
             {
@@ -599,6 +619,11 @@
             }
           ],
           "released": true,
+          "slurm_terminal_state": [
+            "CANCELLED"
+          ],
+          "failure": "cancelled",
+          "profile_recorded": true,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
@@ -627,6 +652,8 @@
         "run_next": true,
         "run_host": true,
         "run_sandbox": true,
+        "exploration": true,
+        "profiles": true,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -681,6 +708,8 @@
           "id": "00000000000000000000000000000003",
           "revision": 4,
           "label": "Game session",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -716,6 +745,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "pending",
+          "gpu_samples": 0,
+          "gpu_missing_samples": 2,
           "model": null,
           "events": [
             {
@@ -802,6 +833,8 @@
           "id": "00000000000000000000000000000002",
           "revision": 5,
           "label": "Existing CPU build",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -837,6 +870,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "slurm-terminal",
+          "gpu_samples": 0,
+          "gpu_missing_samples": 0,
           "model": null,
           "events": [
             {
@@ -949,6 +984,11 @@
             }
           ],
           "released": true,
+          "slurm_terminal_state": [
+            "CANCELLED"
+          ],
+          "failure": "cancelled",
+          "profile_recorded": true,
           "allocation": {
             "cpu": 6,
             "ram_mib": 4096,
@@ -977,6 +1017,8 @@
         "run_next": true,
         "run_host": true,
         "run_sandbox": true,
+        "exploration": true,
+        "profiles": true,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -1032,6 +1074,8 @@
           "id": "00000000000000000000000000000004",
           "revision": 4,
           "label": "Owner-reported model server",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -1059,7 +1103,7 @@
             "vram_mib": 4096,
             "vram_peak_mib": 4096,
             "gpu_utilization_percent": null,
-            "attribution_confidence": "cgroup-compute-processes",
+            "attribution_confidence": "unavailable",
             "oom_kill": null,
             "sampled_at": 1794747602,
             "cpu_set": null
@@ -1067,6 +1111,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "pending",
+          "gpu_samples": 1,
+          "gpu_missing_samples": 1,
           "model": null,
           "events": [
             {
@@ -1153,6 +1199,8 @@
           "id": "00000000000000000000000000000003",
           "revision": 5,
           "label": "Game session",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -1188,6 +1236,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "slurm-terminal",
+          "gpu_samples": 0,
+          "gpu_missing_samples": 2,
           "model": null,
           "events": [
             {
@@ -1300,6 +1350,11 @@
             }
           ],
           "released": true,
+          "slurm_terminal_state": [
+            "CANCELLED"
+          ],
+          "failure": "cancelled",
+          "profile_recorded": true,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
@@ -1328,6 +1383,8 @@
         "run_next": true,
         "run_host": true,
         "run_sandbox": true,
+        "exploration": true,
+        "profiles": true,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -1383,6 +1440,8 @@
           "id": "00000000000000000000000000000004",
           "revision": 4,
           "label": "Owner-reported model server",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -1410,7 +1469,7 @@
             "vram_mib": 4096,
             "vram_peak_mib": 4096,
             "gpu_utilization_percent": null,
-            "attribution_confidence": "cgroup-compute-processes",
+            "attribution_confidence": "unavailable",
             "oom_kill": null,
             "sampled_at": 1794747604,
             "cpu_set": null
@@ -1418,6 +1477,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "pending",
+          "gpu_samples": 2,
+          "gpu_missing_samples": 1,
           "model": null,
           "events": [
             {
@@ -1504,6 +1565,8 @@
           "id": "00000000000000000000000000000003",
           "revision": 5,
           "label": "Game session",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -1539,6 +1602,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "slurm-terminal",
+          "gpu_samples": 0,
+          "gpu_missing_samples": 2,
           "model": null,
           "events": [
             {
@@ -1651,6 +1716,11 @@
             }
           ],
           "released": true,
+          "slurm_terminal_state": [
+            "CANCELLED"
+          ],
+          "failure": "cancelled",
+          "profile_recorded": true,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
@@ -1679,6 +1749,8 @@
         "run_next": true,
         "run_host": true,
         "run_sandbox": true,
+        "exploration": true,
+        "profiles": true,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -1734,6 +1806,8 @@
           "id": "00000000000000000000000000000004",
           "revision": 5,
           "label": "Owner-reported model server",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -1761,7 +1835,7 @@
             "vram_mib": 4096,
             "vram_peak_mib": 4096,
             "gpu_utilization_percent": null,
-            "attribution_confidence": "cgroup-compute-processes",
+            "attribution_confidence": "unavailable",
             "oom_kill": null,
             "sampled_at": 1794747604,
             "cpu_set": null
@@ -1769,6 +1843,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "pending",
+          "gpu_samples": 2,
+          "gpu_missing_samples": 1,
           "model": {
             "label": "Fixture model",
             "state": "loading",
@@ -1895,6 +1971,8 @@
           "id": "00000000000000000000000000000003",
           "revision": 5,
           "label": "Game session",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -1930,6 +2008,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "slurm-terminal",
+          "gpu_samples": 0,
+          "gpu_missing_samples": 2,
           "model": null,
           "events": [
             {
@@ -2042,6 +2122,11 @@
             }
           ],
           "released": true,
+          "slurm_terminal_state": [
+            "CANCELLED"
+          ],
+          "failure": "cancelled",
+          "profile_recorded": true,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
@@ -2070,6 +2155,8 @@
         "run_next": true,
         "run_host": true,
         "run_sandbox": true,
+        "exploration": true,
+        "profiles": true,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -2125,6 +2212,8 @@
           "id": "00000000000000000000000000000004",
           "revision": 6,
           "label": "Owner-reported model server",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -2152,7 +2241,7 @@
             "vram_mib": 4096,
             "vram_peak_mib": 4096,
             "gpu_utilization_percent": null,
-            "attribution_confidence": "cgroup-compute-processes",
+            "attribution_confidence": "unavailable",
             "oom_kill": null,
             "sampled_at": 1794747604,
             "cpu_set": null
@@ -2160,6 +2249,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "pending",
+          "gpu_samples": 2,
+          "gpu_missing_samples": 1,
           "model": {
             "label": "Fixture model",
             "state": "ready",
@@ -2318,6 +2409,8 @@
           "id": "00000000000000000000000000000003",
           "revision": 5,
           "label": "Game session",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -2353,6 +2446,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "slurm-terminal",
+          "gpu_samples": 0,
+          "gpu_missing_samples": 2,
           "model": null,
           "events": [
             {
@@ -2465,6 +2560,11 @@
             }
           ],
           "released": true,
+          "slurm_terminal_state": [
+            "CANCELLED"
+          ],
+          "failure": "cancelled",
+          "profile_recorded": true,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
@@ -2493,6 +2593,8 @@
         "run_next": true,
         "run_host": true,
         "run_sandbox": true,
+        "exploration": true,
+        "profiles": true,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -2548,6 +2650,8 @@
           "id": "00000000000000000000000000000004",
           "revision": 7,
           "label": "Owner-reported model server",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -2575,7 +2679,7 @@
             "vram_mib": 4096,
             "vram_peak_mib": 4096,
             "gpu_utilization_percent": null,
-            "attribution_confidence": "cgroup-compute-processes",
+            "attribution_confidence": "unavailable",
             "oom_kill": null,
             "sampled_at": 1794747604,
             "cpu_set": null
@@ -2583,6 +2687,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "pending",
+          "gpu_samples": 2,
+          "gpu_missing_samples": 1,
           "model": {
             "label": "Fixture model",
             "state": "busy",
@@ -2773,6 +2879,8 @@
           "id": "00000000000000000000000000000003",
           "revision": 5,
           "label": "Game session",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -2808,6 +2916,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "slurm-terminal",
+          "gpu_samples": 0,
+          "gpu_missing_samples": 2,
           "model": null,
           "events": [
             {
@@ -2920,6 +3030,11 @@
             }
           ],
           "released": true,
+          "slurm_terminal_state": [
+            "CANCELLED"
+          ],
+          "failure": "cancelled",
+          "profile_recorded": true,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
@@ -2948,6 +3063,8 @@
         "run_next": true,
         "run_host": true,
         "run_sandbox": true,
+        "exploration": true,
+        "profiles": true,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -3003,6 +3120,8 @@
           "id": "00000000000000000000000000000004",
           "revision": 8,
           "label": "Owner-reported model server",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -3030,7 +3149,7 @@
             "vram_mib": 4096,
             "vram_peak_mib": 4096,
             "gpu_utilization_percent": null,
-            "attribution_confidence": "cgroup-compute-processes",
+            "attribution_confidence": "unavailable",
             "oom_kill": null,
             "sampled_at": 1794747604,
             "cpu_set": null
@@ -3038,6 +3157,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "pending",
+          "gpu_samples": 2,
+          "gpu_missing_samples": 1,
           "model": {
             "label": "Fixture model",
             "state": "idle",
@@ -3260,6 +3381,8 @@
           "id": "00000000000000000000000000000003",
           "revision": 5,
           "label": "Game session",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -3295,6 +3418,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "slurm-terminal",
+          "gpu_samples": 0,
+          "gpu_missing_samples": 2,
           "model": null,
           "events": [
             {
@@ -3407,6 +3532,11 @@
             }
           ],
           "released": true,
+          "slurm_terminal_state": [
+            "CANCELLED"
+          ],
+          "failure": "cancelled",
+          "profile_recorded": true,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
@@ -3435,6 +3565,8 @@
         "run_next": true,
         "run_host": true,
         "run_sandbox": true,
+        "exploration": true,
+        "profiles": true,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -3490,6 +3622,8 @@
           "id": "00000000000000000000000000000004",
           "revision": 9,
           "label": "Owner-reported model server",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -3517,7 +3651,7 @@
             "vram_mib": 4096,
             "vram_peak_mib": 4096,
             "gpu_utilization_percent": null,
-            "attribution_confidence": "cgroup-compute-processes",
+            "attribution_confidence": "unavailable",
             "oom_kill": null,
             "sampled_at": 1794747604,
             "cpu_set": null
@@ -3525,6 +3659,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "pending",
+          "gpu_samples": 2,
+          "gpu_missing_samples": 1,
           "model": {
             "label": "Fixture model",
             "state": "unloaded",
@@ -3779,6 +3915,8 @@
           "id": "00000000000000000000000000000003",
           "revision": 5,
           "label": "Game session",
+          "explore": false,
+          "profile": null,
           "owner_uid": 1000,
           "agent": "fixture-agent",
           "worktree": "fixture-worktree",
@@ -3814,6 +3952,8 @@
           "wait_reason": null,
           "exit_code": null,
           "cleanup": "slurm-terminal",
+          "gpu_samples": 0,
+          "gpu_missing_samples": 2,
           "model": null,
           "events": [
             {
@@ -3926,6 +4066,11 @@
             }
           ],
           "released": true,
+          "slurm_terminal_state": [
+            "CANCELLED"
+          ],
+          "failure": "cancelled",
+          "profile_recorded": true,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,

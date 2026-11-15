@@ -90,3 +90,19 @@ test('sandbox handoff and results stay unmanaged with lifecycle controls', async
   Object.assign(raw.jobs[2], { execution: 'sandbox', host_phase: 'cancelling-slurm', state: 'pending' });
   assert.deepEqual(adaptStatus(raw).jobs[2].actions, ['cancel', 'terminate']);
 });
+
+test('exploratory profiles and outcomes are visible without claiming a peak guarantee', async () => {
+  const raw = fixture();
+  Object.assign(raw.jobs[0], { explore: true, profile: { project: 'nix', name: 'probe', variant: 'v1' }, failure: 'gpu_oom_reported' });
+  const snapshot = adaptStatus(raw), job = snapshot.jobs[0];
+  const html = page(snapshot, { selected: job.id });
+  assert.match(html, /Exploratory/);
+  assert.match(html, /starting budget, not a measured peak/);
+  assert.match(html, /nix \/ probe \/ v1/);
+  assert.match(html, /gpu oom reported/);
+  const { historyMetrics, diagnostic } = await import('../src/model.mjs');
+  assert.equal(diagnostic(snapshot, job).jobs[0].profile.name, 'probe');
+  assert.equal(historyMetrics([{ ...job, state: 'completed' }]).ramSamples, 0);
+  raw.jobs[0].profile.name = '<img src=x onerror=alert(1)>';
+  assert.doesNotMatch(page(adaptStatus(raw), { selected: job.id }), /<img src=x/);
+});

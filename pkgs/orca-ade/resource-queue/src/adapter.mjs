@@ -34,6 +34,7 @@ export function adaptStatus(raw) {
       measured: { cpu: metric(job.observed?.cpu_percent), ram: gib(job.observed?.ram_peak_mib), vram: gib(job.observed?.vram_peak_mib), confidence: text(job.observed?.attribution_confidence, 'Unavailable') },
       queuePosition: Number.isSafeInteger(job.queue_position) && job.queue_position > 0 ? job.queue_position : null,
       execution: ['host', 'sandbox'].includes(job.execution) ? job.execution : 'slurm', hostPhase: text(job.host_phase),
+      explore: job.explore === true, profile: job.profile && ['project', 'name', 'variant'].every((key) => typeof job.profile[key] === 'string') ? { project: text(job.profile.project), name: text(job.profile.name), variant: text(job.profile.variant) } : null, failure: text(job.failure),
       runNextRequested: date(job.run_next_requested_at),
       exclusive: job.mode === 'exclusive', wait: text(job.wait_reason, state === 'waiting' ? 'Waiting for scheduler admission; detailed reason unavailable.' : ''),
       submittedAt: date(job.created_at), startedAt: date(job.started_at), finishedAt: date(job.ended_at), allocation: job.slurm_job_id == null ? null : String(job.slurm_job_id),
