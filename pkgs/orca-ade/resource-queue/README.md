@@ -62,7 +62,7 @@ Supported initial controls:
 
 The inspector includes bounded searchable structured lifecycle events, follow/pause,
 known admission snapshots, requested versus measured peaks, exit/cleanup, safe JSON
-exports and a copyable `journalctl RESOURCE_JOB_ID='…' -o json-pretty` query. Logs
+exports and a copyable `journalctl SYSLOG_IDENTIFIER=resource-scheduler RESOURCE_JOB_ID='…' -o json-pretty` query. Logs
 come from allowlisted fields in status, never arbitrary journald messages.
 
 ## Scope and honest limitations
@@ -119,3 +119,47 @@ plugin; the production entry does not read fixture query parameters. Browser
 screenshots belong in the worktree-root `.tmp/` and review batches use media-gallery.
 A normal `nix build .#packages.x86_64-linux.orca-ade --no-link` validates the full
 reproducible application build without activating it or restarting Orca.
+
+## Exclusive budgets and gaming protection contract
+
+An all-available exclusive GPU job exposes `requested.vram_mib = null` and
+`vram_estimate = "all-available"`. The peak estimate stays **Unknown**. The separate
+`allocation.vram_mib` is null before admission and becomes the frozen effective
+admission budget when released. Rows and the inspector distinguish that allocation
+from requested peaks and measured use; diagnostic exports preserve all three.
+Unknown requested peaks are excluded from peak/request accuracy statistics. The
+GPU reservation total comes directly from `telemetry.gpu.reserved_mib`, including
+exclusive allocations, and is never reconstructed from unknown request fields.
+
+CPU `capacity` is the configured Slurm capacity and `reserved` includes all active
+job allocations, including game jobs. `effective_background_capacity` is a separate
+background admission/protection limit. The CPU card keeps total reservations over
+configured capacity and names the reduced background limit independently, including
+in the compact view. `game_active` can reflect external game discovery even when
+queue mode is normal. Protection errors are visible as degraded protection and
+partial telemetry notices; no successful throttling is inferred from game mode.
+
+The latest backend public status retains up to eight lifecycle events per job,
+omits their admission snapshots, and may omit events or old history to stay below
+900000 serialized bytes. The UI surfaces `truncated.events` and `truncated.history`.
+The native journal contains the deeper records; the copied query matches its real
+`SYSLOG_IDENTIFIER` and `RESOURCE_JOB_ID` fields. If native journald delivery is
+unavailable, the backend's service stdout fallback contains the JSON event inside
+`MESSAGE` and cannot be selected by `RESOURCE_JOB_ID`; inspect
+`journalctl -u resource-scheduler.service -o cat` in that degraded environment.
+
+`tests/backend-status-v1.json` is captured from the actual backend serializer,
+submission and tick code with injected Slurm and deterministic host telemetry.
+It is not evidence of a live host deployment. Its provenance includes the source
+SHA-256. Regenerate it without starting a service or writing to the journal:
+
+```sh
+python3 pkgs/orca-ade/resource-queue/tests/capture-backend-status.py \
+  /path/to/pkgs/resource-scheduler/resource_scheduler.py \
+  pkgs/orca-ade/resource-queue/tests/backend-status-v1.json
+```
+
+The capture also records a real native journal datagram through an intercepted
+socket, allowing contract tests to verify the copied selector against the backend's
+actual structured field names. No credentials, environment, command arguments or
+real host paths are present in the captured public fixture.

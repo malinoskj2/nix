@@ -1,0 +1,963 @@
+{
+  "provenance": {
+    "generator": "capture-backend-status.py",
+    "backend_sha256": "258f1e2e1523d5b5ab14c634f70c157eb9452f3256af6383b042432b5ffd55a6",
+    "execution": "Real Backend.submit/tick/status serializer; simulated Slurm and deterministic host telemetry; captured native journal datagrams"
+  },
+  "scenarios": {
+    "exclusive_running": {
+      "schema_version": 1,
+      "policy_version": "1",
+      "revision": 8,
+      "generated_at": 1794747600,
+      "connected": true,
+      "mode": "exclusive_running",
+      "capabilities": {
+        "cancel": true,
+        "terminate": true,
+        "pause": true,
+        "resume": true,
+        "priority": false,
+        "unload": false
+      },
+      "telemetry": {
+        "sampled_at": 1794747600,
+        "errors": [],
+        "pressure": {
+          "cpu": null,
+          "memory": null,
+          "io": null
+        },
+        "cpu": {
+          "capacity": 12,
+          "reserved": 2,
+          "actual": null,
+          "external": null,
+          "unit": "Slurm CPU",
+          "effective_background_capacity": 12,
+          "game_active": false,
+          "game_protection_errors": []
+        },
+        "ram": {
+          "total_mib": 31744,
+          "available_mib": 20480,
+          "headroom_mib": 4096,
+          "reserved_mib": 4096,
+          "managed_actual_mib": null
+        },
+        "gpu": {
+          "total_mib": 32768,
+          "free_mib": 18432,
+          "used_mib": 14336,
+          "utilization_percent": null,
+          "headroom_mib": 3072,
+          "reserved_mib": 15360,
+          "managed_actual_mib": null
+        }
+      },
+      "jobs": [
+        {
+          "id": "00000000000000000000000000000001",
+          "revision": 4,
+          "label": "Unknown-size exclusive GPU workload",
+          "owner_uid": 1000,
+          "agent": "fixture-agent",
+          "worktree": "fixture-worktree",
+          "project": "fixture-project",
+          "origin": "host",
+          "category": "build",
+          "priority": "background",
+          "mode": "exclusive",
+          "vram_auto": true,
+          "state": "running",
+          "created_at": 1794747600,
+          "started_at": 1794747600,
+          "ended_at": null,
+          "slurm_job_id": "1",
+          "requested": {
+            "cpu": 2,
+            "ram_mib": 4096,
+            "vram_mib": null
+          },
+          "observed": {
+            "cpu_percent": null,
+            "cpu_usec": null,
+            "ram_mib": null,
+            "ram_peak_mib": null,
+            "vram_mib": null,
+            "vram_peak_mib": null,
+            "gpu_utilization_percent": null,
+            "attribution_confidence": "unavailable",
+            "oom_kill": null,
+            "sampled_at": 1794747600
+          },
+          "wait_reason": null,
+          "exit_code": null,
+          "cleanup": "pending",
+          "events": [
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "submission",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": null,
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              }
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "admission",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "reason": null
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "start",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "queue_seconds": 0
+            }
+          ],
+          "released": true,
+          "allocation": {
+            "cpu": 2,
+            "ram_mib": 4096,
+            "vram_mib": 15360
+          },
+          "vram_estimate": "all-available"
+        }
+      ],
+      "history": [],
+      "errors": [],
+      "truncated": {
+        "history": 0,
+        "events": false
+      }
+    },
+    "game_pending": {
+      "schema_version": 1,
+      "policy_version": "1",
+      "revision": 17,
+      "generated_at": 1794747600,
+      "connected": true,
+      "mode": "game_pending",
+      "capabilities": {
+        "cancel": true,
+        "terminate": true,
+        "pause": true,
+        "resume": true,
+        "priority": false,
+        "unload": false
+      },
+      "telemetry": {
+        "sampled_at": 1794747600,
+        "errors": [],
+        "pressure": {
+          "cpu": null,
+          "memory": null,
+          "io": null
+        },
+        "cpu": {
+          "capacity": 12,
+          "reserved": 6,
+          "actual": null,
+          "external": null,
+          "unit": "Slurm CPU",
+          "effective_background_capacity": 12,
+          "game_active": false,
+          "game_protection_errors": []
+        },
+        "ram": {
+          "total_mib": 31744,
+          "available_mib": 20480,
+          "headroom_mib": 4096,
+          "reserved_mib": 4096,
+          "managed_actual_mib": null
+        },
+        "gpu": {
+          "total_mib": 32768,
+          "free_mib": 18432,
+          "used_mib": 14336,
+          "utilization_percent": null,
+          "headroom_mib": 3072,
+          "reserved_mib": 0,
+          "managed_actual_mib": 0
+        }
+      },
+      "jobs": [
+        {
+          "id": "00000000000000000000000000000002",
+          "revision": 4,
+          "label": "Existing CPU build",
+          "owner_uid": 1000,
+          "agent": "fixture-agent",
+          "worktree": "fixture-worktree",
+          "project": "fixture-project",
+          "origin": "host",
+          "category": "build",
+          "priority": "background",
+          "mode": "shared",
+          "vram_auto": false,
+          "state": "running",
+          "created_at": 1794747600,
+          "started_at": 1794747600,
+          "ended_at": null,
+          "slurm_job_id": "2",
+          "requested": {
+            "cpu": 6,
+            "ram_mib": 4096,
+            "vram_mib": 0
+          },
+          "observed": {
+            "cpu_percent": null,
+            "cpu_usec": null,
+            "ram_mib": null,
+            "ram_peak_mib": null,
+            "vram_mib": null,
+            "vram_peak_mib": null,
+            "gpu_utilization_percent": null,
+            "attribution_confidence": "unavailable",
+            "oom_kill": null,
+            "sampled_at": 1794747600
+          },
+          "wait_reason": null,
+          "exit_code": null,
+          "cleanup": "pending",
+          "events": [
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "submission",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": null,
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              }
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "admission",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "2",
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "reason": null
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "start",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "2",
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "queue_seconds": 0
+            }
+          ],
+          "released": true,
+          "allocation": {
+            "cpu": 6,
+            "ram_mib": 4096,
+            "vram_mib": 0
+          },
+          "vram_estimate": "declared-peak"
+        },
+        {
+          "id": "00000000000000000000000000000003",
+          "revision": 1,
+          "label": "Game session",
+          "owner_uid": 1000,
+          "agent": "fixture-agent",
+          "worktree": "fixture-worktree",
+          "project": "fixture-project",
+          "origin": "host",
+          "category": "game",
+          "priority": "game",
+          "mode": "exclusive",
+          "vram_auto": true,
+          "state": "queued",
+          "created_at": 1794747600,
+          "started_at": null,
+          "ended_at": null,
+          "slurm_job_id": "3",
+          "requested": {
+            "cpu": 2,
+            "ram_mib": 4096,
+            "vram_mib": null
+          },
+          "observed": {
+            "cpu_percent": null,
+            "cpu_usec": null,
+            "ram_mib": null,
+            "ram_peak_mib": null,
+            "vram_mib": null,
+            "vram_peak_mib": null,
+            "gpu_utilization_percent": null,
+            "attribution_confidence": "unavailable",
+            "oom_kill": null
+          },
+          "wait_reason": "Awaiting headroom policy",
+          "exit_code": null,
+          "cleanup": "pending",
+          "events": [
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "submission",
+              "job_id": "00000000000000000000000000000003",
+              "label": "Game session",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "game",
+              "slurm_job_id": null,
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              }
+            }
+          ],
+          "allocation": {
+            "cpu": 2,
+            "ram_mib": 4096,
+            "vram_mib": null
+          },
+          "vram_estimate": "all-available"
+        }
+      ],
+      "history": [
+        {
+          "id": "00000000000000000000000000000001",
+          "revision": 5,
+          "label": "Unknown-size exclusive GPU workload",
+          "owner_uid": 1000,
+          "agent": "fixture-agent",
+          "worktree": "fixture-worktree",
+          "project": "fixture-project",
+          "origin": "host",
+          "category": "build",
+          "priority": "background",
+          "mode": "exclusive",
+          "vram_auto": true,
+          "state": "cancelled",
+          "created_at": 1794747600,
+          "started_at": 1794747600,
+          "ended_at": 1794747600,
+          "slurm_job_id": "1",
+          "requested": {
+            "cpu": 2,
+            "ram_mib": 4096,
+            "vram_mib": null
+          },
+          "observed": {
+            "cpu_percent": null,
+            "cpu_usec": null,
+            "ram_mib": null,
+            "ram_peak_mib": null,
+            "vram_mib": null,
+            "vram_peak_mib": null,
+            "gpu_utilization_percent": null,
+            "attribution_confidence": "unavailable",
+            "oom_kill": null,
+            "sampled_at": 1794747600
+          },
+          "wait_reason": null,
+          "exit_code": null,
+          "cleanup": "slurm-terminal",
+          "events": [
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "submission",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": null,
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              }
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "admission",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "reason": null
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "start",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "queue_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "completion",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "exit_code": null,
+              "cleanup": "slurm-terminal",
+              "observed": {
+                "cpu_percent": null,
+                "cpu_usec": null,
+                "ram_mib": null,
+                "ram_peak_mib": null,
+                "vram_mib": null,
+                "vram_peak_mib": null,
+                "gpu_utilization_percent": null,
+                "attribution_confidence": "unavailable",
+                "oom_kill": null,
+                "sampled_at": 1794747600
+              },
+              "queue_seconds": 0,
+              "execution_seconds": 0
+            }
+          ],
+          "released": true,
+          "allocation": {
+            "cpu": 2,
+            "ram_mib": 4096,
+            "vram_mib": 15360
+          },
+          "vram_estimate": "all-available"
+        }
+      ],
+      "errors": [],
+      "truncated": {
+        "history": 0,
+        "events": false
+      }
+    },
+    "game_running": {
+      "schema_version": 1,
+      "policy_version": "1",
+      "revision": 23,
+      "generated_at": 1794747600,
+      "connected": true,
+      "mode": "game_running",
+      "capabilities": {
+        "cancel": true,
+        "terminate": true,
+        "pause": true,
+        "resume": true,
+        "priority": false,
+        "unload": false
+      },
+      "telemetry": {
+        "sampled_at": 1794747600,
+        "errors": [],
+        "pressure": {
+          "cpu": null,
+          "memory": null,
+          "io": null
+        },
+        "cpu": {
+          "capacity": 12,
+          "reserved": 2,
+          "actual": null,
+          "external": null,
+          "unit": "Slurm CPU",
+          "effective_background_capacity": 4,
+          "game_active": true,
+          "game_protection_errors": []
+        },
+        "ram": {
+          "total_mib": 31744,
+          "available_mib": 20480,
+          "headroom_mib": 4096,
+          "reserved_mib": 4096,
+          "managed_actual_mib": null
+        },
+        "gpu": {
+          "total_mib": 32768,
+          "free_mib": 18432,
+          "used_mib": 14336,
+          "utilization_percent": null,
+          "headroom_mib": 3072,
+          "reserved_mib": 15360,
+          "managed_actual_mib": null
+        }
+      },
+      "jobs": [
+        {
+          "id": "00000000000000000000000000000003",
+          "revision": 4,
+          "label": "Game session",
+          "owner_uid": 1000,
+          "agent": "fixture-agent",
+          "worktree": "fixture-worktree",
+          "project": "fixture-project",
+          "origin": "host",
+          "category": "game",
+          "priority": "game",
+          "mode": "exclusive",
+          "vram_auto": true,
+          "state": "running",
+          "created_at": 1794747600,
+          "started_at": 1794747600,
+          "ended_at": null,
+          "slurm_job_id": "3",
+          "requested": {
+            "cpu": 2,
+            "ram_mib": 4096,
+            "vram_mib": null
+          },
+          "observed": {
+            "cpu_percent": null,
+            "cpu_usec": null,
+            "ram_mib": null,
+            "ram_peak_mib": null,
+            "vram_mib": null,
+            "vram_peak_mib": null,
+            "gpu_utilization_percent": null,
+            "attribution_confidence": "unavailable",
+            "oom_kill": null,
+            "sampled_at": 1794747600
+          },
+          "wait_reason": null,
+          "exit_code": null,
+          "cleanup": "pending",
+          "events": [
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "submission",
+              "job_id": "00000000000000000000000000000003",
+              "label": "Game session",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "game",
+              "slurm_job_id": null,
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              }
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "admission",
+              "job_id": "00000000000000000000000000000003",
+              "label": "Game session",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "game",
+              "slurm_job_id": "3",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "reason": null
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "start",
+              "job_id": "00000000000000000000000000000003",
+              "label": "Game session",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "game",
+              "slurm_job_id": "3",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "queue_seconds": 0
+            }
+          ],
+          "released": true,
+          "allocation": {
+            "cpu": 2,
+            "ram_mib": 4096,
+            "vram_mib": 15360
+          },
+          "vram_estimate": "all-available"
+        }
+      ],
+      "history": [
+        {
+          "id": "00000000000000000000000000000002",
+          "revision": 5,
+          "label": "Existing CPU build",
+          "owner_uid": 1000,
+          "agent": "fixture-agent",
+          "worktree": "fixture-worktree",
+          "project": "fixture-project",
+          "origin": "host",
+          "category": "build",
+          "priority": "background",
+          "mode": "shared",
+          "vram_auto": false,
+          "state": "cancelled",
+          "created_at": 1794747600,
+          "started_at": 1794747600,
+          "ended_at": 1794747600,
+          "slurm_job_id": "2",
+          "requested": {
+            "cpu": 6,
+            "ram_mib": 4096,
+            "vram_mib": 0
+          },
+          "observed": {
+            "cpu_percent": null,
+            "cpu_usec": null,
+            "ram_mib": null,
+            "ram_peak_mib": null,
+            "vram_mib": null,
+            "vram_peak_mib": null,
+            "gpu_utilization_percent": null,
+            "attribution_confidence": "unavailable",
+            "oom_kill": null,
+            "sampled_at": 1794747600
+          },
+          "wait_reason": null,
+          "exit_code": null,
+          "cleanup": "slurm-terminal",
+          "events": [
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "submission",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": null,
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              }
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "admission",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "2",
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "reason": null
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "start",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "2",
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "queue_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "completion",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "2",
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "exit_code": null,
+              "cleanup": "slurm-terminal",
+              "observed": {
+                "cpu_percent": null,
+                "cpu_usec": null,
+                "ram_mib": null,
+                "ram_peak_mib": null,
+                "vram_mib": null,
+                "vram_peak_mib": null,
+                "gpu_utilization_percent": null,
+                "attribution_confidence": "unavailable",
+                "oom_kill": null,
+                "sampled_at": 1794747600
+              },
+              "queue_seconds": 0,
+              "execution_seconds": 0
+            }
+          ],
+          "released": true,
+          "allocation": {
+            "cpu": 6,
+            "ram_mib": 4096,
+            "vram_mib": 0
+          },
+          "vram_estimate": "declared-peak"
+        },
+        {
+          "id": "00000000000000000000000000000001",
+          "revision": 5,
+          "label": "Unknown-size exclusive GPU workload",
+          "owner_uid": 1000,
+          "agent": "fixture-agent",
+          "worktree": "fixture-worktree",
+          "project": "fixture-project",
+          "origin": "host",
+          "category": "build",
+          "priority": "background",
+          "mode": "exclusive",
+          "vram_auto": true,
+          "state": "cancelled",
+          "created_at": 1794747600,
+          "started_at": 1794747600,
+          "ended_at": 1794747600,
+          "slurm_job_id": "1",
+          "requested": {
+            "cpu": 2,
+            "ram_mib": 4096,
+            "vram_mib": null
+          },
+          "observed": {
+            "cpu_percent": null,
+            "cpu_usec": null,
+            "ram_mib": null,
+            "ram_peak_mib": null,
+            "vram_mib": null,
+            "vram_peak_mib": null,
+            "gpu_utilization_percent": null,
+            "attribution_confidence": "unavailable",
+            "oom_kill": null,
+            "sampled_at": 1794747600
+          },
+          "wait_reason": null,
+          "exit_code": null,
+          "cleanup": "slurm-terminal",
+          "events": [
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "submission",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": null,
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              }
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "admission",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "reason": null
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "start",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "queue_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "completion",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "exit_code": null,
+              "cleanup": "slurm-terminal",
+              "observed": {
+                "cpu_percent": null,
+                "cpu_usec": null,
+                "ram_mib": null,
+                "ram_peak_mib": null,
+                "vram_mib": null,
+                "vram_peak_mib": null,
+                "gpu_utilization_percent": null,
+                "attribution_confidence": "unavailable",
+                "oom_kill": null,
+                "sampled_at": 1794747600
+              },
+              "queue_seconds": 0,
+              "execution_seconds": 0
+            }
+          ],
+          "released": true,
+          "allocation": {
+            "cpu": 2,
+            "ram_mib": 4096,
+            "vram_mib": 15360
+          },
+          "vram_estimate": "all-available"
+        }
+      ],
+      "errors": [],
+      "truncated": {
+        "history": 0,
+        "events": false
+      }
+    }
+  },
+  "journal_submission": {
+    "MESSAGE": "{\"schema_version\":1,\"policy_version\":\"1\",\"timestamp\":1794747600,\"event\":\"submission\",\"job_id\":\"00000000000000000000000000000001\",\"label\":\"Unknown-size exclusive GPU workload\",\"agent\":\"fixture-agent\",\"worktree\":\"fixture-worktree\",\"category\":\"build\",\"slurm_job_id\":null,\"requested\":{\"cpu\":2,\"ram_mib\":4096,\"vram_mib\":29696}}",
+    "SYSLOG_IDENTIFIER": "resource-scheduler",
+    "RESOURCE_EVENT": "submission",
+    "RESOURCE_JOB_ID": "00000000000000000000000000000001",
+    "RESOURCE_POLICY_VERSION": "1"
+  }
+}

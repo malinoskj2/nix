@@ -29,11 +29,11 @@ export function eligibleActions(snapshot, job, now = Date.now()) {
 }
 export function journalQuery(id) {
   // Quote the field value for a shell; never insert command labels or raw arguments.
-  return `journalctl RESOURCE_JOB_ID='${String(id).replace(/'/g, "'\\''")}' -o json-pretty`;
+  return `journalctl SYSLOG_IDENTIFIER=resource-scheduler RESOURCE_JOB_ID='${String(id).replace(/'/g, "'\\''")}' -o json-pretty`;
 }
 export function diagnostic(snapshot, job) {
   // Explicit allowlist: no raw command, environment, prompts or arbitrary metadata.
-  const safeJob = (j) => ({ id: j.id, label: j.label, state: j.state, owner: j.owner, request: j.request, measured: j.measured, wait: j.wait, submittedAt: j.submittedAt, startedAt: j.startedAt, finishedAt: j.finishedAt, exit: j.exit, allocation: j.allocation, unit: j.unit, cleanup: j.cleanup, admission: j.admission, events: j.events?.slice(-MAX_EVENTS) });
+  const safeJob = (j) => ({ id: j.id, label: j.label, state: j.state, owner: j.owner, request: j.request, effectiveBudget: j.effectiveBudget, vramEstimate: j.vramEstimate, measured: j.measured, wait: j.wait, submittedAt: j.submittedAt, startedAt: j.startedAt, finishedAt: j.finishedAt, exit: j.exit, allocation: j.allocation, unit: j.unit, cleanup: j.cleanup, admission: j.admission, events: j.events?.slice(-MAX_EVENTS) });
   return { schemaVersion: 1, exportedAt: new Date().toISOString(), at: snapshot.at, policy: snapshot.policy, host: snapshot.host, mode: snapshot.mode, limitations: snapshot.limitations, jobs: (job ? [job] : snapshot.jobs).slice(0, MAX_JOBS).map(safeJob) };
 }
 

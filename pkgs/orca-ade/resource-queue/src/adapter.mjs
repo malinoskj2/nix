@@ -23,6 +23,8 @@ export function adaptStatus(raw) {
     return {
       id: job.id, revision: job.revision, label: text(job.label, 'Untitled workload'), state, backendState: job.state, category: text(job.category, 'other'), priority: text(job.priority, 'background'), owner,
       request: { cpu: metric(job.requested?.cpu), ram: gib(job.requested?.ram_mib), vram: gib(job.requested?.vram_mib) },
+      effectiveBudget: { cpu: metric(job.allocation?.cpu), ram: gib(job.allocation?.ram_mib), vram: gib(job.allocation?.vram_mib) },
+      vramEstimate: text(job.vram_estimate, job.vram_auto ? 'all-available' : 'declared-peak'),
       measured: { cpu: metric(job.observed?.cpu_percent), ram: gib(job.observed?.ram_peak_mib), vram: gib(job.observed?.vram_peak_mib), confidence: text(job.observed?.attribution_confidence, 'Unavailable') },
       exclusive: job.mode === 'exclusive', wait: text(job.wait_reason, state === 'waiting' ? 'Waiting for scheduler admission; detailed reason unavailable.' : ''),
       submittedAt: date(job.created_at), startedAt: date(job.started_at), finishedAt: date(job.ended_at), allocation: job.slurm_job_id == null ? null : String(job.slurm_job_id),
@@ -39,12 +41,12 @@ export function adaptStatus(raw) {
     schemaVersion: 1, revision: raw.revision, at: date(raw.generated_at), sampledAt: date(telemetry.sampled_at), policy: String(raw.policy_version ?? 'Unknown'), host: text(raw.host, 'Shared host'),
     mode: raw.mode, actions: actions.filter((a) => a === 'pause' || a === 'resume'),
     capacity: {
-      cpu: { total: metric(cpu.capacity), reserved: metric(cpu.reserved), actual: metric(cpu.actual), external: metric(cpu.external), headroom: null },
+      cpu: { total: metric(cpu.capacity), reserved: metric(cpu.reserved), actual: metric(cpu.actual), external: metric(cpu.external), headroom: null, effectiveBackground: metric(cpu.effective_background_capacity), gameActive: cpu.game_active === true, gameProtectionErrors: Array.isArray(cpu.game_protection_errors) ? cpu.game_protection_errors.filter((error) => typeof error === 'string').map((error) => error.slice(0, 1024)).slice(0, 20) : [] },
       ram: { total: gib(ram.total_mib), reserved: gib(ram.reserved_mib), actual: gib(ram.managed_actual_mib), available: gib(ram.available_mib), external: null, headroom: gib(ram.headroom_mib) },
       gpu: { total: gib(gpu.total_mib), reserved: gib(gpu.reserved_mib), actual: gib(gpu.managed_actual_mib), used: gib(gpu.used_mib), available: gib(gpu.free_mib), external: null, headroom: gib(gpu.headroom_mib), utilization: metric(gpu.utilization_percent) }
     },
     jobs: [...raw.jobs, ...raw.history].slice(0, MAX_JOBS).map(toJob), pressure: telemetry.pressure ?? {},
-    limitations: [...(raw.errors ?? []), ...(telemetry.errors ?? []), ...(raw.jobs.length + raw.history.length > MAX_JOBS ? [`Panel display capped at ${MAX_JOBS} jobs; the host retains additional records.`] : [])].filter((s) => typeof s === 'string').slice(0, 20).map((s) => s.slice(0, 1024)),
+    limitations: [...(raw.errors ?? []), ...(telemetry.errors ?? []), ...(Array.isArray(cpu.game_protection_errors) ? cpu.game_protection_errors : []), ...(raw.truncated?.events === true ? ['Backend omitted public lifecycle events to keep status within its transport bound; inspect the journal for full records.'] : []), ...(Number.isSafeInteger(raw.truncated?.history) && raw.truncated.history > 0 ? [`Backend omitted ${raw.truncated.history} historical jobs to keep status bounded.`] : []), ...(raw.jobs.length + raw.history.length > MAX_JOBS ? [`Panel display capped at ${MAX_JOBS} jobs; the host retains additional records.`] : [])].filter((s) => typeof s === 'string').slice(0, 20).map((s) => s.slice(0, 1024)),
     unsupported: ['Priority changes', 'Managed model unloading', 'Game requests', 'Model residency telemetry', 'Historical policy recommendations'].filter((_, i) => i === 0 ? !caps.priority : i === 1 ? !caps.unload : true)
   };
 }
