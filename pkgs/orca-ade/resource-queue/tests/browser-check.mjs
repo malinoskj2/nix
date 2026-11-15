@@ -108,9 +108,12 @@ export async function check() {
   assert(document.querySelector('.inspector').textContent.includes('Sandbox · unmanaged'), 'Sandbox handoff is visibly unmanaged');
   assert(document.querySelector('.inspector').textContent.includes('not enforced'), 'Sandbox execution never claims a reservation');
   assert(!document.querySelector('[data-action="run-sandbox"][data-queue-job="00000000000000000000000000000008"]'), 'Sandbox handoff cannot launch twice');
-  Object.assign(raw.jobs[0], { explore: true, profile: { project: 'nix', name: 'trial', variant: 'v1' }, failure: 'gpu_oom_reported' });
+  Object.assign(raw.jobs[0], { repo: 'riso-scene-workflow', worktree_name: 'Vue app', parent_worktree_name: 'UI migration', explore: true, profile: { project: 'nix', name: 'trial', variant: 'v1' }, failure: 'gpu_oom_reported' });
   await press('[data-action="refresh"]');
   await press('[data-job="00000000000000000000000000000001"]');
+  assert(document.querySelector('.owner-child').textContent.includes('Vue app'), 'Queue shows indented child worktree');
+  assert(document.querySelector('.inspector').textContent.includes('UI migration'), 'Inspector preserves parent name');
+  assert(document.querySelector('.inspector').textContent.includes('riso-scene-workflow'), 'Inspector shows repository');
   assert(document.querySelector('.inspector').textContent.includes('Exploratory'), 'Trial badge appears in inspector');
   assert(document.querySelector('.inspector').textContent.includes('not a measured peak'), 'Trial budget is not presented as a measured peak');
   assert(document.querySelector('.inspector').textContent.includes('nix / trial / v1'), 'Profile settings identity appears in inspector');

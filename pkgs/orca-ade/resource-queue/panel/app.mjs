@@ -1,5 +1,5 @@
 import { render } from './view.mjs';
-import { journalQuery, freshness, eligibleActions } from '../src/model.mjs';
+import { journalQuery, freshness, eligibleActions, ownerLabel } from '../src/model.mjs';
 const app = document.getElementById('app');
 const state = { snapshot: null, loading: true, error: '', tab: 'queue', filters: {}, selected: null, showFilters: false, samples: [], identities: [], logs: [], logsError: '', logsPaused: false, pending: false, confirm: null, fixture: false };
 let timer, attempt = 0, loading = false, disposed = false, lastFocus;
@@ -98,7 +98,7 @@ function confirm(action, jobId = state.selected) {
     pause: { title: 'Pause new admissions?', description: 'Jobs already running will continue. Waiting jobs remain queued.', consequence: 'This does not suspend processes or reclaim memory.' },
     resume: { title: 'Resume new admissions?', description: 'Let the scheduler admit eligible queued work again.', consequence: 'Resource and desktop headroom checks still apply.' }
   }[action];
-  state.confirm = { ...info, action, ...(['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'run-sandbox'].includes(action) ? { id: job.id, revision: job.revision, owner: `${job.owner.agent} / ${job.owner.worktree}` } : {}) };
+  state.confirm = { ...info, action, ...(['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'run-sandbox'].includes(action) ? { id: job.id, revision: job.revision, owner: ownerLabel(job.owner) } : {}) };
   lastFocus = document.activeElement;
   draw();
   app.querySelector('[data-action="dismiss"]')?.focus();

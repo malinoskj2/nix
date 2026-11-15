@@ -127,3 +127,23 @@ test('completion inbox hides active waiters, escapes output and exposes uncertai
   assert.doesNotMatch(html, /<script>bad/);
   assert.match(page(snapshot, { error: 'offline' }), /data-action="ackNotification"[^>]*disabled/);
 });
+
+test('optional repository and worktree names show child hierarchy and remain searchable', async () => {
+  const { filterJobs, ownerLabel } = await import('../src/model.mjs');
+  const raw = fixture();
+  Object.assign(raw.jobs[0], { repo: 'riso-scene-workflow', worktree_name: 'Vue app', parent_worktree_name: 'UI migration' });
+  const snapshot = adaptStatus(raw), job = snapshot.jobs[0];
+  const html = page(snapshot, { selected: job.id });
+  assert.match(html, /owner-repo">riso-scene-workflow/);
+  assert.match(html, /UI migration<\/span><span class="owner-child">/);
+  assert.match(html, /Child worktree: <\/span>Vue app/);
+  assert.equal(ownerLabel(job.owner), 'riso-scene-workflow · UI migration → Vue app');
+  for (const search of ['riso-scene-workflow', 'Vue app', 'UI migration']) assert.equal(filterJobs([job], { search }).length, 1);
+  delete raw.jobs[0].parent_worktree_name;
+  assert.doesNotMatch(page(adaptStatus(raw)), /owner-child/);
+  raw.jobs[0].repo = '<img src=x>';
+  raw.jobs[0].parent_worktree_name = '<script>bad</script>';
+  assert.doesNotMatch(page(adaptStatus(raw)), /<img src=x>|<script>bad/);
+  delete raw.jobs[0].repo; delete raw.jobs[0].worktree_name; delete raw.jobs[0].parent_worktree_name;
+  assert.doesNotThrow(() => page(adaptStatus(raw)));
+});

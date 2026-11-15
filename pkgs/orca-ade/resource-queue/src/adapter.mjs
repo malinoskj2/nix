@@ -25,7 +25,7 @@ export function adaptStatus(raw) {
       message: [text(event.reason), text(event.action), event.exit_code == null ? '' : `Exit ${text(String(event.exit_code))}`, text(event.cleanup)].filter(Boolean).join(' · '),
       snapshot: event.snapshot ? { availableRam: gib(event.snapshot.ram?.available_mib), freeVram: gib(event.snapshot.gpu?.free_mib), ramHeadroom: gib(event.snapshot.ram?.headroom_mib), vramHeadroom: gib(event.snapshot.gpu?.headroom_mib), ramReserved: gib(event.snapshot.ram?.reserved_mib), vramReserved: gib(event.snapshot.gpu?.reserved_mib) } : null
     })).filter((event) => event.at) : [];
-    const owner = { agent: text(job.agent, 'Unknown agent'), worktree: text(job.worktree, 'Unknown worktree'), project: text(job.project, 'Unknown project'), host: text(job.origin, 'Host'), uid: Number.isSafeInteger(job.owner_uid) && job.owner_uid >= 0 ? job.owner_uid : null };
+    const owner = { repo: text(job.repo), worktreeName: text(job.worktree_name), parentWorktreeName: text(job.parent_worktree_name), agent: text(job.agent, 'Unknown agent'), worktree: text(job.worktree, 'Unknown worktree'), project: text(job.project, 'Unknown project'), host: text(job.origin, 'Host'), uid: Number.isSafeInteger(job.owner_uid) && job.owner_uid >= 0 ? job.owner_uid : null };
     return {
       id: job.id, revision: job.revision, label: text(job.label, 'Untitled workload'), state, backendState: job.state, category: text(job.category, 'other'), priority: text(job.priority, 'background'), owner,
       request: { cpu: metric(job.requested?.cpu), ram: gib(job.requested?.ram_mib), vram: gib(job.requested?.vram_mib) },

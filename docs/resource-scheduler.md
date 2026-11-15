@@ -485,3 +485,30 @@ Unresolved outcomes retain their job and output through normal history pruning;
 500 unresolved outcomes block new submissions until reviewed (already admitted
 jobs can still finish). This is bounded retention, not an exactly-once transport
 guarantee. Notifications do not authorize retries or resuming cancelled tasks.
+
+## Optional repository and Orca ownership labels
+
+Workers should declare ownership when it applies and is known. None of these
+flags is required for submission:
+
+```sh
+resource-run --cpu 2 --ram 4GiB --project riso-scene-workflow \
+  --repo riso-scene-workflow --worktree-name "Vue app" \
+  --parent-worktree-name "UI migration" --name "Vue checks" -- npm test
+```
+
+The queue shows the repository and parent, with `↳ Vue app` beneath the parent.
+Top-level worktrees omit `--parent-worktree-name` and show their own name directly.
+Names are saved with the job, so history keeps the submitted context even if an
+Orca card is later renamed or closed. Names are searchable and appear in the job
+inspector and confirmation modal. Old clients and jobs without labels still work.
+
+`--worktree ID` optionally supplies the exact Orca worktree identity when
+`ORCA_WORKTREE_ID` is absent; that identity supports the existing Open worktree
+control. Display names never substitute for identity or change admission policy.
+Use the session CLI's `worktree current --json` and, for a child, inspect its
+`parentWorktreeId` using `worktree show --worktree id:ID --json`. Do not infer
+parentage from branches or folder layout. Omit unknown metadata; outside Orca,
+repository-only declarations are valid. `--project` retains its separate stable
+logical/profile key. New display labels accept 1–160 UTF-8 bytes without control
+characters and must not contain secrets.

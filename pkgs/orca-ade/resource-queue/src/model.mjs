@@ -28,7 +28,7 @@ export function resourceUsage(key, item) {
 }
 export function filterJobs(jobs, filters) {
   const search = (filters.search ?? '').trim().toLowerCase();
-  return jobs.filter((j) => (!search || [j.label, j.id, j.owner.agent, j.owner.worktree, j.owner.project, j.model?.name].join(' ').toLowerCase().includes(search))
+  return jobs.filter((j) => (!search || [j.label, j.id, j.owner.agent, j.owner.worktree, j.owner.project, j.owner.repo, j.owner.worktreeName, j.owner.parentWorktreeName, j.model?.name].join(' ').toLowerCase().includes(search))
     && (!filters.state || j.state === filters.state)
     && (!filters.project || j.owner.project === filters.project)
     && (!filters.worktree || j.owner.worktree === filters.worktree)
@@ -65,3 +65,6 @@ export function historyMetrics(jobs) {
   const mean = (values) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
   return { count: terminal.length, queueSamples: delays.length, queueMean: mean(delays), ramSamples: ram.length, ramRatio: mean(ram), vramSamples: vram.length, vramRatio: mean(vram) };
 }
+
+export const worktreeLabel = (owner) => owner.worktreeName || owner.worktree.split('/').filter(Boolean).pop() || 'Unknown worktree';
+export const ownerLabel = (owner) => [owner.repo || owner.project, [owner.parentWorktreeName, worktreeLabel(owner)].filter(Boolean).join(' → ')].filter(Boolean).join(' · ');

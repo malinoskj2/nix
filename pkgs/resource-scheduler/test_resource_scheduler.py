@@ -1411,6 +1411,67 @@ class SchedulerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             rs.clean_label("😀" * 41)
 
+    def test_optional_ownership_names_survive_history_and_restart(self):
+        request = self.request()
+        names = dict(repo="riso-scene-workflow", worktree_name="Vue app", parent_worktree_name="UI migration")
+        request.update(names)
+        result = self.backend.handle(request, os.getuid())
+        job = next(j for j in self.backend.state["jobs"] if j["id"] == result["id"])
+        self.finish(job)
+        os.close(self.backend.lock_fd)
+        self.backend = rs.Backend(self.backend.config, self.slurm, lambda: self.snapshot)
+        inspected = self.backend.handle(dict(version=1, action="inspect", id=job["id"]), os.getuid())["job"]
+        self.assertEqual({k: inspected[k] for k in names}, names)
+        self.assertEqual(inspected["worktree"], "worktree")
+
+    def test_ownership_names_are_optional_and_bounded(self):
+        job = self.submit()
+        for field in ("repo", "worktree_name", "parent_worktree_name"):
+            self.assertIsNone(job[field])
+            for invalid in ("x" * 161, "bad\nname", {"name": "bad"}):
+                request = self.request()
+                request[field] = invalid
+                with self.assertRaises(ValueError):
+                    self.backend.handle(request, os.getuid())
+
+    def test_cli_declares_ownership_without_changing_project_or_command(self):
+        argv = [
+            "resource-scheduler",
+            "run",
+            "--cpu",
+            "1",
+            "--ram",
+            "64MiB",
+            "--name",
+            "check",
+            "--project",
+            "stable-profile-key",
+            "--repo",
+            "Repo name",
+            "--worktree",
+            "repo::/child",
+            "--worktree-name",
+            "Child",
+            "--parent-worktree-name",
+            "Parent",
+            "--",
+            "true",
+        ]
+        response = dict(
+            stdout="", stderr="", stdout_offset=0, stderr_offset=0, job=dict(state="completed", exit_code=0)
+        )
+        with patch.object(rs.sys, "argv", argv), patch.dict(os.environ, {}, clear=True):
+            with patch.object(rs, "rpc", side_effect=[dict(id="a" * 32), response]) as rpc:
+                with contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(rs.main(), 0)
+                submitted = rpc.call_args_list[0].args[0]
+                self.assertEqual(submitted["repo"], "Repo name")
+                self.assertEqual(submitted["worktree"], "repo::/child")
+                self.assertEqual(submitted["worktree_name"], "Child")
+                self.assertEqual(submitted["parent_worktree_name"], "Parent")
+                self.assertEqual(submitted["project"], "stable-profile-key")
+                self.assertEqual(submitted["payload"]["command"], ["true"])
+
     def test_client_prefers_actual_orca_agent_session_identity(self):
         args = SimpleNamespace(
             cpu=1,

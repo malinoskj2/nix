@@ -790,6 +790,10 @@ class Backend:
             agent=clean_label(request.get("agent") or "unknown"),
             worktree=clean_label(request.get("worktree") or "unknown"),
             project=clean_label(request.get("project") or "unknown"),
+            **{
+                key: clean_label(request[key]) if request.get(key) is not None else None
+                for key in ("repo", "worktree_name", "parent_worktree_name")
+            },
             origin=origin,
             category=category,
             priority=request["priority"],
@@ -1990,7 +1994,10 @@ def run(args):
             or os.environ.get("ORCA_SESSION_ID")
             or os.environ.get("ORCA_TERMINAL_HANDLE")
             or "unknown",
-            worktree=os.environ.get("ORCA_WORKTREE_ID") or "unknown",
+            worktree=getattr(args, "worktree", None) or os.environ.get("ORCA_WORKTREE_ID") or "unknown",
+            repo=getattr(args, "repo", None),
+            worktree_name=getattr(args, "worktree_name", None),
+            parent_worktree_name=getattr(args, "parent_worktree_name", None),
             project=args.project or "unknown",
             payload=dict(command=command, cwd=os.getcwd(), env=dict(os.environ)),
         )
@@ -2095,6 +2102,9 @@ def resource_job(args):
             for label, value in (
                 ("Job", job["id"]),
                 ("Name", job["label"]),
+                ("Repository", job.get("repo")),
+                ("Worktree", job.get("worktree_name")),
+                ("Parent worktree", job.get("parent_worktree_name")),
                 ("State", job["state"]),
                 ("Exit", job.get("exit_code")),
                 ("Outcome", job.get("failure")),
@@ -2204,6 +2214,10 @@ def main():
     runner.add_argument("--category", choices=("build", "inference", "render", "game", "other"), default="other")
     runner.add_argument("--priority", choices=("background", "interactive", "game"), default="background")
     runner.add_argument("--project")
+    runner.add_argument("--repo", help="Optional repository name for ownership display")
+    runner.add_argument("--worktree", help="Optional exact Orca worktree ID; defaults to ORCA_WORKTREE_ID")
+    runner.add_argument("--worktree-name", help="Optional Orca worktree display name")
+    runner.add_argument("--parent-worktree-name", help="Optional parent display name, only for a child Orca worktree")
     runner.add_argument(
         "--timeout", type=float, help="Queue timeout in seconds; cancellation is confirmed through Slurm"
     )

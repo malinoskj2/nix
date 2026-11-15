@@ -911,3 +911,6 @@ thead th {
 }
 .completion-inbox>p { margin:6px 0 12px }
 .completion-item code { white-space:normal }
+
+.owner-repo { font-weight: 600; }
+.owner-child { display: block; padding-left: .65rem; }
