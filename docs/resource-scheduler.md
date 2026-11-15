@@ -145,7 +145,7 @@ block further probes; an explicitly budgeted successful run resets that count.
 Changed settings may use a new variant; an unchanged workload must not rotate
 identifiers to bypass the bound. Output and the actual exit status remain available.
 
-Profile identity is an explicit `(project, profile, variant)` tuple, using 1–80
+Explicit profile identity is a `(project, profile, variant)` tuple, using 1–80
 safe identifier characters per component. Include model/version, input dimensions,
 batch/context settings or representative scenes in the variant. No fuzzy command
 matching, command-line storage, environment capture or secrets enter profiles.
@@ -153,6 +153,7 @@ The owner-authenticated `resource-profile` command lists profiles or looks up an
 exact tuple. Up to 128 profiles are retained in root-owned scheduler state, across
 restarts and job-history pruning; updates and completion bookkeeping are atomic.
 Normal runs can attach the same `--profile` and `--variant` to refine the evidence.
+Otherwise new runs receive an automatic private workload signature, described below.
 
 Recommendations use the largest successful observed peak plus 25% or 512MiB,
 whichever is larger, rounded up to 256MiB. They are advisory: subsequent runs still
@@ -512,3 +513,122 @@ parentage from branches or folder layout. Omit unknown metadata; outside Orca,
 repository-only declarations are valid. `--project` retains its separate stable
 logical/profile key. New display labels accept 1–160 UTF-8 bytes without control
 characters and must not contain secrets.
+
+## Adaptive RAM admission and automatic workload learning (policy 5)
+
+This is generic: no repository, application or model names appear in policy code.
+Home enables `services.resourceScheduler.adaptiveRam`; other hosts remain strict
+by default. `resource-run --memory-policy strict` retains full unused peak RAM
+reservations for that job. `--memory-policy adaptive` uses adaptive accounting
+only on a host that enables it. Neither flag changes CPU or GPU admission, Slurm
+`--mem`, the hard cgroup RAM limit, or automatic retries.
+
+Admission starts with `MemAvailable`, subtracting the existing desktop reserve,
+running-job growth allowances, a host memory-growth buffer, and the **full**
+incoming RAM request. No swap is counted. Pending/unknown jobs still prevent a
+second release. The sum of full Slurm RAM allocations must also fit the configured
+Slurm `RealMemory`; estimated spare host RAM cannot override this second limit.
+
+A running adaptive job retains its full unused allowance for at least 30 seconds
+of uninterrupted cgroup observations and at least three samples. Missing current
+or peak readings, stale readings, strict jobs and unresolved profile OOMs retain
+full unused allowances. Thereafter its additional allowance is:
+
+```
+baseline = max(current RAM, lifetime observed peak, learned full-run peak)
+margin = max(1 GiB, 25% of baseline, recent positive growth rate × 15 seconds)
+allowance = min(unused hard limit, max(0, baseline + margin - current RAM))
+```
+
+The growth rate is the maximum positive rate in up to 32 recent observations.
+The independent host buffer projects the latest decrease in MemAvailable over
+15 seconds; this deliberately errs conservatively during concurrent growth.
+The lifetime peak remains protected even after unloading or between phases.
+New admissions stop on unavailable memory PSI, full PSI avg10 ≥1%, some PSI
+avg10 ≥5%, unavailable/stale memory readings, or desktop headroom shortage.
+The existing healthy-period gate applies before resuming after pressure. Running
+ordinary jobs are never killed or suspended by this policy. Existing opted-in
+exploration retains its separately documented emergency cleanup behavior.
+
+**This is intentional, bounded-risk host memory overcommit.** An unobserved late
+phase or synchronized growth can still exhaust available host RAM. The numbers
+above are policy choices, not kernel guarantees. In particular, closing admission
+does not reclaim RAM from already-running jobs. Use strict mode for jobs where
+this risk is inappropriate, and for commands whose heavy work runs through an
+external daemon/server and is not attributable to the submitting cgroup.
+
+Automatic identity uses a versioned HMAC of exact argv, repository/project scope,
+relative working directory, requested CPU parallelism, category, and host versus
+sandbox execution. Git common-directory discovery occurs in the client, never
+in the privileged daemon; linked worktrees share repository scope. Without Git,
+the working directory scopes the fallback. Explicit logical project IDs override
+the inferred repository key. The daemon keeps its random HMAC key only in private
+persistent state. Arguments, shell snippets and credentials are not copied into
+public profiles. `auto-v1` is reserved for this generated namespace. Automatic
+identity intentionally does not guess which arguments are input-size settings.
+Changed arguments split histories; environment, file contents and executable
+updates can change behavior without changing the signature. Supply explicit
+versioned variants when these matter. No automatic phase labeling is claimed.
+
+Each exact identity retains up to 32 complete successful RAM peaks and durations.
+Adaptive estimates use the maximum from the last 30 days after at least three
+complete runs. This is an evidence threshold, not a statistical confidence claim.
+Failed, cancelled, missing-telemetry and unmanaged runs cannot lower estimates.
+Confirmed RAM OOM immediately disables reduced allowances for matching workloads
+before further admission; three complete successes are required to restore them.
+Profiles remain bounded at 128. Inactive automatic records may be evicted; active
+and explicit records are protected. If all slots are protected, automatic learning
+is omitted for the new job rather than refusing ordinary work. Existing historical
+jobs are not retrospectively assigned invented workload identities.
+
+The plugin reports RAM admission policy, job growth allowance, host growth buffer,
+and Slurm RAM capacity separately from actual usage and reserved limits. Inspect
+an individual job to see its allowance basis and matching completed sample count.
+Deploy through the normal authorized system switch; the source change alone does
+not change admission for the live queue. Old queued scripts keep their original
+client/helper paths; they gain the daemon's accounting, but only new clients can
+perform Git scope discovery.
+
+### Research informing the policy
+
+Three independent GPT-6.1 Sol reviews informed this implementation. The practical
+choice is conservative peak/growth accounting rather than an opaque predictor:
+
+- [Linux MemAvailable](https://docs.kernel.org/filesystems/proc.html) is already an estimate including reclaimable memory; don't subtract current usage twice or count swap as RAM.
+- [Linux PSI](https://docs.kernel.org/accounting/psi.html) reports experienced stalls, not future memory demand.
+- [cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html) distinguishes observed peaks, throttling and hard limits; observed peaks are not future bounds.
+- [Slurm consumable resources](https://slurm.schedmd.com/cons_tres.html) still schedules allocated RAM. We neither inflate RealMemory nor raise AllowedRAMSpace.
+- [Kubernetes VPA](https://github.com/kubernetes/autoscaler/blob/master/vertical-pod-autoscaler/pkg/recommender/logic/recommender.go) and [Google Autopilot](https://john.e-wilkes.com/papers/2020-EuroSys-Autopilot.pdf) support learning from peak histories with margins and explicit risk tradeoffs; our small-history estimator intentionally makes no p99 claim.
+- [Git common-directory semantics](https://git-scm.com/docs/git-rev-parse) allow worktree-independent repository identity without reading remote URLs.
+
+### Experimental permissive large-GPU lane
+
+`services.resourceScheduler.largeGpuLane` enables one deliberately permissive
+large-job lane (enabled in the home configuration). It is generic: exclusive GPU
+jobs and jobs requesting at least 8 GiB (or half of configured device VRAM,
+whichever is smaller) qualify, or a
+worker can declare `--large-gpu` for a known large workload. Strict-memory jobs
+and exploratory probes do not qualify; `--large-gpu --memory-policy strict` is
+rejected. A declared large job still needs a positive GPU request.
+
+The first large job precedes ordinary queued work and may be released despite
+ordinary pressure holds, startup guards, expected memory demand, and unused RAM
+or VRAM reservations. It does **not** need its declared peak to fit current free
+memory. Another large job waits while any large job is pending, running or
+unresolved. Small work still uses normal admission. Operator pause and confirmed
+cancellation remain authoritative. Human run-next/force controls retain their
+explicit override semantics; the automatic single-slot rule is not a prohibition
+on deliberate human overrides.
+
+Only critical resource gates remain: at least **1 GiB available host RAM** and
+**512 MiB free GPU memory**, memory PSI full avg10 below **10%** and some avg10
+below **50%**, fresh available telemetry, and reconciled Slurm identities. These
+are deliberately aggressive experimental policy values, not a guarantee against
+OOM or desktop stalls. They differ from the 4 GiB desktop reserve used by ordinary
+admission. Nothing automatically terminates another owner's work to make room.
+
+Release still goes through Slurm: requested RAM, GPU allocations and CPU counts
+can leave it pending even after policy release. No fake capacity, raised cgroup
+limits or unmanaged host fallback is introduced. Large exclusive jobs keep the
+full configured usable GPU budget rather than deriving a negative budget from
+critically low free memory. The plugin marks lane jobs and explains the exception.

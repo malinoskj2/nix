@@ -34,6 +34,10 @@ export function adaptStatus(raw) {
       measured: { cpu: metric(job.observed?.cpu_percent), ram: gib(job.observed?.ram_peak_mib), vram: gib(job.observed?.vram_peak_mib), confidence: text(job.observed?.attribution_confidence, 'Unavailable') },
       queuePosition: Number.isSafeInteger(job.queue_position) && job.queue_position > 0 ? job.queue_position : null,
       execution: ['host', 'sandbox'].includes(job.execution) ? job.execution : 'slurm', hostPhase: text(job.host_phase),
+      largeGpuLane: job.large_gpu_lane === true,
+      profileAutomatic: job.profile_automatic === true,
+      memoryPolicy: text(job.memory_policy),
+      ramAdmission: job.ram_admission ? { growth: gib(job.ram_admission.growth_mib), basis: text(job.ram_admission.basis), runs: metric(job.ram_admission.learned_runs) } : null,
       explore: job.explore === true, profile: job.profile && ['project', 'name', 'variant'].every((key) => typeof job.profile[key] === 'string') ? { project: text(job.profile.project), name: text(job.profile.name), variant: text(job.profile.variant) } : null, failure: text(job.failure),
       runNextRequested: date(job.run_next_requested_at),
       exclusive: job.mode === 'exclusive', wait: text(job.wait_reason, state === 'waiting' ? 'Waiting for scheduler admission; detailed reason unavailable.' : ''),
@@ -54,7 +58,7 @@ export function adaptStatus(raw) {
     mode: raw.mode, actions: actions.filter((a) => a === 'pause' || a === 'resume'),
     capacity: {
       cpu: { total: metric(cpu.capacity), reserved: metric(cpu.reserved), actual: metric(cpu.actual), hostActual: metric(cpu.host_actual), hostTotal: metric(cpu.logical_cpus), external: metric(cpu.external), attribution: text(cpu.attribution_confidence, 'Unavailable'), headroom: null, effectiveBackground: metric(cpu.effective_background_capacity), gameActive: cpu.game_active === true, gameProtectionErrors: Array.isArray(cpu.game_protection_errors) ? cpu.game_protection_errors.filter((error) => typeof error === 'string').map((error) => error.slice(0, 1024)).slice(0, 20) : [] },
-      ram: { total: gib(ram.total_mib), reserved: gib(ram.reserved_mib), actual: gib(ram.managed_actual_mib), available: gib(ram.available_mib), swapUsed: gib(ram.swap_used_mib), external: null, headroom: gib(ram.headroom_mib) },
+      ram: { hostGrowth: gib(ram.growth_buffer_mib), policy: text(ram.admission_policy), growth: gib(ram.growth_allowance_mib), slurmCapacity: gib(ram.slurm_capacity_mib), total: gib(ram.total_mib), reserved: gib(ram.reserved_mib), actual: gib(ram.managed_actual_mib), available: gib(ram.available_mib), swapUsed: gib(ram.swap_used_mib), external: null, headroom: gib(ram.headroom_mib) },
       gpu: { total: gib(gpu.total_mib), reserved: gib(gpu.reserved_mib), actual: gib(gpu.managed_actual_mib), used: gib(gpu.used_mib), available: gib(gpu.free_mib), external: gib(gpu.external_mib), attribution: text(gpu.attribution_confidence, 'Unavailable'), headroom: gib(gpu.headroom_mib), utilization: metric(gpu.utilization_percent) }
     },
     swap: { pagesIn: metric(telemetry.swap?.pages_in), pagesOut: metric(telemetry.swap?.pages_out) },

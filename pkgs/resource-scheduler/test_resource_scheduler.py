@@ -168,7 +168,10 @@ class SchedulerTests(unittest.TestCase):
         )
 
     def profile(self):
-        return self.backend.handle(dict(version=1, action="profiles"), os.getuid())["profiles"][0]
+        return self.backend.handle(
+            dict(version=1, action="profiles", project="project", profile="runtime", variant="scene-1080p-v1"),
+            os.getuid(),
+        )["profiles"][0]
 
     def finish(self, job, state="COMPLETED", code=0):
         self.slurm.rows[job["slurm_job_id"]].update(job_state=[state], exit_code={"return_code": code})
@@ -1410,6 +1413,110 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(rs.clean_label("😀" * 40), "😀" * 40)
         with self.assertRaises(ValueError):
             rs.clean_label("😀" * 41)
+
+    def test_large_gpu_lane_releases_around_normal_pressure_and_preserves_single_slot(self):
+        self.backend.config.update(adaptive_ram=True, large_gpu_lane=True)
+        self.snapshot["ram"]["available_mib"] = 2048
+        self.snapshot["gpu"]["free_mib"] = 2048
+        self.snapshot["pressure"]["memory"] = dict(full=dict(avg10=2), some=dict(avg10=10))
+        normal = self.submit(ram=4096)
+        first = self.submit(ram=16384, mode="exclusive")
+        second = self.submit(ram=16384, vram=20000)
+        self.snapshot["sampled_at"] = rs.time.time()
+        self.backend.tick()
+        self.assertEqual(normal["state"], "queued")
+        self.assertEqual(first["state"], "pending")
+        self.assertEqual(second["state"], "queued")
+        self.assertGreater(first["requested"]["vram_mib"], 0)
+        self.assertTrue(first["events"][-1]["large_gpu_lane"])
+        self.snapshot["sampled_at"] = rs.time.time()
+        self.backend.tick()
+        self.assertEqual(first["state"], "running")
+        self.assertIn("occupied", second["wait_reason"])
+        self.backend.state["paused"] = True
+        self.finish(first)
+        self.assertEqual(second["state"], "queued")
+        self.assertIn("paused", second["wait_reason"])
+
+    def test_new_oom_blocks_adaptive_allowance_before_next_admission(self):
+        first = self.submit(ram=3072)
+        self.backend.tick()
+        sibling = self.submit(ram=3072)
+        self.backend.tick()
+        candidate = self.submit(ram=2048)
+        self.slurm.rows[first["slurm_job_id"]].update(job_state=["FAILED"], exit_code={"return_code": 137})
+        first["observed"]["oom_kill"] = 1
+        sibling.update(
+            memory_policy="adaptive", ram_observed_since=960, ram_samples=[[960, 1024], [980, 1024], [998, 1024]]
+        )
+        self.snapshot["cgroups"][sibling["slurm_job_id"]] = {"memory.current": 1024, "memory.peak": 1024, "oom_kill": 0}
+        self.snapshot["ram"]["available_mib"] = 7680
+        self.snapshot["pressure"]["memory"] = dict(full=dict(avg10=0), some=dict(avg10=0))
+        self.snapshot["sampled_at"] = 1000
+        self.backend.config["adaptive_ram"] = True
+        self.backend.healthy_since = 900
+        with patch.object(rs.time, "time", return_value=1000):
+            self.backend.tick()
+        self.assertTrue(sibling["ram_learning_blocked"])
+        self.assertEqual(candidate["state"], "queued")
+        self.assertIn("Insufficient RAM", candidate["wait_reason"])
+
+    def test_missing_cgroup_peak_resets_adaptive_startup_and_preserves_oom(self):
+        job = self.submit()
+        self.backend.tick()
+        job.update(memory_policy="adaptive", ram_observed_since=1, ram_samples=[[1, 100], [2, 100], [3, 100]])
+        job["observed"].update(oom_kill=1, ram_peak_mib=100)
+        self.snapshot["cgroups"][job["slurm_job_id"]] = {"memory.current": 100}
+        self.backend.tick()
+        self.assertEqual(job["observed"]["oom_kill"], 1)
+        self.assertEqual(job["ram_samples"], [])
+        self.assertEqual(job["ram_admission"]["basis"], "strict/startup/unknown")
+
+    def test_automatic_profiles_persist_private_identity_and_bound_storage(self):
+        job = self.submit()
+        self.assertTrue(job["profile_automatic"])
+        self.assertNotIn("secret-argument", json.dumps(job["profile"]))
+        identity = job["profile"]
+        salt = self.backend.state["profile_salt"]
+        os.close(self.backend.lock_fd)
+        self.backend = rs.Backend(self.backend.config, self.slurm, lambda: copy.deepcopy(self.snapshot), host=self.host)
+        self.assertEqual(self.backend.state["profile_salt"], salt)
+        self.assertEqual(self.submit()["profile"], identity)
+        self.assertNotIn(salt, json.dumps(self.backend.status()))
+        profiles = self.backend.state["profiles"]
+        for i in range(127):
+            profiles[str(i)] = {**rs.new_profile(dict(project="x", name="x", variant=str(i))), "automatic": True}
+        req = self.request()
+        req["payload"]["command"] = ["different-command"]
+        self.backend.handle(req, os.getuid())
+        self.assertEqual(len(profiles), 128)
+        self.assertIn(json.dumps(identity, sort_keys=True), profiles)
+
+    def test_ram_learning_uses_complete_successes_and_oom_disables_it(self):
+        for peak in (1000, 1200, 1100):
+            job = self.submit()
+            job["observed"]["ram_peak_mib"] = peak
+            job["ram_good_samples"] = 3
+            self.finish(job)
+        record = self.backend.state["profiles"][json.dumps(job["profile"], sort_keys=True)]
+        self.assertEqual([r["peak"] for r in record["ram_runs"]], [1000, 1200, 1100])
+        job = self.submit()
+        job["observed"]["oom_kill"] = 1
+        self.finish(job, "FAILED", 137)
+        self.assertTrue(record["ram_learning_blocked"])
+        self.assertEqual(len(record["ram_runs"]), 3)
+        for _ in range(3):
+            job = self.submit()
+            job["observed"]["ram_peak_mib"] = 1400
+            job["ram_good_samples"] = 3
+            self.finish(job)
+        self.assertFalse(record["ram_learning_blocked"])
+        job = self.submit()
+        job["observed"]["ram_peak_mib"] = 100
+        job["ram_good_samples"] = 3
+        job["ram_missing_samples"] = 1
+        self.finish(job)
+        self.assertEqual(len(record["ram_runs"]), 6)
 
     def test_optional_ownership_names_survive_history_and_restart(self):
         request = self.request()

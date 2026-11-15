@@ -16,6 +16,9 @@ let
       cpu_capacity = cfg.cpuCapacity;
       game_cpu_capacity = cfg.gameCpuCapacity;
       game_marker_path = "/run/resource-scheduler-game-active";
+      adaptive_ram = cfg.adaptiveRam;
+      large_gpu_lane = cfg.largeGpuLane;
+      ram_capacity_mib = cfg.memoryMiB;
       ram_headroom_mib = cfg.ramHeadroomMiB;
       vram_headroom_mib = cfg.vramHeadroomMiB;
       gpu_capacity_mib = cfg.gpuCapacityMiB;
@@ -59,6 +62,16 @@ in
       type = lib.types.ints.positive;
       default = 24576;
       description = "Static Slurm RAM ceiling, not dynamically available host memory.";
+    };
+    largeGpuLane = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Experimental single-large-GPU admission lane; bypasses normal policy budgets except critical pressure/headroom gates. Slurm limits remain enforced.";
+    };
+    adaptiveRam = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Use measured growth allowances after startup for adaptive jobs; preserves Slurm RAM limits but permits host memory overcommit risk.";
     };
     ramHeadroomMiB = lib.mkOption {
       type = lib.types.ints.positive;

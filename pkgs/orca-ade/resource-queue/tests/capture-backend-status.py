@@ -75,6 +75,8 @@ with tempfile.TemporaryDirectory() as directory, patch.object(backend_module.soc
     backend = backend_module.Backend(dict(state_dir=directory, allowed_uid=1000, allowed_gid=100,
                                          stability_seconds=0, history_limit=1, cgroup_root=str(Path(directory) / "cgroups"), game_marker_path=str(Path(directory) / "game-marker")), slurm, lambda: copy.deepcopy(snapshot))
 
+    backend.state["profile_salt"] = "deterministic-fixture-only"
+
     def submit(label, cpu=2, vram=0, mode="shared", priority="background", category="build"):
         return backend.handle(dict(version=1, action="submit", label=label,
             requested=dict(cpu=cpu, ram_mib=4096, vram_mib=vram), mode=mode, priority=priority,

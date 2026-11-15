@@ -56,7 +56,9 @@ in
     enable = true;
     # Match the idle sandbox pool: 14 cores with two SMT threads each.
     cpuCapacity = 28;
-    policyVersion = "4";
+    policyVersion = "5";
+    adaptiveRam = true;
+    largeGpuLane = true;
   };
 
   swapDevices = [

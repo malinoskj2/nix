@@ -147,3 +147,21 @@ test('optional repository and worktree names show child hierarchy and remain sea
   delete raw.jobs[0].repo; delete raw.jobs[0].worktree_name; delete raw.jobs[0].parent_worktree_name;
   assert.doesNotThrow(() => page(adaptStatus(raw)));
 });
+
+test('adaptive admission shows estimates separately from enforced RAM allocation', () => {
+  const raw = fixture();
+  Object.assign(raw.telemetry.ram, { admission_policy: 'adaptive', growth_allowance_mib: 2048, growth_buffer_mib: 512, slurm_capacity_mib: 24576 });
+  Object.assign(raw.jobs[0], { large_gpu_lane: true, profile_automatic: true, ram_admission: { growth_mib: 1024, basis: 'adaptive', learned_runs: 3 } });
+  const snapshot = adaptStatus(raw);
+  const html = page(snapshot, { selected: snapshot.jobs[0].id });
+  assert.match(html, /Large GPU lane/);
+  assert.match(html, /Only critical headroom and severe pressure/);
+  assert.match(html, /Automatic workload signature/);
+  assert.match(html, /3 completed samples/);
+  assert.match(html, /hard RAM limit remain unchanged/);
+  const resources = page(snapshot, { tab: 'resources' });
+  assert.match(resources, /Host growth buffer/);
+  assert.match(resources, /Slurm RAM capacity/);
+  assert.equal(snapshot.jobs[0].ramAdmission.growth, 1);
+  assert.equal(snapshot.capacity.ram.slurmCapacity, 24);
+});

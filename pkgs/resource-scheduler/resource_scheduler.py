@@ -5,6 +5,8 @@ import contextlib
 import ctypes
 import fcntl
 import json
+import hashlib
+import hmac
 import math
 import os
 from pathlib import Path
@@ -34,6 +36,10 @@ DEFAULTS = dict(
     ram_headroom_mib=4096,
     vram_headroom_mib=3072,
     gpu_capacity_mib=32768,
+    adaptive_ram=False,
+    large_gpu_lane=False,
+    ram_capacity_mib=24576,
+    ram_startup_seconds=30,
     poll_seconds=2,
     stability_seconds=10,
     history_limit=500,
@@ -60,15 +66,20 @@ def validate_config(config):
         "cpu_capacity",
         "game_cpu_capacity",
         "ram_headroom_mib",
+        "ram_capacity_mib",
+        "ram_startup_seconds",
         "vram_headroom_mib",
         "gpu_capacity_mib",
         "history_limit",
     ):
         if type(config[key]) is not int or config[key] < 0:
             raise ValueError("Invalid nonnegative integer configuration: " + key)
+    if type(config["adaptive_ram"]) is not bool or type(config["large_gpu_lane"]) is not bool:
+        raise ValueError("Invalid adaptive RAM policy")
     if (
         config["allowed_uid"] == 0
         or config["cpu_capacity"] < 1
+        or config["ram_capacity_mib"] < 1
         or not 1 <= config["game_cpu_capacity"] <= config["cpu_capacity"]
         or config["gpu_capacity_mib"] <= config["vram_headroom_mib"]
         or not 1 <= config["history_limit"] <= 500
@@ -292,8 +303,133 @@ def telemetry():
     return result
 
 
+def ram_allowance(job, config, now=None):
+    """Additional growth allowance, never a change to Slurm's allocation/limit."""
+    now = time.time() if now is None else now
+    limit = job["requested"]["ram_mib"]
+    current = job["observed"].get("ram_mib")
+    strict = max(0, limit - (current or 0))
+    samples = job.get("ram_samples", [])
+    peak = job["observed"].get("ram_peak_mib")
+    if (
+        not config.get("adaptive_ram")
+        or job.get("memory_policy") == "strict"
+        or job.get("ram_learning_blocked")
+        or job["state"] != "running"
+        or current is None
+        or peak is None
+        or len(samples) < 3
+        or now - samples[-1][0] > max(10, config["poll_seconds"] * 3)
+        or now - samples[-1][0] < 0
+        or now - job.get("ram_observed_since", now) < config["ram_startup_seconds"]
+    ):
+        return strict, "strict/startup/unknown"
+    # Retain the full observed high-water mark, including idle-after-load phases.
+    baseline = max(current, peak, job.get("learned_ram_peak_mib") or 0)
+    growth = max((max(0, b[1] - a[1]) / (b[0] - a[0]) for a, b in zip(samples, samples[1:]) if b[0] > a[0]), default=0)
+    margin = max(1024, baseline * 0.25, growth * 15)
+    return min(strict, max(0, baseline + margin - current)), "adaptive"
+
+
+def automatic_profile(request, salt):
+    payload = request["payload"]
+    scope = payload.get("profile_scope") or payload["cwd"]
+    relative = payload.get("profile_relative_cwd") or "."
+    if not isinstance(scope, str) or not isinstance(relative, str):
+        raise ValueError("Invalid private workload scope")
+
+    def digest(value):
+        return hmac.new(salt.encode(), json.dumps(value, sort_keys=True).encode(), hashlib.sha256).hexdigest()[:32]
+
+    project = request.get("project")
+    if (
+        not isinstance(project, str)
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}", project)
+        or project == "unknown"
+    ):
+        project = "repo-" + digest(scope)
+    # Exact argv is intentionally opaque, including shell snippets and arguments.
+    # Environment/content changes still require explicit variants for reliable reuse.
+    return dict(
+        project=project,
+        name="auto-v1",
+        variant=digest(
+            [
+                project,
+                relative,
+                payload["command"],
+                request["requested"]["cpu"],
+                request.get("category"),
+                "sandbox" if request.get("origin", "host") != "host" else "host",
+            ]
+        ),
+    )
+
+
+def workload_scope():
+    """Client-side Git discovery; never run repository commands in the root daemon."""
+    cwd = os.getcwd()
+    try:
+        output = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=True,
+            env=SAFE_ENV,
+        ).stdout.splitlines()
+        common, root = output
+        return dict(profile_scope=str(Path(common).resolve()), profile_relative_cwd=os.path.relpath(cwd, root))
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return dict(profile_scope=cwd, profile_relative_cwd=".")
+
+
+def large_gpu_job(job, config):
+    return bool(
+        config.get("large_gpu_lane")
+        and managed(job)
+        and not job.get("explore")
+        and job.get("memory_policy") != "strict"
+        and job["requested"]["vram_mib"]
+        and (
+            job.get("large_gpu")
+            or job["mode"] == "exclusive"
+            or job["requested"]["vram_mib"] >= min(8192, config["gpu_capacity_mib"] / 2)
+        )
+    )
+
+
+def large_gpu_reason(job, jobs, snapshot, config):
+    active = [item for item in jobs if item["state"] in ACTIVE and managed(item)]
+    if any(item["state"] == "unknown" for item in active):
+        return "Slurm state unknown; large GPU lane held until reconciled"
+    if any(large_gpu_job(item, config) for item in active):
+        return "Large GPU lane occupied; smaller jobs may pass"
+    sampled = snapshot.get("sampled_at")
+    memory = snapshot.get("pressure", {}).get("memory")
+    available = snapshot["ram"].get("available_mib")
+    free = snapshot["gpu"].get("free_mib")
+    if (
+        sampled is None
+        or not 0 <= time.time() - sampled <= max(10, config["poll_seconds"] * 3)
+        or available is None
+        or free is None
+        or not memory
+        or memory.get("full", {}).get("avg10") is None
+        or memory.get("some", {}).get("avg10") is None
+    ):
+        return "Resource telemetry unavailable or stale; large GPU lane held"
+    if available < 1024 or free < 512:
+        return "Critical memory shortage; large GPU lane needs 1 GiB host RAM and 512 MiB free VRAM"
+    if memory["full"]["avg10"] >= 10 or memory["some"]["avg10"] >= 50:
+        return "Severe memory pressure; large GPU lane held"
+    return None
+
+
 def admission_reason(job, jobs, snapshot, config):
     """Fail closed; unknown managed actual gets no credit against reservations."""
+    if large_gpu_job(job, config):
+        return large_gpu_reason(job, jobs, snapshot, config)
     running = [item for item in jobs if item["state"] in ACTIVE and managed(item)]
     request = job["requested"]
     if any(item["state"] == "unknown" for item in running):
@@ -313,9 +449,23 @@ def admission_reason(job, jobs, snapshot, config):
     available = snapshot["ram"]["available_mib"]
     if available is None:
         return "Host memory telemetry unavailable"
-    outstanding = sum(max(0, item["requested"]["ram_mib"] - (item["observed"].get("ram_mib") or 0)) for item in running)
-    if available - config["ram_headroom_mib"] - outstanding < request["ram_mib"]:
-        return "Insufficient RAM after unused reservations and desktop headroom"
+    if config.get("adaptive_ram"):
+        memory_pressure = snapshot.get("pressure", {}).get("memory")
+        if not memory_pressure or memory_pressure.get("full", {}).get("avg10") is None:
+            return "Memory pressure telemetry unavailable; adaptive admissions stopped"
+        sampled = snapshot.get("sampled_at")
+        if sampled is None or not 0 <= time.time() - sampled <= max(10, config["poll_seconds"] * 3):
+            return "Host memory telemetry stale; adaptive admissions stopped"
+        if sum(item["requested"]["ram_mib"] for item in running) + request["ram_mib"] > config["ram_capacity_mib"]:
+            return "Slurm RAM reservation capacity exhausted"
+    outstanding = sum(ram_allowance(item, config)[0] for item in running)
+    host_growth = snapshot["ram"].get("growth_buffer_mib", 0) if config.get("adaptive_ram") else 0
+    if available - config["ram_headroom_mib"] - outstanding - host_growth < request["ram_mib"]:
+        return (
+            "Insufficient RAM after growth allowances and desktop headroom"
+            if config.get("adaptive_ram")
+            else "Insufficient RAM after unused reservations and desktop headroom"
+        )
     if not request["vram_mib"]:
         return None
     if snapshot.get("game_active"):
@@ -464,10 +614,11 @@ def failure_kind(job, directory):
     return "command_failed"
 
 
-def queue_key(job, now):
+def queue_key(job, now, config=None):
     return (
         0 if job.get("run_next_requested_at") is not None else 1,
         -(job.get("run_next_requested_at") or 0),
+        0 if large_gpu_job(job, config or DEFAULTS) else 1,
         0 if job["priority"] == "game" else 1,
         0 if now - job["created_at"] >= 60 else 1,
         0 if now - job["created_at"] >= 60 or job["priority"] == "interactive" else 1,
@@ -633,6 +784,7 @@ class Backend:
             else {"revision": 0, "paused": False, "jobs": []}
         )
         self.state.setdefault("profiles", {})
+        self.state.setdefault("profile_salt", os.urandom(32).hex())
         self.slurm = slurm or Slurm(self.config)
         self.host = host or HostRunner()
         self.sample = sample
@@ -643,6 +795,7 @@ class Backend:
         self.game_protection_errors = []
         self.game_active = False
         self.previous_cpu = None
+        self.previous_ram = None
         self.save()
 
     def save(self):
@@ -732,6 +885,9 @@ class Backend:
             raise ValueError("Invalid priority")
         if request["priority"] == "game" and mode != "exclusive":
             raise ValueError("Game requests require exclusive GPU access")
+        large_gpu = request.get("large_gpu", False)
+        if type(large_gpu) is not bool or (large_gpu and not req["vram_mib"]):
+            raise ValueError("Large GPU lane requires a GPU workload")
         category = request.get("category", "other")
         if category not in ("build", "inference", "render", "game", "other"):
             raise ValueError("Invalid workload category")
@@ -757,13 +913,39 @@ class Backend:
         if type(explore) is not bool:
             raise ValueError("Invalid exploration mode")
         profile = profile_identity(request)
+        if profile and profile["name"] == "auto-v1":
+            raise ValueError("auto-v1 is reserved for automatic workload signatures")
         if explore and (profile is None or origin == "host" or mode != "shared" or request["priority"] == "game"):
             raise ValueError("Exploration requires a sandbox, project/profile/variant and shared non-game priority")
+        automatic = profile is None
+        if automatic:
+            profile = automatic_profile(request, self.state["profile_salt"])
+        memory_policy = request.get(
+            "memory_policy", "adaptive" if self.config["adaptive_ram"] or self.config["large_gpu_lane"] else "strict"
+        )
+        if large_gpu and memory_policy == "strict":
+            raise ValueError("Choose strict RAM reservations or the permissive large GPU lane, not both")
+        if memory_policy not in ("strict", "adaptive"):
+            raise ValueError("Unknown memory policy")
         if profile:
             key = json.dumps(profile, sort_keys=True)
             record = self.state["profiles"].get(key)
             if record is None and len(self.state["profiles"]) >= 128:
-                raise ValueError("Profile limit reached; reuse an existing workload profile")
+                active_keys = {
+                    json.dumps(j.get("profile"), sort_keys=True)
+                    for j in self.state["jobs"]
+                    if j["state"] not in TERMINAL
+                }
+                evictable = [
+                    (k, v) for k, v in self.state["profiles"].items() if v.get("automatic") and k not in active_keys
+                ]
+                if evictable:
+                    oldest = min(evictable, key=lambda pair: (pair[1].get("last") or {}).get("ended_at") or 0)[0]
+                    del self.state["profiles"][oldest]
+                elif automatic:
+                    profile = None  # Never block ordinary work merely because learning storage is full.
+                else:
+                    raise ValueError("Profile limit reached; reuse an existing workload profile")
             if explore and record and record.get("consecutive_probe_failures", 0) >= 3:
                 raise ValueError(
                     "Three exploration failures; inspect the profile and use explicit budgets or changed workload settings"
@@ -783,6 +965,9 @@ class Backend:
             label=clean_label(request["label"]),
             explore=explore,
             profile=profile,
+            profile_automatic=automatic and profile is not None,
+            memory_policy=memory_policy,
+            large_gpu=large_gpu,
             notification={"state": "waiting", "session": session},
             waiter_token=waiter,
             waiter_until=time.time() + 30 if waiter else 0,
@@ -841,7 +1026,7 @@ class Backend:
             },
         )
         if profile:
-            self.state["profiles"].setdefault(key, new_profile(profile))
+            self.state["profiles"].setdefault(key, {**new_profile(profile), "automatic": automatic})
         self.state["jobs"].append(job)
         self.save()  # Persist UUID before submitting; interrupted submission is reconciled by name.
         self.event(job, "submission")
@@ -970,6 +1155,7 @@ class Backend:
             if state in ACTIVE:
                 metrics = self.snapshot.get("cgroups", {}).get(job["slurm_job_id"], {})
                 observed = job["observed"]
+                job["ram_peak_available"] = metrics.get("memory.peak") is not None
                 observed["ram_mib"] = metrics.get("memory.current")
                 if metrics.get("memory.peak") is not None:
                     observed["ram_peak_mib"] = max(observed["ram_peak_mib"] or 0, metrics["memory.peak"])
@@ -983,7 +1169,8 @@ class Backend:
                 )
                 observed["cpu_usec"] = current_cpu
                 observed["sampled_at"] = now
-                observed["oom_kill"] = metrics.get("oom_kill")
+                if metrics.get("oom_kill") is not None:
+                    observed["oom_kill"] = max(observed.get("oom_kill") or 0, metrics["oom_kill"])
                 observed["cpu_set"] = metrics.get("cpu_set")
                 amount = (
                     self.snapshot["gpu"]
@@ -999,10 +1186,57 @@ class Backend:
                 if state == "running" and job["requested"]["vram_mib"]:
                     field = "gpu_samples" if amount is not None else "gpu_missing_samples"
                     job[field] = job.get(field, 0) + 1
+        for job in self.state["jobs"]:
+            if job["state"] in TERMINAL:
+                self.record_profile(job)
+        for job in self.state["jobs"]:
+            if job["state"] != "running" or not managed(job):
+                continue
+            observed = job["observed"]
+            if observed.get("ram_mib") is None or not job.get("ram_peak_available"):
+                job["ram_missing_samples"] = job.get("ram_missing_samples", 0) + 1
+                job["ram_samples"] = []
+                job["ram_observed_since"] = now
+            else:
+                job["ram_good_samples"] = job.get("ram_good_samples", 0) + 1
+                samples = job.get("ram_samples", [])
+                if samples and now - samples[-1][0] > max(10, self.config["poll_seconds"] * 3):
+                    samples = []
+                if not samples:
+                    job["ram_observed_since"] = now
+                job["ram_samples"] = (samples + [[now, observed["ram_mib"]]])[-32:]
+            record = self.state["profiles"].get(json.dumps(job.get("profile"), sort_keys=True), {})
+            recent = [r for r in record.get("ram_runs", []) if now - r["at"] < 30 * 86400]
+            job["learned_ram_peak_mib"] = max((r["peak"] for r in recent), default=None) if len(recent) >= 3 else None
+            job["ram_learning_blocked"] = record.get("ram_learning_blocked", False)
+            allowance, basis = ram_allowance(job, self.config, now)
+            job["ram_admission"] = dict(
+                growth_mib=allowance,
+                basis=basis,
+                learned_runs=len(recent),
+                learned_peak_mib=job["learned_ram_peak_mib"],
+            )
         self.protect_exploration()
         self.apply_game_protection()
         memory = self.snapshot["pressure"].get("memory")
         pressure_hold = bool(memory and memory.get("full", {}).get("avg10", 0) >= 1)
+        if self.config["adaptive_ram"]:
+            pressure_hold = (
+                pressure_hold
+                or not memory
+                or memory.get("full", {}).get("avg10") is None
+                or memory.get("some", {}).get("avg10", 0) >= 5
+            )
+        available = self.snapshot["ram"]["available_mib"]
+        previous_ram = self.previous_ram
+        self.snapshot["ram"]["growth_buffer_mib"] = (
+            max(0, previous_ram[1] - available) * 15 / (now - previous_ram[0])
+            if available is not None
+            and previous_ram is not None
+            and 0 < now - previous_ram[0] <= max(10, self.config["poll_seconds"] * 3)
+            else 0
+        )
+        self.previous_ram = (now, available) if available is not None else None
         low_ram = (
             self.snapshot["ram"]["available_mib"] is None
             or self.snapshot["ram"]["available_mib"] < self.config["ram_headroom_mib"]
@@ -1015,20 +1249,24 @@ class Backend:
             self.healthy_since = now
         queued = sorted(
             (job for job in self.state["jobs"] if job["state"] == "queued" and managed(job)),
-            key=lambda j: queue_key(j, now),
+            key=lambda j: queue_key(j, now, self.config),
         )
         barrier = None
         gpu_barrier = None
         bypassed = []
         for job in queued:
-            if self.game_protection_errors:
-                reason = "Game CPU protection unavailable; new admissions stopped"
-            elif self.state["paused"]:
+            if self.state["paused"]:
                 reason = "New admissions paused by owner"
-            elif self.healthy_since is None or now - self.healthy_since < self.config["stability_seconds"]:
-                reason = "Pressure hold; waiting for stable desktop headroom"
             elif job.get("cleanup") == "cancellation-requested":
                 reason = "Waiting for Slurm cancellation"
+            elif large_gpu_job(job, self.config):
+                reason = large_gpu_reason(job, self.state["jobs"], self.snapshot, self.config)
+                if reason:
+                    bypassed.append(job["id"])
+            elif self.game_protection_errors:
+                reason = "Game CPU protection unavailable; new admissions stopped"
+            elif self.healthy_since is None or now - self.healthy_since < self.config["stability_seconds"]:
+                reason = "Pressure hold; waiting for stable desktop headroom"
             elif barrier:
                 reason = "Behind earlier job " + barrier["id"]
             elif gpu_barrier and job["requested"]["vram_mib"]:
@@ -1037,7 +1275,9 @@ class Backend:
                 reason = admission_reason(job, self.state["jobs"], self.snapshot, self.config)
                 if reason:
                     external = external_block_reason(job, self.state["jobs"], self.snapshot, self.config)
-                    if reason in (
+                    if reason == "Large GPU lane occupied; smaller jobs may pass":
+                        bypassed.append(job["id"])
+                    elif reason in (
                         "Exclusive GPU workload remains active",
                         "GPU exploration is measuring its peak; CPU-only jobs may pass",
                     ):
@@ -1170,6 +1410,29 @@ class Backend:
             and job.get("gpu_missing_samples", 0) == 0
             and job["observed"].get("attribution_confidence") == "cgroup-gpu-processes"
         )
+        if job["failure"] == "ram_oom":
+            record["ram_learning_blocked"] = True
+            record["ram_recovery_successes"] = 0
+        peak = job["observed"].get("ram_peak_mib")
+        if (
+            success
+            and peak is not None
+            and job.get("ram_good_samples", 0) >= 2
+            and not job.get("ram_missing_samples", 0)
+        ):
+            record["ram_runs"] = (
+                record.get("ram_runs", [])
+                + [
+                    dict(
+                        peak=peak,
+                        at=job["ended_at"] or time.time(),
+                        duration=max(0, (job["ended_at"] or time.time()) - (job["started_at"] or time.time())),
+                    )
+                ]
+            )[-32:]
+            record["ram_recovery_successes"] = record.get("ram_recovery_successes", 0) + 1
+            if record["ram_recovery_successes"] >= 3:
+                record["ram_learning_blocked"] = False
         record["last"] = dict(
             job_id=job["id"],
             state=job["state"],
@@ -1266,7 +1529,7 @@ class Backend:
     def release_job(self, job, *, force=False, bypassed=()):
         if job.get("vram_auto"):
             # A forced exclusive job keeps the full configured usable GPU budget.
-            if not force:
+            if not force and not large_gpu_job(job, self.config):
                 job["requested"]["vram_mib"] = (
                     min(self.config["gpu_capacity_mib"], self.snapshot["gpu"]["free_mib"])
                     - self.config["vram_headroom_mib"]
@@ -1283,7 +1546,14 @@ class Backend:
         except (OSError, subprocess.SubprocessError):
             self.changed(job, "unknown", "Slurm release outcome unknown; retaining reservation")
             raise
-        self.event(job, "admission", forced=force, bypassed_job_ids=list(bypassed), snapshot=self.public_telemetry())
+        self.event(
+            job,
+            "admission",
+            forced=force,
+            large_gpu_lane=large_gpu_job(job, self.config),
+            bypassed_job_ids=list(bypassed),
+            snapshot=self.public_telemetry(),
+        )
         self.save()
 
     def apply_game_protection(self):
@@ -1323,7 +1593,7 @@ class Backend:
     @staticmethod
     def public_job(job):
         result = {
-            **{k: v for k, v in job.items() if k != "waiter_token"},
+            **{k: v for k, v in job.items() if k not in ("waiter_token", "ram_samples")},
             "requested": dict(job["requested"]),
             "events": [{k: v for k, v in event.items() if k != "snapshot"} for event in job["events"][-8:]],
         }
@@ -1385,6 +1655,9 @@ class Backend:
             ),
             ram={
                 **snapshot["ram"],
+                "admission_policy": "adaptive" if self.config["adaptive_ram"] else "strict",
+                "growth_allowance_mib": sum(ram_allowance(j, self.config)[0] for j in running),
+                "slurm_capacity_mib": self.config["ram_capacity_mib"],
                 "headroom_mib": self.config["ram_headroom_mib"],
                 "reserved_mib": sum(j["requested"]["ram_mib"] for j in running),
                 "managed_actual_mib": sum(ram_actual) if all(v is not None for v in ram_actual) else None,
@@ -1407,7 +1680,8 @@ class Backend:
     def status(self):
         jobs = self.state["jobs"]
         queued = sorted(
-            (j for j in jobs if managed(j) and j["state"] == "queued"), key=lambda j: queue_key(j, time.time())
+            (j for j in jobs if managed(j) and j["state"] == "queued"),
+            key=lambda j: queue_key(j, time.time(), self.config),
         )
         positions = {job["id"]: index + 1 for index, job in enumerate(queued)}
         mode = "manual_hold" if self.state["paused"] else "normal"
@@ -1441,6 +1715,8 @@ class Backend:
                 profiles=True,
                 job_inspection=True,
                 completion_notifications=True,
+                adaptive_ram=self.config["adaptive_ram"],
+                large_gpu_lane=self.config["large_gpu_lane"],
                 pause=True,
                 resume=True,
                 priority=False,
@@ -1449,11 +1725,19 @@ class Backend:
             ),
             telemetry=self.public_telemetry(),
             jobs=[
-                {**self.public_job(j), "queue_position": positions.get(j["id"])}
+                {
+                    **self.public_job(j),
+                    "queue_position": positions.get(j["id"]),
+                    "large_gpu_lane": large_gpu_job(j, self.config),
+                }
                 for j in jobs
                 if j["state"] not in TERMINAL
             ],
-            history=[self.public_job(j) for j in reversed(jobs) if j["state"] in TERMINAL],
+            history=[
+                {**self.public_job(j), "large_gpu_lane": large_gpu_job(j, self.config)}
+                for j in reversed(jobs)
+                if j["state"] in TERMINAL
+            ],
             errors=self.errors,
             notifications=self.notification_inbox()[:100],
             notification_count=len(self.notification_inbox()),
@@ -1981,6 +2265,8 @@ def run(args):
             action="submit",
             waiter_token=waiter_token,
             notify_session=os.environ.get("ORCA_AGENT_SESSION_ID") or os.environ.get("ORCA_SESSION_ID"),
+            **({"memory_policy": args.memory_policy} if getattr(args, "memory_policy", None) else {}),
+            large_gpu=getattr(args, "large_gpu", False),
             label=args.name,
             requested=budgets,
             explore=getattr(args, "explore", False),
@@ -1999,7 +2285,7 @@ def run(args):
             worktree_name=getattr(args, "worktree_name", None),
             parent_worktree_name=getattr(args, "parent_worktree_name", None),
             project=args.project or "unknown",
-            payload=dict(command=command, cwd=os.getcwd(), env=dict(os.environ)),
+            payload=dict(command=command, cwd=os.getcwd(), env=dict(os.environ), **workload_scope()),
         )
     )
     job_id = result["id"]
@@ -2213,6 +2499,16 @@ def main():
     runner.add_argument("--name", required=True)
     runner.add_argument("--category", choices=("build", "inference", "render", "game", "other"), default="other")
     runner.add_argument("--priority", choices=("background", "interactive", "game"), default="background")
+    runner.add_argument(
+        "--memory-policy",
+        choices=("strict", "adaptive"),
+        help="Strict peak reservations or host-enabled adaptive RAM admission",
+    )
+    runner.add_argument(
+        "--large-gpu",
+        action="store_true",
+        help="Use the permissive single-large-GPU lane; only critical pressure/headroom gates and Slurm limits apply",
+    )
     runner.add_argument("--project")
     runner.add_argument("--repo", help="Optional repository name for ownership display")
     runner.add_argument("--worktree", help="Optional exact Orca worktree ID; defaults to ORCA_WORKTREE_ID")

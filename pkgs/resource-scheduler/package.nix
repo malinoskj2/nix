@@ -9,6 +9,7 @@
   util-linux,
   coreutils,
   systemd,
+  git,
 }:
 let
   source = runCommand "resource-scheduler-source" { } ''
@@ -22,6 +23,7 @@ let
           util-linux
           coreutils
           systemd
+          git
         ]
       }:/run/opengl-driver/bin:/run/current-system/sw/bin'
   '';
@@ -50,6 +52,7 @@ symlinkJoin {
       ''
         cp ${./resource_scheduler.py} resource_scheduler.py
         cp ${./test_resource_scheduler.py} test_resource_scheduler.py
+        cp ${./test_adaptive_memory.py} test_adaptive_memory.py
         cp ${./resource_notifier.py} resource_notifier.py
         cp ${./test_resource_notifier.py} test_resource_notifier.py
         python -m unittest -v

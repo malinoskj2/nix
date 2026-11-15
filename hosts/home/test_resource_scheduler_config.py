@@ -25,7 +25,10 @@ assert policy == {
     "poll_seconds": 2,
     "stability_seconds": 10,
     "history_limit": 500,
-    "policy_version": "4",
+    "policy_version": "5",
+    "adaptive_ram": True,
+    "large_gpu_lane": True,
+    "ram_capacity_mib": 24576,
 }
 
 config = Path(os.environ["SLURM_CONFIG"])

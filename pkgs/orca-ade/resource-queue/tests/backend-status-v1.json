@@ -1,7 +1,7 @@
 {
   "provenance": {
     "generator": "capture-backend-status.py",
-    "backend_sha256": "869849bdde840ff6fded4323e7f8454835c352f368689a69405e2e47b6d7b32c",
+    "backend_sha256": "19bf8d3e7435c96b1ed0e8905f8ab8f3e0c6336d30c5a31bdad1b908d665d698",
     "execution": "Real Backend.submit/tick/status serializer; simulated Slurm and deterministic host telemetry; captured native journal datagrams"
   },
   "scenarios": {
@@ -23,6 +23,8 @@
         "profiles": true,
         "job_inspection": true,
         "completion_notifications": true,
+        "adaptive_ram": false,
+        "large_gpu_lane": false,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -57,6 +59,10 @@
         "ram": {
           "total_mib": 31744,
           "available_mib": 20480,
+          "growth_buffer_mib": 0,
+          "admission_policy": "strict",
+          "growth_allowance_mib": 4096,
+          "slurm_capacity_mib": 24576,
           "headroom_mib": 4096,
           "reserved_mib": 4096,
           "managed_actual_mib": null
@@ -78,7 +84,14 @@
           "revision": 4,
           "label": "Unknown-size exclusive GPU workload",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "waiting",
             "session": null
@@ -168,6 +181,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -196,13 +210,25 @@
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
             "vram_mib": 15360
           },
           "vram_estimate": "all-available",
-          "queue_position": null
+          "queue_position": null,
+          "large_gpu_lane": false
         }
       ],
       "history": [],
@@ -232,6 +258,8 @@
         "profiles": true,
         "job_inspection": true,
         "completion_notifications": true,
+        "adaptive_ram": false,
+        "large_gpu_lane": false,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -266,6 +294,10 @@
         "ram": {
           "total_mib": 31744,
           "available_mib": 20480,
+          "growth_buffer_mib": 0,
+          "admission_policy": "strict",
+          "growth_allowance_mib": 4096,
+          "slurm_capacity_mib": 24576,
           "headroom_mib": 4096,
           "reserved_mib": 4096,
           "managed_actual_mib": null
@@ -287,7 +319,14 @@
           "revision": 4,
           "label": "Existing CPU build",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "56b686b9650471f1ba25cdd779e12f36"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "waiting",
             "session": null
@@ -377,6 +416,7 @@
                 "vram_mib": 0
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -405,20 +445,39 @@
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "allocation": {
             "cpu": 6,
             "ram_mib": 4096,
             "vram_mib": 0
           },
           "vram_estimate": "declared-peak",
-          "queue_position": null
+          "queue_position": null,
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000003",
           "revision": 1,
           "label": "Game session",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "474460db34585cf0eaa68930b04c0bd8"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "waiting",
             "session": null
@@ -490,7 +549,8 @@
             "vram_mib": null
           },
           "vram_estimate": "all-available",
-          "queue_position": 1
+          "queue_position": 1,
+          "large_gpu_lane": false
         }
       ],
       "history": [
@@ -499,7 +559,14 @@
           "revision": 5,
           "label": "Unknown-size exclusive GPU workload",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -590,6 +657,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -655,9 +723,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -668,7 +776,8 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         }
       ],
       "errors": [],
@@ -712,6 +821,8 @@
         "profiles": true,
         "job_inspection": true,
         "completion_notifications": true,
+        "adaptive_ram": false,
+        "large_gpu_lane": false,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -746,6 +857,10 @@
         "ram": {
           "total_mib": 31744,
           "available_mib": 20480,
+          "growth_buffer_mib": 0,
+          "admission_policy": "strict",
+          "growth_allowance_mib": 4096,
+          "slurm_capacity_mib": 24576,
           "headroom_mib": 4096,
           "reserved_mib": 4096,
           "managed_actual_mib": null
@@ -767,7 +882,14 @@
           "revision": 4,
           "label": "Game session",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "474460db34585cf0eaa68930b04c0bd8"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "waiting",
             "session": null
@@ -857,6 +979,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -885,13 +1008,25 @@
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 2,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
             "vram_mib": 15360
           },
           "vram_estimate": "all-available",
-          "queue_position": null
+          "queue_position": null,
+          "large_gpu_lane": false
         }
       ],
       "history": [
@@ -900,7 +1035,14 @@
           "revision": 5,
           "label": "Existing CPU build",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "56b686b9650471f1ba25cdd779e12f36"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -991,6 +1133,7 @@
                 "vram_mib": 0
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -1056,9 +1199,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "2",
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "vram_estimate": "declared-peak",
+              "allocation": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "56b686b9650471f1ba25cdd779e12f36"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -1069,14 +1252,22 @@
             "ram_mib": 4096,
             "vram_mib": 0
           },
-          "vram_estimate": "declared-peak"
+          "vram_estimate": "declared-peak",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000001",
           "revision": 5,
           "label": "Unknown-size exclusive GPU workload",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -1167,6 +1358,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -1232,9 +1424,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -1245,7 +1477,8 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         }
       ],
       "errors": [],
@@ -1303,6 +1536,8 @@
         "profiles": true,
         "job_inspection": true,
         "completion_notifications": true,
+        "adaptive_ram": false,
+        "large_gpu_lane": false,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -1338,6 +1573,10 @@
           "total_mib": 31744,
           "available_mib": 20480,
           "swap_used_mib": 512,
+          "growth_buffer_mib": 0.0,
+          "admission_policy": "strict",
+          "growth_allowance_mib": 2048,
+          "slurm_capacity_mib": 24576,
           "headroom_mib": 4096,
           "reserved_mib": 4096,
           "managed_actual_mib": 2048
@@ -1359,7 +1598,14 @@
           "revision": 4,
           "label": "Owner-reported model server",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "5c5b32acaa059a8edea7d2ba1332d427"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "waiting",
             "session": null
@@ -1449,6 +1695,7 @@
                 "vram_mib": 4096
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -1477,13 +1724,26 @@
             }
           ],
           "released": true,
+          "ram_peak_available": true,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747602,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 2048,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
+          "ram_good_samples": 1,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
             "vram_mib": 4096
           },
           "vram_estimate": "declared-peak",
-          "queue_position": null
+          "queue_position": null,
+          "large_gpu_lane": false
         }
       ],
       "history": [
@@ -1492,7 +1752,14 @@
           "revision": 5,
           "label": "Game session",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "474460db34585cf0eaa68930b04c0bd8"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -1583,6 +1850,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -1648,9 +1916,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000003",
+              "label": "Game session",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "game",
+              "slurm_job_id": "3",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "474460db34585cf0eaa68930b04c0bd8"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 2,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -1661,14 +1969,22 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000002",
           "revision": 5,
           "label": "Existing CPU build",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "56b686b9650471f1ba25cdd779e12f36"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -1759,6 +2075,7 @@
                 "vram_mib": 0
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -1824,9 +2141,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "2",
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "vram_estimate": "declared-peak",
+              "allocation": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "56b686b9650471f1ba25cdd779e12f36"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -1837,14 +2194,22 @@
             "ram_mib": 4096,
             "vram_mib": 0
           },
-          "vram_estimate": "declared-peak"
+          "vram_estimate": "declared-peak",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000001",
           "revision": 5,
           "label": "Unknown-size exclusive GPU workload",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -1935,6 +2300,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -2000,9 +2366,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -2013,7 +2419,8 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         }
       ],
       "errors": [],
@@ -2085,6 +2492,8 @@
         "profiles": true,
         "job_inspection": true,
         "completion_notifications": true,
+        "adaptive_ram": false,
+        "large_gpu_lane": false,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -2120,6 +2529,10 @@
           "total_mib": 31744,
           "available_mib": 20480,
           "swap_used_mib": 512,
+          "growth_buffer_mib": 0.0,
+          "admission_policy": "strict",
+          "growth_allowance_mib": 2048,
+          "slurm_capacity_mib": 24576,
           "headroom_mib": 4096,
           "reserved_mib": 4096,
           "managed_actual_mib": 2048
@@ -2141,7 +2554,14 @@
           "revision": 4,
           "label": "Owner-reported model server",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "5c5b32acaa059a8edea7d2ba1332d427"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "waiting",
             "session": null
@@ -2231,6 +2651,7 @@
                 "vram_mib": 4096
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -2259,13 +2680,26 @@
             }
           ],
           "released": true,
+          "ram_peak_available": true,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747602,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 2048,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
+          "ram_good_samples": 2,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
             "vram_mib": 4096
           },
           "vram_estimate": "declared-peak",
-          "queue_position": null
+          "queue_position": null,
+          "large_gpu_lane": false
         }
       ],
       "history": [
@@ -2274,7 +2708,14 @@
           "revision": 5,
           "label": "Game session",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "474460db34585cf0eaa68930b04c0bd8"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -2365,6 +2806,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -2430,9 +2872,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000003",
+              "label": "Game session",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "game",
+              "slurm_job_id": "3",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "474460db34585cf0eaa68930b04c0bd8"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 2,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -2443,14 +2925,22 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000002",
           "revision": 5,
           "label": "Existing CPU build",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "56b686b9650471f1ba25cdd779e12f36"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -2541,6 +3031,7 @@
                 "vram_mib": 0
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -2606,9 +3097,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "2",
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "vram_estimate": "declared-peak",
+              "allocation": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "56b686b9650471f1ba25cdd779e12f36"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -2619,14 +3150,22 @@
             "ram_mib": 4096,
             "vram_mib": 0
           },
-          "vram_estimate": "declared-peak"
+          "vram_estimate": "declared-peak",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000001",
           "revision": 5,
           "label": "Unknown-size exclusive GPU workload",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -2717,6 +3256,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -2782,9 +3322,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -2795,7 +3375,8 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         }
       ],
       "errors": [],
@@ -2867,6 +3448,8 @@
         "profiles": true,
         "job_inspection": true,
         "completion_notifications": true,
+        "adaptive_ram": false,
+        "large_gpu_lane": false,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -2902,6 +3485,10 @@
           "total_mib": 31744,
           "available_mib": 20480,
           "swap_used_mib": 512,
+          "growth_buffer_mib": 0.0,
+          "admission_policy": "strict",
+          "growth_allowance_mib": 2048,
+          "slurm_capacity_mib": 24576,
           "headroom_mib": 4096,
           "reserved_mib": 4096,
           "managed_actual_mib": 2048
@@ -2923,7 +3510,14 @@
           "revision": 5,
           "label": "Owner-reported model server",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "5c5b32acaa059a8edea7d2ba1332d427"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "waiting",
             "session": null
@@ -3021,6 +3615,7 @@
                 "vram_mib": 4096
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -3081,13 +3676,26 @@
             }
           ],
           "released": true,
+          "ram_peak_available": true,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747602,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 2048,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
+          "ram_good_samples": 2,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
             "vram_mib": 4096
           },
           "vram_estimate": "declared-peak",
-          "queue_position": null
+          "queue_position": null,
+          "large_gpu_lane": false
         }
       ],
       "history": [
@@ -3096,7 +3704,14 @@
           "revision": 5,
           "label": "Game session",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "474460db34585cf0eaa68930b04c0bd8"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -3187,6 +3802,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -3252,9 +3868,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000003",
+              "label": "Game session",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "game",
+              "slurm_job_id": "3",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "474460db34585cf0eaa68930b04c0bd8"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 2,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -3265,14 +3921,22 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000002",
           "revision": 5,
           "label": "Existing CPU build",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "56b686b9650471f1ba25cdd779e12f36"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -3363,6 +4027,7 @@
                 "vram_mib": 0
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -3428,9 +4093,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "2",
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "vram_estimate": "declared-peak",
+              "allocation": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "56b686b9650471f1ba25cdd779e12f36"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -3441,14 +4146,22 @@
             "ram_mib": 4096,
             "vram_mib": 0
           },
-          "vram_estimate": "declared-peak"
+          "vram_estimate": "declared-peak",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000001",
           "revision": 5,
           "label": "Unknown-size exclusive GPU workload",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -3539,6 +4252,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -3604,9 +4318,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -3617,7 +4371,8 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         }
       ],
       "errors": [],
@@ -3689,6 +4444,8 @@
         "profiles": true,
         "job_inspection": true,
         "completion_notifications": true,
+        "adaptive_ram": false,
+        "large_gpu_lane": false,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -3724,6 +4481,10 @@
           "total_mib": 31744,
           "available_mib": 20480,
           "swap_used_mib": 512,
+          "growth_buffer_mib": 0.0,
+          "admission_policy": "strict",
+          "growth_allowance_mib": 2048,
+          "slurm_capacity_mib": 24576,
           "headroom_mib": 4096,
           "reserved_mib": 4096,
           "managed_actual_mib": 2048
@@ -3745,7 +4506,14 @@
           "revision": 6,
           "label": "Owner-reported model server",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "5c5b32acaa059a8edea7d2ba1332d427"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "waiting",
             "session": null
@@ -3843,6 +4611,7 @@
                 "vram_mib": 4096
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -3935,13 +4704,26 @@
             }
           ],
           "released": true,
+          "ram_peak_available": true,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747602,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 2048,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
+          "ram_good_samples": 2,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
             "vram_mib": 4096
           },
           "vram_estimate": "declared-peak",
-          "queue_position": null
+          "queue_position": null,
+          "large_gpu_lane": false
         }
       ],
       "history": [
@@ -3950,7 +4732,14 @@
           "revision": 5,
           "label": "Game session",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "474460db34585cf0eaa68930b04c0bd8"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -4041,6 +4830,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -4106,9 +4896,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000003",
+              "label": "Game session",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "game",
+              "slurm_job_id": "3",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "474460db34585cf0eaa68930b04c0bd8"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 2,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -4119,14 +4949,22 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000002",
           "revision": 5,
           "label": "Existing CPU build",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "56b686b9650471f1ba25cdd779e12f36"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -4217,6 +5055,7 @@
                 "vram_mib": 0
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -4282,9 +5121,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "2",
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "vram_estimate": "declared-peak",
+              "allocation": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "56b686b9650471f1ba25cdd779e12f36"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -4295,14 +5174,22 @@
             "ram_mib": 4096,
             "vram_mib": 0
           },
-          "vram_estimate": "declared-peak"
+          "vram_estimate": "declared-peak",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000001",
           "revision": 5,
           "label": "Unknown-size exclusive GPU workload",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -4393,6 +5280,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -4458,9 +5346,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -4471,7 +5399,8 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         }
       ],
       "errors": [],
@@ -4543,6 +5472,8 @@
         "profiles": true,
         "job_inspection": true,
         "completion_notifications": true,
+        "adaptive_ram": false,
+        "large_gpu_lane": false,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -4578,6 +5509,10 @@
           "total_mib": 31744,
           "available_mib": 20480,
           "swap_used_mib": 512,
+          "growth_buffer_mib": 0.0,
+          "admission_policy": "strict",
+          "growth_allowance_mib": 2048,
+          "slurm_capacity_mib": 24576,
           "headroom_mib": 4096,
           "reserved_mib": 4096,
           "managed_actual_mib": 2048
@@ -4599,7 +5534,14 @@
           "revision": 7,
           "label": "Owner-reported model server",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "5c5b32acaa059a8edea7d2ba1332d427"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "waiting",
             "session": null
@@ -4697,6 +5639,7 @@
                 "vram_mib": 4096
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -4821,13 +5764,26 @@
             }
           ],
           "released": true,
+          "ram_peak_available": true,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747602,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 2048,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
+          "ram_good_samples": 2,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
             "vram_mib": 4096
           },
           "vram_estimate": "declared-peak",
-          "queue_position": null
+          "queue_position": null,
+          "large_gpu_lane": false
         }
       ],
       "history": [
@@ -4836,7 +5792,14 @@
           "revision": 5,
           "label": "Game session",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "474460db34585cf0eaa68930b04c0bd8"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -4927,6 +5890,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -4992,9 +5956,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000003",
+              "label": "Game session",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "game",
+              "slurm_job_id": "3",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "474460db34585cf0eaa68930b04c0bd8"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 2,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -5005,14 +6009,22 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000002",
           "revision": 5,
           "label": "Existing CPU build",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "56b686b9650471f1ba25cdd779e12f36"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -5103,6 +6115,7 @@
                 "vram_mib": 0
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -5168,9 +6181,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "2",
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "vram_estimate": "declared-peak",
+              "allocation": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "56b686b9650471f1ba25cdd779e12f36"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -5181,14 +6234,22 @@
             "ram_mib": 4096,
             "vram_mib": 0
           },
-          "vram_estimate": "declared-peak"
+          "vram_estimate": "declared-peak",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000001",
           "revision": 5,
           "label": "Unknown-size exclusive GPU workload",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -5279,6 +6340,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -5344,9 +6406,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -5357,7 +6459,8 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         }
       ],
       "errors": [],
@@ -5429,6 +6532,8 @@
         "profiles": true,
         "job_inspection": true,
         "completion_notifications": true,
+        "adaptive_ram": false,
+        "large_gpu_lane": false,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -5464,6 +6569,10 @@
           "total_mib": 31744,
           "available_mib": 20480,
           "swap_used_mib": 512,
+          "growth_buffer_mib": 0.0,
+          "admission_policy": "strict",
+          "growth_allowance_mib": 2048,
+          "slurm_capacity_mib": 24576,
           "headroom_mib": 4096,
           "reserved_mib": 4096,
           "managed_actual_mib": 2048
@@ -5485,7 +6594,14 @@
           "revision": 8,
           "label": "Owner-reported model server",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "5c5b32acaa059a8edea7d2ba1332d427"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "waiting",
             "session": null
@@ -5583,6 +6699,7 @@
                 "vram_mib": 4096
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -5739,13 +6856,26 @@
             }
           ],
           "released": true,
+          "ram_peak_available": true,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747602,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 2048,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
+          "ram_good_samples": 2,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
             "vram_mib": 4096
           },
           "vram_estimate": "declared-peak",
-          "queue_position": null
+          "queue_position": null,
+          "large_gpu_lane": false
         }
       ],
       "history": [
@@ -5754,7 +6884,14 @@
           "revision": 5,
           "label": "Game session",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "474460db34585cf0eaa68930b04c0bd8"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -5845,6 +6982,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -5910,9 +7048,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000003",
+              "label": "Game session",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "game",
+              "slurm_job_id": "3",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "474460db34585cf0eaa68930b04c0bd8"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 2,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -5923,14 +7101,22 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000002",
           "revision": 5,
           "label": "Existing CPU build",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "56b686b9650471f1ba25cdd779e12f36"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -6021,6 +7207,7 @@
                 "vram_mib": 0
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -6086,9 +7273,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "2",
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "vram_estimate": "declared-peak",
+              "allocation": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "56b686b9650471f1ba25cdd779e12f36"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -6099,14 +7326,22 @@
             "ram_mib": 4096,
             "vram_mib": 0
           },
-          "vram_estimate": "declared-peak"
+          "vram_estimate": "declared-peak",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000001",
           "revision": 5,
           "label": "Unknown-size exclusive GPU workload",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -6197,6 +7432,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -6262,9 +7498,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -6275,7 +7551,8 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         }
       ],
       "errors": [],
@@ -6347,6 +7624,8 @@
         "profiles": true,
         "job_inspection": true,
         "completion_notifications": true,
+        "adaptive_ram": false,
+        "large_gpu_lane": false,
         "pause": true,
         "resume": true,
         "priority": false,
@@ -6382,6 +7661,10 @@
           "total_mib": 31744,
           "available_mib": 20480,
           "swap_used_mib": 512,
+          "growth_buffer_mib": 0.0,
+          "admission_policy": "strict",
+          "growth_allowance_mib": 2048,
+          "slurm_capacity_mib": 24576,
           "headroom_mib": 4096,
           "reserved_mib": 4096,
           "managed_actual_mib": 2048
@@ -6403,7 +7686,14 @@
           "revision": 9,
           "label": "Owner-reported model server",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "5c5b32acaa059a8edea7d2ba1332d427"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "waiting",
             "session": null
@@ -6501,6 +7791,7 @@
                 "vram_mib": 4096
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -6689,13 +7980,26 @@
             }
           ],
           "released": true,
+          "ram_peak_available": true,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747602,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 2048,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
+          "ram_good_samples": 2,
           "allocation": {
             "cpu": 2,
             "ram_mib": 4096,
             "vram_mib": 4096
           },
           "vram_estimate": "declared-peak",
-          "queue_position": null
+          "queue_position": null,
+          "large_gpu_lane": false
         }
       ],
       "history": [
@@ -6704,7 +8008,14 @@
           "revision": 5,
           "label": "Game session",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "474460db34585cf0eaa68930b04c0bd8"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -6795,6 +8106,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -6860,9 +8172,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000003",
+              "label": "Game session",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "game",
+              "slurm_job_id": "3",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "474460db34585cf0eaa68930b04c0bd8"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 2,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -6873,14 +8225,22 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000002",
           "revision": 5,
           "label": "Existing CPU build",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "56b686b9650471f1ba25cdd779e12f36"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -6971,6 +8331,7 @@
                 "vram_mib": 0
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -7036,9 +8397,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000002",
+              "label": "Existing CPU build",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "2",
+              "requested": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "vram_estimate": "declared-peak",
+              "allocation": {
+                "cpu": 6,
+                "ram_mib": 4096,
+                "vram_mib": 0
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "56b686b9650471f1ba25cdd779e12f36"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -7049,14 +8450,22 @@
             "ram_mib": 4096,
             "vram_mib": 0
           },
-          "vram_estimate": "declared-peak"
+          "vram_estimate": "declared-peak",
+          "large_gpu_lane": false
         },
         {
           "id": "00000000000000000000000000000001",
           "revision": 5,
           "label": "Unknown-size exclusive GPU workload",
           "explore": false,
-          "profile": null,
+          "profile": {
+            "project": "fixture-project",
+            "name": "auto-v1",
+            "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+          },
+          "profile_automatic": true,
+          "memory_policy": "strict",
+          "large_gpu": false,
           "notification": {
             "state": "pending",
             "session": null,
@@ -7147,6 +8556,7 @@
                 "vram_mib": 15360
               },
               "forced": false,
+              "large_gpu_lane": false,
               "bypassed_job_ids": []
             },
             {
@@ -7212,9 +8622,49 @@
               },
               "queue_seconds": 0,
               "execution_seconds": 0
+            },
+            {
+              "schema_version": 1,
+              "policy_version": "1",
+              "timestamp": 1794747600,
+              "event": "profile_recorded",
+              "job_id": "00000000000000000000000000000001",
+              "label": "Unknown-size exclusive GPU workload",
+              "agent": "fixture-agent",
+              "worktree": "fixture-worktree",
+              "category": "build",
+              "slurm_job_id": "1",
+              "requested": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": null
+              },
+              "vram_estimate": "all-available",
+              "allocation": {
+                "cpu": 2,
+                "ram_mib": 4096,
+                "vram_mib": 15360
+              },
+              "failure": "cancelled",
+              "profile": {
+                "project": "fixture-project",
+                "name": "auto-v1",
+                "variant": "cfd50e8e4339204936ea3ff0df1b4b30"
+              }
             }
           ],
           "released": true,
+          "ram_peak_available": false,
+          "ram_missing_samples": 1,
+          "ram_observed_since": 1794747600,
+          "learned_ram_peak_mib": null,
+          "ram_learning_blocked": false,
+          "ram_admission": {
+            "growth_mib": 4096,
+            "basis": "strict/startup/unknown",
+            "learned_runs": 0,
+            "learned_peak_mib": null
+          },
           "slurm_terminal_state": [
             "CANCELLED"
           ],
@@ -7225,7 +8675,8 @@
             "ram_mib": 4096,
             "vram_mib": 15360
           },
-          "vram_estimate": "all-available"
+          "vram_estimate": "all-available",
+          "large_gpu_lane": false
         }
       ],
       "errors": [],
