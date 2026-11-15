@@ -7,6 +7,7 @@
     ../features/desktop.nix
     ../features/discord-context.nix
     ../features/dev.nix
+    ../features/local-models.nix
     ../features/native.nix
     ../features/rust
     ../features/rust/mold.nix

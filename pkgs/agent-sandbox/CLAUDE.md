@@ -132,3 +132,16 @@ Agents here run without permission prompts, but Claude Code still asks before an
 
 - When a task finishes, delete the target dirs, worktrees, venvs, databases and other scratch you created for it. Leave only what the human needs to keep working.
 - Before finishing, check what you added with `du -sh` and report anything over a few GB that you kept.
+
+## Local model storage
+
+New sandboxes mount the host's `/home/jesse/.local/share/models` read-only at the
+same path. `MODEL_ROOT`, `HF_HUB_CACHE`, `IMG2VIDEO_MODELS` and `SAM` are passed
+explicitly; runtime/compilation caches remain writable outside this mount.
+Read `$MODEL_ROOT/catalog.json`, `readiness.json` and `README.md` before use.
+Host synchronization is asynchronous; catalog membership is not installation.
+Existing containers must be recreated to receive this mount. If the catalog is
+absent, the host integration has not been deployed. Request missing aliases with
+`systemctl --user start local-models-sync.service` **on the host**. Do not run a
+sandbox downloader or look for a token; the host credential is never mounted.
+Claude's shared rules and Codex's context include the local-models policy.

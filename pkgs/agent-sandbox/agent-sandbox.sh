@@ -27,6 +27,7 @@ done
 
 data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
 sandbox_home=$data/home
+model_root=$HOME/.local/share/models
 steam_common=$HOME/.local/share/Steam/steamapps/common
 shared=(
   "$HOME/projects"
@@ -257,7 +258,8 @@ mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.config/g
 for dir in "${shared[@]}"; do
   mkdir -p "$dir" "$sandbox_home${dir#"$HOME"}"
 done
-mkdir -p "$screenshots" "$media"
+mkdir -p "$screenshots" "$media" "$model_root"
+mount_readonly "$model_root"
 mkdir -p "$orca_relay_dir"
 chmod 700 "$orca_relay_dir"
 mkdir -p "$gpu_lease_dir"
@@ -324,6 +326,10 @@ args=(
   --volume "$sandbox_home:$HOME"
   --workdir "$workdir"
   --env HOME
+  --env MODEL_ROOT="$model_root"
+  --env HF_HUB_CACHE="$model_root/huggingface"
+  --env IMG2VIDEO_MODELS="$model_root/by-name/img2video"
+  --env SAM="$model_root/by-name/sam2.1"
   --env USER="$user"
   --env TERM
   --env COLORTERM

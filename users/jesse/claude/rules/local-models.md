@@ -1,0 +1,10 @@
+# Shared local models
+
+- When `MODEL_ROOT` is set, read `$MODEL_ROOT/catalog.json`, `$MODEL_ROOT/readiness.json` and `$MODEL_ROOT/README.md` before selecting a model or downloading weights. The host manages storage at the same path inside sandboxes. A catalog entry is not proof of availability; check readiness and required files. File readiness and runtime compatibility are separate.
+- Reuse pinned local aliases under `$MODEL_ROOT/by-name`. Configure consumers explicitly; `HF_HUB_CACHE` alone does not configure ComfyUI, voice containers or custom pipelines. Never make another project copy, write through the shared read-only mount, overwrite canonical weights with a merge, or search model storage for credentials.
+- Switches enqueue background reconciliation. A successful switch does not mean downloads finished. Use `local-models status` on the host. For a missing model, report its alias and the host command `systemctl --user start local-models-sync.service`; do not start a second downloader from a project or sandbox. Without `MODEL_ROOT`, this integration may not be deployed on that host.
+- For gated failures, remind Jesse to set `/home/jesse/.config/local-models/hf-token` on the host to the raw token on one line (no quotes, JSON, `HF_TOKEN=` or `Bearer `), with directory mode `0700` and file mode `0600`. Accept access to both LTX repositories, SAM 3 and SAM 3.1. Never request the token in chat or mount it into a sandbox.
+- Check each adapter's artifact kind, explicit base, dependencies, compatibility and loader instructions. Use the catalog's base and adapter paths together. Do not infer compatibility from filenames, reapply adapters to merged checkpoints or silently choose another base. Add new adapters through this catalog and host synchronization workflow. Unresolved combinations remain unresolved.
+- Acquire a shared GPU reservation before loading a model or running inference. Retain it until unloading and GPU cleanup finish. Downloading and inspecting metadata do not require GPU reservations.
+
+Operational details: `$MODEL_ROOT/README.md` (source: `docs/local-models.md` in the Nix repository).

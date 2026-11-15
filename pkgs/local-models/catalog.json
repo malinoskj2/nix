@@ -1,0 +1,3292 @@
+{
+  "schemaVersion": 1,
+  "entries": {
+    "qwen3.8-27b": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "bartowski/Qwen3.8-27B-GGUF",
+          "revision": "87410e7b9a5c21e6ca70c0c9cc5237de909fe621",
+          "path": "Qwen3.8-27B-Q5_K_M.gguf",
+          "target": "Qwen3.8-27B-Q5_K_M.gguf",
+          "size": 20923877088,
+          "sha256": "9f0a899d43b29285a02da149f9b62f007d7b5d5fd59afe9f46dda1b891636b0a",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "llama.cpp GGUF; chat template and tool use require runtime validation"
+    },
+    "qwen-image": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "LICENSE",
+          "target": "LICENSE",
+          "size": 7831,
+          "gitSha1": "13ae08d5a5828f508cf0e852b1b316c0c0bbb9b3",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/LICENSE"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "model_index.json",
+          "target": "model_index.json",
+          "size": 447,
+          "gitSha1": "85d02d05f150cbe24a8fd3542062b565767bbe7b",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/model_index.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "processor/added_tokens.json",
+          "target": "processor/added_tokens.json",
+          "size": 707,
+          "gitSha1": "b54f9135e44c1e81047e8d05cb027af8bc039eed",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/processor/added_tokens.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "processor/chat_template.jinja",
+          "target": "processor/chat_template.jinja",
+          "size": 5292,
+          "gitSha1": "124386803f142761528f710e77ae483f5f8c4fc4",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/processor/chat_template.jinja"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "processor/merges.txt",
+          "target": "processor/merges.txt",
+          "size": 1671853,
+          "gitSha1": "31349551d90c7606f325fe0f11bbb8bd5fa0d7c7",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/processor/merges.txt"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "processor/preprocessor_config.json",
+          "target": "processor/preprocessor_config.json",
+          "size": 782,
+          "gitSha1": "2fa6553554f69b4e3a6b742a75264ff9dff90ad0",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/processor/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "processor/special_tokens_map.json",
+          "target": "processor/special_tokens_map.json",
+          "size": 613,
+          "gitSha1": "ac23c0aaa2434523c494330aeb79c58395378103",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/processor/special_tokens_map.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "processor/tokenizer.json",
+          "target": "processor/tokenizer.json",
+          "size": 11422654,
+          "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/processor/tokenizer.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "processor/tokenizer_config.json",
+          "target": "processor/tokenizer_config.json",
+          "size": 5445,
+          "gitSha1": "fec7f182135c384a08ea2fc9635566ca79c45afc",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/processor/tokenizer_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "processor/video_preprocessor_config.json",
+          "target": "processor/video_preprocessor_config.json",
+          "size": 817,
+          "gitSha1": "e32b1d90356f74457edbfca27aa1e121dab7cdc7",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/processor/video_preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "processor/vocab.json",
+          "target": "processor/vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/processor/vocab.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "scheduler/scheduler_config.json",
+          "target": "scheduler/scheduler_config.json",
+          "size": 485,
+          "gitSha1": "45cd05b021892b1cafbd16d61ce692637e88bedd",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/scheduler/scheduler_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "text_encoder/config.json",
+          "target": "text_encoder/config.json",
+          "size": 1517,
+          "gitSha1": "581ce4655dde5272e577065dd08b1fda7e97d6e8",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/text_encoder/config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "text_encoder/generation_config.json",
+          "target": "text_encoder/generation_config.json",
+          "size": 213,
+          "gitSha1": "bdb4e0372b04220c80df250f2b3354d1c81c97cb",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/text_encoder/generation_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "text_encoder/model-00001-of-00004.safetensors",
+          "target": "text_encoder/model-00001-of-00004.safetensors",
+          "size": 4998056552,
+          "sha256": "dde00291b5f7fb92013895310a3da0ddba78674df9f10d505d375243dc01fc6f",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/text_encoder/model-00001-of-00004.safetensors"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "text_encoder/model-00002-of-00004.safetensors",
+          "target": "text_encoder/model-00002-of-00004.safetensors",
+          "size": 4915962464,
+          "sha256": "9047faccc0a6d98496a52d55f27be1c94a9c259d1e283fbea0128d054a948d42",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/text_encoder/model-00002-of-00004.safetensors"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "text_encoder/model-00003-of-00004.safetensors",
+          "target": "text_encoder/model-00003-of-00004.safetensors",
+          "size": 4915962496,
+          "sha256": "8c54187654c0176b73ae73785bf791dc9a14c9df7fb4310083a09d42048cb57e",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/text_encoder/model-00003-of-00004.safetensors"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "text_encoder/model-00004-of-00004.safetensors",
+          "target": "text_encoder/model-00004-of-00004.safetensors",
+          "size": 2704357976,
+          "sha256": "5311532aaaeae3259eb6a7b2c600636be1159adf7ded35f53579f7d0e7d43cdd",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/text_encoder/model-00004-of-00004.safetensors"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "text_encoder/model.safetensors.index.json",
+          "target": "text_encoder/model.safetensors.index.json",
+          "size": 67795,
+          "gitSha1": "6d4d74c934b05b8addb0744305eef3674650cd8b",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/text_encoder/model.safetensors.index.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "transformer/config.json",
+          "target": "transformer/config.json",
+          "size": 370,
+          "gitSha1": "706df60672976086089e99f6595037f917d7602e",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/transformer/config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "transformer/diffusion_pytorch_model-00001-of-00002.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00001-of-00002.safetensors",
+          "size": 9968332504,
+          "sha256": "9e6bc2d641e67bf277895ea8777141044a38f3edb7101bc469b2961dd7c36b4b",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/transformer/diffusion_pytorch_model-00001-of-00002.safetensors"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "transformer/diffusion_pytorch_model-00002-of-00002.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00002-of-00002.safetensors",
+          "size": 4261951904,
+          "sha256": "3aaf234dcbe128530479735854a346b5e3e66283b7c11db56f836bbd1c13ebaa",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/transformer/diffusion_pytorch_model-00002-of-00002.safetensors"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "transformer/diffusion_pytorch_model.safetensors.index.json",
+          "target": "transformer/diffusion_pytorch_model.safetensors.index.json",
+          "size": 30283,
+          "gitSha1": "bd64579cfd093a6a4ea8fb492217790018c53c0d",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/transformer/diffusion_pytorch_model.safetensors.index.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "vae/config.json",
+          "target": "vae/config.json",
+          "size": 2079,
+          "gitSha1": "ac6fe795d898a5eff16e4527256c2d039f5b0d4b",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/vae/config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen-Image-2.1",
+          "revision": "d26bb61231c349cf6b7896fa83353113880e1ba3",
+          "path": "vae/diffusion_pytorch_model.safetensors",
+          "target": "vae/diffusion_pytorch_model.safetensors",
+          "size": 1350989512,
+          "sha256": "a07a1b7c4ee2966a1b3bdc37de9b4f983d56937e46619f709a80b6e490675417",
+          "imports": [
+            "/home/jesse/projects/img2video/models/Qwen-Image-2.1/vae/diffusion_pytorch_model.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "Diffusers QwenImagePipeline.from_pretrained(local_path, local_files_only=True)"
+    },
+    "ltx-2.5": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+          "path": "diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+          "target": "diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+          "size": 42018190584,
+          "sha256": "31eb3cad89b9e54e99dd3baf286f70825ac4f6c660a70d9184d895be76d7bff4",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors"
+          ]
+        },
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+          "path": "text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+          "target": "text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+          "size": 26263858182,
+          "sha256": "ef7243612fdae7a75cb4d5cee9433e81380675fb6c213bd98ae74a9cd16561d1",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors"
+          ]
+        },
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+          "path": "vae/ltx-2.5-video-vae-bf16.safetensors",
+          "target": "vae/ltx-2.5-video-vae-bf16.safetensors",
+          "size": 1472223346,
+          "sha256": "847e14ca7f3355debca0cea4eaa24ac0fbcdf0061da054ac89ca638a869ddba3",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/vae/ltx-2.5-video-vae-bf16.safetensors"
+          ]
+        },
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+          "path": "vae/ltx-2.5-audio-vae-bf16.safetensors",
+          "target": "vae/ltx-2.5-audio-vae-bf16.safetensors",
+          "size": 364866540,
+          "sha256": "c52733d37f6a7fb7949c3dc0fb468c6cb2169e4d836983a73babb9f0d54837a5",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/vae/ltx-2.5-audio-vae-bf16.safetensors"
+          ]
+        },
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+          "path": "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+          "target": "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+          "size": 995778752,
+          "sha256": "eb5a71fe4068ee87ccdb1c3aa635e547ca76bd2d30ae20ae889f2c325c0677e8",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
+          ]
+        },
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+          "path": "latent_upscale_models/ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors",
+          "target": "latent_upscale_models/ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors",
+          "size": 261944000,
+          "sha256": "2bc3300f2b3c3c1834d72164fbf13a3b9fd73e5a741e8a2c3f4035f89a75c3fe",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/latent_upscale_models/ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors"
+          ]
+        },
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+          "path": "model_patches/ltx-2.5-duration-head-bf16.safetensors",
+          "target": "model_patches/ltx-2.5-duration-head-bf16.safetensors",
+          "size": 3843690,
+          "sha256": "2ec71e4206ed365d015f00c05a48caccfb0ee862986809d06ae376c09f5d9190",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/model_patches/ltx-2.5-duration-head-bf16.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "img2video LTX DFR explicit component paths",
+      "gated": true
+    },
+    "ltx-pixel-upscaler": {
+      "enabled": true,
+      "kind": "adapter",
+      "files": [
+        {
+          "repository": "Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler",
+          "revision": "59f26f1e0c11af42f1affa924b4ef231e9e98b2a",
+          "path": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
+          "target": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
+          "size": 327322640,
+          "sha256": "984851b769ea2bcb4c9e0a239a7676239e42c6a6001ddc69943b41ff0b283c1d",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/loras/ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [
+        "ltx-2.5"
+      ],
+      "compatibility": "consumer-evidenced",
+      "loader": "img2video --detailing-lora; LTX-2.5 distilled BF16 components",
+      "base": "ltx-2.5",
+      "gated": true,
+      "baseSources": [
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f"
+        }
+      ]
+    },
+    "sam2.1": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "facebook/sam2.1-hiera-large",
+          "revision": "665f8e2ad61cf5f53d65644ff27c8ee525124610",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 897897416,
+          "sha256": "dc407dce21301fd94abb395c5099b4f2c455fdc8a8f261ac3d0ea6d4cd197230",
+          "imports": []
+        },
+        {
+          "repository": "facebook/sam2.1-hiera-large",
+          "revision": "665f8e2ad61cf5f53d65644ff27c8ee525124610",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 5705,
+          "gitSha1": "62a1dd93657b383ec1e9bad75699747951d307c7",
+          "imports": []
+        },
+        {
+          "repository": "facebook/sam2.1-hiera-large",
+          "revision": "665f8e2ad61cf5f53d65644ff27c8ee525124610",
+          "path": "preprocessor_config.json",
+          "target": "preprocessor_config.json",
+          "size": 683,
+          "gitSha1": "8499e53cb79bf1786a890021550e6994b9808f39",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "Transformers local safetensors",
+      "gated": false
+    },
+    "sam3": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "facebook/sam3",
+          "revision": "3c879f39826c281e95690f02c7821c4de09afae7",
+          "path": "sam3.pt",
+          "target": "sam3.pt",
+          "size": 3450062241,
+          "sha256": "9999e2341ceef5e136daa386eecb55cb414446a00ac2b55eb2dfd2f7c3cf8c9e",
+          "imports": []
+        },
+        {
+          "repository": "facebook/sam3",
+          "revision": "3c879f39826c281e95690f02c7821c4de09afae7",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 25843,
+          "gitSha1": "3e600e765b0f1b4c52680aed9ad242c9a90f7ed1",
+          "imports": []
+        },
+        {
+          "repository": "facebook/sam3",
+          "revision": "3c879f39826c281e95690f02c7821c4de09afae7",
+          "path": "LICENSE",
+          "target": "LICENSE",
+          "size": 7352,
+          "gitSha1": "16ee5f6318102430087a4a779f04417a21d7cd18",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "Explicit local checkpoint; separately reviewed/pinned implementation required",
+      "gated": true
+    },
+    "sam3.1": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "facebook/sam3.1",
+          "revision": "daa63191845a41281374e725f4c9e51c7a824460",
+          "path": "sam3.1_multiplex.pt",
+          "target": "sam3.1_multiplex.pt",
+          "size": 3502755717,
+          "sha256": "0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6",
+          "imports": []
+        },
+        {
+          "repository": "facebook/sam3.1",
+          "revision": "daa63191845a41281374e725f4c9e51c7a824460",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 25843,
+          "gitSha1": "3e600e765b0f1b4c52680aed9ad242c9a90f7ed1",
+          "imports": []
+        },
+        {
+          "repository": "facebook/sam3.1",
+          "revision": "daa63191845a41281374e725f4c9e51c7a824460",
+          "path": "LICENSE",
+          "target": "LICENSE",
+          "size": 7352,
+          "gitSha1": "16ee5f6318102430087a4a779f04417a21d7cd18",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "Explicit local checkpoint; separately reviewed/pinned implementation required",
+      "gated": true
+    },
+    "birefnet": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "ZhengPeng7/BiRefNet",
+          "revision": "e2bf8e4460fc8fa32bba5ea4d94b3233d367b0e4",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 444473596,
+          "sha256": "9ab37426bf4de0567af6b5d21b16151357149139362e6e8992021b8ce356a154",
+          "imports": []
+        },
+        {
+          "repository": "ZhengPeng7/BiRefNet",
+          "revision": "e2bf8e4460fc8fa32bba5ea4d94b3233d367b0e4",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 405,
+          "gitSha1": "06d8fa9d7f2f4c6f1cf0dc6e7bfd194153176a42",
+          "imports": []
+        },
+        {
+          "repository": "ZhengPeng7/BiRefNet",
+          "revision": "e2bf8e4460fc8fa32bba5ea4d94b3233d367b0e4",
+          "path": "BiRefNet_config.py",
+          "target": "BiRefNet_config.py",
+          "size": 298,
+          "gitSha1": "37c8ac58bec2f52dac34204978a7b61b69e3da76",
+          "imports": []
+        },
+        {
+          "repository": "ZhengPeng7/BiRefNet",
+          "revision": "e2bf8e4460fc8fa32bba5ea4d94b3233d367b0e4",
+          "path": "birefnet.py",
+          "target": "birefnet.py",
+          "size": 91896,
+          "gitSha1": "8dea801e2b56facb8486ba351e6f91c3e664eb6d",
+          "imports": []
+        },
+        {
+          "repository": "ZhengPeng7/BiRefNet",
+          "revision": "e2bf8e4460fc8fa32bba5ea4d94b3233d367b0e4",
+          "path": "requirements.txt",
+          "target": "requirements.txt",
+          "size": 149,
+          "gitSha1": "ed8583eb7e7264c7a0c76523882b265a3297423f",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "Explicit local checkpoint; separately reviewed/pinned implementation required",
+      "gated": false
+    },
+    "voice-tts": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+          "revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 4908,
+          "gitSha1": "95d74b20b7485f5dfa09d05988d6c606ec226811",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tts/config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+          "revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+          "path": "generation_config.json",
+          "target": "generation_config.json",
+          "size": 245,
+          "gitSha1": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tts/generation_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+          "revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+          "path": "preprocessor_config.json",
+          "target": "preprocessor_config.json",
+          "size": 127,
+          "gitSha1": "0525dd953bb9241912f7147666f0d535165d5d4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tts/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+          "revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+          "path": "tokenizer_config.json",
+          "target": "tokenizer_config.json",
+          "size": 7344,
+          "gitSha1": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tts/tokenizer_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+          "revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+          "path": "merges.txt",
+          "target": "merges.txt",
+          "size": 1671839,
+          "gitSha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tts/merges.txt"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+          "revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+          "path": "vocab.json",
+          "target": "vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tts/vocab.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+          "revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 3833402552,
+          "sha256": "38b1d5971bdbd982b561cccec982669a53b0537c3cf5e9bd4778ed07bb2f5137",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tts/model.safetensors"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+          "revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+          "path": "speech_tokenizer/config.json",
+          "target": "speech_tokenizer/config.json",
+          "size": 2336,
+          "gitSha1": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tts/speech_tokenizer/config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+          "revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+          "path": "speech_tokenizer/configuration.json",
+          "target": "speech_tokenizer/configuration.json",
+          "size": 76,
+          "gitSha1": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tts/speech_tokenizer/configuration.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+          "revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+          "path": "speech_tokenizer/preprocessor_config.json",
+          "target": "speech_tokenizer/preprocessor_config.json",
+          "size": 234,
+          "gitSha1": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tts/speech_tokenizer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+          "revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+          "path": "speech_tokenizer/model.safetensors",
+          "target": "speech_tokenizer/model.safetensors",
+          "size": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tts/speech_tokenizer/model.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices custom_voice",
+      "status": "supported",
+      "reference": null,
+      "notes": []
+    },
+    "voice-clone": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+          "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 4494,
+          "gitSha1": "4e923f500f5c3eeb78d44072e7049b28817c2e04",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/clone/config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+          "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+          "path": "generation_config.json",
+          "target": "generation_config.json",
+          "size": 245,
+          "gitSha1": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/clone/generation_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+          "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+          "path": "preprocessor_config.json",
+          "target": "preprocessor_config.json",
+          "size": 127,
+          "gitSha1": "0525dd953bb9241912f7147666f0d535165d5d4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/clone/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+          "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+          "path": "tokenizer_config.json",
+          "target": "tokenizer_config.json",
+          "size": 7344,
+          "gitSha1": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/clone/tokenizer_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+          "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+          "path": "merges.txt",
+          "target": "merges.txt",
+          "size": 1671839,
+          "gitSha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/clone/merges.txt"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+          "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+          "path": "vocab.json",
+          "target": "vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/clone/vocab.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+          "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 1829344272,
+          "sha256": "180b3b10eb1c9f1b4db7806d5475bae3071c0243c299d49926bab1da3b6946f6",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/clone/model.safetensors"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+          "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+          "path": "speech_tokenizer/config.json",
+          "target": "speech_tokenizer/config.json",
+          "size": 2336,
+          "gitSha1": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/clone/speech_tokenizer/config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+          "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+          "path": "speech_tokenizer/configuration.json",
+          "target": "speech_tokenizer/configuration.json",
+          "size": 76,
+          "gitSha1": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/clone/speech_tokenizer/configuration.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+          "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+          "path": "speech_tokenizer/preprocessor_config.json",
+          "target": "speech_tokenizer/preprocessor_config.json",
+          "size": 234,
+          "gitSha1": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/clone/speech_tokenizer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+          "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+          "path": "speech_tokenizer/model.safetensors",
+          "target": "speech_tokenizer/model.safetensors",
+          "size": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/clone/speech_tokenizer/model.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices base",
+      "status": "supported",
+      "reference": null,
+      "notes": []
+    },
+    "voice-asr": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-21",
+          "revision": "9a65b6ea94c311ca770c2bf895b30f456a22d703",
+          "path": "encoder-epoch-99-avg-1.int8.onnx",
+          "target": "encoder-epoch-99-avg-1.int8.onnx",
+          "size": 187823992,
+          "sha256": "32c98281c7bd8b63e3e142d007251b37f120572e8fdea9a4f5a79ce22b10ec4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/asr/encoder-epoch-99-avg-1.int8.onnx"
+          ]
+        },
+        {
+          "repository": "csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-21",
+          "revision": "9a65b6ea94c311ca770c2bf895b30f456a22d703",
+          "path": "decoder-epoch-99-avg-1.onnx",
+          "target": "decoder-epoch-99-avg-1.onnx",
+          "size": 2092566,
+          "sha256": "9da02b77cb08826756ec6a88635f35a40374e4164e7c6359121a9145958a6ceb",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/asr/decoder-epoch-99-avg-1.onnx"
+          ]
+        },
+        {
+          "repository": "csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-21",
+          "revision": "9a65b6ea94c311ca770c2bf895b30f456a22d703",
+          "path": "joiner-epoch-99-avg-1.int8.onnx",
+          "target": "joiner-epoch-99-avg-1.int8.onnx",
+          "size": 259335,
+          "sha256": "831477d390e59a61f1b6a6f763b9903e6c6366ff6034f1ddba613be82637122f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/asr/joiner-epoch-99-avg-1.int8.onnx"
+          ]
+        },
+        {
+          "repository": "csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-21",
+          "revision": "9a65b6ea94c311ca770c2bf895b30f456a22d703",
+          "path": "tokens.txt",
+          "target": "tokens.txt",
+          "size": 5048,
+          "gitSha1": "b4d1bf82e68de1354f2a3f5fd51094d61d65c77c",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/asr/tokens.txt"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices asr",
+      "status": "supported",
+      "reference": null,
+      "notes": []
+    },
+    "voice-turn": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "pipecat-ai/smart-turn-v3",
+          "revision": "f766f81d3cfdf7737ac64aad813d91bbfd56bf93",
+          "path": "smart-turn-v3.2-cpu.onnx",
+          "target": "smart-turn-v3.2-cpu.onnx",
+          "size": 8679182,
+          "sha256": "2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/turn/smart-turn-v3.2-cpu.onnx"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices turn",
+      "status": "supported",
+      "reference": null,
+      "notes": [
+        "CPU only. Acoustic end-of-turn evidence; it never triggers a reply alone."
+      ]
+    },
+    "voice-design": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "revision": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 4421,
+          "gitSha1": "2c2c027c574a85c0d5a5d48e3cfed1a8a051ff9d",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/design/config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "revision": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+          "path": "generation_config.json",
+          "target": "generation_config.json",
+          "size": 245,
+          "gitSha1": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/design/generation_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "revision": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+          "path": "preprocessor_config.json",
+          "target": "preprocessor_config.json",
+          "size": 127,
+          "gitSha1": "0525dd953bb9241912f7147666f0d535165d5d4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/design/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "revision": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+          "path": "tokenizer_config.json",
+          "target": "tokenizer_config.json",
+          "size": 7344,
+          "gitSha1": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/design/tokenizer_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "revision": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+          "path": "merges.txt",
+          "target": "merges.txt",
+          "size": 1671839,
+          "gitSha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/design/merges.txt"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "revision": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+          "path": "vocab.json",
+          "target": "vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/design/vocab.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "revision": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 3833402552,
+          "sha256": "391e8db219f292c515297cdceeb43e4eae67cdde35fa57e79a6a8a532fca0522",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/design/model.safetensors"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "revision": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+          "path": "speech_tokenizer/config.json",
+          "target": "speech_tokenizer/config.json",
+          "size": 2336,
+          "gitSha1": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/design/speech_tokenizer/config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "revision": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+          "path": "speech_tokenizer/configuration.json",
+          "target": "speech_tokenizer/configuration.json",
+          "size": 76,
+          "gitSha1": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/design/speech_tokenizer/configuration.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "revision": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+          "path": "speech_tokenizer/preprocessor_config.json",
+          "target": "speech_tokenizer/preprocessor_config.json",
+          "size": 234,
+          "gitSha1": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/design/speech_tokenizer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "revision": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+          "path": "speech_tokenizer/model.safetensors",
+          "target": "speech_tokenizer/model.safetensors",
+          "size": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/design/speech_tokenizer/model.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices design",
+      "status": "tooling",
+      "reference": null,
+      "notes": []
+    },
+    "voice-kurisu": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "starrydark/Makise_Kurisu_Qwen3_TTS",
+          "revision": "e85b16d18c38bd315f1b5687383d20e98d8bb4df",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 4614,
+          "gitSha1": "f51880dcea68f2e6f737b5cf5096812c337f8f9a",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/kurisu/config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Makise_Kurisu_Qwen3_TTS",
+          "revision": "e85b16d18c38bd315f1b5687383d20e98d8bb4df",
+          "path": "generation_config.json",
+          "target": "generation_config.json",
+          "size": 245,
+          "gitSha1": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/kurisu/generation_config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Makise_Kurisu_Qwen3_TTS",
+          "revision": "e85b16d18c38bd315f1b5687383d20e98d8bb4df",
+          "path": "preprocessor_config.json",
+          "target": "preprocessor_config.json",
+          "size": 127,
+          "gitSha1": "0525dd953bb9241912f7147666f0d535165d5d4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/kurisu/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Makise_Kurisu_Qwen3_TTS",
+          "revision": "e85b16d18c38bd315f1b5687383d20e98d8bb4df",
+          "path": "tokenizer_config.json",
+          "target": "tokenizer_config.json",
+          "size": 7720,
+          "gitSha1": "3ced45daa1b6086cfe484d86410528edec648b16",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/kurisu/tokenizer_config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Makise_Kurisu_Qwen3_TTS",
+          "revision": "e85b16d18c38bd315f1b5687383d20e98d8bb4df",
+          "path": "tokenizer.json",
+          "target": "tokenizer.json",
+          "size": 11424519,
+          "sha256": "acc421e81ca50fc0ca8f0f78ab773aea5cce350f0c259caa23782e07b2627e1e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/kurisu/tokenizer.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Makise_Kurisu_Qwen3_TTS",
+          "revision": "e85b16d18c38bd315f1b5687383d20e98d8bb4df",
+          "path": "added_tokens.json",
+          "target": "added_tokens.json",
+          "size": 942,
+          "gitSha1": "e9165960204fbf3a7c22fd4987aec25c04555865",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/kurisu/added_tokens.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Makise_Kurisu_Qwen3_TTS",
+          "revision": "e85b16d18c38bd315f1b5687383d20e98d8bb4df",
+          "path": "special_tokens_map.json",
+          "target": "special_tokens_map.json",
+          "size": 1008,
+          "gitSha1": "fca9909b535ff91b68474e5ee7258e1574e60d1e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/kurisu/special_tokens_map.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Makise_Kurisu_Qwen3_TTS",
+          "revision": "e85b16d18c38bd315f1b5687383d20e98d8bb4df",
+          "path": "merges.txt",
+          "target": "merges.txt",
+          "size": 1671853,
+          "gitSha1": "31349551d90c7606f325fe0f11bbb8bd5fa0d7c7",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/kurisu/merges.txt"
+          ]
+        },
+        {
+          "repository": "starrydark/Makise_Kurisu_Qwen3_TTS",
+          "revision": "e85b16d18c38bd315f1b5687383d20e98d8bb4df",
+          "path": "vocab.json",
+          "target": "vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/kurisu/vocab.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Makise_Kurisu_Qwen3_TTS",
+          "revision": "e85b16d18c38bd315f1b5687383d20e98d8bb4df",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 3833402520,
+          "sha256": "db51266faa5bb62a0eaa91d118ca39ca51de92dc2043eb644f9b9bb88e7989ef",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/kurisu/model.safetensors"
+          ]
+        },
+        {
+          "repository": "starrydark/Makise_Kurisu_Qwen3_TTS",
+          "revision": "e85b16d18c38bd315f1b5687383d20e98d8bb4df",
+          "path": "speech_tokenizer/config.json",
+          "target": "speech_tokenizer/config.json",
+          "size": 2336,
+          "gitSha1": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/kurisu/speech_tokenizer/config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Makise_Kurisu_Qwen3_TTS",
+          "revision": "e85b16d18c38bd315f1b5687383d20e98d8bb4df",
+          "path": "speech_tokenizer/configuration.json",
+          "target": "speech_tokenizer/configuration.json",
+          "size": 76,
+          "gitSha1": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/kurisu/speech_tokenizer/configuration.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Makise_Kurisu_Qwen3_TTS",
+          "revision": "e85b16d18c38bd315f1b5687383d20e98d8bb4df",
+          "path": "speech_tokenizer/preprocessor_config.json",
+          "target": "speech_tokenizer/preprocessor_config.json",
+          "size": 234,
+          "gitSha1": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/kurisu/speech_tokenizer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Makise_Kurisu_Qwen3_TTS",
+          "revision": "e85b16d18c38bd315f1b5687383d20e98d8bb4df",
+          "path": "speech_tokenizer/model.safetensors",
+          "target": "speech_tokenizer/model.safetensors",
+          "size": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/kurisu/speech_tokenizer/model.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices custom_voice",
+      "status": "experimental",
+      "reference": null,
+      "notes": [
+        "Not yet measured on the production RTX 3060 Ti 8 GB; English quality requires auditioning."
+      ]
+    },
+    "voice-furina": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "Karthikappi0011/genshin-furina-english-qwen3-tts",
+          "revision": "b07a0c5f4889400914d9beee83a28ef9bb82bbba",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 4524,
+          "gitSha1": "51705f3174f0f7c4722aae5a43ce5a431b0a1954",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/furina/config.json"
+          ]
+        },
+        {
+          "repository": "Karthikappi0011/genshin-furina-english-qwen3-tts",
+          "revision": "b07a0c5f4889400914d9beee83a28ef9bb82bbba",
+          "path": "generation_config.json",
+          "target": "generation_config.json",
+          "size": 245,
+          "gitSha1": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/furina/generation_config.json"
+          ]
+        },
+        {
+          "repository": "Karthikappi0011/genshin-furina-english-qwen3-tts",
+          "revision": "b07a0c5f4889400914d9beee83a28ef9bb82bbba",
+          "path": "preprocessor_config.json",
+          "target": "preprocessor_config.json",
+          "size": 127,
+          "gitSha1": "0525dd953bb9241912f7147666f0d535165d5d4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/furina/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "Karthikappi0011/genshin-furina-english-qwen3-tts",
+          "revision": "b07a0c5f4889400914d9beee83a28ef9bb82bbba",
+          "path": "tokenizer_config.json",
+          "target": "tokenizer_config.json",
+          "size": 7344,
+          "gitSha1": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/furina/tokenizer_config.json"
+          ]
+        },
+        {
+          "repository": "Karthikappi0011/genshin-furina-english-qwen3-tts",
+          "revision": "b07a0c5f4889400914d9beee83a28ef9bb82bbba",
+          "path": "merges.txt",
+          "target": "merges.txt",
+          "size": 1671839,
+          "gitSha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/furina/merges.txt"
+          ]
+        },
+        {
+          "repository": "Karthikappi0011/genshin-furina-english-qwen3-tts",
+          "revision": "b07a0c5f4889400914d9beee83a28ef9bb82bbba",
+          "path": "vocab.json",
+          "target": "vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/furina/vocab.json"
+          ]
+        },
+        {
+          "repository": "Karthikappi0011/genshin-furina-english-qwen3-tts",
+          "revision": "b07a0c5f4889400914d9beee83a28ef9bb82bbba",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 3833402520,
+          "sha256": "272ace840b2c2f27fa5913e050cc559588cf18c91292ad3e4b5d9eebfe701800",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/furina/model.safetensors"
+          ]
+        },
+        {
+          "repository": "Karthikappi0011/genshin-furina-english-qwen3-tts",
+          "revision": "b07a0c5f4889400914d9beee83a28ef9bb82bbba",
+          "path": "speech_tokenizer/config.json",
+          "target": "speech_tokenizer/config.json",
+          "size": 2336,
+          "gitSha1": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/furina/speech_tokenizer/config.json"
+          ]
+        },
+        {
+          "repository": "Karthikappi0011/genshin-furina-english-qwen3-tts",
+          "revision": "b07a0c5f4889400914d9beee83a28ef9bb82bbba",
+          "path": "speech_tokenizer/configuration.json",
+          "target": "speech_tokenizer/configuration.json",
+          "size": 76,
+          "gitSha1": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/furina/speech_tokenizer/configuration.json"
+          ]
+        },
+        {
+          "repository": "Karthikappi0011/genshin-furina-english-qwen3-tts",
+          "revision": "b07a0c5f4889400914d9beee83a28ef9bb82bbba",
+          "path": "speech_tokenizer/preprocessor_config.json",
+          "target": "speech_tokenizer/preprocessor_config.json",
+          "size": 234,
+          "gitSha1": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/furina/speech_tokenizer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "Karthikappi0011/genshin-furina-english-qwen3-tts",
+          "revision": "b07a0c5f4889400914d9beee83a28ef9bb82bbba",
+          "path": "speech_tokenizer/model.safetensors",
+          "target": "speech_tokenizer/model.safetensors",
+          "size": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/furina/speech_tokenizer/model.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices custom_voice",
+      "status": "experimental",
+      "reference": null,
+      "notes": [
+        "Not yet measured on the production RTX 3060 Ti 8 GB; English quality requires auditioning."
+      ]
+    },
+    "voice-bangdream": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "starrydark/BanG_Dream_Qwen3_TTS",
+          "revision": "96d658a4bdbcf8294aec6a331d496295093f6dc3",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 7022,
+          "gitSha1": "31768b1d05a98bb44b347164f0d942e25fe6a7be",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/bangdream/config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/BanG_Dream_Qwen3_TTS",
+          "revision": "96d658a4bdbcf8294aec6a331d496295093f6dc3",
+          "path": "generation_config.json",
+          "target": "generation_config.json",
+          "size": 245,
+          "gitSha1": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/bangdream/generation_config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/BanG_Dream_Qwen3_TTS",
+          "revision": "96d658a4bdbcf8294aec6a331d496295093f6dc3",
+          "path": "preprocessor_config.json",
+          "target": "preprocessor_config.json",
+          "size": 127,
+          "gitSha1": "0525dd953bb9241912f7147666f0d535165d5d4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/bangdream/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/BanG_Dream_Qwen3_TTS",
+          "revision": "96d658a4bdbcf8294aec6a331d496295093f6dc3",
+          "path": "tokenizer_config.json",
+          "target": "tokenizer_config.json",
+          "size": 7344,
+          "gitSha1": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/bangdream/tokenizer_config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/BanG_Dream_Qwen3_TTS",
+          "revision": "96d658a4bdbcf8294aec6a331d496295093f6dc3",
+          "path": "merges.txt",
+          "target": "merges.txt",
+          "size": 1671839,
+          "gitSha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/bangdream/merges.txt"
+          ]
+        },
+        {
+          "repository": "starrydark/BanG_Dream_Qwen3_TTS",
+          "revision": "96d658a4bdbcf8294aec6a331d496295093f6dc3",
+          "path": "vocab.json",
+          "target": "vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/bangdream/vocab.json"
+          ]
+        },
+        {
+          "repository": "starrydark/BanG_Dream_Qwen3_TTS",
+          "revision": "96d658a4bdbcf8294aec6a331d496295093f6dc3",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 3833402520,
+          "sha256": "27652e20bfe26bfe01747d482c9996ffcfe2c777759e869721ec27fa2893c60f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/bangdream/model.safetensors"
+          ]
+        },
+        {
+          "repository": "starrydark/BanG_Dream_Qwen3_TTS",
+          "revision": "96d658a4bdbcf8294aec6a331d496295093f6dc3",
+          "path": "speech_tokenizer/config.json",
+          "target": "speech_tokenizer/config.json",
+          "size": 2336,
+          "gitSha1": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/bangdream/speech_tokenizer/config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/BanG_Dream_Qwen3_TTS",
+          "revision": "96d658a4bdbcf8294aec6a331d496295093f6dc3",
+          "path": "speech_tokenizer/configuration.json",
+          "target": "speech_tokenizer/configuration.json",
+          "size": 76,
+          "gitSha1": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/bangdream/speech_tokenizer/configuration.json"
+          ]
+        },
+        {
+          "repository": "starrydark/BanG_Dream_Qwen3_TTS",
+          "revision": "96d658a4bdbcf8294aec6a331d496295093f6dc3",
+          "path": "speech_tokenizer/preprocessor_config.json",
+          "target": "speech_tokenizer/preprocessor_config.json",
+          "size": 234,
+          "gitSha1": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/bangdream/speech_tokenizer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/BanG_Dream_Qwen3_TTS",
+          "revision": "96d658a4bdbcf8294aec6a331d496295093f6dc3",
+          "path": "speech_tokenizer/model.safetensors",
+          "target": "speech_tokenizer/model.safetensors",
+          "size": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/bangdream/speech_tokenizer/model.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices custom_voice",
+      "status": "experimental",
+      "reference": null,
+      "notes": [
+        "Not yet measured on the production RTX 3060 Ti 8 GB; English quality requires auditioning."
+      ]
+    },
+    "voice-tomoko": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "quarterturn/kuroki-tomoko-qwen3-tts-1.7b",
+          "revision": "830c00d19885d83a201d3bfb4f39c7fab022ecc2",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 4538,
+          "gitSha1": "ae0614f4fdf7a0682add20e303d24562a7aa6ea8",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tomoko/config.json"
+          ]
+        },
+        {
+          "repository": "quarterturn/kuroki-tomoko-qwen3-tts-1.7b",
+          "revision": "830c00d19885d83a201d3bfb4f39c7fab022ecc2",
+          "path": "generation_config.json",
+          "target": "generation_config.json",
+          "size": 245,
+          "gitSha1": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tomoko/generation_config.json"
+          ]
+        },
+        {
+          "repository": "quarterturn/kuroki-tomoko-qwen3-tts-1.7b",
+          "revision": "830c00d19885d83a201d3bfb4f39c7fab022ecc2",
+          "path": "preprocessor_config.json",
+          "target": "preprocessor_config.json",
+          "size": 127,
+          "gitSha1": "0525dd953bb9241912f7147666f0d535165d5d4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tomoko/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "quarterturn/kuroki-tomoko-qwen3-tts-1.7b",
+          "revision": "830c00d19885d83a201d3bfb4f39c7fab022ecc2",
+          "path": "tokenizer_config.json",
+          "target": "tokenizer_config.json",
+          "size": 7344,
+          "gitSha1": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tomoko/tokenizer_config.json"
+          ]
+        },
+        {
+          "repository": "quarterturn/kuroki-tomoko-qwen3-tts-1.7b",
+          "revision": "830c00d19885d83a201d3bfb4f39c7fab022ecc2",
+          "path": "merges.txt",
+          "target": "merges.txt",
+          "size": 1671839,
+          "gitSha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tomoko/merges.txt"
+          ]
+        },
+        {
+          "repository": "quarterturn/kuroki-tomoko-qwen3-tts-1.7b",
+          "revision": "830c00d19885d83a201d3bfb4f39c7fab022ecc2",
+          "path": "vocab.json",
+          "target": "vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tomoko/vocab.json"
+          ]
+        },
+        {
+          "repository": "quarterturn/kuroki-tomoko-qwen3-tts-1.7b",
+          "revision": "830c00d19885d83a201d3bfb4f39c7fab022ecc2",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 3833402520,
+          "sha256": "f70b607cb68f41311109b2882897cdb5239ef4ece710e43c14b5840ef36360e8",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tomoko/model.safetensors"
+          ]
+        },
+        {
+          "repository": "quarterturn/kuroki-tomoko-qwen3-tts-1.7b",
+          "revision": "830c00d19885d83a201d3bfb4f39c7fab022ecc2",
+          "path": "speech_tokenizer/config.json",
+          "target": "speech_tokenizer/config.json",
+          "size": 2336,
+          "gitSha1": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tomoko/speech_tokenizer/config.json"
+          ]
+        },
+        {
+          "repository": "quarterturn/kuroki-tomoko-qwen3-tts-1.7b",
+          "revision": "830c00d19885d83a201d3bfb4f39c7fab022ecc2",
+          "path": "speech_tokenizer/configuration.json",
+          "target": "speech_tokenizer/configuration.json",
+          "size": 76,
+          "gitSha1": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tomoko/speech_tokenizer/configuration.json"
+          ]
+        },
+        {
+          "repository": "quarterturn/kuroki-tomoko-qwen3-tts-1.7b",
+          "revision": "830c00d19885d83a201d3bfb4f39c7fab022ecc2",
+          "path": "speech_tokenizer/preprocessor_config.json",
+          "target": "speech_tokenizer/preprocessor_config.json",
+          "size": 234,
+          "gitSha1": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tomoko/speech_tokenizer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "quarterturn/kuroki-tomoko-qwen3-tts-1.7b",
+          "revision": "830c00d19885d83a201d3bfb4f39c7fab022ecc2",
+          "path": "speech_tokenizer/model.safetensors",
+          "target": "speech_tokenizer/model.safetensors",
+          "size": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tomoko/speech_tokenizer/model.safetensors"
+          ]
+        },
+        {
+          "repository": "quarterturn/kuroki-tomoko-qwen3-tts-1.7b",
+          "revision": "830c00d19885d83a201d3bfb4f39c7fab022ecc2",
+          "path": "tomoko88.wav",
+          "target": "tomoko88.wav",
+          "size": 291276,
+          "sha256": "11ef68aa097077d5f14dced6055f79818a3053f59a928c6ecd932c8cacb8b9d2",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tomoko/tomoko88.wav"
+          ]
+        },
+        {
+          "repository": "quarterturn/kuroki-tomoko-qwen3-tts-1.7b",
+          "revision": "830c00d19885d83a201d3bfb4f39c7fab022ecc2",
+          "path": "tomoko88.txt",
+          "target": "tomoko88.txt",
+          "size": 109,
+          "gitSha1": "946a41cefc8d5ac11ad12bfb6501d4c775f12f73",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tomoko/tomoko88.txt"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices custom_voice",
+      "status": "experimental",
+      "reference": {
+        "audio": "tomoko88.wav",
+        "textFile": "tomoko88.txt"
+      },
+      "notes": [
+        "Not yet measured on the production RTX 3060 Ti 8 GB; English quality requires auditioning.",
+        "Author documents a reference-audio inference route; the pinned config also contains learned speaker kuroki_tomoko."
+      ]
+    },
+    "voice-nefer": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 4522,
+          "gitSha1": "cc1f78f6ba3d3e76d6cfc2c7c551ad726bf3b06b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/config.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "generation_config.json",
+          "target": "generation_config.json",
+          "size": 245,
+          "gitSha1": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/generation_config.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "preprocessor_config.json",
+          "target": "preprocessor_config.json",
+          "size": 127,
+          "gitSha1": "0525dd953bb9241912f7147666f0d535165d5d4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "tokenizer_config.json",
+          "target": "tokenizer_config.json",
+          "size": 7344,
+          "gitSha1": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/tokenizer_config.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "merges.txt",
+          "target": "merges.txt",
+          "size": 1671839,
+          "gitSha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/merges.txt"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "vocab.json",
+          "target": "vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/vocab.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 3623203864,
+          "sha256": "e156ceca92da9bf713948b19b6c4fcadc264da778482f1d09ff52c8998906f0c",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/model.safetensors"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "speech_tokenizer/config.json",
+          "target": "speech_tokenizer/config.json",
+          "size": 2336,
+          "gitSha1": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/speech_tokenizer/config.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "speech_tokenizer/configuration.json",
+          "target": "speech_tokenizer/configuration.json",
+          "size": 76,
+          "gitSha1": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/speech_tokenizer/configuration.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "speech_tokenizer/preprocessor_config.json",
+          "target": "speech_tokenizer/preprocessor_config.json",
+          "size": 234,
+          "gitSha1": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/speech_tokenizer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "speech_tokenizer/model.safetensors",
+          "target": "speech_tokenizer/model.safetensors",
+          "size": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/speech_tokenizer/model.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices custom_voice",
+      "status": "experimental",
+      "reference": null,
+      "notes": [
+        "Not yet measured on the production RTX 3060 Ti 8 GB; English quality requires auditioning.",
+        "Root checkpoint must be loaded together with the supplied LoRA adapter; no reference audio is required for that route.",
+        "Root checkpoint requires voice-nefer-adapter; load with PEFT and merge in memory only."
+      ]
+    },
+    "voice-nefer-adapter": {
+      "enabled": true,
+      "kind": "adapter",
+      "files": [
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "adapter/adapter_config.json",
+          "target": "adapter/adapter_config.json",
+          "size": 1265,
+          "gitSha1": "69dd539fa8d9afbf68a396e0a1f6536394318de8",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/adapter/adapter_config.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "adapter/adapter_model.safetensors",
+          "target": "adapter/adapter_model.safetensors",
+          "size": 47645144,
+          "sha256": "b968268cb0e727b53ff054580cf3fe2a330665fccc2b03094ca081c154d3038e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/adapter/adapter_model.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [
+        "voice-nefer"
+      ],
+      "compatibility": "consumer-evidenced",
+      "loader": "PeftModel.from_pretrained(root_model, local_adapter_path/adapter).merge_and_unload(); do not persist over base",
+      "base": "voice-nefer",
+      "baseSources": [
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9"
+        }
+      ]
+    },
+    "voice-ellen": {
+      "enabled": true,
+      "kind": "merged-checkpoint",
+      "files": [
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-ellen-200steps-2026-10-02",
+          "revision": "2974aaf4f02e8374f1f5a5b85ace961ce0ee976f",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 4492,
+          "gitSha1": "ac6451e987af99db6dc354a02c6e08198b53ba34",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/ellen/config.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-ellen-200steps-2026-10-02",
+          "revision": "2974aaf4f02e8374f1f5a5b85ace961ce0ee976f",
+          "path": "generation_config.json",
+          "target": "generation_config.json",
+          "size": 245,
+          "gitSha1": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/ellen/generation_config.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-ellen-200steps-2026-10-02",
+          "revision": "2974aaf4f02e8374f1f5a5b85ace961ce0ee976f",
+          "path": "preprocessor_config.json",
+          "target": "preprocessor_config.json",
+          "size": 127,
+          "gitSha1": "0525dd953bb9241912f7147666f0d535165d5d4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/ellen/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-ellen-200steps-2026-10-02",
+          "revision": "2974aaf4f02e8374f1f5a5b85ace961ce0ee976f",
+          "path": "tokenizer_config.json",
+          "target": "tokenizer_config.json",
+          "size": 7344,
+          "gitSha1": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/ellen/tokenizer_config.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-ellen-200steps-2026-10-02",
+          "revision": "2974aaf4f02e8374f1f5a5b85ace961ce0ee976f",
+          "path": "merges.txt",
+          "target": "merges.txt",
+          "size": 1671839,
+          "gitSha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/ellen/merges.txt"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-ellen-200steps-2026-10-02",
+          "revision": "2974aaf4f02e8374f1f5a5b85ace961ce0ee976f",
+          "path": "vocab.json",
+          "target": "vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/ellen/vocab.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-ellen-200steps-2026-10-02",
+          "revision": "2974aaf4f02e8374f1f5a5b85ace961ce0ee976f",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 3658630272,
+          "sha256": "05aa63a585f3d1696a9fd363415880de9b41e1083f66ffd2efcd679d0f29ff7d",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/ellen/model.safetensors"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-ellen-200steps-2026-10-02",
+          "revision": "2974aaf4f02e8374f1f5a5b85ace961ce0ee976f",
+          "path": "speech_tokenizer/config.json",
+          "target": "speech_tokenizer/config.json",
+          "size": 2336,
+          "gitSha1": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/ellen/speech_tokenizer/config.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-ellen-200steps-2026-10-02",
+          "revision": "2974aaf4f02e8374f1f5a5b85ace961ce0ee976f",
+          "path": "speech_tokenizer/configuration.json",
+          "target": "speech_tokenizer/configuration.json",
+          "size": 76,
+          "gitSha1": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/ellen/speech_tokenizer/configuration.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-ellen-200steps-2026-10-02",
+          "revision": "2974aaf4f02e8374f1f5a5b85ace961ce0ee976f",
+          "path": "speech_tokenizer/preprocessor_config.json",
+          "target": "speech_tokenizer/preprocessor_config.json",
+          "size": 234,
+          "gitSha1": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/ellen/speech_tokenizer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-ellen-200steps-2026-10-02",
+          "revision": "2974aaf4f02e8374f1f5a5b85ace961ce0ee976f",
+          "path": "speech_tokenizer/model.safetensors",
+          "target": "speech_tokenizer/model.safetensors",
+          "size": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/ellen/speech_tokenizer/model.safetensors"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-ellen-200steps-2026-10-02",
+          "revision": "2974aaf4f02e8374f1f5a5b85ace961ce0ee976f",
+          "path": "voices/data/train-00000-of-00001.parquet",
+          "target": "voices/data/train-00000-of-00001.parquet",
+          "size": 226945,
+          "sha256": "bde6da7a1f489e05db7624703940a92b85e24e733c97465657ff142b7c797867",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/ellen/voices/data/train-00000-of-00001.parquet"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices base",
+      "status": "experimental",
+      "reference": {
+        "audio": "reference.wav",
+        "textFile": "reference.txt"
+      },
+      "notes": [
+        "Not yet measured on the production RTX 3060 Ti 8 GB; English quality requires auditioning.",
+        "Chinese-trained; English voice quality is unverified. Reference audio and transcript are extracted from the supplied inference voice asset, not the training dataset."
+      ],
+      "referencePreparation": {
+        "file": "voices/data/train-00000-of-00001.parquet",
+        "speaker": "ellen",
+        "audio": "reference.wav",
+        "textFile": "reference.txt"
+      }
+    },
+    "voice-jane": {
+      "enabled": true,
+      "kind": "merged-checkpoint",
+      "files": [
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-jane-200steps-2026-10-02",
+          "revision": "865808bb44e7cc7db181d787599679a64893a86c",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 4492,
+          "gitSha1": "ac6451e987af99db6dc354a02c6e08198b53ba34",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/jane/config.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-jane-200steps-2026-10-02",
+          "revision": "865808bb44e7cc7db181d787599679a64893a86c",
+          "path": "generation_config.json",
+          "target": "generation_config.json",
+          "size": 245,
+          "gitSha1": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/jane/generation_config.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-jane-200steps-2026-10-02",
+          "revision": "865808bb44e7cc7db181d787599679a64893a86c",
+          "path": "preprocessor_config.json",
+          "target": "preprocessor_config.json",
+          "size": 127,
+          "gitSha1": "0525dd953bb9241912f7147666f0d535165d5d4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/jane/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-jane-200steps-2026-10-02",
+          "revision": "865808bb44e7cc7db181d787599679a64893a86c",
+          "path": "tokenizer_config.json",
+          "target": "tokenizer_config.json",
+          "size": 7344,
+          "gitSha1": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/jane/tokenizer_config.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-jane-200steps-2026-10-02",
+          "revision": "865808bb44e7cc7db181d787599679a64893a86c",
+          "path": "merges.txt",
+          "target": "merges.txt",
+          "size": 1671839,
+          "gitSha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/jane/merges.txt"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-jane-200steps-2026-10-02",
+          "revision": "865808bb44e7cc7db181d787599679a64893a86c",
+          "path": "vocab.json",
+          "target": "vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/jane/vocab.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-jane-200steps-2026-10-02",
+          "revision": "865808bb44e7cc7db181d787599679a64893a86c",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 3658630272,
+          "sha256": "ec88b771b92ef8f635a0992873044a19123507b73ab7591b242825ee1a5e7df9",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/jane/model.safetensors"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-jane-200steps-2026-10-02",
+          "revision": "865808bb44e7cc7db181d787599679a64893a86c",
+          "path": "speech_tokenizer/config.json",
+          "target": "speech_tokenizer/config.json",
+          "size": 2336,
+          "gitSha1": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/jane/speech_tokenizer/config.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-jane-200steps-2026-10-02",
+          "revision": "865808bb44e7cc7db181d787599679a64893a86c",
+          "path": "speech_tokenizer/configuration.json",
+          "target": "speech_tokenizer/configuration.json",
+          "size": 76,
+          "gitSha1": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/jane/speech_tokenizer/configuration.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-jane-200steps-2026-10-02",
+          "revision": "865808bb44e7cc7db181d787599679a64893a86c",
+          "path": "speech_tokenizer/preprocessor_config.json",
+          "target": "speech_tokenizer/preprocessor_config.json",
+          "size": 234,
+          "gitSha1": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/jane/speech_tokenizer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-jane-200steps-2026-10-02",
+          "revision": "865808bb44e7cc7db181d787599679a64893a86c",
+          "path": "speech_tokenizer/model.safetensors",
+          "target": "speech_tokenizer/model.safetensors",
+          "size": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/jane/speech_tokenizer/model.safetensors"
+          ]
+        },
+        {
+          "repository": "MigoXV/qwen3-tts-0.6b-lora-jane-200steps-2026-10-02",
+          "revision": "865808bb44e7cc7db181d787599679a64893a86c",
+          "path": "voices/data/train-00000-of-00001.parquet",
+          "target": "voices/data/train-00000-of-00001.parquet",
+          "size": 216272,
+          "sha256": "e652dd2806930a0b5a68ab5ea774d3ecfdc0856cef3e52480dd67559c6f33195",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/jane/voices/data/train-00000-of-00001.parquet"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices base",
+      "status": "experimental",
+      "reference": {
+        "audio": "reference.wav",
+        "textFile": "reference.txt"
+      },
+      "notes": [
+        "Not yet measured on the production RTX 3060 Ti 8 GB; English quality requires auditioning.",
+        "Chinese-trained; English voice quality is unverified. Reference audio and transcript are extracted from the supplied inference voice asset, not the training dataset."
+      ],
+      "referencePreparation": {
+        "file": "voices/data/train-00000-of-00001.parquet",
+        "speaker": "jane",
+        "audio": "reference.wav",
+        "textFile": "reference.txt"
+      }
+    },
+    "voice-tricolour": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "starrydark/Tricolour_Lovestory_Qwen3_TTS",
+          "revision": "7b9c45391cce941dbb089c183e3c8a264bd64f0d",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 5529,
+          "gitSha1": "4ed350068a128752ad3ee44e5389ad59e8d96eae",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tricolour/config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Tricolour_Lovestory_Qwen3_TTS",
+          "revision": "7b9c45391cce941dbb089c183e3c8a264bd64f0d",
+          "path": "generation_config.json",
+          "target": "generation_config.json",
+          "size": 245,
+          "gitSha1": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tricolour/generation_config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Tricolour_Lovestory_Qwen3_TTS",
+          "revision": "7b9c45391cce941dbb089c183e3c8a264bd64f0d",
+          "path": "preprocessor_config.json",
+          "target": "preprocessor_config.json",
+          "size": 127,
+          "gitSha1": "0525dd953bb9241912f7147666f0d535165d5d4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tricolour/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Tricolour_Lovestory_Qwen3_TTS",
+          "revision": "7b9c45391cce941dbb089c183e3c8a264bd64f0d",
+          "path": "tokenizer_config.json",
+          "target": "tokenizer_config.json",
+          "size": 7344,
+          "gitSha1": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tricolour/tokenizer_config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Tricolour_Lovestory_Qwen3_TTS",
+          "revision": "7b9c45391cce941dbb089c183e3c8a264bd64f0d",
+          "path": "merges.txt",
+          "target": "merges.txt",
+          "size": 1671839,
+          "gitSha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tricolour/merges.txt"
+          ]
+        },
+        {
+          "repository": "starrydark/Tricolour_Lovestory_Qwen3_TTS",
+          "revision": "7b9c45391cce941dbb089c183e3c8a264bd64f0d",
+          "path": "vocab.json",
+          "target": "vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tricolour/vocab.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Tricolour_Lovestory_Qwen3_TTS",
+          "revision": "7b9c45391cce941dbb089c183e3c8a264bd64f0d",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 3833402520,
+          "sha256": "b5a1d767b25f34f5cced00829476da04e6248f205f8589de700114bce64cc203",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tricolour/model.safetensors"
+          ]
+        },
+        {
+          "repository": "starrydark/Tricolour_Lovestory_Qwen3_TTS",
+          "revision": "7b9c45391cce941dbb089c183e3c8a264bd64f0d",
+          "path": "speech_tokenizer/config.json",
+          "target": "speech_tokenizer/config.json",
+          "size": 2336,
+          "gitSha1": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tricolour/speech_tokenizer/config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Tricolour_Lovestory_Qwen3_TTS",
+          "revision": "7b9c45391cce941dbb089c183e3c8a264bd64f0d",
+          "path": "speech_tokenizer/configuration.json",
+          "target": "speech_tokenizer/configuration.json",
+          "size": 76,
+          "gitSha1": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tricolour/speech_tokenizer/configuration.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Tricolour_Lovestory_Qwen3_TTS",
+          "revision": "7b9c45391cce941dbb089c183e3c8a264bd64f0d",
+          "path": "speech_tokenizer/preprocessor_config.json",
+          "target": "speech_tokenizer/preprocessor_config.json",
+          "size": 234,
+          "gitSha1": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tricolour/speech_tokenizer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "starrydark/Tricolour_Lovestory_Qwen3_TTS",
+          "revision": "7b9c45391cce941dbb089c183e3c8a264bd64f0d",
+          "path": "speech_tokenizer/model.safetensors",
+          "target": "speech_tokenizer/model.safetensors",
+          "size": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/tricolour/speech_tokenizer/model.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices custom_voice",
+      "status": "experimental",
+      "reference": null,
+      "notes": [
+        "Not yet measured on the production RTX 3060 Ti 8 GB; English quality requires auditioning.",
+        "In the development audition, moxiaoju's initial English phrase had automatic-transcription errors; other speakers were not auditioned."
+      ]
+    },
+    "voice-elaina": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "yeeko/Elaina_TTS_QWen3_SFT_Epoch16",
+          "revision": "ff663d1b49b75e994df48afbba4c9890dba13502",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 4822,
+          "gitSha1": "1f27d1a7de9ab650c63e7cf4273566e611c0655d",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/elaina/config.json"
+          ]
+        },
+        {
+          "repository": "yeeko/Elaina_TTS_QWen3_SFT_Epoch16",
+          "revision": "ff663d1b49b75e994df48afbba4c9890dba13502",
+          "path": "generation_config.json",
+          "target": "generation_config.json",
+          "size": 245,
+          "gitSha1": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/elaina/generation_config.json"
+          ]
+        },
+        {
+          "repository": "yeeko/Elaina_TTS_QWen3_SFT_Epoch16",
+          "revision": "ff663d1b49b75e994df48afbba4c9890dba13502",
+          "path": "preprocessor_config.json",
+          "target": "preprocessor_config.json",
+          "size": 127,
+          "gitSha1": "0525dd953bb9241912f7147666f0d535165d5d4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/elaina/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "yeeko/Elaina_TTS_QWen3_SFT_Epoch16",
+          "revision": "ff663d1b49b75e994df48afbba4c9890dba13502",
+          "path": "tokenizer_config.json",
+          "target": "tokenizer_config.json",
+          "size": 7344,
+          "gitSha1": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/elaina/tokenizer_config.json"
+          ]
+        },
+        {
+          "repository": "yeeko/Elaina_TTS_QWen3_SFT_Epoch16",
+          "revision": "ff663d1b49b75e994df48afbba4c9890dba13502",
+          "path": "merges.txt",
+          "target": "merges.txt",
+          "size": 1671839,
+          "gitSha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/elaina/merges.txt"
+          ]
+        },
+        {
+          "repository": "yeeko/Elaina_TTS_QWen3_SFT_Epoch16",
+          "revision": "ff663d1b49b75e994df48afbba4c9890dba13502",
+          "path": "vocab.json",
+          "target": "vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/elaina/vocab.json"
+          ]
+        },
+        {
+          "repository": "yeeko/Elaina_TTS_QWen3_SFT_Epoch16",
+          "revision": "ff663d1b49b75e994df48afbba4c9890dba13502",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 3833402520,
+          "sha256": "7c027c370863d6316c751f72259936dfdd9d930274c749055c4927fe53ab1531",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/elaina/model.safetensors"
+          ]
+        },
+        {
+          "repository": "yeeko/Elaina_TTS_QWen3_SFT_Epoch16",
+          "revision": "ff663d1b49b75e994df48afbba4c9890dba13502",
+          "path": "speech_tokenizer/config.json",
+          "target": "speech_tokenizer/config.json",
+          "size": 2336,
+          "gitSha1": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/elaina/speech_tokenizer/config.json"
+          ]
+        },
+        {
+          "repository": "yeeko/Elaina_TTS_QWen3_SFT_Epoch16",
+          "revision": "ff663d1b49b75e994df48afbba4c9890dba13502",
+          "path": "speech_tokenizer/configuration.json",
+          "target": "speech_tokenizer/configuration.json",
+          "size": 76,
+          "gitSha1": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/elaina/speech_tokenizer/configuration.json"
+          ]
+        },
+        {
+          "repository": "yeeko/Elaina_TTS_QWen3_SFT_Epoch16",
+          "revision": "ff663d1b49b75e994df48afbba4c9890dba13502",
+          "path": "speech_tokenizer/preprocessor_config.json",
+          "target": "speech_tokenizer/preprocessor_config.json",
+          "size": 234,
+          "gitSha1": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/elaina/speech_tokenizer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "yeeko/Elaina_TTS_QWen3_SFT_Epoch16",
+          "revision": "ff663d1b49b75e994df48afbba4c9890dba13502",
+          "path": "speech_tokenizer/model.safetensors",
+          "target": "speech_tokenizer/model.safetensors",
+          "size": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/elaina/speech_tokenizer/model.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices custom_voice",
+      "status": "experimental",
+      "reference": null,
+      "notes": [
+        "Not yet measured on the production RTX 3060 Ti 8 GB; English quality requires auditioning.",
+        "Model card calls this an adapter, but the pinned repository contains a full model.safetensors and custom_voice config with elaina speaker. English quality is unverified."
+      ]
+    },
+    "h3": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "FenomAI/MiniMax-H3",
+          "revision": "15646562c19be9d62aee6d28a7070d00d026027c",
+          "path": "minimax_h3_ref2va_pruned_nvfp4.safetensors",
+          "target": "minimax_h3_ref2va_pruned_nvfp4.safetensors",
+          "size": 12528636800,
+          "sha256": "8eea02f43902e69904990c4405968d01a13c6656aa392d37ab80331e79b5df2f",
+          "imports": [
+            "/home/jesse/orca/workspaces/inclusive-skateboarding/Generation-Procedure/.models/minimax_h3_ref2va_pruned_nvfp4.safetensors"
+          ]
+        },
+        {
+          "repository": "FenomAI/MiniMax-H3",
+          "revision": "15646562c19be9d62aee6d28a7070d00d026027c",
+          "path": "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "target": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "size": 15687142551,
+          "sha256": "35a88d51044231fe332301d7a62aa81e3f2cba62febeb446e2c1e3e0ef76f2c6",
+          "imports": [
+            "/home/jesse/orca/workspaces/inclusive-skateboarding/Generation-Procedure/.models/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
+          ]
+        },
+        {
+          "repository": "FenomAI/MiniMax-H3",
+          "revision": "15646562c19be9d62aee6d28a7070d00d026027c",
+          "path": "vae/minimax_h3_video_vae_fp16.safetensors",
+          "target": "minimax_h3_video_vae_fp16.safetensors",
+          "size": 5207808496,
+          "sha256": "7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522",
+          "imports": [
+            "/home/jesse/orca/workspaces/inclusive-skateboarding/Generation-Procedure/.models/minimax_h3_video_vae_fp16.safetensors"
+          ]
+        },
+        {
+          "repository": "FenomAI/MiniMax-H3",
+          "revision": "15646562c19be9d62aee6d28a7070d00d026027c",
+          "path": "vae/minimax_h3_audio_vae_fp32.safetensors",
+          "target": "minimax_h3_audio_vae_fp32.safetensors",
+          "size": 605254808,
+          "sha256": "8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48",
+          "imports": [
+            "/home/jesse/orca/workspaces/inclusive-skateboarding/Generation-Procedure/.models/minimax_h3_audio_vae_fp32.safetensors"
+          ]
+        },
+        {
+          "repository": "LBH-123-AI/Minimax_h3_latent_Upscaler",
+          "revision": "27236837051793bc7cccf628e5936c6110361dab",
+          "path": "minimax_h3_latent_upscaler_3d_fp16.safetensors",
+          "target": "minimax_h3_latent_upscaler_3d_fp16.safetensors",
+          "size": 690592672,
+          "sha256": "043e5a48e161610ef6c3ea974645220354d06fa618abca15f76d084812eb55c2",
+          "imports": [
+            "/home/jesse/orca/workspaces/inclusive-skateboarding/Generation-Procedure/.models/minimax_h3_latent_upscaler_3d_fp16.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "scripts/run-h3.py --models $MODEL_ROOT/by-name/h3; separate ComfyUI environment required"
+    },
+    "whisper-tiny.en": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "Systran/faster-whisper-tiny.en",
+          "revision": "0d3d19a32d3338f10357c0889762bd8d64bbdeba",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 2317,
+          "gitSha1": "4065bb3bed375b176d5465be117d2d202e210434",
+          "imports": []
+        },
+        {
+          "repository": "Systran/faster-whisper-tiny.en",
+          "revision": "0d3d19a32d3338f10357c0889762bd8d64bbdeba",
+          "path": "model.bin",
+          "target": "model.bin",
+          "size": 75537502,
+          "sha256": "1a5afae06a4db91c975c9a9d78be5cc110ee4ea022ad57d55492e4550e936b2a",
+          "imports": []
+        },
+        {
+          "repository": "Systran/faster-whisper-tiny.en",
+          "revision": "0d3d19a32d3338f10357c0889762bd8d64bbdeba",
+          "path": "tokenizer.json",
+          "target": "tokenizer.json",
+          "size": 2128466,
+          "gitSha1": "15d7bdf9ba25718ca2504eec6a8f02bc55af0a6a",
+          "imports": []
+        },
+        {
+          "repository": "Systran/faster-whisper-tiny.en",
+          "revision": "0d3d19a32d3338f10357c0889762bd8d64bbdeba",
+          "path": "vocabulary.txt",
+          "target": "vocabulary.txt",
+          "size": 422309,
+          "gitSha1": "ee695b8d3e3c10d488304e04468efec4ca27554a",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "faster_whisper.WhisperModel(local_path, local_files_only=True)"
+    },
+    "skintokens": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "VAST-AI/SkinTokens",
+          "revision": "79736cad0fd84de384d5eede659b4ebd24effe33",
+          "path": "experiments/articulation_xl_quantization_256_token_4/grpo_1400.ckpt",
+          "target": "experiments/articulation_xl_quantization_256_token_4/grpo_1400.ckpt",
+          "size": 1131603979,
+          "sha256": "f4e4706a11cfb520cdde65156a0358545e4fbf8f36237aca01ea5e79d5cb5692",
+          "imports": []
+        },
+        {
+          "repository": "VAST-AI/SkinTokens",
+          "revision": "79736cad0fd84de384d5eede659b4ebd24effe33",
+          "path": "experiments/skin_vae_2_10_32768/last.ckpt",
+          "target": "experiments/skin_vae_2_10_32768/last.ckpt",
+          "size": 487311745,
+          "sha256": "4843f49e58afff88345806b94ca82e6cc9d8def6e7432e2853c677b154de0ed4",
+          "imports": []
+        },
+        {
+          "repository": "Qwen/Qwen3-0.6B",
+          "revision": "c1899de289a04d12100db370d81485cdf75e47ca",
+          "path": "config.json",
+          "target": "models/Qwen3-0.6B/config.json",
+          "size": 726,
+          "gitSha1": "f5c3703b78ae2a478ae15b247e9f855e0ce2107b",
+          "imports": []
+        },
+        {
+          "repository": "Qwen/Qwen3-0.6B",
+          "revision": "c1899de289a04d12100db370d81485cdf75e47ca",
+          "path": "generation_config.json",
+          "target": "models/Qwen3-0.6B/generation_config.json",
+          "size": 239,
+          "gitSha1": "20a8a9156fc8c3f25295ca067f61fdf120d517c5",
+          "imports": []
+        },
+        {
+          "repository": "Qwen/Qwen3-0.6B",
+          "revision": "c1899de289a04d12100db370d81485cdf75e47ca",
+          "path": "merges.txt",
+          "target": "models/Qwen3-0.6B/merges.txt",
+          "size": 1671853,
+          "gitSha1": "31349551d90c7606f325fe0f11bbb8bd5fa0d7c7",
+          "imports": []
+        },
+        {
+          "repository": "Qwen/Qwen3-0.6B",
+          "revision": "c1899de289a04d12100db370d81485cdf75e47ca",
+          "path": "tokenizer.json",
+          "target": "models/Qwen3-0.6B/tokenizer.json",
+          "size": 11422654,
+          "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+          "imports": []
+        },
+        {
+          "repository": "Qwen/Qwen3-0.6B",
+          "revision": "c1899de289a04d12100db370d81485cdf75e47ca",
+          "path": "tokenizer_config.json",
+          "target": "models/Qwen3-0.6B/tokenizer_config.json",
+          "size": 9732,
+          "gitSha1": "417d038a63fa3de29cfde265caedae14d1a58d92",
+          "imports": []
+        },
+        {
+          "repository": "Qwen/Qwen3-0.6B",
+          "revision": "c1899de289a04d12100db370d81485cdf75e47ca",
+          "path": "vocab.json",
+          "target": "models/Qwen3-0.6B/vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "See docs/local-models.md; runtime not provisioned by storage"
+    },
+    "unirig": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "VAST-AI/UniRig",
+          "revision": "36842e2b5947e9e60f89275b83208c8e74071c63",
+          "path": "skeleton/articulation-xl_quantization_256/model.ckpt",
+          "target": "skeleton/articulation-xl_quantization_256/model.ckpt",
+          "size": 1439617174,
+          "sha256": "d8cf9b42d56e7bc316d293597ecf8c4c39a8631cdd44a261ecf388242fabd0f4",
+          "imports": []
+        },
+        {
+          "repository": "VAST-AI/UniRig",
+          "revision": "36842e2b5947e9e60f89275b83208c8e74071c63",
+          "path": "skin/articulation-xl/model.ckpt",
+          "target": "skin/articulation-xl/model.ckpt",
+          "size": 4375464854,
+          "sha256": "9d40cf42fb9d4c10d8b373d9f4f557c6fbbc5ebacae7ae6b3dce5a0d8a18bc33",
+          "imports": []
+        },
+        {
+          "repository": "facebook/opt-350m",
+          "revision": "08ab08cc4b72ff5593870b5d527cf4230323703c",
+          "path": "config.json",
+          "target": "opt-350m/config.json",
+          "size": 644,
+          "gitSha1": "562d268bddb298d43b74a55c3197d1a011c473c4",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "UniRig pinned runtime; llm.pretrained_model_name_or_path=$MODEL_ROOT/by-name/unirig/opt-350m and explicit local resume_from_checkpoint paths"
+    },
+    "diff3f-sd15": {
+      "enabled": true,
+      "kind": "component",
+      "files": [
+        {
+          "repository": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+          "revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+          "path": "feature_extractor/preprocessor_config.json",
+          "target": "feature_extractor/preprocessor_config.json",
+          "size": 342,
+          "gitSha1": "5294955ff7801083f720b34b55d0f1f51313c5c5",
+          "imports": []
+        },
+        {
+          "repository": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+          "revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+          "path": "model_index.json",
+          "target": "model_index.json",
+          "size": 541,
+          "gitSha1": "daf7e2e2dfc64fb437a2b44525667111b00cb9fc",
+          "imports": []
+        },
+        {
+          "repository": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+          "revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+          "path": "scheduler/scheduler_config.json",
+          "target": "scheduler/scheduler_config.json",
+          "size": 308,
+          "gitSha1": "82d05b0e688d7ea94675678646c427907419346e",
+          "imports": []
+        },
+        {
+          "repository": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+          "revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+          "path": "text_encoder/config.json",
+          "target": "text_encoder/config.json",
+          "size": 617,
+          "gitSha1": "4d3e873ab5086ad989f407abd50fdce66db8d657",
+          "imports": []
+        },
+        {
+          "repository": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+          "revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+          "path": "text_encoder/model.safetensors",
+          "target": "text_encoder/model.safetensors",
+          "size": 492265874,
+          "sha256": "d008943c017f0092921106440254dbbe00b6a285f7883ec8ba160c3faad88334",
+          "imports": []
+        },
+        {
+          "repository": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+          "revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+          "path": "tokenizer/merges.txt",
+          "target": "tokenizer/merges.txt",
+          "size": 524619,
+          "gitSha1": "76e821f1b6f0a9709293c3b6b51ed90980b3166b",
+          "imports": []
+        },
+        {
+          "repository": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+          "revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+          "path": "tokenizer/special_tokens_map.json",
+          "target": "tokenizer/special_tokens_map.json",
+          "size": 472,
+          "gitSha1": "2c2130b544c0c5a72d5d00da071ba130a9800fb2",
+          "imports": []
+        },
+        {
+          "repository": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+          "revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+          "path": "tokenizer/tokenizer_config.json",
+          "target": "tokenizer/tokenizer_config.json",
+          "size": 806,
+          "gitSha1": "5ba7bf706515bc60487ad0e1816b4929b82542d6",
+          "imports": []
+        },
+        {
+          "repository": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+          "revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+          "path": "tokenizer/vocab.json",
+          "target": "tokenizer/vocab.json",
+          "size": 1059962,
+          "gitSha1": "469be27c5c010538f845f518c4f5e8574c78f7c8",
+          "imports": []
+        },
+        {
+          "repository": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+          "revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+          "path": "unet/config.json",
+          "target": "unet/config.json",
+          "size": 743,
+          "gitSha1": "1a02ee8abc93e840ffbcb2d68b66ccbcb74b3ab3",
+          "imports": []
+        },
+        {
+          "repository": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+          "revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+          "path": "unet/diffusion_pytorch_model.fp16.safetensors",
+          "target": "unet/diffusion_pytorch_model.fp16.safetensors",
+          "size": 1719125304,
+          "sha256": "c83908253f9a64d08c25fc90874c9c8aef9a329ce1ca5fb909d73b0c83d1ea21",
+          "imports": []
+        },
+        {
+          "repository": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+          "revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+          "path": "vae/config.json",
+          "target": "vae/config.json",
+          "size": 547,
+          "gitSha1": "55d78924fee13e4220f24320127c5f16284e13b9",
+          "imports": []
+        },
+        {
+          "repository": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+          "revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+          "path": "vae/diffusion_pytorch_model.safetensors",
+          "target": "vae/diffusion_pytorch_model.safetensors",
+          "size": 334643276,
+          "sha256": "a2b5134f4dbc140d9c11f11cba3233099e00af40f262f136c691fb7d38d2194c",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "See docs/local-models.md; runtime not provisioned by storage"
+    },
+    "diff3f-depth": {
+      "enabled": true,
+      "kind": "component",
+      "files": [
+        {
+          "repository": "lllyasviel/control_v11f1p_sd15_depth",
+          "revision": "539f99181d33db39cf1af2e517cd8056785f0a87",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 945,
+          "gitSha1": "5c10feecb9047e7ea30cc567f1ff4e2d5086a979",
+          "imports": []
+        },
+        {
+          "repository": "lllyasviel/control_v11f1p_sd15_depth",
+          "revision": "539f99181d33db39cf1af2e517cd8056785f0a87",
+          "path": "diffusion_pytorch_model.safetensors",
+          "target": "diffusion_pytorch_model.safetensors",
+          "size": 1445157124,
+          "sha256": "999aca923ca5e19e70e6afc8d11073cc3c03553ca935b636bd5925df4a1c77d1",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "See docs/local-models.md; runtime not provisioned by storage"
+    },
+    "diff3f-normalbae": {
+      "enabled": true,
+      "kind": "component",
+      "files": [
+        {
+          "repository": "lllyasviel/control_v11p_sd15_normalbae",
+          "revision": "cb7296e6587a219068e9d65864e38729cd862aa8",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 1000,
+          "gitSha1": "ac9cd39cfb11da7dfa83aa4dbf8b72a117cd8ed5",
+          "imports": []
+        },
+        {
+          "repository": "lllyasviel/control_v11p_sd15_normalbae",
+          "revision": "cb7296e6587a219068e9d65864e38729cd862aa8",
+          "path": "diffusion_pytorch_model.safetensors",
+          "target": "diffusion_pytorch_model.safetensors",
+          "size": 1445157124,
+          "sha256": "e6c3772b35e5cb1869beca97a6ade6e8e5283310462297b10d129e25351983d7",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "See docs/local-models.md; runtime not provisioned by storage"
+    },
+    "diff3f": {
+      "enabled": true,
+      "kind": "pipeline",
+      "files": [],
+      "dependencies": [
+        "diff3f-sd15",
+        "diff3f-depth",
+        "diff3f-normalbae",
+        "dinov2-vitb14"
+      ],
+      "compatibility": "unverified",
+      "loader": "Diff3F explicit local Diffusers components; old runtime compatibility unverified"
+    },
+    "dinov2-vitb14": {
+      "enabled": true,
+      "kind": "component",
+      "files": [],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "See docs/local-models.md; runtime not provisioned by storage",
+      "unresolved": "Published standalone URL known; verified checksum and pinned DINO implementation still required",
+      "source": "https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_pretrain.pth"
+    },
+    "silero-vad": {
+      "enabled": true,
+      "kind": "component",
+      "files": [
+        {
+          "url": "https://raw.githubusercontent.com/snakers4/silero-vad/5cd7945676eb32225748052e2e6a0580e4686a08/src/silero_vad/data/silero_vad.onnx",
+          "path": "silero-vad-v6.2.3.onnx",
+          "target": "silero-vad-v6.2.3.onnx",
+          "size": 2327524,
+          "sha256": "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/apps/web/src/assets/voice/silero-vad-v6.2.3.onnx"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "See docs/local-models.md; runtime not provisioned by storage"
+    },
+    "h3-singularity-comparison": {
+      "enabled": false,
+      "kind": "checkpoint",
+      "files": [],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "See docs/local-models.md; runtime not provisioned by storage",
+      "unresolved": "Comparison provenance and runtime/base compatibility not established"
+    },
+    "h3-taomate-lora": {
+      "enabled": false,
+      "kind": "adapter",
+      "files": [],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "See docs/local-models.md; runtime not provisioned by storage",
+      "unresolved": "Comparison provenance and runtime/base compatibility not established"
+    },
+    "historical-wan-r1": {
+      "enabled": false,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "rzgar/Wan2.2_I2V_R1_base_v2",
+          "revision": "2118ff4037ab196834f6d36185a197ef3a7a3754",
+          "path": "Wan2.2_I2V_High_R1_n54w_v2.safetensors",
+          "target": "Wan2.2_I2V_High_R1_n54w_v2.safetensors",
+          "size": 14803879958,
+          "sha256": "2e048f2e0977dce05098886ca1d171569c622897e94fc549b433f64ed98a13f4"
+        },
+        {
+          "repository": "rzgar/Wan2.2_I2V_R1_base_v2",
+          "revision": "2118ff4037ab196834f6d36185a197ef3a7a3754",
+          "path": "Wan2.2_I2V_Low_R1_n54w_v2.safetensors",
+          "target": "Wan2.2_I2V_Low_R1_n54w_v2.safetensors",
+          "size": 14803879958,
+          "sha256": "08fe6e276550d80928f9d016a7a9c67f3aa6444aff4d92a52d1879fefe586e7c"
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "See docs/local-models.md; runtime not provisioned by storage",
+      "source": "rzgar/Wan2.2_I2V_R1_base_v2"
+    },
+    "historical-wan-vae": {
+      "enabled": false,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "Kijai/WanVideo_comfy",
+          "revision": "8260d429d19fd7a72304cad059160b95d843913f",
+          "path": "Wan2_1_VAE_fp32.safetensors",
+          "target": "Wan2_1_VAE_fp32.safetensors",
+          "size": 507591244,
+          "sha256": "fd1531e31cdd20af005a9fb66e69afe4ea481a6db9b07cd889ece2e1ca2e67b9"
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "See docs/local-models.md; runtime not provisioned by storage",
+      "source": "Kijai/WanVideo_comfy"
+    },
+    "historical-umt5": {
+      "enabled": false,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+          "revision": "123acf1cc74bccbb9bfff8ac1ee72edc08c2341d",
+          "path": "split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+          "target": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+          "size": 6735906897,
+          "sha256": "c3355d30191f1f066b26d93fba017ae9809dce6c627dda5f6a66eaa651204f68"
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "See docs/local-models.md; runtime not provisioned by storage",
+      "source": "Comfy-Org/Wan_2.1_ComfyUI_repackaged"
+    },
+    "historical-flux-schnell": {
+      "enabled": false,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "Comfy-Org/flux1-schnell",
+          "revision": "d31e04067066d92c55ece2b01748dcc337725d7a",
+          "path": "flux1-schnell-fp8.safetensors",
+          "target": "flux1-schnell-fp8.safetensors",
+          "size": 17236328572,
+          "sha256": "ead426278b49030e9da5df862994f25ce94ab2ee4df38b556ddddb3db093bf72"
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "See docs/local-models.md; runtime not provisioned by storage",
+      "source": "Comfy-Org/flux1-schnell"
+    },
+    "img2video-ltx": {
+      "enabled": true,
+      "kind": "pipeline",
+      "files": [
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+          "path": "diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+          "target": "diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+          "size": 42018190584,
+          "sha256": "31eb3cad89b9e54e99dd3baf286f70825ac4f6c660a70d9184d895be76d7bff4",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors"
+          ]
+        },
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+          "path": "text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+          "target": "text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+          "size": 26263858182,
+          "sha256": "ef7243612fdae7a75cb4d5cee9433e81380675fb6c213bd98ae74a9cd16561d1",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors"
+          ]
+        },
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+          "path": "vae/ltx-2.5-video-vae-bf16.safetensors",
+          "target": "vae/ltx-2.5-video-vae-bf16.safetensors",
+          "size": 1472223346,
+          "sha256": "847e14ca7f3355debca0cea4eaa24ac0fbcdf0061da054ac89ca638a869ddba3",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/vae/ltx-2.5-video-vae-bf16.safetensors"
+          ]
+        },
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+          "path": "vae/ltx-2.5-audio-vae-bf16.safetensors",
+          "target": "vae/ltx-2.5-audio-vae-bf16.safetensors",
+          "size": 364866540,
+          "sha256": "c52733d37f6a7fb7949c3dc0fb468c6cb2169e4d836983a73babb9f0d54837a5",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/vae/ltx-2.5-audio-vae-bf16.safetensors"
+          ]
+        },
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+          "path": "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+          "target": "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+          "size": 995778752,
+          "sha256": "eb5a71fe4068ee87ccdb1c3aa635e547ca76bd2d30ae20ae889f2c325c0677e8",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
+          ]
+        },
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+          "path": "latent_upscale_models/ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors",
+          "target": "latent_upscale_models/ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors",
+          "size": 261944000,
+          "sha256": "2bc3300f2b3c3c1834d72164fbf13a3b9fd73e5a741e8a2c3f4035f89a75c3fe",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/latent_upscale_models/ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors"
+          ]
+        },
+        {
+          "repository": "Lightricks/LTX-2.5",
+          "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+          "path": "model_patches/ltx-2.5-duration-head-bf16.safetensors",
+          "target": "model_patches/ltx-2.5-duration-head-bf16.safetensors",
+          "size": 3843690,
+          "sha256": "2ec71e4206ed365d015f00c05a48caccfb0ee862986809d06ae376c09f5d9190",
+          "imports": [
+            "/home/jesse/projects/img2video/models/ltx-2.5/model_patches/ltx-2.5-duration-head-bf16.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [
+        "ltx-2.5",
+        "ltx-pixel-upscaler"
+      ],
+      "compatibility": "unverified",
+      "loader": "img2video LTX DFR explicit component paths",
+      "gated": true,
+      "views": {
+        "loras": "ltx-pixel-upscaler"
+      }
+    },
+    "img2video": {
+      "enabled": true,
+      "kind": "pipeline",
+      "files": [],
+      "dependencies": [
+        "qwen-image",
+        "img2video-ltx"
+      ],
+      "views": {
+        "Qwen-Image-2.1": "qwen-image",
+        "ltx-2.5": "img2video-ltx"
+      },
+      "compatibility": "consumer-evidenced",
+      "loader": "IMG2VIDEO_MODELS=$MODEL_ROOT/by-name/img2video img2video run ..."
+    },
+    "voice-nefer-complete": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 4522,
+          "gitSha1": "cc1f78f6ba3d3e76d6cfc2c7c551ad726bf3b06b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/config.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "generation_config.json",
+          "target": "generation_config.json",
+          "size": 245,
+          "gitSha1": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/generation_config.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "preprocessor_config.json",
+          "target": "preprocessor_config.json",
+          "size": 127,
+          "gitSha1": "0525dd953bb9241912f7147666f0d535165d5d4f",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "tokenizer_config.json",
+          "target": "tokenizer_config.json",
+          "size": 7344,
+          "gitSha1": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/tokenizer_config.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "merges.txt",
+          "target": "merges.txt",
+          "size": 1671839,
+          "gitSha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/merges.txt"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "vocab.json",
+          "target": "vocab.json",
+          "size": 2776833,
+          "gitSha1": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/vocab.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "model.safetensors",
+          "target": "model.safetensors",
+          "size": 3623203864,
+          "sha256": "e156ceca92da9bf713948b19b6c4fcadc264da778482f1d09ff52c8998906f0c",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/model.safetensors"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "speech_tokenizer/config.json",
+          "target": "speech_tokenizer/config.json",
+          "size": 2336,
+          "gitSha1": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/speech_tokenizer/config.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "speech_tokenizer/configuration.json",
+          "target": "speech_tokenizer/configuration.json",
+          "size": 76,
+          "gitSha1": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/speech_tokenizer/configuration.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "speech_tokenizer/preprocessor_config.json",
+          "target": "speech_tokenizer/preprocessor_config.json",
+          "size": 234,
+          "gitSha1": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/speech_tokenizer/preprocessor_config.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "speech_tokenizer/model.safetensors",
+          "target": "speech_tokenizer/model.safetensors",
+          "size": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/speech_tokenizer/model.safetensors"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "adapter/adapter_config.json",
+          "target": "adapter/adapter_config.json",
+          "size": 1265,
+          "gitSha1": "69dd539fa8d9afbf68a396e0a1f6536394318de8",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/adapter/adapter_config.json"
+          ]
+        },
+        {
+          "repository": "rijulpaul/Qwen3-TTS-12Hz-0.6B-Nefer-LoRa-32",
+          "revision": "20a56014098385f44a7b62ae874a3b630013aca9",
+          "path": "adapter/adapter_model.safetensors",
+          "target": "adapter/adapter_model.safetensors",
+          "size": 47645144,
+          "sha256": "b968268cb0e727b53ff054580cf3fe2a330665fccc2b03094ca081c154d3038e",
+          "imports": [
+            "/home/jesse/projects/n33tc0de/.models/nefer/adapter/adapter_model.safetensors"
+          ]
+        }
+      ],
+      "dependencies": [
+        "voice-nefer",
+        "voice-nefer-adapter"
+      ],
+      "compatibility": "consumer-evidenced",
+      "loader": "n33tc0de voices custom_voice",
+      "status": "experimental",
+      "reference": null,
+      "notes": [
+        "Not yet measured on the production RTX 3060 Ti 8 GB; English quality requires auditioning.",
+        "Root checkpoint must be loaded together with the supplied LoRA adapter; no reference audio is required for that route.",
+        "Root checkpoint requires voice-nefer-adapter; load with PEFT and merge in memory only."
+      ]
+    },
+    "voices": {
+      "enabled": true,
+      "kind": "pipeline",
+      "files": [],
+      "dependencies": [
+        "voice-tts",
+        "voice-clone",
+        "voice-asr",
+        "voice-turn",
+        "voice-design",
+        "voice-kurisu",
+        "voice-furina",
+        "voice-bangdream",
+        "voice-tomoko",
+        "voice-nefer-complete",
+        "voice-ellen",
+        "voice-jane",
+        "voice-tricolour",
+        "voice-elaina"
+      ],
+      "views": {
+        "tts": "voice-tts",
+        "clone": "voice-clone",
+        "asr": "voice-asr",
+        "turn": "voice-turn",
+        "design": "voice-design",
+        "kurisu": "voice-kurisu",
+        "furina": "voice-furina",
+        "bangdream": "voice-bangdream",
+        "tomoko": "voice-tomoko",
+        "nefer": "voice-nefer-complete",
+        "ellen": "voice-ellen",
+        "jane": "voice-jane",
+        "tricolour": "voice-tricolour",
+        "elaina": "voice-elaina"
+      },
+      "compatibility": "consumer-evidenced",
+      "loader": "Mount complete MODEL_ROOT at same absolute path plus MODEL_ROOT/by-name/voices at /models; read-only; runtime remains separate"
+    }
+  },
+  "runtimeSources": {
+    "facebookresearch/sam3": "eef6839bcfc3458dd52ea80535dc6bd62aea86b1",
+    "facebookresearch/dinov2": "7764ea0f912e53c92e82eb78a2a1631e92725fc8",
+    "VAST-AI-Research/SkinTokens": "273b691d35989d71cd17ff2895fdc735097b92d1",
+    "VAST-AI-Research/UniRig": "6793c6640ff01c8fb389f3993434124bb43d2933",
+    "niladridutt/Diffusion-3D-Features": "5bda6874f04495cd7d32d29f5f5e9f39e24fee5c"
+  }
+}

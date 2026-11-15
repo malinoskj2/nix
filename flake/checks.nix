@@ -25,10 +25,50 @@
           "pkgs/ packages missing from exportedPackages in flake.nix: ${lib.concatStringsSep ", " unexported}";
         hostChecks
         // {
+          local-models = self'.packages.local-models.tests.sync;
           devshell = self'.devShells.default;
           gpu-scheduler = self'.packages.gpu-scheduler.tests.scheduler;
         }
         // lib.optionalAttrs (system == "x86_64-linux") {
+          local-models-activation =
+            let
+              home = self.nixosConfigurations.home.config.home-manager.users.jesse;
+            in
+            pkgs.runCommand "local-models-activation-tests"
+              {
+                nativeBuildInputs = [
+                  pkgs.python3
+                  pkgs.systemd
+                ];
+                ACTIVATION = pkgs.writeText "local-models-activation" home.home.activation.localModels.data;
+                SERVICE = pkgs.writeText "local-models-service.json" (
+                  builtins.toJSON home.systemd.user.services.local-models-sync
+                );
+                PATH_UNIT = pkgs.writeText "local-models-path.json" (
+                  builtins.toJSON home.systemd.user.paths.local-models-sync
+                );
+                SYSTEMCTL = "${pkgs.systemd}/bin/systemctl";
+                TEST_BASH = "${pkgs.bash}/bin/bash";
+              }
+              ''
+                export XDG_RUNTIME_DIR="$TMPDIR/runtime"
+                mkdir -m700 "$XDG_RUNTIME_DIR"
+                mkdir units
+                cp ${
+                  home.xdg.configFile."systemd/user/local-models-sync.service".source
+                } units/local-models-sync.service
+                cp ${home.xdg.configFile."systemd/user/local-models-sync.path".source} units/local-models-sync.path
+                for unit in basic.target shutdown.target paths.target; do
+                  cat > "units/$unit" <<EOF
+                [Unit]
+                Description=Verification fixture
+                DefaultDependencies=no
+                EOF
+                done
+                SYSTEMD_LOG_TARGET=console SYSTEMD_UNIT_PATH="$PWD/units" systemd-analyze --user verify units/local-models-sync.service units/local-models-sync.path
+                python -B ${../pkgs/local-models/test_activation.py}
+                touch "$out"
+              '';
           unreal-sandbox = self'.packages.agent-sandbox.unrealTests;
         };
     };

@@ -126,6 +126,7 @@
           "hyprrecede"
           "hyprsheet"
           "last30days"
+          "local-models"
           "markdown-to-pdf"
           "media-gallery"
           "media-transcribe"
