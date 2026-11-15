@@ -105,7 +105,7 @@ in
     ];
     # Host launchers, Steam and sandbox images all resolve the same adapter.
     # This replaces legacy admission after the mode marker is deployed.
-    nixpkgs.overlays = [
+    nixpkgs.overlays = lib.mkAfter [
       (_final: prev: {
         gpu-scheduler = prev.gpu-scheduler.override { unifiedScheduler = cfg.package; };
       })

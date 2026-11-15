@@ -77,8 +77,9 @@ metadata; prompts, environment and raw command arguments are not log payloads.
 ## Host and sandbox adoption
 
 The backend package is exported by the flake. New sandbox images include the CLI.
-After the mode marker is deployed, new sandboxes bind the host configuration and
-socket directory read-only at their canonical paths. A directory bind survives
+After the mode marker is deployed, new sandboxes bind the resolved host configuration
+files and socket directory read-only at their canonical paths. Resolving the files
+avoids dangling NixOS `/etc/static` symlinks inside containers. A directory bind survives
 socket replacement during daemon recovery. A missing socket yields an actionable
 failure; it never starts a second queue. Each container receives its exact Docker
 name in `AGENT_SANDBOX_INSTANCE`, including unnamed interactive launches.

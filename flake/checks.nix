@@ -55,6 +55,8 @@
                 );
                 MUSE_MERGER = ../users/jesse/muse-resources.py;
                 GUIDANCE = ../users/jesse/claude/rules/resources.md;
+                COMPAT = self.nixosConfigurations.home.pkgs.gpu-scheduler;
+                SCHEDULER = staged.services.resourceScheduler.package;
               }
               ''
                 python ${../hosts/home/test_resource_scheduler_config.py}
