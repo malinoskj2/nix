@@ -1,0 +1,82 @@
+--- a/src/main/codex-accounts/runtime-home-service-home-routing.ts
++++ b/src/main/codex-accounts/runtime-home-service-home-routing.ts
+@@ -1,3 +1,4 @@
++import { nixCodexAccountHomes } from '../../shared/nix-codex-account-homes'
+ import { posix as pathPosix } from 'node:path'
+ import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
+ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+@@ -30,7 +31,7 @@
+ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHome {
+   getHostCodexHomePathsForSessionDiscovery(): string[] {
+     // Transcript polling must resolve the mirror path without creating it.
+-    const homes = [resolveOrcaManagedCodexHomePath()]
++    const homes = [resolveOrcaManagedCodexHomePath(), ...nixCodexAccountHomes]
+     if (this.isHostSystemDefaultRealHomeSelected() || this.getSelfContainedManagedHostAccount()) {
+       // Include real-home history even when nested Orca inherits a managed CODEX_HOME.
+       homes.push(getSystemCodexHomePath())
+--- a/src/main/codex-accounts/runtime-home-session-discovery-read-only.test.ts
++++ b/src/main/codex-accounts/runtime-home-session-discovery-read-only.test.ts
+@@ -1,6 +1,6 @@
+ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+ import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
+-import { existsSync, readdirSync, rmSync } from 'node:fs'
++import { existsSync, readdirSync, rmSync, mkdirSync, writeFileSync } from 'node:fs'
+ import type * as NodeOs from 'node:os'
+ import { join } from 'node:path'
+ import { createSettings } from './runtime-home-settings-test-fixtures'
+@@ -27,6 +27,12 @@
+   }
+ })
+ 
++vi.mock('../../shared/nix-codex-account-homes', () => ({
++  get nixCodexAccountHomes() {
++    return [join(testState.fakeHomeDir, 'sandbox', '.codex')]
++  }
++}))
++
+ describe('Codex session discovery on a transcript lookup miss', () => {
+   beforeEach(() => {
+     setupRuntimeHomeTest()
+@@ -34,6 +40,42 @@
+ 
+   afterEach(() => {
+     teardownRuntimeHomeTest()
++  })
++
++  it('admits sandbox terminal history through the recognized account homes', async () => {
++    const home = join(testState.fakeHomeDir, 'sandbox', '.codex')
++    const sessions = join(home, 'sessions', '2026', '11', '15')
++    const id = '01a1e048-997e-7d80-afb6-ed8bc8c88fea'
++    const transcript = join(sessions, `rollout-2026-11-15T12-36-56-${id}.jsonl`)
++    mkdirSync(sessions, { recursive: true })
++    writeFileSync(transcript, JSON.stringify({ type: 'session_meta', payload: { id } }) + '\n')
++    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
++    const service = new CodexRuntimeHomeService(createStore(createSettings({})) as never)
++    const { configureAiVaultSessionSources } = await import('../ai-vault/cached-session-list')
++    const { CODEX_CLI_CONVERSATIONS } = await import('../codex/history/journal-views/codex-cli-conversations')
++    const importer = CODEX_CLI_CONVERSATIONS.transcriptImport!
++    const selectedAccountHome = { variable: 'CODEX_HOME', path: join(testState.fakeHomeDir, '.codex') }
++    const candidates = () => importer.accountHomeCandidates({ settings: {}, selectedAccountHome })
++    configureAiVaultSessionSources({})
++    expect(candidates()).not.toContainEqual({ variable: 'CODEX_HOME', path: home })
++    configureAiVaultSessionSources({
++      getAdditionalCodexHomePaths: () => service.getHostCodexHomePathsForSessionDiscovery()
++    })
++    try {
++      expect(candidates()).toContainEqual({ variable: 'CODEX_HOME', path: home })
++      const store = importer.conversationStore({
++        accountHome: { variable: 'CODEX_HOME', path: home }, launchEnv: {}
++      })!
++      await expect(importer.admitTranscriptPath({ store, transcriptPath: transcript })).resolves.toBe(transcript)
++      await expect(importer.findTranscript({
++        providerSessionId: id, store, launchEnv: {}, workspaceCwd: testState.fakeHomeDir
++      })).resolves.toBe(transcript)
++      await expect(importer.admitTranscriptPath({
++        store: join(selectedAccountHome.path, 'sessions'), transcriptPath: transcript
++      })).resolves.toBeNull()
++    } finally {
++      configureAiVaultSessionSources({})
++    }
+   })
+ 
+   it('creates no directories and reads no account ownership markers', async () => {

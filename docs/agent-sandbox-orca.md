@@ -110,9 +110,18 @@ Orca's persisted status. A separate test confirmed the proxy follows an
 endpoint port change.
 
 The direct launch remains experimental. The local Orca process cannot see the
-agent process or its sandbox session files. Agent recognition, session history,
-and resume need verification and further integration before this replaces the
-SSH setup.
+agent process directly. The hook bridge translates process IDs and Codex
+transcript paths to their host locations. The Nix-built Orca also recognizes
+`~/.local/share/agent-sandbox/home/.codex` as a local account home for history,
+resume and **Continue in chat**. Usage Insights' `extraCodexFolders` setting is
+separate and does not register an account home with Orca.
+
+After rebuilding, restart Orca to load the recognized account home. Existing
+terminal sessions with host-translated transcript paths can then continue in
+Chat without copying or moving their history. Chat passes that account's
+`CODEX_HOME` through the launcher, which mounts it writable at the same absolute
+host path. Older sessions still reporting the container's `~/.codex` path need
+to be resumed in a terminal with the current launcher first.
 
 ## Chat interface
 

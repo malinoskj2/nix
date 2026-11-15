@@ -10,6 +10,9 @@ in
 {
   # Orca resumes agents when it reopens; this resumes the ones `sandbox` started in a sandbox again.
   orca.agentResumeWrapper = "agent-sandbox-resume";
+  # Continue in chat admits hook transcript paths only inside recognized account homes.
+  # The launcher mounts this selected account at the same host path when Chat resumes it.
+  orca.codexAccountHomes = [ "${config.xdg.dataHome}/agent-sandbox/home/.codex" ];
   # Sandboxed Claude shares ~/.claude/projects, but sandboxed Codex keeps its own home.
   orca.usageInsightsSettings.extraCodexFolders = [
     "${config.xdg.dataHome}/agent-sandbox/home/.codex"

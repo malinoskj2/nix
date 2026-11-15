@@ -25,6 +25,8 @@
   # Command that automatic Claude, Codex and Muse resumes in local workspaces run through, as
   # `<command> <agent> ...`.
   agentResumeWrapper ? null,
+  # Additional local account homes whose transcripts may be discovered and resumed.
+  codexAccountHomes ? [ ],
 }:
 
 let
@@ -75,6 +77,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./approved-plugins.patch
     ./structured-sandbox-launch.patch
     ./agent-resume-wrapper.patch
+    ./sandbox-codex-history.patch
     ./terminal-container-indicators.patch
     ./structured-sandbox-indicators.patch
     ./pending-below-main.patch
@@ -89,6 +92,9 @@ stdenv.mkDerivation (finalAttrs: {
     EOF
     cat > src/shared/nix-agent-resume-wrapper.ts <<'EOF'
     export const nixAgentResumeWrapper: string | null = ${builtins.toJSON agentResumeWrapper}
+    EOF
+    cat > src/shared/nix-codex-account-homes.ts <<'EOF'
+    export const nixCodexAccountHomes: readonly string[] = ${builtins.toJSON codexAccountHomes}
     EOF
     # Keep the declarative overrides after the defaults without TS2783's duplicate-key error
     # for overrides also named explicitly in the defaults object.
@@ -245,6 +251,7 @@ stdenv.mkDerivation (finalAttrs: {
     pnpm exec vitest run --config config/vitest.config.ts \
       src/main/native-chat/structured-agent-command-resolution.test.ts \
       src/main/native-chat/nix-sandbox-launch-environment.test.ts \
+      src/main/codex-accounts/runtime-home-session-discovery-read-only.test.ts \
       src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts \
       src/main/runtime/agent-session/structured-agent-session-integration.test.ts \
       src/renderer/src/components/StructuredSessionSandboxBadge.test.tsx \

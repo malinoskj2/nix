@@ -60,7 +60,7 @@ let
     ];
     # Generic keeps workspace, branch and machine names out of the activity.
     discordPresenceSettings.detailLevel = "generic";
-    inherit (config.orca) agentResumeWrapper usageInsightsSettings;
+    inherit (config.orca) agentResumeWrapper codexAccountHomes usageInsightsSettings;
   };
   orcaSkills = [
     "computer-use"
@@ -94,6 +94,12 @@ in
     type = lib.types.attrsOf (lib.types.listOf lib.types.str);
     default = { };
     description = "Default lines for the bundled Usage Insights plugin's multiline settings, by setting key.";
+  };
+
+  options.orca.codexAccountHomes = lib.mkOption {
+    type = lib.types.listOf lib.types.str;
+    default = [ ];
+    description = "Additional local Codex account homes trusted for history discovery and resume, including Continue in chat.";
   };
 
   config = {
