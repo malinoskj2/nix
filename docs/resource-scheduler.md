@@ -20,6 +20,7 @@ resource-control terminate FULL_JOB_ID --revision JOB_REVISION --confirm
 resource-control run-next FULL_JOB_ID --revision JOB_REVISION --confirm
 resource-control force-run FULL_JOB_ID --revision JOB_REVISION --confirm
 resource-control run-host FULL_JOB_ID --revision JOB_REVISION --confirm
+resource-control run-sandbox FULL_JOB_ID --revision JOB_REVISION --confirm
 resource-control pause --confirm
 resource-control resume --confirm
 ```
@@ -106,7 +107,7 @@ The policy never suspends processes or claims suspension frees memory.
 
 ## Explicit waiting-job controls
 
-All three controls require the immutable ID, current revision, owner authorization
+All four controls require the immutable ID, current revision, owner authorization
 and explicit confirmation. Only unreleased queued Slurm jobs are eligible:
 
 - `run-next` moves a job to the front, keeping all admission checks. The latest
@@ -122,17 +123,29 @@ and explicit confirmation. Only unreleased queued Slurm jobs are eligible:
   original working directory, command and environment; those dependencies must
   exist on the host. No CPU/RAM/VRAM admission budget or headroom protection applies.
 
+- `run-sandbox` follows the same confirmed cancellation handoff but runs in the
+  **original submitting sandbox**, outside Slurm. Only sandbox-origin jobs qualify.
+  The trusted namespace bridge validates the running container and immutable
+  runtime, then enters its mount, network, IPC, UTS and PID namespaces before
+  dropping privileges. Missing or invalid sandboxes fail; execution never falls
+  back to the host. No queue resource reservation or budget enforcement applies.
+
 Unmanaged processes run in a unique root-created transient systemd service using
 an immutable privileged bootstrap, followed by privilege drop and `no_new_privs`.
 No submitted command or environment enters systemd unit arguments. The subreaper
 and systemd control group retain descendant lifetime and termination, but do not
 reserve resource capacity. The same job ID, bounded stdout/stderr stream and files
-remain available to the submitting CLI and plugin. `execution: "host"` and
-`systemd_unit` identify this mode; its `allocation` is null. Its usage is external
+remain available to the submitting CLI and plugin. `execution: "host"` or `"sandbox"` and
+`systemd_unit` identify the execution mode; its `allocation` is null. Its usage is external
 to Slurm, and it never contributes to queue reservation totals or game CPU quotas.
 Original submission origin remains recorded. Processes receive
 `RESOURCE_EXECUTION_MODE=unmanaged-host` and `RESOURCE_HOST_JOB_ID`, not reservation
-or sandbox-instance markers. Runtime files and output stay on the host.
+or sandbox-instance markers for host execution. Sandbox execution instead receives
+`RESOURCE_EXECUTION_MODE=unmanaged-sandbox`, `RESOURCE_SANDBOX_JOB_ID` and the
+validated `AGENT_SANDBOX_INSTANCE`; reservation markers are removed in both modes.
+Sandbox processes remain in the transient service cgroup for cleanup, not the
+container or Slurm cgroup. Runtime records and captured stdout/stderr stay on the
+host; command-created files use the sandbox filesystem and its existing mounts.
 
 Launch intent is persisted before systemd submission. A lost response or missing
 unit produces Unknown, never an automatic second launch. Cancel during the Slurm

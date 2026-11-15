@@ -47,12 +47,15 @@ inconsistent attribution stays unknown. CPU uses the backend's `logical_cpus`,
 not the smaller Slurm admission capacity; older backends show unknown host capacity.
 Memory trends remain explicitly labeled queue reservations and queue measurements.
 
-Waiting rows offer **Run via Slurm**, **Run on host**, and **Run next**, each with
+Waiting rows offer **Run via Slurm**, **Run in sandbox**, **Run on host**, and **Run next**, each with
 named confirmation and revision checking. Run via Slurm bypasses admission policy
-but preserves Slurm allocation limits. Run on host confirms cancellation of the
+but preserves Slurm allocation limits. Run in sandbox is available only for
+sandbox-origin jobs: it confirms Slurm cancellation and runs in the original
+sandbox without a Slurm reservation. Sandbox validation failure stops execution;
+there is no host fallback. Run on host confirms cancellation of the
 held Slurm job before starting an unmanaged host process, outside the sandbox;
 its badge and inspector explicitly say that requested budgets are not enforced.
-Both paths retain output and termination through the original job identity.
+All run paths retain output and termination through the original job identity.
 Pending Slurm allocations cannot be launched again. Reordering follows backend
 `queue_position`; unsupported controls remain hidden on older backends.
 
@@ -90,6 +93,7 @@ Supported controls (shown only when advertised by the backend):
 - `resource-control run-next ID --revision N --confirm`
 - `resource-control force-run ID --revision N --confirm`
 - `resource-control run-host ID --revision N --confirm`
+- `resource-control run-sandbox ID --revision N --confirm`
 
 The inspector includes bounded searchable structured lifecycle events, follow/pause,
 known admission snapshots, requested versus measured peaks, exit/cleanup and a copyable `journalctl SYSLOG_IDENTIFIER=resource-scheduler RESOURCE_JOB_ID='…' -o json-pretty` query. Logs

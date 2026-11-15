@@ -69,8 +69,9 @@ async function readLogs() {
 function confirm(action) {
   const job = state.snapshot.jobs.find((j) => j.id === state.selected);
   if (state.fixture || state.error || freshness(state.snapshot) !== 'live') return;
-  if (!eligibleActions(state.snapshot, ['cancel', 'terminate', 'force-run', 'run-next', 'run-host'].includes(action) ? job : null).includes(action)) return;
+  if (!eligibleActions(state.snapshot, ['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'run-sandbox'].includes(action) ? job : null).includes(action)) return;
   const info = {
+    'run-sandbox': { title: `Run “${job?.label}” in the sandbox?`, description: 'Cancel the waiting Slurm allocation, then run this command in its original submitting sandbox, outside Slurm.', consequence: 'No queue resource reservation, CPU/RAM/VRAM budget enforcement or headroom checks apply. The sandbox must still be running; failure to enter it stops execution. Output and termination remain available here.' },
     'run-host': { title: `Run “${job?.label}” on the host?`, description: 'Cancel the waiting Slurm allocation, then run this command directly on the host as your user, outside the sandbox and Slurm.', consequence: 'CPU, RAM, VRAM and headroom are not reserved or limited. The working directory and command dependencies must be accessible on the host. Output and termination remain available here.' },
     'force-run': { title: `Run via Slurm now: “${job?.label}” now?`, description: 'Release this job to Slurm immediately, overriding queue order, admission pause, pressure and headroom checks.', consequence: 'This can cause resource contention or memory pressure. Requested budgets and Slurm allocation limits still apply; the job may remain pending until Slurm can allocate it.' },
     'run-next': { title: `Run “${job?.label}” next?`, description: 'Move this job to the front of the waiting queue.', consequence: 'Normal resource, pressure and headroom checks still apply. Running jobs continue.' },
@@ -79,7 +80,7 @@ function confirm(action) {
     pause: { title: 'Pause new admissions?', description: 'Jobs already running will continue. Waiting jobs remain queued.', consequence: 'This does not suspend processes or reclaim memory.' },
     resume: { title: 'Resume new admissions?', description: 'Let the scheduler admit eligible queued work again.', consequence: 'Resource and desktop headroom checks still apply.' }
   }[action];
-  state.confirm = { ...info, action, ...(['cancel', 'terminate', 'force-run', 'run-next', 'run-host'].includes(action) ? { id: job.id, revision: job.revision, owner: `${job.owner.agent} / ${job.owner.worktree}` } : {}) };
+  state.confirm = { ...info, action, ...(['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'run-sandbox'].includes(action) ? { id: job.id, revision: job.revision, owner: `${job.owner.agent} / ${job.owner.worktree}` } : {}) };
   lastFocus = document.activeElement;
   draw();
   app.querySelector('[data-action="dismiss"]')?.focus();
@@ -146,7 +147,7 @@ app.addEventListener('click', async (event) => {
     case 'refreshLogs': await readLogs(); draw(); break;
     case 'dismiss': state.confirm = null; draw(); lastFocus?.focus(); break;
     case 'confirm': await execute(); break;
-    default: if (['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'pause', 'resume'].includes(action)) confirm(action);
+    default: if (['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'run-sandbox', 'pause', 'resume'].includes(action)) confirm(action);
   }
 });
 app.addEventListener('keydown', (event) => {

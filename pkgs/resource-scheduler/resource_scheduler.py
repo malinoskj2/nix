@@ -443,7 +443,7 @@ class HostRunner:
                 sys.executable,
                 "-I",
                 str(Path(__file__).resolve()),
-                "host-step",
+                "sandbox-step" if job.get("execution") == "sandbox" else "host-step",
                 str(directory),
             ]
         )
@@ -896,13 +896,16 @@ class Backend:
         self.save()
 
     def tick_host_job(self, job, now):
+        # Both unmanaged destinations use the host service lifecycle. Keep the
+        # persisted host_phase field compatible with existing host overrides.
+        target = job["execution"]
         try:
             if job["host_phase"] == "cancelling-slurm":
                 row = self.slurm.detail(job["slurm_job_id"])
                 if row.get("name") != "rs-" + job["id"]:
-                    raise ValueError("Slurm identity mismatch during host handoff")
+                    raise ValueError("Slurm identity mismatch during unmanaged handoff")
                 if slurm_state(row) != "cancelled":
-                    self.changed(job, reason="Waiting for confirmed Slurm cancellation before host launch")
+                    self.changed(job, reason=f"Waiting for confirmed Slurm cancellation before {target} launch")
                     return
                 if job.get("host_cancel_requested"):
                     self.finish_host_job(job, "cancelled", 130, "slurm-terminal", now)
@@ -910,11 +913,11 @@ class Backend:
                 payload_path = self.directory / job["id"] / "payload.json"
                 payload = json.loads(payload_path.read_text())
                 (self.directory / job["id"] / "result.json").unlink(missing_ok=True)
-                payload["execution"] = "host"
+                payload["execution"] = target
                 atomic(payload_path, payload)
                 # Persist before launch. Never retry an ambiguous systemd request.
                 job["host_phase"] = "starting"
-                self.changed(job, "pending", "Starting unmanaged host process")
+                self.changed(job, "pending", f"Starting unmanaged {target} process")
                 self.host.start(job, self.directory / job["id"])
             status = self.host.status(job["systemd_unit"])
             if status.get("LoadState") != "loaded":
@@ -947,18 +950,22 @@ class Backend:
                     job["started_at"] = job["started_at"] or now
                     self.changed(job, "running")
                     job["wait_reason"] = None
-                    self.event(job, "host_start", reason="Unmanaged host execution; no Slurm resource reservation")
+                    self.event(
+                        job, f"{target}_start", reason=f"Unmanaged {target} execution; no Slurm resource reservation"
+                    )
             elif active in ("activating", "deactivating") or finished:
                 self.changed(job, "pending", "Waiting for host service lifecycle confirmation")
             else:
                 raise ValueError("Unknown host service state")
         except (OSError, ValueError, KeyError, subprocess.SubprocessError):
-            self.changed(job, "unknown", "Host handoff or process state unknown; inspect service before retrying")
-            self.errors.append("Unmanaged host job reconciliation failed: " + job["id"])
+            self.changed(
+                job, "unknown", f"Unmanaged {target} handoff or process state unknown; inspect service before retrying"
+            )
+            self.errors.append(f"Unmanaged {target} job reconciliation failed: " + job["id"])
 
     def finish_host_job(self, job, state, code, cleanup, now):
         job.update(state=state, exit_code=code, cleanup=cleanup, ended_at=now, wait_reason=None)
-        self.event(job, "completion", exit_code=code, cleanup=cleanup, execution="host")
+        self.event(job, "completion", exit_code=code, cleanup=cleanup, execution=job["execution"])
         (self.directory / job["id"] / "payload.json").unlink(missing_ok=True)
         self.changed(job)
 
@@ -1133,6 +1140,7 @@ class Backend:
                 force_run=True,
                 run_next=True,
                 run_host=True,
+                run_sandbox=True,
                 pause=True,
                 resume=True,
                 priority=False,
@@ -1231,7 +1239,7 @@ class Backend:
                     result[name], result[name + "_offset"] = "", offset
             result["job"] = job
             return result
-        if action not in ("cancel", "terminate", "force-run", "run-next", "run-host"):
+        if action not in ("cancel", "terminate", "force-run", "run-next", "run-host", "run-sandbox"):
             raise ValueError("Unsupported control action")
         if request.get("confirm") is not True or request.get("revision") != job["revision"]:
             raise ValueError("Confirmation and current job revision required")
@@ -1239,15 +1247,15 @@ class Backend:
             raise ValueError("Job already finished")
         if not managed(job):
             if action not in ("cancel", "terminate"):
-                raise ValueError("Host execution cannot be released or reordered in Slurm")
+                raise ValueError("Unmanaged execution cannot be released or reordered in Slurm")
             if job["host_phase"] == "cancelling-slurm":
                 job["host_cancel_requested"] = True
             else:
                 if action != "terminate":
-                    raise ValueError("Host process may have started; use terminate")
+                    raise ValueError("Unmanaged process may have started; use terminate")
                 self.host.stop(job["systemd_unit"])
                 job["host_cancel_requested"] = True
-            self.event(job, "host_termination_requested")
+            self.event(job, job["execution"] + "_termination_requested")
             self.changed(job)
             return {"id": job_id, "revision": job["revision"], "pending": True}
         if action == "cancel" and job["state"] not in ("queued", "pending"):
@@ -1257,7 +1265,7 @@ class Backend:
         current = self.slurm.detail(job["slurm_job_id"])
         if current.get("name") != "rs-" + job["id"]:
             raise ValueError("Slurm allocation identity changed; refusing control")
-        if action in ("force-run", "run-next", "run-host"):
+        if action in ("force-run", "run-next", "run-host", "run-sandbox"):
             if (
                 job["state"] != "queued"
                 or job.get("released")
@@ -1265,16 +1273,19 @@ class Backend:
                 or slurm_state(current) != "pending"
             ):
                 raise ValueError("This action requires an unallocated queued job without a pending cancellation")
-            if action == "run-host":
-                # Cancellation is confirmed on a later tick before any host command starts.
+            if action in ("run-host", "run-sandbox"):
+                target = "sandbox" if action == "run-sandbox" else "host"
+                if target == "sandbox" and not re.fullmatch(r"agent-sandbox-[A-Za-z0-9_.-]{1,128}", job["origin"]):
+                    raise ValueError("Run in sandbox requires a sandbox-origin job")
+                # Cancellation is confirmed on a later tick before any command starts.
                 self.slurm.cancel(job["slurm_job_id"])
                 job.update(
-                    execution="host",
+                    execution=target,
                     host_phase="cancelling-slurm",
-                    systemd_unit="resource-host-" + job["id"] + ".service",
+                    systemd_unit="resource-" + target + "-" + job["id"] + ".service",
                 )
-                self.event(job, "host_run_requested", reason="Owner requested unmanaged execution on the host")
-                self.changed(job, "pending", "Waiting for Slurm cancellation before unmanaged host launch")
+                self.event(job, target + "_run_requested", reason=f"Owner requested unmanaged {target} execution")
+                self.changed(job, "pending", f"Waiting for Slurm cancellation before unmanaged {target} launch")
             elif action == "force-run":
                 self.event(
                     job, "force_run_requested", reason="Owner overrides queue order, pressure and headroom policy"
@@ -1422,9 +1433,10 @@ def namespace_command(payload, payload_fd):
         raise
 
 
-def step(directory, host=False):
-    # Slurm executes this fixed root-owned/store bootstrap. Caller env is private data.
-    if os.getuid() != 0 or not os.environ.get("INVOCATION_ID" if host else "SLURM_JOB_ID"):
+def step(directory, host=False, sandbox=False):
+    # Slurm or a transient systemd service runs this immutable root bootstrap.
+    # Caller environment remains private data until privilege drop.
+    if os.getuid() != 0 or not os.environ.get("INVOCATION_ID" if host or sandbox else "SLURM_JOB_ID"):
         raise RuntimeError("Step bootstrap must be launched by root Slurm or the host service")
     directory = Path(directory)
     payload_fd = os.open(directory / "payload.json", os.O_RDONLY | os.O_NOFOLLOW)
@@ -1436,9 +1448,11 @@ def step(directory, host=False):
             raise ValueError("Private payload identity mismatch")
         if host and payload.get("execution") != "host":
             raise ValueError("Unmanaged host execution was not authorized")
+        if sandbox and payload.get("execution") != "sandbox":
+            raise ValueError("Unmanaged sandbox execution was not authorized")
         os.lseek(payload_fd, 0, os.SEEK_SET)
         argv = [sys.executable, "-I", str(Path(__file__).resolve()), "step-exec", str(payload_fd)]
-        if not host and payload["origin"] != "host":
+        if sandbox or (not host and payload["origin"] != "host"):
             argv, handles = namespace_command(payload, payload_fd)
         # Files are root-owned and private. Bound stored stdout/stderr independently.
         streams = {name: (directory / name).open("wb") for name in ("stdout", "stderr")}
@@ -1495,7 +1509,7 @@ def step(directory, host=False):
 
 def execution_environment(payload):
     environment = dict(payload["env"])
-    if payload.get("execution") == "host":
+    if payload.get("execution") in ("host", "sandbox"):
         for key in (
             "RESOURCE_JOB_ID",
             "GPU_LEASE_ID",
@@ -1503,11 +1517,17 @@ def execution_environment(payload):
             "RESOURCE_RAM_MIB",
             "RESOURCE_VRAM_MIB",
             "RESOURCE_CPUSET",
-            "AGENT_SANDBOX_INSTANCE",
+            "RESOURCE_HOST_JOB_ID",
+            "RESOURCE_SANDBOX_JOB_ID",
         ):
             environment.pop(key, None)
-        environment["RESOURCE_HOST_JOB_ID"] = payload["id"]
-        environment["RESOURCE_EXECUTION_MODE"] = "unmanaged-host"
+        target = payload["execution"]
+        if target == "sandbox":
+            environment["AGENT_SANDBOX_INSTANCE"] = payload["origin"]
+        else:
+            environment.pop("AGENT_SANDBOX_INSTANCE", None)
+        environment[f"RESOURCE_{target.upper()}_JOB_ID"] = payload["id"]
+        environment["RESOURCE_EXECUTION_MODE"] = "unmanaged-" + target
         return environment
     environment.update(
         RESOURCE_JOB_ID=payload["id"], RESOURCE_CPUSET=",".join(str(cpu) for cpu in sorted(os.sched_getaffinity(0)))
@@ -1698,7 +1718,8 @@ def main():
     actions.add_parser("status").add_argument("--json", action="store_true")
     control = actions.add_parser("control")
     control.add_argument(
-        "operation", choices=("cancel", "terminate", "force-run", "run-next", "run-host", "pause", "resume")
+        "operation",
+        choices=("cancel", "terminate", "force-run", "run-next", "run-host", "run-sandbox", "pause", "resume"),
     )
     control.add_argument("id", nargs="?")
     control.add_argument("--revision", type=int)
@@ -1710,6 +1731,7 @@ def main():
     service.add_argument("--config", required=True)
     actions.add_parser("step").add_argument("directory")
     actions.add_parser("host-step").add_argument("directory")
+    actions.add_parser("sandbox-step").add_argument("directory")
     actions.add_parser("step-exec").add_argument("fd", type=int)
     args = parser.parse_args()
     if args.action == "run":
@@ -1720,6 +1742,8 @@ def main():
         return step(args.directory)
     if args.action == "host-step":
         return step(args.directory, host=True)
+    if args.action == "sandbox-step":
+        return step(args.directory, sandbox=True)
     if args.action == "step-exec":
         return step_exec(args.fd)
     if args.action == "model":

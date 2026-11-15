@@ -6,14 +6,16 @@ import { render } from '../panel/view.mjs';
 import { fixture, fixtureTime } from './fixtures.mjs';
 const page = (snapshot, patch = {}) => render({ snapshot, filters: {}, samples: [], identities: [], logs: [], ...patch }, fixtureTime);
 
-test('waiting rows offer both run paths and reorder without nesting interactive controls', () => {
+test('waiting rows offer all run paths and reorder without nesting interactive controls', () => {
   const html = page(adaptStatus(fixture()));
   assert.match(html, /data-action="force-run"[^>]*>Run via Slurm/);
   assert.match(html, /data-action="run-host"[^>]*>Run on host/);
+  assert.match(html, /data-action="run-sandbox"[^>]*>Run in sandbox/);
   assert.match(html, /data-action="run-next"[^>]*>Run next/);
   assert.match(html, /<\/button><div class="waiting-actions">/);
   const stale = page(adaptStatus(fixture()), { error: 'offline' });
   assert.match(stale, /data-action="run-host"[^>]*disabled/);
+  assert.match(stale, /data-action="run-sandbox"[^>]*disabled/);
 });
 
 test('host handoff stays unmanaged through running and unknown states with termination available', () => {
@@ -52,4 +54,39 @@ test('unmanaged host results do not enter reservation accuracy statistics', asyn
   const [first, second] = snapshot.jobs.slice(2);
   first.queuePosition = 2; second.queuePosition = 1;
   assert.equal(orderJobs([first, second])[0].id, second.id);
+});
+
+test('sandbox run action requires a sandbox origin and advertised capability', () => {
+  for (const origin of ['host', 'workstation', '', 'agent-sandbox-', 'agent-sandbox-test/invalid']) {
+    const raw = fixture(); raw.jobs[2].origin = origin;
+    assert.ok(!adaptStatus(raw).jobs[2].actions.includes('run-sandbox'));
+  }
+  const raw = fixture();
+  assert.ok(adaptStatus(raw).jobs[2].actions.includes('run-sandbox'));
+  delete raw.capabilities.run_sandbox;
+  assert.ok(!adaptStatus(raw).jobs[2].actions.includes('run-sandbox'));
+});
+
+test('sandbox handoff and results stay unmanaged with lifecycle controls', async () => {
+  const { diagnostic, historyMetrics } = await import('../src/model.mjs');
+  for (const state of ['pending', 'running', 'unknown', 'completed', 'failed', 'cancelled']) {
+    const raw = fixture();
+    Object.assign(raw.jobs[2], { execution: 'sandbox', host_phase: 'starting', state, allocation: null });
+    const snapshot = adaptStatus(raw), job = snapshot.jobs[2];
+    assert.equal(job.execution, 'sandbox');
+    assert.equal(diagnostic(snapshot, job).jobs[0].execution, 'sandbox');
+    assert.deepEqual(job.actions, ['pending', 'running', 'unknown'].includes(state) ? ['terminate'] : []);
+    assert.equal(job.effectiveBudget.ram, null);
+    const html = page(snapshot, { selected: job.id });
+    assert.match(html, /Sandbox · unmanaged/);
+    assert.match(html, /Running in the submitting sandbox outside Slurm/);
+    assert.doesNotMatch(html, /Running on the host outside Slurm and the sandbox/);
+    assert.match(html, /Requested resource budgets are not enforced/);
+    const metrics = historyMetrics([job]);
+    assert.equal(metrics.ramSamples, 0);
+    assert.equal(metrics.queueSamples, 0);
+  }
+  const raw = fixture();
+  Object.assign(raw.jobs[2], { execution: 'sandbox', host_phase: 'cancelling-slurm', state: 'pending' });
+  assert.deepEqual(adaptStatus(raw).jobs[2].actions, ['cancel', 'terminate']);
 });

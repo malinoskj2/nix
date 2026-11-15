@@ -116,11 +116,12 @@ class SchedulerTests(unittest.TestCase):
         self.stack.close()
         self.temp.cleanup()
 
-    def request(self, cpu=2, ram=4096, vram=0, priority="background", mode="shared"):
+    def request(self, cpu=2, ram=4096, vram=0, priority="background", mode="shared", origin="host"):
         return dict(
             version=1,
             action="submit",
             label="safe build",
+            origin=origin,
             requested=dict(cpu=cpu, ram_mib=ram, vram_mib=vram),
             mode=mode,
             priority=priority,
@@ -238,7 +239,7 @@ class SchedulerTests(unittest.TestCase):
                 self.control("force-run", job)
 
     def test_queue_controls_require_confirmation_revision_and_queued_identity(self):
-        for action in ("force-run", "run-next", "run-host"):
+        for action in ("force-run", "run-next", "run-host", "run-sandbox"):
             job = self.submit()
             for changes in ({"confirm": False}, {"revision": 0}):
                 request = dict(version=1, action=action, id=job["id"], revision=job["revision"], confirm=True)
@@ -253,6 +254,160 @@ class SchedulerTests(unittest.TestCase):
                 self.control(action, job)
         self.assertFalse(self.host.started)
         self.assertFalse(self.slurm.released)
+
+    def test_sandbox_override_rejects_host_origin_without_cancelling(self):
+        job = self.submit()
+        with self.assertRaisesRegex(ValueError, "sandbox-origin"):
+            self.control("run-sandbox", job)
+        self.assertFalse(self.slurm.cancelled)
+        self.assertFalse(self.host.started)
+        self.assertTrue(rs.managed(job))
+
+    def test_sandbox_handoff_preserves_identity_output_and_cleanup(self):
+        job = self.submit(origin="agent-sandbox-test", vram=1000)
+        self.control("run-sandbox", job)
+        self.assertEqual(job["execution"], "sandbox")
+        self.assertTrue(job["systemd_unit"].startswith("resource-sandbox-"))
+        self.slurm.rows[job["slurm_job_id"]]["job_state"] = ["COMPLETING"]
+        self.backend.tick()
+        self.assertFalse(self.host.started)
+        self.slurm.rows[job["slurm_job_id"]]["job_state"] = ["CANCELLED"]
+        self.backend.tick()
+        self.backend.tick()
+        self.assertEqual(self.host.started, [job["id"]])
+        self.assertEqual(job["state"], "running")
+        self.assertIsNone(self.backend.public_job(job)["allocation"])
+        self.assertEqual(self.backend.public_telemetry()["ram"]["reserved_mib"], 0)
+        self.assertEqual(self.backend.public_telemetry()["gpu"]["reserved_mib"], 0)
+        directory = Path(self.temp.name) / job["id"]
+        payload = json.loads((directory / "payload.json").read_text())
+        self.assertEqual(payload["execution"], "sandbox")
+        self.assertEqual(payload["origin"], "agent-sandbox-test")
+        self.assertEqual(payload["command"], ["echo", "secret-argument"])
+        (directory / "stdout").write_text("sandbox output")
+        (directory / "stderr").write_text("sandbox diagnostic")
+        rs.atomic(directory / "result.json", {"exit_code": 7})
+        self.host.units[job["systemd_unit"]].update(
+            ActiveState="failed", SubState="failed", Result="exit-code", ExecMainStatus="7"
+        )
+        self.slurm.fail = True
+        self.backend.tick()
+        self.assertEqual(job["state"], "failed")
+        self.assertEqual(job["exit_code"], 7)
+        self.assertEqual(job["cleanup"], "systemd-terminal")
+        self.assertFalse((directory / "payload.json").exists())
+        result = self.backend.handle(dict(version=1, action="output", id=job["id"]), os.getuid())
+        self.assertEqual(result["stdout"], "sandbox output")
+        self.assertEqual(result["stderr"], "sandbox diagnostic")
+        self.assertEqual(job["events"][-1]["execution"], "sandbox")
+
+    def test_sandbox_cancel_and_terminate_keep_descendant_cleanup(self):
+        queued = self.submit(origin="agent-sandbox-test")
+        self.control("run-sandbox", queued)
+        self.control("cancel", queued)
+        self.backend.tick()
+        self.assertEqual(queued["state"], "cancelled")
+        self.assertFalse(self.host.started)
+        running = self.submit(origin="agent-sandbox-test")
+        self.control("run-sandbox", running)
+        self.backend.tick()
+        self.control("terminate", running)
+        self.assertEqual(self.host.stopped, [running["systemd_unit"]])
+        self.assertEqual(running["state"], "running")
+        self.host.units[running["systemd_unit"]].update(
+            ActiveState="inactive", SubState="dead", Result="signal", ExecMainCode="2", ExecMainStatus="15"
+        )
+        self.backend.tick()
+        self.assertEqual(running["state"], "cancelled")
+        self.assertEqual(running["exit_code"], 143)
+
+    def test_sandbox_lost_launch_reply_is_not_retried_after_restart(self):
+        job = self.submit(origin="agent-sandbox-test")
+        self.control("run-sandbox", job)
+        with patch.object(self.host, "start", side_effect=OSError("lost")) as start:
+            self.backend.tick()
+            self.backend.tick()
+            self.assertEqual(start.call_count, 1)
+            self.assertEqual(job["state"], "unknown")
+        os.close(self.backend.lock_fd)
+        self.backend = rs.Backend(self.backend.config, self.slurm, lambda: copy.deepcopy(self.snapshot), host=self.host)
+        self.backend.tick()
+        self.assertFalse(self.host.started)
+
+    def test_sandbox_environment_preserves_sandbox_but_removes_reservations(self):
+        payload = dict(
+            id="a" * 32,
+            execution="sandbox",
+            origin="agent-sandbox-test",
+            env={
+                key: "stale"
+                for key in (
+                    "RESOURCE_JOB_ID",
+                    "GPU_LEASE_ID",
+                    "RESOURCE_CPU",
+                    "RESOURCE_RAM_MIB",
+                    "RESOURCE_VRAM_MIB",
+                    "RESOURCE_CPUSET",
+                    "RESOURCE_HOST_JOB_ID",
+                    "AGENT_SANDBOX_INSTANCE",
+                )
+            }
+            | {"ORCA_WORKTREE_ID": "real-card", "PATH": "/bin"},
+        )
+        env = rs.execution_environment(payload)
+        self.assertEqual(
+            env,
+            {
+                "AGENT_SANDBOX_INSTANCE": "agent-sandbox-test",
+                "ORCA_WORKTREE_ID": "real-card",
+                "PATH": "/bin",
+                "RESOURCE_EXECUTION_MODE": "unmanaged-sandbox",
+                "RESOURCE_SANDBOX_JOB_ID": payload["id"],
+            },
+        )
+
+    def test_sandbox_bootstrap_requires_authorization_and_never_falls_back(self):
+        job = self.submit(origin="agent-sandbox-test")
+        directory = Path(self.temp.name) / job["id"]
+        with patch.object(os, "getuid", return_value=0), patch.dict(os.environ, INVOCATION_ID="service"):
+            with self.assertRaisesRegex(ValueError, "not authorized"):
+                rs.step(directory, sandbox=True)
+        self.control("run-sandbox", job)
+        self.backend.tick()
+        with patch.object(os, "getuid", return_value=0), patch.dict(os.environ, INVOCATION_ID="service"):
+            with patch.object(rs, "namespace_command", side_effect=ValueError("sandbox unavailable")) as enter:
+                with patch.object(rs.subprocess, "Popen") as launch:
+                    with self.assertRaisesRegex(ValueError, "sandbox unavailable"):
+                        rs.step(directory, sandbox=True)
+                    self.assertEqual(enter.call_args.args[0]["origin"], "agent-sandbox-test")
+                    launch.assert_not_called()
+
+    def test_sandbox_bootstrap_streams_namespace_process_output_and_exit(self):
+        job = self.submit(origin="agent-sandbox-test")
+        self.control("run-sandbox", job)
+        self.backend.tick()
+        directory = Path(self.temp.name) / job["id"]
+        command = [
+            rs.sys.executable,
+            "-c",
+            "import sys; print('namespace stdout'); print('namespace stderr', file=sys.stderr); sys.exit(7)",
+        ]
+        with patch.object(os, "getuid", return_value=0), patch.dict(os.environ, INVOCATION_ID="service"):
+            with patch.object(rs, "namespace_command", return_value=(command, [])) as enter:
+                self.assertEqual(rs.step(directory, sandbox=True), 7)
+                self.assertEqual(enter.call_args.args[0]["execution"], "sandbox")
+        self.assertEqual((directory / "stdout").read_text(), "namespace stdout\n")
+        self.assertEqual((directory / "stderr").read_text(), "namespace stderr\n")
+        self.assertEqual(json.loads((directory / "result.json").read_text())["exit_code"], 7)
+
+    def test_sandbox_service_uses_explicit_sandbox_bootstrap(self):
+        job = {"id": "a" * 32, "execution": "sandbox", "systemd_unit": "resource-sandbox-" + "a" * 32 + ".service"}
+        with patch.object(rs, "checked", return_value="") as call:
+            rs.HostRunner().start(job, Path("/private/state") / job["id"])
+        argv = call.call_args.args[0]
+        self.assertIn("sandbox-step", argv)
+        self.assertNotIn("host-step", argv)
+        self.assertIn("--property=KillMode=control-group", argv)
 
     def test_host_handoff_confirms_slurm_cancellation_before_launch(self):
         job = self.submit(vram=1000)

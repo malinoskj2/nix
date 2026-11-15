@@ -70,6 +70,18 @@ export async function check() {
   await press('[data-action="confirm"]');
   assert(document.querySelector('.inspector').textContent.includes('Host · unmanaged'), 'Host handoff is visibly unmanaged');
   assert(document.querySelector('.inspector').textContent.includes('not enforced'), 'Host execution never claims a resource reservation');
+  raw.jobs.push({ ...structuredClone(raw.jobs[2]), id:'00000000000000000000000000000008', origin:'agent-sandbox-test', state:'queued', label:'Sandbox launch check', revision:1, released:false, cleanup:null });
+  await press('[data-action="refresh"]');
+  await press('[data-action="run-sandbox"][data-queue-job="00000000000000000000000000000008"]');
+  const beforeSandbox = window.testBridge.controls.length;
+  assert(document.querySelector('[role="dialog"]').textContent.includes('original submitting sandbox, outside Slurm'), 'Sandbox run discloses its execution boundary');
+  assert(document.querySelector('[role="dialog"]').textContent.includes('failure to enter it stops execution'), 'Sandbox run has no host fallback');
+  await press('[data-action="confirm"]');
+  assert(window.testBridge.controls.length === beforeSandbox + 1, 'Sandbox confirmation sends exactly one command');
+  assert(window.testBridge.controls.at(-1).action === 'run-sandbox', 'Sandbox confirmation uses the distinct backend action');
+  assert(document.querySelector('.inspector').textContent.includes('Sandbox · unmanaged'), 'Sandbox handoff is visibly unmanaged');
+  assert(document.querySelector('.inspector').textContent.includes('not enforced'), 'Sandbox execution never claims a reservation');
+  assert(!document.querySelector('[data-action="run-sandbox"][data-queue-job="00000000000000000000000000000008"]'), 'Sandbox handoff cannot launch twice');
   assert(document.documentElement.scrollWidth <= window.innerWidth, 'No horizontal overflow');
   return { passed: results.length, results };
 }
