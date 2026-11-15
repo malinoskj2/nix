@@ -122,7 +122,7 @@ or environments. In-game VSync/Reflex/frame generation/caps, effective mouse
 overrides, Wine child render geometry, raw-input delivery, exit-time restoration
 and end-to-end latency still require separate verification.
 
-The [TODO list](../todo.md) retains the XWayland/Wine Wayland comparison.
+The XWayland/Wine Wayland comparison still needs runtime verification.
 Final GameMode cleanup/restoration after game exit still needs runtime
 verification. These checks did not establish zero added input latency.
 
