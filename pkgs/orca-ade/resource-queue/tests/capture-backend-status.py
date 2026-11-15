@@ -72,7 +72,7 @@ with tempfile.TemporaryDirectory() as directory, patch.object(backend_module.soc
      patch.object(backend_module.uuid, "uuid4", side_effect=[uuid.UUID(int=i) for i in range(1, 20)]):
     slurm = Slurm()
     backend = backend_module.Backend(dict(state_dir=directory, allowed_uid=1000, allowed_gid=100,
-                                         stability_seconds=0), slurm, lambda: copy.deepcopy(snapshot))
+                                         stability_seconds=0, cgroup_root=str(Path(directory) / "cgroups")), slurm, lambda: copy.deepcopy(snapshot))
 
     def submit(label, cpu=2, vram=0, mode="shared", priority="background"):
         return backend.handle(dict(version=1, action="submit", label=label,
