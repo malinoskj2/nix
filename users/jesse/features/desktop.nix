@@ -68,7 +68,6 @@ let
     "computer-use"
     "orca-cli"
     "orchestration"
-    "true-random"
   ];
   skillsFor =
     agent:

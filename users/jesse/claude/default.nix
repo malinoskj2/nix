@@ -61,6 +61,7 @@ in
       rust-review-jesse = ./skills/rust-review-jesse;
       sandbox-wayland-display = ./skills/sandbox-wayland-display;
       tiktok-search = ./skills/tiktok-search;
+      true-random = ./skills/true-random;
       video-download = ./skills/video-download;
       youtube-search = ./skills/youtube-search;
     };
