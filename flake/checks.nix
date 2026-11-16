@@ -51,6 +51,19 @@
                 DAEMON = pkgs.writeText "resource-scheduler-service.json" (
                   builtins.toJSON staged.systemd.services.resource-scheduler.serviceConfig
                 );
+                SLURM_UNITS = pkgs.writeText "resource-slurm-units.json" (
+                  builtins.toJSON (
+                    lib.genAttrs [ "slurmctld" "slurmd" ] (
+                      name:
+                      let
+                        unit = staged.systemd.services.${name};
+                      in
+                      {
+                        inherit (unit) after wants serviceConfig;
+                      }
+                    )
+                  )
+                );
                 GAME_SERVICE = pkgs.writeText "resource-scheduler-game-service.json" (
                   builtins.toJSON staged.systemd.services.agent-sandbox-gaming.serviceConfig
                 );

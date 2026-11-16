@@ -224,7 +224,25 @@ in
     # The upstream module refers to munge.service for slurmd, but the service is munged.
     systemd.services.slurmd = {
       requires = [ "munged.service" ];
-      after = [ "munged.service" ];
+      wants = [ "network-online.target" ];
+      after = [
+        "munged.service"
+        "network-online.target"
+      ];
+      serviceConfig = {
+        Restart = "on-failure";
+        RestartSec = 5;
+      };
+    };
+    # Listener address resolution can fail during boot. Keep both daemons
+    # retrying after network readiness rather than leaving the queue offline.
+    systemd.services.slurmctld = {
+      wants = [ "network-online.target" ];
+      after = [ "network-online.target" ];
+      serviceConfig = {
+        Restart = "on-failure";
+        RestartSec = 5;
+      };
     };
 
     systemd.tmpfiles.rules = [

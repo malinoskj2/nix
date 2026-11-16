@@ -98,3 +98,10 @@ with tempfile.TemporaryDirectory() as temporary:
         raise AssertionError("Malformed settings were overwritten")
 
 print("Generated resource policy, Slurm/cgroup configuration and agent guidance verified")
+
+# A boot-time listener failure must recover without another system switch.
+for unit in json.loads(Path(os.environ["SLURM_UNITS"]).read_text()).values():
+    assert "network-online.target" in unit["after"]
+    assert "network-online.target" in unit["wants"]
+    assert unit["serviceConfig"]["Restart"] == "on-failure"
+    assert unit["serviceConfig"]["RestartSec"] == 5
