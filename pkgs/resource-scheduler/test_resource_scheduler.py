@@ -57,6 +57,11 @@ class FakeSlurm:
         self.released.append(job_id)
         self.rows[job_id]["job_state"] = ["RUNNING"]
 
+    def hold(self, job_id):
+        if self.rows[job_id]["job_state"] != ["PENDING"]:
+            raise OSError("already allocated")
+        self.rows[job_id]["priority"] = 0
+
     def cancel(self, job_id):
         self.cancelled.append(job_id)
         self.rows[job_id]["job_state"] = ["CANCELLED"]
@@ -459,6 +464,10 @@ class SchedulerTests(unittest.TestCase):
             + "</processes></gpu></nvidia_smi_log>"
         )
         self.assertEqual(rs.gpu_process_allocations(xml, "GPU-test", proc), {"42": 4000})
+        identity = "a" * 32
+        (proc / "10" / "cgroup").write_text(f"0::/system.slice/resource-large-{identity}.service/child")
+        (proc / "12" / "cgroup").write_text(f"0::/user.slice/resource-large-{identity}.service")
+        self.assertEqual(rs.gpu_process_allocations(xml, "GPU-test", proc), {identity: 3000, "42": 1000})
         with self.assertRaises(ValueError):
             rs.gpu_process_allocations(xml.replace("3000 MiB", "N/A"), "GPU-test", proc)
         with self.assertRaises(ValueError):
@@ -1428,15 +1437,168 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(first["state"], "pending")
         self.assertEqual(second["state"], "queued")
         self.assertGreater(first["requested"]["vram_mib"], 0)
-        self.assertTrue(first["events"][-1]["large_gpu_lane"])
+        self.assertEqual(first["execution"], "large")
+        self.assertEqual(first["events"][-1]["event"], "large_lane_handoff")
         self.snapshot["sampled_at"] = rs.time.time()
         self.backend.tick()
         self.assertEqual(first["state"], "running")
         self.assertIn("occupied", second["wait_reason"])
         self.backend.state["paused"] = True
-        self.finish(first)
+        self.host.units[first["systemd_unit"]].update(ActiveState="active", SubState="exited")
+        self.backend.tick()
+        self.assertEqual(first["state"], "completed")
         self.assertEqual(second["state"], "queued")
         self.assertIn("paused", second["wait_reason"])
+
+    def large_ready(self):
+        self.backend.config.update(adaptive_ram=True, large_gpu_lane=True)
+        self.snapshot["sampled_at"] = rs.time.time()
+        self.snapshot["pressure"]["memory"] = dict(full=dict(avg10=0), some=dict(avg10=0))
+        return self.submit(ram=16384, vram=24576, origin="agent-sandbox-test")
+
+    def test_large_handoff_waits_for_cancellation_and_rechecks_pressure(self):
+        job = self.large_ready()
+        with patch.object(self.slurm, "cancel"):
+            self.backend.tick()
+            self.backend.tick()
+        self.assertEqual(self.host.started, [])
+        self.slurm.rows[job["slurm_job_id"]]["job_state"] = ["CANCELLED"]
+        self.snapshot["ram"]["available_mib"] = 500
+        self.backend.tick()
+        self.assertIn("Critical", job["wait_reason"])
+        self.assertEqual(self.host.started, [])
+        self.snapshot["ram"]["available_mib"] = 2048
+        self.backend.tick()
+        self.assertEqual(self.host.started, [job["id"]])
+        payload = json.loads((Path(self.temp.name) / job["id"] / "payload.json").read_text())
+        self.assertEqual(payload["origin"], "agent-sandbox-test")
+        self.assertEqual(payload["execution"], "large")
+        self.backend.tick()
+        self.assertEqual(self.host.started, [job["id"]])
+
+    def test_large_handoff_does_not_cancel_job_that_started_during_hold(self):
+        job = self.large_ready()
+
+        def started(_):
+            self.slurm.rows[job["slurm_job_id"]]["job_state"] = ["RUNNING"]
+
+        with patch.object(self.slurm, "hold", side_effect=started):
+            self.backend.tick()
+        self.assertEqual(self.slurm.cancelled, [])
+        self.assertEqual(self.host.started, [])
+        self.assertTrue(rs.slurm_managed(job))
+
+    def test_policy_five_pending_large_allocation_migrates_without_command_resubmission(self):
+        job = self.large_ready()
+        job.update(released=True, state="pending")
+        self.backend.tick()
+        self.assertEqual(job["execution"], "large")
+        self.backend.tick()
+        self.assertEqual(job["state"], "running")
+        self.assertEqual(self.slurm.counter, 1)
+        self.assertEqual(self.slurm.released, [])
+        self.assertEqual(self.host.started, [job["id"]])
+
+    def test_large_cancel_before_launch_and_terminate_after_launch(self):
+        job = self.large_ready()
+        self.backend.tick()
+        self.control("cancel", job)
+        self.backend.tick()
+        self.assertEqual(job["state"], "cancelled")
+        self.assertEqual(self.host.started, [])
+        job = self.large_ready()
+        self.backend.tick()
+        self.backend.tick()
+        self.control("terminate", job)
+        self.assertEqual(self.host.stopped, [job["systemd_unit"]])
+
+    def test_explicit_force_slurm_pending_is_not_migrated(self):
+        job = self.large_ready()
+        with patch.object(self.slurm, "release"):
+            self.control("force-run", job)
+        self.backend.tick()
+        self.assertTrue(rs.slurm_managed(job))
+        self.assertEqual(job["state"], "pending")
+        self.assertEqual(self.slurm.cancelled, [])
+
+    def test_large_handoff_accepts_slurm_optional_integer_priority(self):
+        job = self.large_ready()
+
+        def hold(identity):
+            self.slurm.rows[identity]["priority"] = dict(set=True, infinite=False, number=0)
+
+        with patch.object(self.slurm, "hold", side_effect=hold):
+            self.backend.tick()
+        self.assertEqual(job["execution"], "large")
+        for value in (None, False, dict(set=False, number=0), dict(set=True, infinite=True, number=0)):
+            self.assertFalse(rs.slurm_held(dict(job_state=["PENDING"], priority=value)))
+
+    def test_large_ambiguous_start_is_never_retried_after_restart(self):
+        job = self.large_ready()
+        self.backend.tick()
+        with patch.object(self.host, "start", side_effect=OSError("ambiguous RPC")) as start:
+            self.backend.tick()
+            self.assertEqual(start.call_count, 1)
+        self.assertEqual(job["state"], "unknown")
+        os.close(self.backend.lock_fd)
+        self.backend = rs.Backend(self.backend.config, self.slurm, lambda: copy.deepcopy(self.snapshot), host=self.host)
+        self.backend.tick()
+        self.assertEqual(self.host.started, [])
+        self.assertEqual(self.backend.state["jobs"][0]["state"], "unknown")
+
+    def test_large_namespace_failure_never_launches_on_host(self):
+        job = self.large_ready()
+        path = Path(self.temp.name) / job["id"]
+        payload = json.loads((path / "payload.json").read_text())
+        payload["execution"] = "large"
+        rs.atomic(path / "payload.json", payload)
+        with (
+            patch.object(rs.os, "getuid", return_value=0),
+            patch.dict(rs.os.environ, {"INVOCATION_ID": "test"}),
+            patch.object(rs, "namespace_command", side_effect=ValueError("sandbox missing")),
+            patch.object(rs.subprocess, "Popen") as launch,
+        ):
+            with self.assertRaisesRegex(ValueError, "sandbox missing"):
+                rs.step(path, large=True)
+            launch.assert_not_called()
+
+    def test_large_unit_has_hard_limits_and_managed_environment(self):
+        job = self.large_ready()
+        job.update(execution="large", systemd_unit="resource-large-" + job["id"] + ".service")
+        with patch.object(rs, "checked") as checked:
+            rs.HostRunner().start(job, Path(self.temp.name) / job["id"])
+        argv = checked.call_args.args[0]
+        for option in (
+            "--property=CPUQuota=200%",
+            "--property=MemoryMax=16384M",
+            "--property=MemorySwapMax=0",
+            "--property=OOMPolicy=kill",
+            "large-step",
+        ):
+            self.assertIn(option, argv)
+        payload = json.loads((Path(self.temp.name) / job["id"] / "payload.json").read_text())
+        payload["execution"] = "large"
+        env = rs.execution_environment(payload)
+        self.assertEqual(env["RESOURCE_JOB_ID"], job["id"])
+        self.assertEqual(env["RESOURCE_EXECUTION_MODE"], "managed-large")
+        self.assertNotIn("RESOURCE_HOST_JOB_ID", env)
+
+    def test_large_telemetry_and_oom_remain_managed(self):
+        job = self.large_ready()
+        self.backend.tick()
+        self.snapshot["cgroups"][job["id"]] = {"memory.current": 700, "memory.peak": 1000, "oom_kill": 0}
+        self.snapshot["gpu"].update(allocations_mib={job["id"]: 2500}, process_inventory_complete=True)
+        self.backend.tick()
+        self.assertEqual(job["observed"]["ram_mib"], 700)
+        self.assertEqual(job["observed"]["vram_mib"], 2500)
+        self.assertEqual(self.backend.status()["telemetry"]["ram"]["reserved_mib"], 16384)
+        self.host.units[job["systemd_unit"]].update(
+            ActiveState="failed", SubState="failed", Result="oom-kill", ExecMainStatus="9", ExecMainCode="2"
+        )
+        self.backend.tick()
+        self.assertEqual(job["state"], "failed")
+        self.assertEqual(job["failure"], "ram_oom")
+        self.assertEqual(job["exit_code"], 137)
 
     def test_new_oom_blocks_adaptive_allowance_before_next_admission(self):
         first = self.submit(ram=3072)

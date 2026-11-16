@@ -627,8 +627,31 @@ are deliberately aggressive experimental policy values, not a guarantee against
 OOM or desktop stalls. They differ from the 4 GiB desktop reserve used by ordinary
 admission. Nothing automatically terminates another owner's work to make room.
 
-Release still goes through Slurm: requested RAM, GPU allocations and CPU counts
-can leave it pending even after policy release. No fake capacity, raised cgroup
-limits or unmanaged host fallback is introduced. Large exclusive jobs keep the
-full configured usable GPU budget rather than deriving a negative budget from
-critically low free memory. The plugin marks lane jobs and explains the exception.
+Policy 6 runs this lane through a **managed systemd service outside Slurm's
+reservation accounting**. The same queue remains the sole admission authority.
+The service enforces the original CPU quota and hard RAM limit, forbids swap,
+and retains foreground descendant cleanup, output, profiles and notifications.
+GPU VRAM remains cooperative, not a physical fence. The original submitting
+sandbox is preserved; a missing sandbox fails instead of falling back to the host.
+This differs from the explicitly unmanaged Run on host / Run in sandbox overrides.
+
+For queued or released-but-unstarted Slurm jobs, the daemon first holds the
+allocation, verifies its UUID and held state, persists the transition, cancels it,
+and waits for confirmed cancellation before starting the command once. Critical
+headroom and operator pause are checked again immediately before startup. A job
+that has already started in Slurm is never migrated. On restart, ambiguous service
+starts are reconciled rather than retried. Turning the lane off holds any transition
+that has not launched yet. Existing Slurm force-run overrides retain their meaning.
+
+Pending ordinary Slurm grants retain their full budget allowances but no longer
+impose an unconditional hold on every later job. Slurm RAM capacity counts only
+Slurm allocations; managed lane jobs still count in host growth, CPU and GPU
+admission accounting. This does not make every waiting job admissible: a zero-VRAM
+submission is CPU-only, and a 12 GiB RAM request can still legitimately wait for
+host headroom. Declare a positive VRAM budget and `--large-gpu` for a known large
+runtime when applicable; the daemon never infers this from repository names.
+
+[systemd resource controls](https://www.freedesktop.org/software/systemd/man/latest/systemd.resource-control)
+provide `CPUQuota`, `MemoryMax` and `MemorySwapMax`;
+[`OOMPolicy=kill`](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html#OOMPolicy=) enables whole-job OOM handling. This avoids
+inflating Slurm capacity or shrinking a job's hard limit to force admission.

@@ -158,10 +158,29 @@ test('adaptive admission shows estimates separately from enforced RAM allocation
   assert.match(html, /Only critical headroom and severe pressure/);
   assert.match(html, /Automatic workload signature/);
   assert.match(html, /3 completed samples/);
-  assert.match(html, /hard RAM limit remain unchanged/);
+  assert.match(html, /hard RAM limit remains unchanged/);
   const resources = page(snapshot, { tab: 'resources' });
   assert.match(resources, /Host growth buffer/);
   assert.match(resources, /Slurm RAM capacity/);
   assert.equal(snapshot.jobs[0].ramAdmission.growth, 1);
   assert.equal(snapshot.capacity.ram.slurmCapacity, 24);
+});
+
+
+test('managed large lane keeps budgets and only offers lifecycle controls', () => {
+  const raw = fixture();
+  Object.assign(raw.jobs[0], { execution: 'large', host_phase: 'running', state: 'running',
+    allocation: { cpu: 4, ram_mib: 16384, vram_mib: 24576 } });
+  let snapshot = adaptStatus(raw);
+  assert.equal(snapshot.jobs[0].execution, 'large');
+  assert.equal(snapshot.jobs[0].effectiveBudget.ram, 16);
+  assert.deepEqual(snapshot.jobs[0].actions, ['terminate']);
+  const html = page(snapshot, { selected: snapshot.jobs[0].id });
+  assert.match(html, /Managed large lane · outside Slurm/);
+  assert.match(html, /CPU and hard RAM limits remain enforced/);
+  assert.doesNotMatch(html, /Requested resource budgets are not enforced/);
+  Object.assign(raw.jobs[0], { state: 'pending', host_phase: 'cancelling-slurm' });
+  snapshot = adaptStatus(raw);
+  assert(snapshot.jobs[0].actions.includes('cancel'));
+  assert(!snapshot.jobs[0].actions.includes('run-host'));
 });

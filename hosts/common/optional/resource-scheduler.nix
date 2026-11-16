@@ -66,7 +66,7 @@ in
     largeGpuLane = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Experimental single-large-GPU admission lane; bypasses normal policy budgets except critical pressure/headroom gates. Slurm limits remain enforced.";
+      description = "Experimental managed large-GPU lane outside Slurm accounting; retains CPU/RAM limits and critical pressure/headroom gates.";
     };
     adaptiveRam = lib.mkOption {
       type = lib.types.bool;

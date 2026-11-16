@@ -202,6 +202,8 @@ def gpu_process_allocations(xml, gpu_uuid, proc_root=Path("/proc")):
         seen.add(pid)
         group = (proc_root / pid / "cgroup").read_text()
         match = re.search(r"(?:/|_)job[_-](\d+)(?:/|\b)", group)
+        if not match:
+            match = re.search(r"(?:^|\n)0::/system\.slice/resource-large-([a-f0-9]{32})\.service(?:/|\n|$)", group)
         if match:
             amounts[match[1]] = amounts.get(match[1], 0) + int(memory[1])
     return amounts
@@ -274,8 +276,12 @@ def telemetry():
     # Cgroup v2 high-water marks are authoritative where available; missing stays null.
     result["cgroups"] = {}
     try:
-        for path in Path("/sys/fs/cgroup").glob("system.slice/*slurmstepd.scope/job_*"):
-            match = re.fullmatch(r"job_(\d+)", path.name)
+        for path in list(Path("/sys/fs/cgroup").glob("system.slice/*slurmstepd.scope/job_*")) + list(
+            Path("/sys/fs/cgroup").glob("system.slice/resource-large-*.service")
+        ):
+            match = re.fullmatch(r"job_(\d+)", path.name) or re.fullmatch(
+                r"resource-large-([a-f0-9]{32})\.service", path.name
+            )
             if not match:
                 continue
             metrics = {}
@@ -434,9 +440,7 @@ def admission_reason(job, jobs, snapshot, config):
     request = job["requested"]
     if any(item["state"] == "unknown" for item in running):
         return "Slurm state unknown; retaining reservations until reconciled"
-    # Do not release another job before Slurm has accounted for the previous grant.
-    if any(item["state"] == "pending" for item in running):
-        return "Waiting for Slurm to start the previous allocation"
+    # Pending grants retain their full allowances below, without a blanket FIFO hold.
     game_active = any(managed(item) and item["priority"] == "game" and item["state"] not in TERMINAL for item in jobs)
     game_active = game_active or snapshot.get("game_active", False)
     capacity = config["game_cpu_capacity"] if game_active and job.get("priority") != "game" else config["cpu_capacity"]
@@ -456,7 +460,10 @@ def admission_reason(job, jobs, snapshot, config):
         sampled = snapshot.get("sampled_at")
         if sampled is None or not 0 <= time.time() - sampled <= max(10, config["poll_seconds"] * 3):
             return "Host memory telemetry stale; adaptive admissions stopped"
-        if sum(item["requested"]["ram_mib"] for item in running) + request["ram_mib"] > config["ram_capacity_mib"]:
+        if (
+            sum(item["requested"]["ram_mib"] for item in running if slurm_managed(item)) + request["ram_mib"]
+            > config["ram_capacity_mib"]
+        ):
             return "Slurm RAM reservation capacity exhausted"
     outstanding = sum(ram_allowance(item, config)[0] for item in running)
     host_growth = snapshot["ram"].get("growth_buffer_mib", 0) if config.get("adaptive_ram") else 0
@@ -675,15 +682,29 @@ class Slurm:
     def release(self, job_id):
         checked(["scontrol", "release", job_id])
 
+    def hold(self, job_id):
+        checked(["scontrol", "hold", job_id])
+
     def cancel(self, job_id):
         # TERM then Slurm's configured KillWait/KILL; cgroup cleanup remains Slurm-owned.
         checked(["scancel", job_id])
 
 
 class HostRunner:
-    """Systemd owns unmanaged process lifetime, never resource admission."""
+    """Systemd owns process lifetime; the queue admits the managed large lane."""
 
     def start(self, job, directory):
+        properties = []
+        if job.get("execution") == "large":
+            budget = job["requested"]
+            properties = [
+                "--property=CPUAccounting=yes",
+                "--property=MemoryAccounting=yes",
+                f"--property=CPUQuota={budget['cpu'] * 100}%",
+                f"--property=MemoryMax={budget['ram_mib']}M",
+                "--property=MemorySwapMax=0",
+                "--property=OOMPolicy=kill",
+            ]
         checked(
             [
                 "systemd-run",
@@ -696,11 +717,16 @@ class HostRunner:
                 "--property=TimeoutStopSec=10s",
                 "--property=SendSIGKILL=yes",
                 "--property=Restart=no",
+                *properties,
                 "--",
                 sys.executable,
                 "-I",
                 str(Path(__file__).resolve()),
-                "sandbox-step" if job.get("execution") == "sandbox" else "host-step",
+                "large-step"
+                if job.get("execution") == "large"
+                else "sandbox-step"
+                if job.get("execution") == "sandbox"
+                else "host-step",
                 str(directory),
             ]
         )
@@ -729,7 +755,19 @@ class HostRunner:
 
 
 def managed(job):
+    return job.get("execution", "slurm") in ("slurm", "large")
+
+
+def slurm_managed(job):
     return job.get("execution", "slurm") == "slurm"
+
+
+def slurm_held(row):
+    # Slurm 25 wraps optional integers; older versions returned plain integers.
+    priority = row.get("priority")
+    if isinstance(priority, dict):
+        priority = priority.get("number") if priority.get("set") and not priority.get("infinite") else None
+    return slurm_state(row) == "pending" and type(priority) is int and priority == 0
 
 
 def slurm_state(row):
@@ -1061,7 +1099,7 @@ class Backend:
         self.snapshot["game_active"] = Path(self.config["game_marker_path"]).exists()
         now = time.time()
         for job in self.state["jobs"]:
-            if not managed(job) and job["state"] not in TERMINAL:
+            if not slurm_managed(job) and job["state"] not in TERMINAL:
                 self.tick_host_job(job, now)
         try:
             rows = self.slurm.jobs()
@@ -1072,7 +1110,7 @@ class Backend:
             self.healthy_since = None
             return
         for job in self.state["jobs"]:
-            if job["state"] in TERMINAL or not managed(job):
+            if job["state"] in TERMINAL or not slurm_managed(job):
                 continue
             if not job["slurm_job_id"]:
                 row = by_name.get("rs-" + job["id"])
@@ -1152,8 +1190,11 @@ class Backend:
                     )
                     # Secrets are only retained while execution/recovery may require them.
                     (self.directory / job["id"] / "payload.json").unlink(missing_ok=True)
-            if state in ACTIVE:
-                metrics = self.snapshot.get("cgroups", {}).get(job["slurm_job_id"], {})
+        for job in self.state["jobs"]:
+            if job["state"] in ACTIVE and managed(job):
+                metrics = self.snapshot.get("cgroups", {}).get(
+                    job["id"] if job.get("execution") == "large" else job["slurm_job_id"], {}
+                )
                 observed = job["observed"]
                 job["ram_peak_available"] = metrics.get("memory.peak") is not None
                 observed["ram_mib"] = metrics.get("memory.current")
@@ -1175,7 +1216,10 @@ class Backend:
                 amount = (
                     self.snapshot["gpu"]
                     .get("allocations_mib", {})
-                    .get(job["slurm_job_id"], 0 if self.snapshot["gpu"].get("process_inventory_complete") else None)
+                    .get(
+                        job["id"] if job.get("execution") == "large" else job["slurm_job_id"],
+                        0 if self.snapshot["gpu"].get("process_inventory_complete") else None,
+                    )
                 )
                 observed["vram_mib"] = amount
                 if amount is not None:
@@ -1183,7 +1227,7 @@ class Backend:
                     observed["attribution_confidence"] = self.snapshot["gpu"].get(
                         "attribution_confidence", "unavailable"
                     )
-                if state == "running" and job["requested"]["vram_mib"]:
+                if job["state"] == "running" and job["requested"]["vram_mib"]:
                     field = "gpu_samples" if amount is not None else "gpu_missing_samples"
                     job[field] = job.get(field, 0) + 1
         for job in self.state["jobs"]:
@@ -1247,6 +1291,21 @@ class Backend:
             self.healthy_since = None
         elif self.healthy_since is None:
             self.healthy_since = now
+        if not self.state["paused"]:
+            for job in self.state["jobs"]:
+                if (
+                    slurm_managed(job)
+                    and job["state"] == "pending"
+                    and job.get("cleanup") != "cancellation-requested"
+                    and large_gpu_job(job, self.config)
+                    and not job.get("force_slurm")
+                    and not any(e.get("event") == "force_run_requested" for e in job.get("events", []))
+                    and not large_gpu_reason(
+                        job, [j for j in self.state["jobs"] if j is not job], self.snapshot, self.config
+                    )
+                ):
+                    self.start_large_handoff(job)
+                    break
         queued = sorted(
             (job for job in self.state["jobs"] if job["state"] == "queued" and managed(job)),
             key=lambda j: queue_key(j, now, self.config),
@@ -1449,21 +1508,59 @@ class Backend:
         )
         self.event(job, "profile_recorded", failure=job["failure"], profile=job["profile"])
 
+    def start_large_handoff(self, job):
+        # Hold first: a pending snapshot alone does not rule out a concurrent start.
+        current = self.slurm.detail(job["slurm_job_id"])
+        if current.get("name") != "rs-" + job["id"]:
+            raise ValueError("Slurm identity mismatch before large lane hold")
+        if slurm_state(current) != "pending":
+            return
+        self.slurm.hold(job["slurm_job_id"])
+        row = self.slurm.detail(job["slurm_job_id"])
+        if row.get("name") != "rs-" + job["id"]:
+            raise ValueError("Slurm identity changed during large lane handoff")
+        if not slurm_held(row):
+            return
+        job.update(
+            execution="large", host_phase="cancelling-slurm", systemd_unit="resource-large-" + job["id"] + ".service"
+        )
+        self.changed(job, "pending", "Moving held allocation to the managed large lane")
+        # Persist first; a restart retries cancellation, never command submission.
+        self.slurm.cancel(job["slurm_job_id"])
+        self.event(job, "large_lane_handoff", reason="Managed CPU/RAM limits; original execution namespace retained")
+
     def tick_host_job(self, job, now):
-        # Both unmanaged destinations use the host service lifecycle. Keep the
-        # persisted host_phase field compatible with existing host overrides.
+        # Managed large jobs and both explicit overrides share service lifecycle.
+        # Keep host_phase compatible with existing persisted overrides.
         target = job["execution"]
+        description = "Managed large lane" if target == "large" else f"Unmanaged {target}"
         try:
             if job["host_phase"] == "cancelling-slurm":
                 row = self.slurm.detail(job["slurm_job_id"])
                 if row.get("name") != "rs-" + job["id"]:
-                    raise ValueError("Slurm identity mismatch during unmanaged handoff")
+                    raise ValueError("Slurm identity mismatch during service handoff")
+                if target == "large" and slurm_held(row):
+                    self.slurm.cancel(job["slurm_job_id"])
+                    return
                 if slurm_state(row) != "cancelled":
                     self.changed(job, reason=f"Waiting for confirmed Slurm cancellation before {target} launch")
                     return
                 if job.get("host_cancel_requested"):
                     self.finish_host_job(job, "cancelled", 130, "slurm-terminal", now)
                     return
+                if target == "large":
+                    reason = (
+                        "New admissions paused by owner"
+                        if self.state["paused"]
+                        else large_gpu_reason(
+                            job, [j for j in self.state["jobs"] if j is not job], self.snapshot, self.config
+                        )
+                    )
+                    if not self.config["large_gpu_lane"]:
+                        reason = "Managed large lane disabled; waiting for operator"
+                    if reason:
+                        self.changed(job, reason=reason)
+                        return
                 payload_path = self.directory / job["id"] / "payload.json"
                 payload = json.loads(payload_path.read_text())
                 (self.directory / job["id"] / "result.json").unlink(missing_ok=True)
@@ -1471,7 +1568,7 @@ class Backend:
                 atomic(payload_path, payload)
                 # Persist before launch. Never retry an ambiguous systemd request.
                 job["host_phase"] = "starting"
-                self.changed(job, "pending", f"Starting unmanaged {target} process")
+                self.changed(job, "pending", f"Starting {description} process")
                 self.host.start(job, self.directory / job["id"])
             status = self.host.status(job["systemd_unit"])
             if status.get("LoadState") != "loaded":
@@ -1493,7 +1590,11 @@ class Backend:
                         code += 128
                     if status.get("Result") != "success" and code == 0:
                         code = 1
+                if status.get("Result") != "success" and code == 0:
+                    code = 137 if status.get("Result") == "oom-kill" else 1
                 job["observed"].update(result.get("observed", {}))
+                if target == "large" and status.get("Result") == "oom-kill":
+                    job["observed"]["oom_kill"] = max(1, job["observed"].get("oom_kill") or 0)
                 job["output_truncated"] = result.get("output_truncated", {})
                 state = "cancelled" if job.get("host_cancel_requested") else "completed" if code == 0 else "failed"
                 self.finish_host_job(job, state, code, "systemd-terminal", now)
@@ -1505,18 +1606,16 @@ class Backend:
                     job["started_at"] = job["started_at"] or now
                     self.changed(job, "running")
                     job["wait_reason"] = None
-                    self.event(
-                        job, f"{target}_start", reason=f"Unmanaged {target} execution; no Slurm resource reservation"
-                    )
+                    self.event(job, f"{target}_start", reason=f"{description} execution")
             elif active in ("activating", "deactivating") or finished:
                 self.changed(job, "pending", "Waiting for host service lifecycle confirmation")
             else:
                 raise ValueError("Unknown host service state")
         except (OSError, ValueError, KeyError, subprocess.SubprocessError):
             self.changed(
-                job, "unknown", f"Unmanaged {target} handoff or process state unknown; inspect service before retrying"
+                job, "unknown", f"{description} handoff or process state unknown; inspect service before retrying"
             )
-            self.errors.append(f"Unmanaged {target} job reconciliation failed: " + job["id"])
+            self.errors.append(f"{description} job reconciliation failed: " + job["id"])
 
     def finish_host_job(self, job, state, code, cleanup, now):
         job.update(state=state, exit_code=code, cleanup=cleanup, ended_at=now, wait_reason=None)
@@ -1527,6 +1626,9 @@ class Backend:
         self.changed(job)
 
     def release_job(self, job, *, force=False, bypassed=()):
+        if not force and large_gpu_job(job, self.config):
+            self.start_large_handoff(job)
+            return
         if job.get("vram_auto"):
             # A forced exclusive job keeps the full configured usable GPU budget.
             if not force and not large_gpu_job(job, self.config):
@@ -1539,6 +1641,8 @@ class Backend:
             payload["budget"] = dict(job["requested"])
             atomic(payload_path, payload)
         # Persist the attempt first: an ambiguous RPC must not release this job twice.
+        if force:
+            job["force_slurm"] = True
         job["released"] = True
         self.changed(job, "pending", "Waiting for Slurm allocation")
         try:
@@ -1568,6 +1672,8 @@ class Backend:
             paths = list(
                 Path(self.config["cgroup_root"]).glob("system.slice/*slurmstepd.scope/job_" + job["slurm_job_id"])
             )
+            if job.get("execution") == "large":
+                paths = [Path(self.config["cgroup_root"]) / "system.slice" / job["systemd_unit"]]
             if not paths:
                 if self.game_active:
                     self.game_protection_errors.append("Slurm CPU cgroup unavailable for " + job["id"])
@@ -1577,6 +1683,8 @@ class Backend:
                     quota = (
                         f"{max(1000, int(100000 * self.config['game_cpu_capacity'] * job['requested']['cpu'] / total))} 100000"
                         if self.game_active and total > self.config["game_cpu_capacity"]
+                        else f"{100000 * job['requested']['cpu']} 100000"
+                        if job.get("execution") == "large"
                         else "max 100000"
                     )
                     for name, value in (("cpu.max", quota), ("cpu.weight", "25" if self.game_active else "100")):
@@ -1896,14 +2004,14 @@ class Backend:
             raise ValueError("Confirmation and current job revision required")
         if job["state"] in TERMINAL:
             raise ValueError("Job already finished")
-        if not managed(job):
+        if not slurm_managed(job):
             if action not in ("cancel", "terminate"):
-                raise ValueError("Unmanaged execution cannot be released or reordered in Slurm")
+                raise ValueError("Service execution cannot be released or reordered in Slurm")
             if job["host_phase"] == "cancelling-slurm":
                 job["host_cancel_requested"] = True
             else:
                 if action != "terminate":
-                    raise ValueError("Unmanaged process may have started; use terminate")
+                    raise ValueError("Service process may have started; use terminate")
                 self.host.stop(job["systemd_unit"])
                 job["host_cancel_requested"] = True
             self.event(job, job["execution"] + "_termination_requested")
@@ -2084,10 +2192,10 @@ def namespace_command(payload, payload_fd):
         raise
 
 
-def step(directory, host=False, sandbox=False):
+def step(directory, host=False, sandbox=False, large=False):
     # Slurm or a transient systemd service runs this immutable root bootstrap.
     # Caller environment remains private data until privilege drop.
-    if os.getuid() != 0 or not os.environ.get("INVOCATION_ID" if host or sandbox else "SLURM_JOB_ID"):
+    if os.getuid() != 0 or not os.environ.get("INVOCATION_ID" if host or sandbox or large else "SLURM_JOB_ID"):
         raise RuntimeError("Step bootstrap must be launched by root Slurm or the host service")
     directory = Path(directory)
     payload_fd = os.open(directory / "payload.json", os.O_RDONLY | os.O_NOFOLLOW)
@@ -2097,6 +2205,8 @@ def step(directory, host=False, sandbox=False):
             payload = json.load(stream)
         if payload["id"] != directory.name or not ID_RE.fullmatch(directory.name):
             raise ValueError("Private payload identity mismatch")
+        if large and payload.get("execution") != "large":
+            raise ValueError("Managed large execution was not authorized")
         if host and payload.get("execution") != "host":
             raise ValueError("Unmanaged host execution was not authorized")
         if sandbox and payload.get("execution") != "sandbox":
@@ -2184,6 +2294,7 @@ def execution_environment(payload):
         environment[f"RESOURCE_{target.upper()}_JOB_ID"] = payload["id"]
         environment["RESOURCE_EXECUTION_MODE"] = "unmanaged-" + target
         return environment
+    environment["RESOURCE_EXECUTION_MODE"] = "managed-large" if payload.get("execution") == "large" else "slurm"
     environment.pop("RESOURCE_EXPLORATORY", None)
     if payload.get("explore"):
         environment["RESOURCE_EXPLORATORY"] = "1"
@@ -2346,7 +2457,7 @@ def run(args):
                         dict(
                             action="cancel"
                             if job["state"] in ("queued", "pending")
-                            and (managed(job) or job.get("host_phase") == "cancelling-slurm")
+                            and (slurm_managed(job) or job.get("host_phase") == "cancelling-slurm")
                             else "terminate",
                             id=job_id,
                             revision=job["revision"],
@@ -2549,6 +2660,7 @@ def main():
     actions.add_parser("step").add_argument("directory")
     actions.add_parser("host-step").add_argument("directory")
     actions.add_parser("sandbox-step").add_argument("directory")
+    actions.add_parser("large-step").add_argument("directory")
     actions.add_parser("step-exec").add_argument("fd", type=int)
     args = parser.parse_args()
     if args.action == "job":
@@ -2568,6 +2680,8 @@ def main():
         return step(args.directory)
     if args.action == "host-step":
         return step(args.directory, host=True)
+    if args.action == "large-step":
+        return step(args.directory, large=True)
     if args.action == "sandbox-step":
         return step(args.directory, sandbox=True)
     if args.action == "step-exec":

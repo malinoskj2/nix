@@ -80,6 +80,21 @@ class AdaptiveMemoryTests(unittest.TestCase):
                 "Slurm RAM reservation capacity exhausted",
             )
 
+    def test_pending_grant_keeps_budget_without_blanket_head_of_line_block(self):
+        self.job["state"] = "pending"
+        with patch.object(rs.time, "time", return_value=self.now):
+            self.assertIsNone(rs.admission_reason(self.candidate, [self.job], self.snapshot, self.config))
+            self.job["requested"]["ram_mib"] = 15000
+            self.assertIn(
+                "Insufficient RAM", rs.admission_reason(self.candidate, [self.job], self.snapshot, self.config)
+            )
+
+    def test_large_lane_is_not_a_slurm_memory_allocation(self):
+        self.job.update(execution="large")
+        self.job["requested"]["ram_mib"] = 23000
+        with patch.object(rs.time, "time", return_value=self.now):
+            self.assertIsNone(rs.admission_reason(self.candidate, [self.job], self.snapshot, self.config))
+
     def test_automatic_identity_is_private_exact_and_repo_scoped(self):
         request = dict(
             project="repo-a",

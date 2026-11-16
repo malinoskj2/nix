@@ -33,8 +33,8 @@ export function adaptStatus(raw) {
       vramEstimate: text(job.vram_estimate, job.vram_auto ? 'all-available' : 'declared-peak'),
       measured: { cpu: metric(job.observed?.cpu_percent), ram: gib(job.observed?.ram_peak_mib), vram: gib(job.observed?.vram_peak_mib), confidence: text(job.observed?.attribution_confidence, 'Unavailable') },
       queuePosition: Number.isSafeInteger(job.queue_position) && job.queue_position > 0 ? job.queue_position : null,
-      execution: ['host', 'sandbox'].includes(job.execution) ? job.execution : 'slurm', hostPhase: text(job.host_phase),
-      largeGpuLane: job.large_gpu_lane === true,
+      execution: ['host', 'sandbox', 'large'].includes(job.execution) ? job.execution : 'slurm', hostPhase: text(job.host_phase),
+      largeGpuLane: job.execution === 'large' || job.large_gpu_lane === true,
       profileAutomatic: job.profile_automatic === true,
       memoryPolicy: text(job.memory_policy),
       ramAdmission: job.ram_admission ? { growth: gib(job.ram_admission.growth_mib), basis: text(job.ram_admission.basis), runs: metric(job.ram_admission.learned_runs) } : null,
@@ -46,7 +46,7 @@ export function adaptStatus(raw) {
       events: lifecycle.length ? lifecycle : [{ at: date(job.created_at), label: 'Submitted' }, { at: date(job.started_at), label: 'Started' }, { at: date(job.ended_at), label: `Finished · ${state}` }].filter((e) => e.at).slice(-MAX_EVENTS),
       logs: lifecycle.map((event) => ({ at: event.at, event: event.label, message: event.message })),
       admission: [...lifecycle].reverse().find((event) => event.snapshot)?.snapshot ?? null,
-      actions: ['host', 'sandbox'].includes(job.execution) ? actions.filter((a) => job.state !== 'completed' && job.state !== 'failed' && job.state !== 'cancelled' && (a === 'terminate' || (a === 'cancel' && job.host_phase === 'cancelling-slurm'))) : state === 'waiting' ? actions.filter((a) => a === 'cancel' || (job.state === 'queued' && !job.released && job.cleanup !== 'cancellation-requested' && ['force-run', 'run-next', 'run-host', 'run-sandbox'].includes(a) && (a !== 'run-sandbox' || /^agent-sandbox-[A-Za-z0-9_.-]{1,128}$/.test(job.origin)))) : state === 'running' ? actions.filter((a) => a === 'terminate') : []
+      actions: ['host', 'sandbox', 'large'].includes(job.execution) ? actions.filter((a) => job.state !== 'completed' && job.state !== 'failed' && job.state !== 'cancelled' && (a === 'terminate' || (a === 'cancel' && job.host_phase === 'cancelling-slurm'))) : state === 'waiting' ? actions.filter((a) => a === 'cancel' || (job.state === 'queued' && !job.released && job.cleanup !== 'cancellation-requested' && ['force-run', 'run-next', 'run-host', 'run-sandbox'].includes(a) && (a !== 'run-sandbox' || /^agent-sandbox-[A-Za-z0-9_.-]{1,128}$/.test(job.origin)))) : state === 'running' ? actions.filter((a) => a === 'terminate') : []
     };
   };
   const telemetry = raw.telemetry ?? {};

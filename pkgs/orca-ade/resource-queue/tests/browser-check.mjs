@@ -118,11 +118,15 @@ export async function check() {
   assert(document.querySelector('.inspector').textContent.includes('Only critical headroom and severe pressure'), 'Large GPU exception explains relaxed admission');
   assert(document.querySelector('.inspector').textContent.includes('Automatic workload signature'), 'Automatic profile is visibly identified');
   assert(document.querySelector('.inspector').textContent.includes('3 completed samples'), 'Adaptive allowance reports its evidence');
-  assert(document.querySelector('.inspector').textContent.includes('hard RAM limit remain unchanged'), 'Adaptive admission does not imply changing hard limits');
+  assert(document.querySelector('.inspector').textContent.includes('hard RAM limit remains unchanged'), 'Adaptive admission does not imply changing hard limits');
   assert(document.querySelector('.inspector').textContent.includes('Exploratory'), 'Trial badge appears in inspector');
   assert(document.querySelector('.inspector').textContent.includes('not a measured peak'), 'Trial budget is not presented as a measured peak');
   assert(document.querySelector('.inspector').textContent.includes('nix / trial / v1'), 'Profile settings identity appears in inspector');
   assert(document.querySelector('.inspector').textContent.includes('gpu oom reported'), 'Classified outcome appears in inspector');
+  Object.assign(raw.jobs[0], { execution: 'large', host_phase: 'running', explore: false });
+  await press('[data-action="refresh"]');
+  assert(document.querySelector('.inspector').textContent.includes('Managed large lane · outside Slurm'), 'Managed lane names its executor');
+  assert(!document.querySelector('.inspector').textContent.includes('budgets are not enforced'), 'Managed lane retains enforcement');
   assert(document.documentElement.scrollWidth <= window.innerWidth, 'No horizontal overflow');
   return { passed: results.length, results };
 }
