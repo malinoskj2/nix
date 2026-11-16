@@ -29,6 +29,7 @@
           devshell = self'.devShells.default;
           gpu-scheduler = self'.packages.gpu-scheduler.tests.scheduler;
           cargo-preferences = self'.packages.cargo-preferences;
+          zsh-claude-command = self'.packages.zsh-claude-command.tests.widget;
           resource-scheduler = self'.packages.resource-scheduler.tests.scheduler;
         }
         // lib.optionalAttrs (system == "x86_64-linux") {
