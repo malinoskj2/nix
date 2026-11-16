@@ -9,7 +9,7 @@ import tempfile
 
 policy = json.loads(Path(os.environ["POLICY"]).read_text())
 compat = (Path(os.environ["COMPAT"]) / "bin/gpu-status").read_text()
-assert f'{os.environ["SCHEDULER"]}/bin/resource-scheduler compat status' in compat
+assert f"{os.environ['SCHEDULER']}/bin/resource-scheduler compat status" in compat
 assert policy == {
     "socket_path": "/run/resource-scheduler/control.sock",
     "state_dir": "/var/lib/resource-scheduler",
@@ -25,9 +25,10 @@ assert policy == {
     "poll_seconds": 2,
     "stability_seconds": 10,
     "history_limit": 500,
-    "policy_version": "6",
+    "policy_version": "7",
     "adaptive_ram": True,
     "large_gpu_lane": True,
+    "large_lane_project_ids": ["24291623818044406835024016436979284527", "246305380162557260146525484389874795221"],
     "ram_capacity_mib": 24576,
 }
 

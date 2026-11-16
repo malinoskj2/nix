@@ -655,3 +655,26 @@ runtime when applicable; the daemon never infers this from repository names.
 provide `CPUQuota`, `MemoryMax` and `MemorySwapMax`;
 [`OOMPolicy=kill`](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html#OOMPolicy=) enables whole-job OOM handling. This avoids
 inflating Slurm capacity or shrinking a job's hard limit to force admission.
+
+### Numeric project exceptions (policy 7)
+
+`services.resourceScheduler.largeLaneProjectIds` is an operator-configured list
+of decimal project fingerprints. `resource-status --json` and `resource-job inspect`
+expose each job's `lane_project_id`. The identifier is derived generically from
+its exact stable `--project` value using the versioned SHA-256 namespace and the
+first 128 bits, rendered in decimal. It is an identifier, not an authentication
+secret. Worktrees sharing that project value share the identifier. No project
+names or command-name heuristics appear in the admission implementation.
+
+Allowlisted projects automatically qualify even with a zero-VRAM request or an
+exploratory submission. They share the **same one active slot** with every other
+large-lane workload; there is not one slot per identifier. Explicit strict-memory
+submissions still opt out. Existing queued jobs qualify without resubmission;
+running Slurm jobs are not moved. Removing an identifier does not free the slot
+occupied by a managed lane job that is still running.
+
+Exploratory exceptions retain their 30-minute limit, failure/profile reporting,
+and stop on the lane's critical resource thresholds or unavailable telemetry.
+Their cleanup targets the systemd service, never the cancelled Slurm allocation.
+CPU/RAM limits, original execution namespace, operator pause and startup checks
+remain unchanged. The home configuration holds the numeric selections only.

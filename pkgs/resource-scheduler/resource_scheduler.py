@@ -38,6 +38,7 @@ DEFAULTS = dict(
     gpu_capacity_mib=32768,
     adaptive_ram=False,
     large_gpu_lane=False,
+    large_lane_project_ids=[],
     ram_capacity_mib=24576,
     ram_startup_seconds=30,
     poll_seconds=2,
@@ -74,6 +75,11 @@ def validate_config(config):
     ):
         if type(config[key]) is not int or config[key] < 0:
             raise ValueError("Invalid nonnegative integer configuration: " + key)
+    identifiers = config["large_lane_project_ids"]
+    if not isinstance(identifiers, list) or any(
+        not isinstance(value, str) or not re.fullmatch(r"[1-9][0-9]{0,38}", value) for value in identifiers
+    ):
+        raise ValueError("Lane project identifiers must be decimal strings")
     if type(config["adaptive_ram"]) is not bool or type(config["large_gpu_lane"]) is not bool:
         raise ValueError("Invalid adaptive RAM policy")
     if (
@@ -390,12 +396,24 @@ def workload_scope():
         return dict(profile_scope=cwd, profile_relative_cwd=".")
 
 
+def lane_project_id(job):
+    project = job.get("project")
+    if not isinstance(project, str) or not project or project == "unknown":
+        return None
+    digest = hashlib.sha256(("resource-lane-project-v1\0" + project).encode()).digest()
+    return str(int.from_bytes(digest[:16], "big"))
+
+
 def large_gpu_job(job, config):
+    if not config.get("large_gpu_lane") or not managed(job) or job.get("memory_policy") == "strict":
+        return False
+    # A running managed lane keeps its slot even if configuration changes.
+    if job.get("execution") == "large":
+        return True
+    if lane_project_id(job) in config.get("large_lane_project_ids", []):
+        return True
     return bool(
-        config.get("large_gpu_lane")
-        and managed(job)
-        and not job.get("explore")
-        and job.get("memory_policy") != "strict"
+        not job.get("explore")
         and job["requested"]["vram_mib"]
         and (
             job.get("large_gpu")
@@ -705,6 +723,8 @@ class HostRunner:
                 "--property=MemorySwapMax=0",
                 "--property=OOMPolicy=kill",
             ]
+            if job.get("explore"):
+                properties.append("--property=RuntimeMaxSec=1800")
         checked(
             [
                 "systemd-run",
@@ -1425,7 +1445,9 @@ class Backend:
             ):
                 continue
             reason = None
-            if (
+            if job.get("execution") == "large":
+                reason = large_gpu_reason(job, [], self.snapshot, self.config)
+            elif (
                 ram is None
                 or ram < self.config["ram_headroom_mib"]
                 or (memory and memory.get("full", {}).get("avg10", 0) >= 1)
@@ -1435,11 +1457,15 @@ class Backend:
                 reason = "GPU headroom or unavailable telemetry interrupted exploration"
             if reason:
                 try:
-                    self.slurm.cancel(job["slurm_job_id"])
+                    if job.get("execution") == "large":
+                        self.host.stop(job["systemd_unit"])
+                        job["host_cancel_requested"] = True
+                    else:
+                        self.slurm.cancel(job["slurm_job_id"])
                     job["cleanup"] = "cancellation-requested"
                     job["exploration_stop_reason"] = reason
                     self.event(job, "exploration_interrupted", reason=reason)
-                    self.changed(job, reason=reason + "; awaiting Slurm cleanup")
+                    self.changed(job, reason=reason + "; awaiting execution cleanup")
                 except (OSError, subprocess.SubprocessError):
                     self.errors.append("Exploration cancellation needs reconciliation: " + job["id"])
 
@@ -1703,6 +1729,7 @@ class Backend:
         result = {
             **{k: v for k, v in job.items() if k not in ("waiter_token", "ram_samples")},
             "requested": dict(job["requested"]),
+            "lane_project_id": lane_project_id(job),
             "events": [{k: v for k, v in event.items() if k != "snapshot"} for event in job["events"][-8:]],
         }
         if job.get("notification"):
@@ -1733,7 +1760,7 @@ class Backend:
         }
         running = [j for j in self.state["jobs"] if j["state"] in ACTIVE and managed(j)]
         ram_actual = [j["observed"]["ram_mib"] for j in running]
-        gpu_actual = [j["observed"]["vram_mib"] for j in running if j["requested"]["vram_mib"]]
+        gpu_actual = [j["observed"]["vram_mib"] for j in running]
         cpu_samples = [j["observed"]["cpu_percent"] for j in running]
         cpu_actual = sum(cpu_samples) / 100 if all(v is not None for v in cpu_samples) else None
         host_actual = snapshot.get("cpu", {}).get("host_actual")

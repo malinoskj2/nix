@@ -18,6 +18,7 @@ let
       game_marker_path = "/run/resource-scheduler-game-active";
       adaptive_ram = cfg.adaptiveRam;
       large_gpu_lane = cfg.largeGpuLane;
+      large_lane_project_ids = cfg.largeLaneProjectIds;
       ram_capacity_mib = cfg.memoryMiB;
       ram_headroom_mib = cfg.ramHeadroomMiB;
       vram_headroom_mib = cfg.vramHeadroomMiB;
@@ -67,6 +68,11 @@ in
       type = lib.types.bool;
       default = false;
       description = "Experimental managed large-GPU lane outside Slurm accounting; retains CPU/RAM limits and critical pressure/headroom gates.";
+    };
+    largeLaneProjectIds = lib.mkOption {
+      type = lib.types.listOf (lib.types.strMatching "[1-9][0-9]{0,38}");
+      default = [ ];
+      description = "Numeric project fingerprints automatically sharing the single managed lane, including CPU-only submissions and probes. Explicit strict memory remains excluded.";
     };
     adaptiveRam = lib.mkOption {
       type = lib.types.bool;

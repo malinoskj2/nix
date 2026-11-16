@@ -1456,6 +1456,57 @@ class SchedulerTests(unittest.TestCase):
         self.snapshot["pressure"]["memory"] = dict(full=dict(avg10=0), some=dict(avg10=0))
         return self.submit(ram=16384, vram=24576, origin="agent-sandbox-test")
 
+    def test_numeric_project_exception_shares_one_slot_with_all_large_jobs(self):
+        self.backend.config["large_gpu_lane"] = True
+        first = self.submit(ram=12288)
+        second = self.profiled(ram=16384, vram=26000)
+        second["project"] = "another-project"
+        self.backend.config.update(
+            large_gpu_lane=True, large_lane_project_ids=[rs.lane_project_id(first), rs.lane_project_id(second)]
+        )
+        self.snapshot["sampled_at"] = rs.time.time()
+        self.snapshot["pressure"]["memory"] = dict(full=dict(avg10=0), some=dict(avg10=0))
+        self.backend.tick()
+        self.backend.tick()
+        self.assertEqual(first["execution"], "large")
+        self.assertEqual(first["state"], "running")
+        self.assertEqual(first["requested"]["vram_mib"], 0)
+        first["observed"]["vram_mib"] = 300
+        self.assertEqual(self.backend.status()["telemetry"]["gpu"]["managed_actual_mib"], 300)
+        self.assertEqual(second["state"], "queued")
+        self.assertIn("occupied", second["wait_reason"])
+        self.host.units[first["systemd_unit"]].update(ActiveState="active", SubState="exited")
+        self.backend.tick()
+        self.backend.tick()
+        self.assertEqual(second["execution"], "large")
+        self.assertTrue(second["explore"])
+        self.assertEqual(second["state"], "running")
+        with patch.object(rs, "checked") as checked:
+            rs.HostRunner().start(second, Path(self.temp.name) / second["id"])
+        self.assertIn("--property=RuntimeMaxSec=1800", checked.call_args.args[0])
+        before = list(self.slurm.cancelled)
+        self.snapshot["ram"]["available_mib"] = 500
+        self.backend.tick()
+        self.assertEqual(self.host.stopped, [second["systemd_unit"]])
+        self.assertEqual(self.slurm.cancelled, before)
+
+    def test_numeric_project_identity_is_stable_and_strict_is_an_opt_out(self):
+        job = self.submit()
+        identity = rs.lane_project_id(job)
+        self.assertTrue(identity.isdecimal())
+        self.assertEqual(identity, rs.lane_project_id({**job, "worktree": "another-card"}))
+        self.assertNotEqual(identity, rs.lane_project_id({**job, "project": "another-project"}))
+        self.assertIsNone(rs.lane_project_id({}))
+        self.backend.config.update(large_gpu_lane=True, large_lane_project_ids=[identity])
+        job["memory_policy"] = "adaptive"
+        self.assertTrue(rs.large_gpu_job(job, self.backend.config))
+        job["memory_policy"] = "strict"
+        self.assertFalse(rs.large_gpu_job(job, self.backend.config))
+        self.assertEqual(self.backend.public_job(job)["lane_project_id"], identity)
+        for invalid in ([1], ["not-numeric"], ["01"], "123", ["1" * 40]):
+            with self.assertRaises(ValueError):
+                rs.validate_config({**self.backend.config, "large_lane_project_ids": invalid})
+
     def test_large_handoff_waits_for_cancellation_and_rechecks_pressure(self):
         job = self.large_ready()
         with patch.object(self.slurm, "cancel"):
