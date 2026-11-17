@@ -1,6 +1,6 @@
 ---
 name: codex-image
-description: Generate or edit raster images with Codex (gpt-6.1-sol, medium reasoning) and its built-in image generator. Use whenever a task needs a raster or visually complex image that can't reasonably be hand-written as SVG, CSS or code, such as illustrations, photos, realistic or painterly art, detailed icons, logos with texture, sprites, textures, backgrounds, hero images, mockups, concept art, reference images for 3D, or edits to an existing image. Don't use it for charts, diagrams, simple geometric SVG, screenshots or UI you can build in code.
+description: Generate or edit raster images with Codex (gpt-6.2-sol, medium reasoning) and its built-in image generator. Use whenever a task needs a raster or visually complex image that can't reasonably be hand-written as SVG, CSS or code, such as illustrations, photos, realistic or painterly art, detailed icons, logos with texture, sprites, textures, backgrounds, hero images, mockups, concept art, reference images for 3D, or edits to an existing image. Don't use it for charts, diagrams, simple geometric SVG, screenshots or UI you can build in code.
 ---
 
 # Codex image generation
@@ -33,7 +33,7 @@ done < <(codex mcp list --json | jq -r '.[].name')
 codex \
   "${no_mcp[@]}" \
   exec \
-  -m gpt-6.1-sol \
+  -m gpt-6.2-sol \
   -c model_reasoning_effort=medium \
   -s read-only \
   --skip-git-repo-check \

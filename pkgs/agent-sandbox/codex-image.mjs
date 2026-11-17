@@ -181,7 +181,7 @@ async function main() {
     allowPositionals: true,
     options: {
       image: { type: "string", short: "i", multiple: true, default: [] },
-      model: { type: "string", short: "m", default: "gpt-6.1-sol" },
+      model: { type: "string", short: "m", default: "gpt-6.2-sol" },
       effort: { type: "string", default: "medium" },
       help: { type: "boolean", short: "h" },
     },
