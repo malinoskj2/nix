@@ -464,18 +464,25 @@ with the job, not an unlimited archive. Successful log reads exit zero; `wait`
 returns the job's exit code. Observation timeout returns 124 without cancelling
 or resubmitting the job.
 
-New submissions preserve the submitting Orca session identity. The foreground
-client heartbeats a 30-second waiter lease and acknowledges terminal results;
-normal foreground completions do not generate redundant notifications. A detached
-completion becomes eligible after both that lease and a 10-second completion
-grace expire. `resource-job wait` can reattach and acknowledge the result.
+New submissions preserve the submitting Orca session identity. Foreground clients
+and `resource-job wait` record output consumption, not agent acknowledgement.
+This also applies to older clients using a waiter token: a terminal waiter cannot
+silence an Orca wake-up. Explicit `resource-job ack JOB_ID --confirm` or the plugin's
+**Mark reviewed** action records that a human or agent handled the update.
 
-The unprivileged `resource-job-notifications` user service resolves the exact
-local structured Orca session and sends a completion message with inspection
-commands. It never launches a replacement agent or retries the workload. Session
-matching does not use project names, paths or terminal titles. Terminal-only,
-missing or ambiguous sessions fall back to the plugin's **Completions to review**
-inbox. Delivery acceptance is not proof the agent has read or acted on a message.
+The unprivileged `resource-job-notifications` user service sends state changes to
+the exact local structured Orca session: running, unknown, recovery to queued, and
+terminal outcomes. A 10-second debounce coalesces rapid changes into the latest
+state. Waiter heartbeats do not suppress delivery. Claims are bound to a notification
+generation so an older delivery cannot overwrite a newer state. Delivered updates
+remain in the review inbox until acknowledged; acceptance is not proof of reading.
+
+Messages instruct agents to inspect current state before acting, acknowledge handled
+updates, and, for supervised workers, report to their existing coordinator through
+the dispatch mailbox. They do not create a new coordinator route or authorize retries.
+Session matching does not use project names, paths or terminal titles. Terminal-only,
+missing or ambiguous sessions remain in the plugin inbox. The notifier never starts
+a replacement agent or retries the workload.
 
 The scheduler persists a delivery claim before contacting Orca. A lost receipt
 or restart during sending leaves an uncertain outcome in the inbox rather than

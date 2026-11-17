@@ -504,9 +504,14 @@ class SchedulerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.backend.handle(dict(version=1, action="notification-ack", id=job["id"]), os.getuid())
         self.backend.handle(dict(version=1, action="notification-ack", id=job["id"], token=token), os.getuid())
-        self.assertEqual(self.backend.notification_inbox(), [])
+        self.assertEqual(job["notification"]["state"], "pending")
+        self.assertIn("output_consumed_at", job)
+        with patch.object(rs.time, "time", return_value=job["ended_at"] + 11):
+            self.assertTrue(self.backend.notification_inbox()[0]["ready"])
         os.close(self.backend.lock_fd)
         self.backend = rs.Backend(self.backend.config, self.slurm, lambda: copy.deepcopy(self.snapshot), host=self.host)
+        self.assertEqual(len(self.backend.notification_inbox()), 1)
+        self.backend.handle(dict(version=1, action="notification-ack", id=job["id"], confirm=True), os.getuid())
         self.assertEqual(self.backend.notification_inbox(), [])
 
     def test_expired_waiter_claim_survives_restart_without_duplicate_delivery(self):
@@ -528,7 +533,37 @@ class SchedulerTests(unittest.TestCase):
             dict(version=1, action="notification-finish", id=job["id"], token=claim["token"], state="delivered"),
             os.getuid(),
         )
-        self.assertEqual(self.backend.notification_inbox(), [])
+        self.assertEqual(self.backend.notification_inbox()[0]["notification"]["state"], "delivered")
+
+    def test_state_notifications_coalesce_and_reject_stale_claims(self):
+        job = self.submit()
+        self.backend.changed(job, "running")
+        running = job["notification"]["generation"]
+        self.backend.changed(job, "unknown")
+        self.backend.changed(job, "queued")
+        self.assertEqual(len(self.backend.notification_inbox()), 1)
+        self.assertEqual(job["notification"]["job_state"], "queued")
+        with patch.object(rs.time, "time", return_value=job["notification"]["created_at"] + 11):
+            with self.assertRaises(ValueError):
+                self.backend.handle(dict(version=1, action="notification-claim", id=job["id"], generation=running), os.getuid())
+            claim = self.backend.handle(dict(version=1, action="notification-claim", id=job["id"], generation=job["notification"]["generation"]), os.getuid())
+        self.finish(job)
+        with self.assertRaises(ValueError):
+            self.backend.handle(dict(version=1, action="notification-finish", id=job["id"], token=claim["token"], state="delivered"), os.getuid())
+        self.assertEqual(job["notification"]["state"], "pending")
+        self.assertEqual(job["notification"]["job_state"], "completed")
+
+    def test_slurm_start_notifies_despite_active_waiter(self):
+        job = self.submit()
+        self.backend.handle(dict(version=1, action="watch", id=job["id"], token="b" * 32), os.getuid())
+        self.slurm.rows[job["slurm_job_id"]]["job_state"] = ["RUNNING"]
+        self.backend.tick()
+        self.assertEqual(job["notification"]["job_state"], "running")
+        generation = job["notification"]["generation"]
+        self.backend.tick()
+        self.assertEqual(job["notification"]["generation"], generation)
+        with patch.object(rs.time, "time", return_value=job["notification"]["created_at"] + 11):
+            self.assertTrue(self.backend.notification_inbox()[0]["ready"])
 
     def test_unreviewed_completion_pins_output_until_acknowledged(self):
         first = self.submit()
@@ -568,7 +603,8 @@ class SchedulerTests(unittest.TestCase):
             self.assertEqual(len(output.getvalue()), 40000)
             args.operation = "wait"
             self.assertEqual(rs.resource_job(args), 7)
-        self.assertEqual(job["notification"]["state"], "acknowledged")
+        self.assertEqual(job["notification"]["state"], "pending")
+        self.assertIn("output_consumed_at", job)
 
     def test_resource_job_wait_timeout_does_not_cancel_or_resubmit(self):
         job = self.submit()

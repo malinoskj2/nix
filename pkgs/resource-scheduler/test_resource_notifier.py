@@ -55,6 +55,17 @@ class NotifierTests(unittest.TestCase):
         notifier.deliver_once("/trusted/orca", self.call, self.request)
         self.assertEqual(len(self.calls), 2)
 
+    def test_running_update_requests_coordinator_report_and_explicit_ack(self):
+        self.item["state"] = "running"
+        self.item["notification"]["generation"] = 3
+        notifier.deliver_once("/trusted/orca", self.call, self.request)
+        body = self.calls[-1][-1]
+        self.assertIn("running", body)
+        self.assertIn("existing coordinator", body)
+        self.assertIn("resource-job ack", body)
+        self.assertIn("inspect the current job", body)
+        self.assertEqual(self.requests[1]["generation"], 3)
+
     def test_waiter_suppression_does_not_contact_orca(self):
         self.item["ready"] = False
         notifier.deliver_once("/trusted/orca", self.call, self.request)

@@ -107,7 +107,7 @@ test('exploratory profiles and outcomes are visible without claiming a peak guar
   assert.doesNotMatch(page(adaptStatus(raw), { selected: job.id }), /<img src=x/);
 });
 
-test('completion inbox hides active waiters, escapes output and exposes uncertain delivery', () => {
+test('update inbox debounces pending notices, escapes output and exposes uncertain delivery', () => {
   const raw = fixture(), id = raw.jobs[0].id;
   assert.deepEqual(adaptStatus(raw).notifications, []);
   raw.notifications = [
@@ -119,7 +119,7 @@ test('completion inbox hides active waiters, escapes output and exposes uncertai
   const snapshot = adaptStatus(raw);
   assert.equal(snapshot.notifications.length, 1);
   const html = page(snapshot);
-  assert.match(html, /Completions to review/);
+  assert.match(html, /Job updates to review/);
   assert.match(html, /Exit 7/);
   assert.match(html, /Delivery may have been interrupted/);
   assert.match(html, /data-notification-job=/);
@@ -183,4 +183,15 @@ test('managed large lane keeps budgets and only offers lifecycle controls', () =
   snapshot = adaptStatus(raw);
   assert(snapshot.jobs[0].actions.includes('cancel'));
   assert(!snapshot.jobs[0].actions.includes('run-host'));
+});
+
+test('delivered running updates remain reviewable without a fake exit code', () => {
+  const raw = fixture();
+  raw.notifications = [{ id: raw.jobs[0].id, label: 'Running update', state: 'running', notification: { state: 'delivered' } }];
+  const snapshot = adaptStatus(raw);
+  assert.equal(snapshot.notifications.length, 1);
+  const html = page(snapshot);
+  assert.match(html, /Running update/);
+  assert.match(html, /Mark reviewed/);
+  assert.doesNotMatch(html, /Running · Exit/);
 });

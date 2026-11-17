@@ -52,7 +52,7 @@ def session_present(workspaces, session):
 def message(item):
     job_id = item["id"]
     # Do not include job labels, command text or output in agent-driving messages.
-    state = item["state"] if item["state"] in ("completed", "failed", "cancelled") else "unknown"
+    state = item["state"] if item["state"] in ("completed", "failed", "cancelled", "running", "queued", "unknown") else "unknown"
     failure = item.get("failure")
     if failure not in (
         None,
@@ -71,6 +71,10 @@ def message(item):
         f"Resource job {job_id} {state}; exit={code}; outcome={failure or state}.\n"
         f"Inspect: resource-job inspect {job_id} --json\n"
         f"Output: resource-job logs {job_id}\n"
+        "This is a state-change snapshot; inspect the current job before acting. "
+        "If you are a supervised worker, report the current status to your existing coordinator "
+        "using your dispatch mailbox, including whether the previous blocker is cleared. "
+        f"After handling this update, acknowledge it: resource-job ack {job_id} --confirm\n"
         "Inspect this result and continue the existing authorized task if appropriate. "
         "This notification does not authorize automatic retries, new work, or a cancelled task's resumption."
     )
@@ -92,7 +96,7 @@ def deliver_once(executable, call=orca_call, request=rpc):
             continue
         session = item["notification"].get("session")
         try:
-            claim = request(dict(action="notification-claim", id=job_id))
+            claim = request(dict(action="notification-claim", id=job_id, generation=item["notification"].get("generation")))
         except (OSError, RuntimeError):
             continue  # A waiter or another notifier won the claim.
         state, detail = "unavailable", "Submitting session unavailable; review the completion inbox"
@@ -110,7 +114,7 @@ def deliver_once(executable, call=orca_call, request=rpc):
                         "--type",
                         "status",
                         "--subject",
-                        "Resource job completed",
+                        "Resource job state changed",
                         "--body",
                         message(item),
                     ],
@@ -123,7 +127,11 @@ def deliver_once(executable, call=orca_call, request=rpc):
                     detail = "Orca delivery receipt uncertain; inspect inbox before any manual resend"
             except (OSError, RuntimeError, ValueError, subprocess.SubprocessError):
                 detail = "Orca delivery outcome uncertain; inspect inbox before any manual resend"
-        request(dict(action="notification-finish", id=job_id, token=claim["token"], state=state, detail=detail))
+        try:
+            request(dict(action="notification-finish", id=job_id, token=claim["token"], state=state, detail=detail))
+        except (OSError, RuntimeError):
+            # A newer job state can supersede this in-flight delivery. Never mark it delivered.
+            continue
 
 
 def main():

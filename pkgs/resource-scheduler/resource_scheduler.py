@@ -906,6 +906,7 @@ class Backend:
         if reason is not None:
             job["wait_reason"] = reason
         job["revision"] += 1
+        self.prepare_notification(job)
         self.save()
 
     def submit(self, request, uid):
@@ -913,7 +914,7 @@ class Backend:
             raise ValueError("Nested reservations are forbidden; run within the existing budget")
         if (
             sum(
-                j.get("notification", {}).get("state") in ("pending", "sending", "unavailable")
+                j.get("notification", {}).get("state") in ("pending", "sending", "unavailable", "delivered")
                 for j in self.state["jobs"]
             )
             >= 500
@@ -1026,7 +1027,7 @@ class Backend:
             profile_automatic=automatic and profile is not None,
             memory_policy=memory_policy,
             large_gpu=large_gpu,
-            notification={"state": "waiting", "session": session},
+            notification={"state": "waiting", "session": session, "job_state": "queued", "generation": 0},
             waiter_token=waiter,
             waiter_until=time.time() + 30 if waiter else 0,
             owner_uid=uid,
@@ -1382,13 +1383,16 @@ class Backend:
         if now - self.last_sample_event >= 30 and any(j["state"] in ACTIVE for j in self.state["jobs"]):
             self.event({}, "sample", snapshot=self.public_telemetry())
             self.last_sample_event = now
+        for job in self.state["jobs"]:
+            self.prepare_notification(job)
         terminal = [j for j in self.state["jobs"] if j["state"] in TERMINAL]
         for job in terminal:
             self.record_profile(job)
-            self.prepare_notification(job)
         keep = {j["id"] for j in terminal[-self.config["history_limit"] :]}
         keep.update(
-            j["id"] for j in terminal if j.get("notification", {}).get("state") in ("pending", "sending", "unavailable")
+            j["id"]
+            for j in terminal
+            if j.get("notification", {}).get("state") in ("pending", "sending", "unavailable", "delivered")
         )
         for job in terminal:
             if job["id"] not in keep:
@@ -1401,9 +1405,24 @@ class Backend:
 
     def prepare_notification(self, job):
         notice = job.get("notification")
-        # Pre-upgrade jobs do not generate a burst of historical notifications.
-        if notice and notice["state"] == "waiting" and job["state"] in TERMINAL:
-            notice.update(state="pending", created_at=time.time())
+        if not notice:
+            return
+        state = job["state"]
+        previous = notice.get("job_state")
+        # Adopt old live notices without replaying historical terminal outcomes.
+        if previous is None:
+            if state in TERMINAL and notice["state"] != "waiting":
+                return
+            previous = "queued"
+        if state == previous or state not in (*TERMINAL, "running", "unknown", "queued"):
+            return
+        job["notification"] = dict(
+            state="pending",
+            session=notice.get("session"),
+            job_state=state,
+            generation=notice.get("generation", 0) + 1,
+            created_at=time.time(),
+        )
 
     def notification_inbox(self):
         return [
@@ -1415,10 +1434,10 @@ class Backend:
                 "failure": j.get("failure"),
                 "project": j["project"],
                 "notification": {k: v for k, v in j["notification"].items() if k != "token"},
-                "ready": time.time() >= max(j.get("waiter_until", 0), (j.get("ended_at") or time.time()) + 10),
+                "ready": time.time() >= j["notification"].get("created_at", 0) + 10,
             }
             for j in self.state["jobs"]
-            if j.get("notification", {}).get("state") in ("pending", "sending", "unavailable")
+            if j.get("notification", {}).get("state") in ("pending", "sending", "unavailable", "delivered")
         ]
 
     def output_metadata(self, job):
@@ -1967,12 +1986,16 @@ class Backend:
             return {"id": job_id}
         if action in ("notification-claim", "notification-finish", "notification-ack"):
             notice = job.get("notification")
-            if job["state"] not in TERMINAL or not notice:
+            if not notice:
                 raise ValueError("No completion notification")
             if action == "notification-claim":
-                due = max(job.get("waiter_until", 0), (job.get("ended_at") or time.time()) + 10)
-                if notice["state"] != "pending" or time.time() < due:
-                    raise ValueError("Notification is claimed or has an active waiter")
+                due = notice.get("created_at", 0) + 10
+                if (
+                    notice["state"] != "pending"
+                    or time.time() < due
+                    or request.get("generation", notice.get("generation")) != notice.get("generation")
+                ):
+                    raise ValueError("Notification is claimed, superseded or not ready")
                 # Durable intent BEFORE contacting Orca. A lost response never causes a second wake.
                 notice.update(state="sending", token=uuid.uuid4().hex)
                 self.save()
@@ -1986,13 +2009,13 @@ class Backend:
                 notice.update(state=state, detail=clean_label(request.get("detail", state)))
                 notice.pop("token", None)
             else:
-                if (
-                    not (request.get("token") and request["token"] == job.get("waiter_token"))
-                    and request.get("confirm") is not True
-                ):
-                    raise ValueError("Acknowledge with --confirm or the active waiter token")
-                if notice["state"] == "sending" and request.get("confirm") is not True:
-                    return {"id": job_id, "state": "sending"}
+                if request.get("confirm") is not True:
+                    if not request.get("token") or request["token"] != job.get("waiter_token"):
+                        raise ValueError("Acknowledge with --confirm; waiter tokens only record output consumption")
+                    # Compatibility with old clients: draining a CLI is not agent acknowledgement.
+                    job["output_consumed_at"] = time.time()
+                    self.save()
+                    return {"id": job_id, "state": notice["state"], "output_consumed": True}
                 notice.update(state="acknowledged")
                 notice.pop("token", None)
             self.save()

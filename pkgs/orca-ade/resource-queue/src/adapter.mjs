@@ -52,7 +52,7 @@ export function adaptStatus(raw) {
   const telemetry = raw.telemetry ?? {};
   const cpu = telemetry.cpu ?? {}, ram = telemetry.ram ?? {}, gpu = telemetry.gpu ?? {};
   return {
-    notifications: (Array.isArray(raw.notifications) ? raw.notifications : []).filter((n) => /^[a-f0-9]{32}$/.test(n.id) && ['pending', 'sending', 'unavailable'].includes(n.notification?.state) && (n.ready || n.notification.state !== 'pending')).slice(0, 100).map((n) => ({ id: n.id, label: text(n.label, 'Job'), state: text(n.state), delivery: n.notification.state, detail: text(n.notification.detail), exit: n.exit_code, failure: text(n.failure) })),
+    notifications: (Array.isArray(raw.notifications) ? raw.notifications : []).filter((n) => /^[a-f0-9]{32}$/.test(n.id) && ['pending', 'sending', 'unavailable', 'delivered'].includes(n.notification?.state) && (n.ready || n.notification.state !== 'pending')).slice(0, 100).map((n) => ({ id: n.id, label: text(n.label, 'Job'), state: text(n.state), delivery: n.notification.state, detail: text(n.notification.detail), exit: n.exit_code, failure: text(n.failure) })),
     notificationCount: Number.isSafeInteger(raw.notification_count) ? raw.notification_count : 0,
     schemaVersion: 1, revision: raw.revision, at: date(raw.generated_at), sampledAt: date(telemetry.sampled_at), policy: String(raw.policy_version ?? 'Unknown'), host: text(raw.host, 'Shared host'),
     mode: raw.mode, actions: actions.filter((a) => a === 'pause' || a === 'resume'),
