@@ -345,7 +345,7 @@ the compositor tearing patch when updating.
 ## Codex
 
 `overlays/codex/default.nix` temporarily advances `pkgs.unstable.codex` to
-[0.169.0](https://github.com/openai/codex/releases/tag/rust-v0.169.0) without
+[0.169.1](https://github.com/openai/codex/releases/tag/rust-v0.169.1) without
 moving the unstable input or unrelated packages. It retains nixpkgs' package
 layout, voice runtime, code-mode helper and Nix compatibility patches. The
 host CLI, sandbox CLI and sandbox app-server all use this override.
@@ -353,7 +353,7 @@ host CLI, sandbox CLI and sandbox app-server all use this override.
 For a manual bump, resolve the requested release tag to its full commit SHA,
 update `version`, `buildCommit`, the unpacked source hash and `cargoHash`,
 and compare the release's `codex-rs/Cargo.lock` V8 version with nixpkgs'
-`librusty_v8` and source bindings. Version 0.169.0 still uses V8 152.2.0.
+`librusty_v8` and source bindings. Version 0.169.1 still uses V8 152.2.0.
 Build the package and its `tests.app-server-daemon` and `tests.voice-runtime`
 passthru checks; these exercise the package layout and matching helper build
 stamps. Run builds through the shared resource scheduler. Remove the override
