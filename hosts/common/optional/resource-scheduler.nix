@@ -151,7 +151,6 @@ in
 
     services.slurm = {
       server.enable = true;
-      server.flags.systemd = true;
       client.enable = true;
       clusterName = "workstation-resources";
       procTrackType = "proctrack/cgroup";
@@ -244,7 +243,9 @@ in
     # retrying after network readiness rather than leaving the queue offline.
     # A SIGHUP reconfigure re-executes the daemon and the old process exits 0;
     # under Type=forking systemd then stops the unit and kills the new process.
+    # The nixpkgs wrapper doesn't exec, so notify needs the unwrapped binary.
     systemd.services.slurmctld = {
+      environment.SLURM_CONF = "${config.services.slurm.etcSlurm}/slurm.conf";
       wants = [ "network-online.target" ];
       after = [ "network-online.target" ];
       serviceConfig = {
@@ -254,6 +255,7 @@ in
         User = config.services.slurm.user;
         Group = "slurm";
         RuntimeDirectory = "slurmctld";
+        ExecStart = lib.mkForce "${config.services.slurm.package}/bin/slurmctld --systemd";
         ExecStartPre = lib.mkForce [
           "+${pkgs.writeShellScript "slurmctld-pre-start" config.systemd.services.slurmctld.preStart}"
         ];
