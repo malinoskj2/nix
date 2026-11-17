@@ -151,6 +151,7 @@ in
 
     services.slurm = {
       server.enable = true;
+      server.flags.systemd = true;
       client.enable = true;
       clusterName = "workstation-resources";
       procTrackType = "proctrack/cgroup";
@@ -223,6 +224,7 @@ in
     systemd.services.munged.after = [ "resource-scheduler-munge-key.service" ];
     # The upstream module refers to munge.service for slurmd, but the service is munged.
     systemd.services.slurmd = {
+      environment.SLURM_CONF = "${config.services.slurm.etcSlurm}/slurm.conf";
       requires = [ "munged.service" ];
       wants = [ "network-online.target" ];
       after = [
@@ -230,16 +232,23 @@ in
         "network-online.target"
       ];
       serviceConfig = {
+        Type = lib.mkForce "notify";
+        ExecStart = lib.mkForce "${config.services.slurm.package}/bin/slurmd --systemd";
+        PIDFile = lib.mkForce null;
         Restart = "on-failure";
         RestartSec = 5;
       };
     };
     # Listener address resolution can fail during boot. Keep both daemons
     # retrying after network readiness rather than leaving the queue offline.
+    # A SIGHUP reconfigure re-executes the daemon and the old process exits 0;
+    # under Type=forking systemd then stops the unit and kills the new process.
     systemd.services.slurmctld = {
       wants = [ "network-online.target" ];
       after = [ "network-online.target" ];
       serviceConfig = {
+        Type = lib.mkForce "notify";
+        PIDFile = lib.mkForce null;
         Restart = "on-failure";
         RestartSec = 5;
       };
@@ -257,7 +266,7 @@ in
       missingok = true;
       notifempty = true;
       create = "0600 slurm slurm";
-      postrotate = "${config.systemd.package}/bin/systemctl kill -s HUP slurmctld.service || true";
+      postrotate = "${config.systemd.package}/bin/systemctl reload slurmctld.service || true";
     };
 
     systemd.services.resource-scheduler = {
