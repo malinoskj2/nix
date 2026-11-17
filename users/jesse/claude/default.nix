@@ -76,6 +76,7 @@ in
       rust = ./rules/rust.md;
       sandbox-display = ./rules/sandbox-display.md;
       sandbox-previews = ./rules/sandbox-previews.md;
+      tool-output = ./rules/tool-output.md;
       worktrees = ./rules/worktrees.md;
     };
 

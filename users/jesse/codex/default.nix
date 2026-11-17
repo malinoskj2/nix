@@ -96,6 +96,7 @@ in
         ../claude/rules/media.md
         ../claude/rules/sandbox-display.md
         ../claude/rules/sandbox-previews.md
+        ../claude/rules/tool-output.md
       ]
       + ''
 
