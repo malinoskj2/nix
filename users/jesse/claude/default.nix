@@ -63,6 +63,7 @@ in
       tiktok-search = ./skills/tiktok-search;
       true-random = ./skills/true-random;
       video-download = ./skills/video-download;
+      work-queue = ./skills/work-queue;
       youtube-search = ./skills/youtube-search;
     };
     rules = {

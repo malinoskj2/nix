@@ -1,0 +1,4 @@
+interface:
+  display_name: "Work Queue"
+  short_description: "Show running and waiting work as a text tree"
+  default_prompt: "Use $work-queue to show the shared workstation's current work queue."
