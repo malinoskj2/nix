@@ -565,6 +565,7 @@ def profile_identity(request):
 
 
 PROFILE_LIMIT = 512
+DELIVERED_REVIEW_SECONDS = 24 * 3600
 
 
 def new_profile(identity):
@@ -1397,6 +1398,7 @@ class Backend:
             self.last_sample_event = now
         for job in self.state["jobs"]:
             self.prepare_notification(job)
+            self.retire_delivered_notification(job)
         terminal = [j for j in self.state["jobs"] if j["state"] in TERMINAL]
         for job in terminal:
             self.record_profile(job)
@@ -1435,6 +1437,22 @@ class Backend:
             generation=notice.get("generation", 0) + 1,
             created_at=time.time(),
         )
+
+    def retire_delivered_notification(self, job):
+        # The session already holds a delivered wake-up. It needs review only for an outcome that
+        # no waiting command returned, and only until the agent has had a day to handle it.
+        notice = job.get("notification")
+        if not notice or notice.get("state") != "delivered":
+            return
+        if job["state"] not in TERMINAL:
+            reason = "Delivered state change; nothing to review"
+        elif job.get("output_consumed_at"):
+            reason = "Delivered; the waiting command also returned this outcome"
+        elif time.time() >= notice.get("delivered_at", notice.get("created_at", 0)) + DELIVERED_REVIEW_SECONDS:
+            reason = "Delivered and unreviewed for a day; retired"
+        else:
+            return
+        notice.update(state="acknowledged", detail=reason)
 
     def notification_inbox(self):
         return [
@@ -2021,14 +2039,16 @@ class Backend:
                 state = request.get("state")
                 if state not in ("delivered", "unavailable"):
                     raise ValueError("Invalid notification outcome")
-                notice.update(state=state, detail=clean_label(request.get("detail", state)))
+                notice.update(state=state, detail=clean_label(request.get("detail", state)), delivered_at=time.time())
                 notice.pop("token", None)
+                self.retire_delivered_notification(job)
             else:
                 if request.get("confirm") is not True:
                     if not request.get("token") or request["token"] != job.get("waiter_token"):
                         raise ValueError("Acknowledge with --confirm; waiter tokens only record output consumption")
                     # Compatibility with old clients: draining a CLI is not agent acknowledgement.
                     job["output_consumed_at"] = time.time()
+                    self.retire_delivered_notification(job)
                     self.save()
                     return {"id": job_id, "state": notice["state"], "output_consumed": True}
                 notice.update(state="acknowledged")

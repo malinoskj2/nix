@@ -535,6 +535,63 @@ class SchedulerTests(unittest.TestCase):
         )
         self.assertEqual(self.backend.notification_inbox()[0]["notification"]["state"], "delivered")
 
+    def deliver(self, job):
+        with patch.object(rs.time, "time", return_value=job["notification"]["created_at"] + 11):
+            claim = self.backend.handle(dict(version=1, action="notification-claim", id=job["id"]), os.getuid())
+        self.backend.handle(
+            dict(version=1, action="notification-finish", id=job["id"], token=claim["token"], state="delivered"),
+            os.getuid(),
+        )
+
+    def test_delivered_outcome_already_returned_to_waiter_needs_no_review(self):
+        token = "b" * 32
+        for consume_first in (True, False):
+            job = self.submit()
+            self.backend.handle(dict(version=1, action="watch", id=job["id"], token=token), os.getuid())
+            self.finish(job, "FAILED", 7)
+            ack = dict(version=1, action="notification-ack", id=job["id"], token=token)
+            if consume_first:
+                self.backend.handle(ack, os.getuid())
+                self.assertEqual(job["notification"]["state"], "pending")
+            self.deliver(job)
+            if not consume_first:
+                self.assertEqual(job["notification"]["state"], "delivered")
+                self.backend.handle(ack, os.getuid())
+            self.assertEqual(job["notification"]["state"], "acknowledged")
+        self.assertEqual(self.backend.notification_inbox(), [])
+
+    def test_delivered_state_change_needs_no_review(self):
+        job = self.submit()
+        self.backend.changed(job, "running")
+        self.deliver(job)
+        self.assertEqual(job["notification"]["state"], "acknowledged")
+        self.assertEqual(self.backend.notification_inbox(), [])
+
+    def test_unconsumed_delivered_outcome_stays_for_a_day(self):
+        job = self.submit()
+        self.finish(job)
+        self.deliver(job)
+        self.backend.tick()
+        self.assertEqual(self.backend.notification_inbox()[0]["notification"]["state"], "delivered")
+        later = job["notification"]["delivered_at"] + rs.DELIVERED_REVIEW_SECONDS + 1
+        with patch.object(rs.time, "time", return_value=later):
+            self.backend.tick()
+        self.assertEqual(job["notification"]["state"], "acknowledged")
+        self.assertEqual(self.backend.notification_inbox(), [])
+
+    def test_undeliverable_outcome_stays_for_human_review(self):
+        job = self.submit()
+        self.finish(job)
+        with patch.object(rs.time, "time", return_value=job["notification"]["created_at"] + 11):
+            claim = self.backend.handle(dict(version=1, action="notification-claim", id=job["id"]), os.getuid())
+        self.backend.handle(
+            dict(version=1, action="notification-finish", id=job["id"], token=claim["token"], state="unavailable"),
+            os.getuid(),
+        )
+        with patch.object(rs.time, "time", return_value=job["ended_at"] + rs.DELIVERED_REVIEW_SECONDS * 2):
+            self.backend.tick()
+        self.assertEqual(self.backend.notification_inbox()[0]["notification"]["state"], "unavailable")
+
     def test_state_notifications_coalesce_and_reject_stale_claims(self):
         job = self.submit()
         self.backend.changed(job, "running")

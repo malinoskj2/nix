@@ -477,8 +477,12 @@ The unprivileged `resource-job-notifications` user service sends state changes t
 the exact local structured Orca session: running, unknown, recovery to queued, and
 terminal outcomes. A 10-second debounce coalesces rapid changes into the latest
 state. Waiter heartbeats do not suppress delivery. Claims are bound to a notification
-generation so an older delivery cannot overwrite a newer state. Delivered updates
-remain in the review inbox until acknowledged; acceptance is not proof of reading.
+generation so an older delivery cannot overwrite a newer state. Acceptance is not
+proof of reading, so a delivered terminal outcome stays in the review inbox until
+acknowledged, with three exceptions that retire it automatically: a delivered
+non-terminal state change, a delivered outcome that a waiting `resource-run` or
+`resource-job wait` also returned (in either order), and any delivered outcome left
+unreviewed for 24 hours. Undeliverable and uncertain outcomes stay until reviewed.
 
 Messages instruct agents to inspect current state before acting, acknowledge handled
 updates, and, for supervised workers, report to their existing coordinator through
