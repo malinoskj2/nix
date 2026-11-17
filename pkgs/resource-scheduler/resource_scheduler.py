@@ -564,6 +564,9 @@ def profile_identity(request):
     return identity
 
 
+PROFILE_LIMIT = 512
+
+
 def new_profile(identity):
     return dict(
         identity=identity,
@@ -989,17 +992,26 @@ class Backend:
         if profile:
             key = json.dumps(profile, sort_keys=True)
             record = self.state["profiles"].get(key)
-            if record is None and len(self.state["profiles"]) >= 128:
+            if record is None and len(self.state["profiles"]) >= PROFILE_LIMIT:
                 active_keys = {
                     json.dumps(j.get("profile"), sort_keys=True)
                     for j in self.state["jobs"]
                     if j["state"] not in TERMINAL
                 }
+                # Failed probe counters stay, so eviction can't reset the three-failure refusal.
                 evictable = [
-                    (k, v) for k, v in self.state["profiles"].items() if v.get("automatic") and k not in active_keys
+                    (k, v)
+                    for k, v in self.state["profiles"].items()
+                    if k not in active_keys and not v.get("consecutive_probe_failures")
                 ]
                 if evictable:
-                    oldest = min(evictable, key=lambda pair: (pair[1].get("last") or {}).get("ended_at") or 0)[0]
+                    oldest = min(
+                        evictable,
+                        key=lambda pair: (
+                            not pair[1].get("automatic"),
+                            (pair[1].get("last") or {}).get("ended_at") or 0,
+                        ),
+                    )[0]
                     del self.state["profiles"][oldest]
                 elif automatic:
                     profile = None  # Never block ordinary work merely because learning storage is full.
@@ -1959,7 +1971,10 @@ class Backend:
                 if (identity is None or p["identity"] == identity)
                 and (project is None or p["identity"]["project"] == project)
             ]
-            return {"profiles": sorted(profiles, key=lambda p: json.dumps(p["identity"], sort_keys=True)), "limit": 128}
+            return {
+                "profiles": sorted(profiles, key=lambda p: json.dumps(p["identity"], sort_keys=True)),
+                "limit": PROFILE_LIMIT,
+            }
         if action == "submit":
             return self.submit(request, uid)
         if action in ("pause", "resume"):

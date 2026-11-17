@@ -440,11 +440,11 @@ class SchedulerTests(unittest.TestCase):
         rs.atomic(Path(self.temp.name) / job["id"] / "result.json", {"exit_code": 0})
         self.backend.tick()
         self.assertEqual(self.profile()["runs"], 0)
-        for i in range(127):
+        for i in range(rs.PROFILE_LIMIT - 1):
             identity = {"project": "project", "name": "extra", "variant": str(i)}
             self.backend.state["profiles"][json.dumps(identity, sort_keys=True)] = rs.new_profile(identity)
-        with self.assertRaisesRegex(ValueError, "Profile limit"):
-            self.submit(profile="new", variant="v1")
+        self.submit(profile="new", variant="v1")
+        self.assertEqual(len(self.backend.state["profiles"]), rs.PROFILE_LIMIT)
 
     def test_graphics_and_compute_memory_are_attributed_without_double_counting(self):
         proc = Path(self.temp.name) / "proc"
@@ -545,11 +545,21 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(job["notification"]["job_state"], "queued")
         with patch.object(rs.time, "time", return_value=job["notification"]["created_at"] + 11):
             with self.assertRaises(ValueError):
-                self.backend.handle(dict(version=1, action="notification-claim", id=job["id"], generation=running), os.getuid())
-            claim = self.backend.handle(dict(version=1, action="notification-claim", id=job["id"], generation=job["notification"]["generation"]), os.getuid())
+                self.backend.handle(
+                    dict(version=1, action="notification-claim", id=job["id"], generation=running), os.getuid()
+                )
+            claim = self.backend.handle(
+                dict(
+                    version=1, action="notification-claim", id=job["id"], generation=job["notification"]["generation"]
+                ),
+                os.getuid(),
+            )
         self.finish(job)
         with self.assertRaises(ValueError):
-            self.backend.handle(dict(version=1, action="notification-finish", id=job["id"], token=claim["token"], state="delivered"), os.getuid())
+            self.backend.handle(
+                dict(version=1, action="notification-finish", id=job["id"], token=claim["token"], state="delivered"),
+                os.getuid(),
+            )
         self.assertEqual(job["notification"]["state"], "pending")
         self.assertEqual(job["notification"]["job_state"], "completed")
 
@@ -1769,13 +1779,35 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(self.submit()["profile"], identity)
         self.assertNotIn(salt, json.dumps(self.backend.status()))
         profiles = self.backend.state["profiles"]
-        for i in range(127):
+        for i in range(rs.PROFILE_LIMIT - 1):
             profiles[str(i)] = {**rs.new_profile(dict(project="x", name="x", variant=str(i))), "automatic": True}
         req = self.request()
         req["payload"]["command"] = ["different-command"]
         self.backend.handle(req, os.getuid())
-        self.assertEqual(len(profiles), 128)
+        self.assertEqual(len(profiles), rs.PROFILE_LIMIT)
         self.assertIn(json.dumps(identity, sort_keys=True), profiles)
+
+    def test_full_named_profile_storage_evicts_least_recent_idle_profile(self):
+        profiles = self.backend.state["profiles"]
+        for i in range(rs.PROFILE_LIMIT):
+            record = rs.new_profile(dict(project="x", name="x", variant=str(i)))
+            record.update(automatic=False, last=dict(ended_at=1000 + i))
+            profiles[str(i)] = record
+        profiles["0"]["consecutive_probe_failures"] = 1
+        self.backend.handle(self.request(profile="qwen-prompt", variant="v1"), os.getuid())
+        self.assertEqual(len(profiles), rs.PROFILE_LIMIT)
+        self.assertIn("0", profiles)
+        self.assertNotIn("1", profiles)
+        self.assertIn(json.dumps(dict(project="project", name="qwen-prompt", variant="v1"), sort_keys=True), profiles)
+
+    def test_full_profile_storage_rejects_when_every_profile_is_protected(self):
+        profiles = self.backend.state["profiles"]
+        for i in range(rs.PROFILE_LIMIT):
+            record = rs.new_profile(dict(project="x", name="x", variant=str(i)))
+            record.update(automatic=False, consecutive_probe_failures=1)
+            profiles[str(i)] = record
+        with self.assertRaisesRegex(ValueError, "Profile limit"):
+            self.backend.handle(self.request(profile="qwen-prompt", variant="v1"), os.getuid())
 
     def test_ram_learning_uses_complete_successes_and_oom_disables_it(self):
         for peak in (1000, 1200, 1100):

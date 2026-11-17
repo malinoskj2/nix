@@ -150,8 +150,11 @@ safe identifier characters per component. Include model/version, input dimension
 batch/context settings or representative scenes in the variant. No fuzzy command
 matching, command-line storage, environment capture or secrets enter profiles.
 The owner-authenticated `resource-profile` command lists profiles or looks up an
-exact tuple. Up to 128 profiles are retained in root-owned scheduler state, across
+exact tuple. Up to 512 profiles are retained in root-owned scheduler state, across
 restarts and job-history pruning; updates and completion bookkeeping are atomic.
+When storage is full, a new profile evicts the least recently used idle profile,
+automatic signatures first. Profiles with active work or recorded probe failures
+are never evicted, so the three-failure exploration refusal survives eviction.
 Normal runs can attach the same `--profile` and `--variant` to refine the evidence.
 Otherwise new runs receive an automatic private workload signature, described below.
 
