@@ -163,6 +163,7 @@ in
       ];
       extraConfig = ''
         SlurmctldHost=${cfg.nodeName}(127.0.0.1)
+        SlurmctldPidFile=/run/slurmctld/slurmctld.pid
         AuthType=auth/munge
         CredType=cred/munge
         SlurmdUser=root
@@ -249,6 +250,13 @@ in
       serviceConfig = {
         Type = lib.mkForce "notify";
         PIDFile = lib.mkForce null;
+        # With --systemd, slurmctld no longer drops to SlurmUser itself.
+        User = config.services.slurm.user;
+        Group = "slurm";
+        RuntimeDirectory = "slurmctld";
+        ExecStartPre = lib.mkForce [
+          "+${pkgs.writeShellScript "slurmctld-pre-start" config.systemd.services.slurmctld.preStart}"
+        ];
         Restart = "on-failure";
         RestartSec = 5;
       };
