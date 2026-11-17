@@ -1,8 +1,8 @@
 diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index 94520949..c529238e 100644
+index 4d89b080..376d3560 100644
 --- a/src/renderer/src/assets/main.css
 +++ b/src/renderer/src/assets/main.css
-@@ -1088,6 +1088,16 @@ body[data-modal-overlay-open]
+@@ -1197,6 +1197,16 @@ body[data-modal-overlay-open]
    backdrop-filter: none !important;
  }
  
@@ -19,7 +19,7 @@ index 94520949..c529238e 100644
  /* Why: native windows have a stable content box and need no wake-time viewport reflow. */
  html.native-shell,
  html.native-shell body,
-@@ -1195,6 +1205,21 @@ html.native-shell .app-layout {
+@@ -1304,6 +1314,21 @@ html.native-shell .app-layout {
    background: var(--bg-titlebar, var(--card));
  }
  
@@ -41,11 +41,11 @@ index 94520949..c529238e 100644
  .titlebar-traffic-light-pad {
    width: calc(80px / var(--ui-zoom-factor, 1));
    flex-shrink: 0;
-diff --git a/src/renderer/src/components/right-sidebar/index.tsx b/src/renderer/src/components/right-sidebar/index.tsx
-index 059a4cfa..163eab26 100644
---- a/src/renderer/src/components/right-sidebar/index.tsx
-+++ b/src/renderer/src/components/right-sidebar/index.tsx
-@@ -133,7 +133,7 @@ function RightSidebarInner(): React.JSX.Element {
+diff --git a/src/renderer/src/components/right-sidebar/RightSidebar.tsx b/src/renderer/src/components/right-sidebar/RightSidebar.tsx
+index 8e41adf9..a078b879 100644
+--- a/src/renderer/src/components/right-sidebar/RightSidebar.tsx
++++ b/src/renderer/src/components/right-sidebar/RightSidebar.tsx
+@@ -136,7 +136,7 @@ function RightSidebarInner(): React.JSX.Element {
    const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
  
    const panelContent = rightSidebarOpen ? (
@@ -54,7 +54,7 @@ index 059a4cfa..163eab26 100644
        {creatingWorktree ? (
          <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
            {t(
-@@ -199,7 +199,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -202,7 +202,7 @@ function RightSidebarInner(): React.JSX.Element {
        )}
      >
        <div
@@ -63,7 +63,7 @@ index 059a4cfa..163eab26 100644
          style={{
            borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
          }}
-@@ -218,7 +218,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -221,7 +221,7 @@ function RightSidebarInner(): React.JSX.Element {
            />
          ) : (
            /* The 40px activity bar absorbs part of the 138px window-control overlay; inset the header by the remaining 98px. */
@@ -72,7 +72,7 @@ index 059a4cfa..163eab26 100644
              <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
                {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
              </span>
-@@ -243,7 +243,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -246,7 +246,7 @@ function RightSidebarInner(): React.JSX.Element {
              onContextMenu={contextPlugin.onContextMenu}
              onPointerDown={contextPlugin.onPointerDown}
            >
@@ -81,11 +81,11 @@ index 059a4cfa..163eab26 100644
                <TooltipProvider>{sideActivityBarIcons}</TooltipProvider>
              </div>
            </ContextMenuTrigger>
-diff --git a/src/renderer/src/components/right-sidebar/right-sidebar-top-activity-bar.tsx b/src/renderer/src/components/right-sidebar/right-sidebar-top-activity-bar.tsx
-index dce54182..b29f4328 100644
---- a/src/renderer/src/components/right-sidebar/right-sidebar-top-activity-bar.tsx
-+++ b/src/renderer/src/components/right-sidebar/right-sidebar-top-activity-bar.tsx
-@@ -38,7 +38,7 @@ export function RightSidebarTopActivityBar({
+diff --git a/src/renderer/src/components/right-sidebar/activity-bar/right-sidebar-top-activity-bar.tsx b/src/renderer/src/components/right-sidebar/activity-bar/right-sidebar-top-activity-bar.tsx
+index 9d112ed6..fce5d6a5 100644
+--- a/src/renderer/src/components/right-sidebar/activity-bar/right-sidebar-top-activity-bar.tsx
++++ b/src/renderer/src/components/right-sidebar/activity-bar/right-sidebar-top-activity-bar.tsx
+@@ -45,7 +45,7 @@ export function RightSidebarTopActivityBar({
    const contextPlugin = useActivityBarContextPlugin()
    return (
      <ContextMenu>
@@ -95,15 +95,15 @@ index dce54182..b29f4328 100644
            <TooltipProvider>
              <ContextMenuTrigger
 diff --git a/src/renderer/src/components/tab-group/TabGroupPanel.tsx b/src/renderer/src/components/tab-group/TabGroupPanel.tsx
-index 8cd38051..bba9a1db 100644
+index ff526ac5..fad3de8f 100644
 --- a/src/renderer/src/components/tab-group/TabGroupPanel.tsx
 +++ b/src/renderer/src/components/tab-group/TabGroupPanel.tsx
-@@ -285,7 +285,7 @@ export default function TabGroupPanel({
+@@ -287,7 +287,7 @@ export default function TabGroupPanel({
        {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
        {tabStrip !== 'attached' ? null : (
          <div
--          className="@container/tab-strip h-[32px] shrink-0 border-b border-border bg-tab-bar"
-+          className="orca-titlebar-glass @container/tab-strip h-[32px] shrink-0 border-b border-border"
+-          className="h-[32px] shrink-0 border-b border-border bg-tab-bar"
++          className="orca-titlebar-glass h-[32px] shrink-0 border-b border-border"
            data-tab-group-strip-id={groupId}
            data-terminal-focus-release-surface="true"
            data-worktree-id={worktreeId}
@@ -123,10 +123,10 @@ index 3bbe47cd..7098f52b 100644
            <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
              <TabGroupSplitNodeTree
                layout={layout}
-diff --git a/src/shared/window-material.ts b/src/shared/window-material.ts
+diff --git a/src/shared/app-lifecycle/windows/window-material.ts b/src/shared/app-lifecycle/windows/window-material.ts
 index f45aa131..23711925 100644
---- a/src/shared/window-material.ts
-+++ b/src/shared/window-material.ts
+--- a/src/shared/app-lifecycle/windows/window-material.ts
++++ b/src/shared/app-lifecycle/windows/window-material.ts
 @@ -74,7 +74,8 @@ export function resolveWindowMaterial(
      return 'off'
    }

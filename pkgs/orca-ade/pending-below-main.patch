@@ -1,7 +1,7 @@
-diff --git a/src/shared/sidebar-list/group-sections.ts b/src/shared/sidebar-list/group-sections.ts
-index 5303a0b8..0835ef05 100644
---- a/src/shared/sidebar-list/group-sections.ts
-+++ b/src/shared/sidebar-list/group-sections.ts
+diff --git a/src/shared/sidebar-list/sections/group-sections.ts b/src/shared/sidebar-list/sections/group-sections.ts
+index 6ee2f9d5..7745b978 100644
+--- a/src/shared/sidebar-list/sections/group-sections.ts
++++ b/src/shared/sidebar-list/sections/group-sections.ts
 @@ -80,6 +80,26 @@ function getProjectHeaderHostScope(
    }
  }

@@ -1,5 +1,5 @@
 diff --git a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-saved-status.ts b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-saved-status.ts
-index 6f0fdf9f..550cc015 100644
+index 667b6378..f7e15bfe 100644
 --- a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-saved-status.ts
 +++ b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-saved-status.ts
 @@ -54,6 +54,7 @@ export function savedStructuredAgentSessionStatus(
@@ -11,10 +11,10 @@ index 6f0fdf9f..550cc015 100644
      ...structuredSummaryHostProgram(record),
      ...structuredSummaryConversationNaming(record, undefined),
 diff --git a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary-equality.ts b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary-equality.ts
-index 548af5dd..5ae44b34 100644
+index 898560da..720c5f2a 100644
 --- a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary-equality.ts
 +++ b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary-equality.ts
-@@ -11,6 +11,7 @@ export function structuredStatusSummariesEqual(
+@@ -12,6 +12,7 @@ export function structuredStatusSummariesEqual(
  ): boolean {
    return (
      a.workspaceId === b.workspaceId &&
@@ -23,10 +23,10 @@ index 548af5dd..5ae44b34 100644
      a.usageLimitContinue?.resetsAt === b.usageLimitContinue?.resetsAt &&
      a.usageLimitContinue?.state === b.usageLimitContinue?.state &&
 diff --git a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary.ts b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary.ts
-index 5534c7ec..f16b78b9 100644
+index 4442cda0..18b8e5db 100644
 --- a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary.ts
 +++ b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-summary.ts
-@@ -71,6 +71,7 @@ export function structuredAgentSessionStatusSummary({
+@@ -67,6 +67,7 @@ export function structuredAgentSessionStatusSummary({
    const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
    return {
      sessionId,
@@ -87,7 +87,7 @@ index 00000000..267d4aa9
 +  return { ORCA_SANDBOX_LAUNCH: sandbox ? '1' : '0' }
 +}
 diff --git a/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts b/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
-index c59f1d36..3c93cd1c 100644
+index b06b30a6..4c5d1f77 100644
 --- a/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
 +++ b/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
 @@ -1,3 +1,4 @@
@@ -115,7 +115,7 @@ index c59f1d36..3c93cd1c 100644
      )
    }
 diff --git a/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts b/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
-index c583ebb4..0c389405 100644
+index 5ca49b58..a0e54bcd 100644
 --- a/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 +++ b/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 @@ -81,6 +81,7 @@ export async function installOnJournal(
@@ -127,15 +127,15 @@ index c583ebb4..0c389405 100644
      ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
      observeCommittedRows: observePRWatchCommittedRows,
 diff --git a/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts b/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts
-index d6c402cb..81756ad3 100644
+index 988b7425..47044aaa 100644
 --- a/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts
 +++ b/src/main/runtime/agent-session/launch/structured-agent-launch-support.ts
 @@ -1,3 +1,4 @@
 +import { nixSandboxLaunchEnvironment } from '../../../native-chat/nix-sandbox-launch-environment'
  import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
- import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+ import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
  import type { GlobalSettings } from '../../../../shared/global-settings-types'
-@@ -103,8 +104,12 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
+@@ -120,8 +121,12 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
    settings: LaunchEnvironmentSettings
  ): Promise<Record<string, string>> {
    return overlayEnvironmentVariables(
@@ -151,11 +151,11 @@ index d6c402cb..81756ad3 100644
    )
  }
 diff --git a/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts b/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts
-index acab3283..fa5d4fdf 100644
+index 954e97a8..b8150946 100644
 --- a/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts
 +++ b/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts
 @@ -11,6 +11,7 @@ import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/li
- import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+ import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
  import {
    applyAgentSessionReservation,
 +  commitAgentSessionReservation,
@@ -238,7 +238,7 @@ index acab3283..fa5d4fdf 100644
 +  expect(resumed.record.sandboxLaunch).toBe(false)
 +})
 diff --git a/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.ts b/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.ts
-index c0803faa..6857a4fc 100644
+index f8a9e16c..71c47d36 100644
 --- a/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.ts
 +++ b/src/main/runtime/agent-session/ownership/agent-session-reservation-admission.ts
 @@ -324,6 +324,13 @@ function reserveWithOperationRow(
@@ -256,7 +256,7 @@ index c0803faa..6857a4fc 100644
    state.records.set(result.record.sessionId, result.record)
    return { ...result, operationRow: row }
 diff --git a/src/main/runtime/agent-session/structured-agent-session-integration.test.ts b/src/main/runtime/agent-session/structured-agent-session-integration.test.ts
-index fb1bcb5a..d4a740be 100644
+index f1385296..f3491816 100644
 --- a/src/main/runtime/agent-session/structured-agent-session-integration.test.ts
 +++ b/src/main/runtime/agent-session/structured-agent-session-integration.test.ts
 @@ -201,6 +201,7 @@ let root: string
@@ -421,7 +421,7 @@ index 00000000..78020580
 +  )
 +}
 diff --git a/src/renderer/src/components/dashboard/DashboardAgentRow.tsx b/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
-index 93d62860..ed21fea2 100644
+index ef3007a6..37beb85f 100644
 --- a/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
 +++ b/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
 @@ -1,3 +1,4 @@
@@ -429,7 +429,7 @@ index 93d62860..ed21fea2 100644
  import { PaneContainerBadge } from '@/components/TerminalContainerBadge'
  import React, { useState, useCallback } from 'react'
  import { cn } from '@/lib/class-names'
-@@ -327,7 +328,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
+@@ -332,7 +333,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
              <AgentTypeIcon agentType={agent.agentType} size={14} />
            </span>
          )}
@@ -444,17 +444,17 @@ index 93d62860..ed21fea2 100644
          <span
            className={cn(
 diff --git a/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx b/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
-index 0d89a636..e8ad2776 100644
+index c83c3580..afbf45c6 100644
 --- a/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
 +++ b/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
 @@ -1,3 +1,4 @@
 +import { StructuredSessionSandboxBadge } from '@/components/StructuredSessionSandboxBadge'
  import { PaneContainerBadge } from '@/components/TerminalContainerBadge'
  import React, { useCallback, useEffect, useRef } from 'react'
- import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
-@@ -242,7 +243,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
-             tooltipSide="right"
+ import { DashboardAgentChildDisclosure } from '@/components/dashboard/rows/DashboardAgentChildDisclosure'
+@@ -244,7 +245,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
              progress={presentation.progress}
+             unread={isUnvisited}
            />
 -          {agent.rowSource !== 'subagent' && <PaneContainerBadge paneKey={agent.paneKey} />}
 +          {agent.rowSource !== 'subagent' && (
@@ -470,7 +470,7 @@ index 0d89a636..e8ad2776 100644
              <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
                <AgentTypeIcon agentType={agent.agentType} size={13} />
 diff --git a/src/renderer/src/components/tab-bar/SortableTab.tsx b/src/renderer/src/components/tab-bar/SortableTab.tsx
-index d766ffc0..9178caa8 100644
+index 8467243f..592b81ac 100644
 --- a/src/renderer/src/components/tab-bar/SortableTab.tsx
 +++ b/src/renderer/src/components/tab-bar/SortableTab.tsx
 @@ -1,3 +1,4 @@
@@ -478,7 +478,7 @@ index d766ffc0..9178caa8 100644
  import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
  import { useCallback, useEffect } from 'react'
  import { useSortable } from '@dnd-kit/sortable'
-@@ -256,6 +257,7 @@ export default function SortableTab({
+@@ -261,6 +262,7 @@ export default function SortableTab({
          isActive={isActive}
          progress={programProgress}
        />
@@ -487,10 +487,10 @@ index d766ffc0..9178caa8 100644
          <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
        )}
 diff --git a/src/shared/agent-session/agent-session-wire.ts b/src/shared/agent-session/agent-session-wire.ts
-index 2ad59b03..537ac803 100644
+index 84bc2931..62f14e1a 100644
 --- a/src/shared/agent-session/agent-session-wire.ts
 +++ b/src/shared/agent-session/agent-session-wire.ts
-@@ -249,6 +249,8 @@ export type AgentSessionStatusSummary = {
+@@ -258,6 +258,8 @@ export type AgentSessionStatusSummary = {
    /** The chat runs a program the host already has, so it needs no Orca-installed runtime.
     *  Absent from older hosts. */
    hostProgram?: true
@@ -500,10 +500,10 @@ index 2ad59b03..537ac803 100644
     *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
    launchDirectory?: string
 diff --git a/src/shared/agent-session/lifecycle/agent-session-record.ts b/src/shared/agent-session/lifecycle/agent-session-record.ts
-index 0732f967..1e980f31 100644
+index 23e58007..ab896ba5 100644
 --- a/src/shared/agent-session/lifecycle/agent-session-record.ts
 +++ b/src/shared/agent-session/lifecycle/agent-session-record.ts
-@@ -122,6 +122,8 @@ export type AgentSessionRecord = {
+@@ -127,6 +127,8 @@ export type AgentSessionRecord = {
    /** Optional host-written construction observation; checked independently of record readability. */
    acquiredAccount?: unknown
    /** Initial launch directory in host path syntax. Floating sessions resume here; worktree/folder IDs resolve their durable location. */
@@ -512,7 +512,7 @@ index 0732f967..1e980f31 100644
    launchDirectory?: string
    /** Provider options the user chose, replayed whenever a new owner starts the session. */
    options?: Record<string, string>
-@@ -327,6 +329,7 @@ export function isPersistedAgentSessionObservationRecord(
+@@ -333,6 +335,7 @@ export function isPersistedAgentSessionObservationRecord(
        (record.conversationName === undefined ||
          isAgentSessionConversationName(record.conversationName)) &&
        (record.conversationNameSource === undefined || record.conversationNameSource === 'user') &&

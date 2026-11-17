@@ -22,10 +22,10 @@ index 5917698c..aa07f58f 100644
            onBell: () => this.emitFact(sessionId, { kind: 'bell' }),
            onCommandFinished: (exitCode) =>
              this.emitFact(sessionId, { kind: 'command-finished', exitCode }),
-diff --git a/src/main/providers/pty-provider-events.ts b/src/main/providers/pty-provider-events.ts
-index c73a0262..1d750965 100644
---- a/src/main/providers/pty-provider-events.ts
-+++ b/src/main/providers/pty-provider-events.ts
+diff --git a/src/main/providers/pty/events.ts b/src/main/providers/pty/events.ts
+index b918e3fa..50c0686d 100644
+--- a/src/main/providers/pty/events.ts
++++ b/src/main/providers/pty/events.ts
 @@ -12,6 +12,7 @@ export type PtyDataEvent = {
  
  /** Notification fact observed while the thinning transport owned scan authority for this PTY. */
@@ -34,12 +34,12 @@ index c73a0262..1d750965 100644
    | { kind: 'bell' }
    | { kind: 'command-finished'; exitCode: number | null }
    | { kind: 'pr-link'; link: TerminalGitHubPRLink }
-diff --git a/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts.spec.ts b/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts.spec.ts
-index 4c7b468e..e55594fa 100644
---- a/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts.spec.ts
-+++ b/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts.spec.ts
-@@ -9,6 +9,40 @@ import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.s
- import { DECORATIVE_TITLE_FACT_HEARTBEAT_MS } from '../terminal/output/decorative-title-fact-emission'
+diff --git a/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts-part-02.spec.ts b/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts-part-02.spec.ts
+index 2f04219e..da50cc8c 100644
+--- a/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts-part-02.spec.ts
++++ b/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts-part-02.spec.ts
+@@ -7,6 +7,40 @@ import { syncSinglePty, store } from './orca-runtime-test-fixtures.spec'
+ import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.spec'
  
  describe('terminal side-effect fact channel', () => {
 +  it('retains each container report for reattach and clears it after launcher exit', () => {
@@ -76,11 +76,11 @@ index 4c7b468e..e55594fa 100644
 +    })
 +  })
 +
-   it('bounds decorative title delivery per paired client below the local heartbeat', () => {
-     // Clear the local heartbeat each round so only the per-client gate can collapse repeats.
-     vi.useFakeTimers({ toFake: ['Date'] })
+   it('bounds a hung authoritative provider acquisition and reuses its fallback', async () => {
+     vi.useFakeTimers()
+     try {
 diff --git a/src/main/runtime/terminal/output/terminal-title-tracker.ts b/src/main/runtime/terminal/output/terminal-title-tracker.ts
-index 64d9c0b6..d76cf507 100644
+index 72405b00..3ef6ea7f 100644
 --- a/src/main/runtime/terminal/output/terminal-title-tracker.ts
 +++ b/src/main/runtime/terminal/output/terminal-title-tracker.ts
 @@ -74,6 +74,9 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
@@ -94,7 +94,7 @@ index 64d9c0b6..d76cf507 100644
            const live = this.ptyTitleTrackersByPtyId.get(ptyId)
            const gateKey = this.makeDecorativeTitleGateKey(rawTitle, normalizedTitle)
 diff --git a/src/main/runtime/terminal/output/terminal-transient-facts.ts b/src/main/runtime/terminal/output/terminal-transient-facts.ts
-index 4d131eff..62b88628 100644
+index 8fca1181..4c8ce7dc 100644
 --- a/src/main/runtime/terminal/output/terminal-transient-facts.ts
 +++ b/src/main/runtime/terminal/output/terminal-transient-facts.ts
 @@ -28,6 +28,15 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
@@ -259,7 +259,7 @@ index 00000000..4dcfc137
 +})
 diff --git a/src/renderer/src/components/TerminalContainerBadge.tsx b/src/renderer/src/components/TerminalContainerBadge.tsx
 new file mode 100644
-index 00000000..aa5a6f58
+index 00000000..da48ec3a
 --- /dev/null
 +++ b/src/renderer/src/components/TerminalContainerBadge.tsx
 @@ -0,0 +1,84 @@
@@ -269,7 +269,7 @@ index 00000000..aa5a6f58
 +import { useAppStore } from '@/store'
 +import { useTerminalContainers } from '@/lib/terminal-container-state'
 +import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-+import { collectLeafIds } from '../../../shared/workspace-layout/terminal-pane-layout-tree'
++import { collectLeafIds } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 +import type { AppState } from '@/store/types'
 +import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 +
@@ -348,7 +348,7 @@ index 00000000..aa5a6f58
 +  return <ContainerBadge names={names} />
 +}
 diff --git a/src/renderer/src/components/dashboard/DashboardAgentRow.tsx b/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
-index a67e05ec..93d62860 100644
+index a86997c7..ef3007a6 100644
 --- a/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
 +++ b/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
 @@ -1,3 +1,4 @@
@@ -356,7 +356,7 @@ index a67e05ec..93d62860 100644
  import React, { useState, useCallback } from 'react'
  import { cn } from '@/lib/class-names'
  import {
-@@ -326,6 +327,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
+@@ -331,6 +332,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
              <AgentTypeIcon agentType={agent.agentType} size={14} />
            </span>
          )}
@@ -365,17 +365,17 @@ index a67e05ec..93d62860 100644
          <span
            className={cn(
 diff --git a/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx b/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
-index 3cb839dc..0d89a636 100644
+index b90f15b5..c83c3580 100644
 --- a/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
 +++ b/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
 @@ -1,3 +1,4 @@
 +import { PaneContainerBadge } from '@/components/TerminalContainerBadge'
  import React, { useCallback, useEffect, useRef } from 'react'
- import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
+ import { DashboardAgentChildDisclosure } from '@/components/dashboard/rows/DashboardAgentChildDisclosure'
  import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
-@@ -241,6 +242,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
-             tooltipSide="right"
+@@ -243,6 +244,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
              progress={presentation.progress}
+             unread={isUnvisited}
            />
 +          {agent.rowSource !== 'subagent' && <PaneContainerBadge paneKey={agent.paneKey} />}
            {!hideIcon && (

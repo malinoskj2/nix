@@ -1,13 +1,54 @@
---- a/src/main/native-chat/structured-agent-command-resolution.ts
-+++ b/src/main/native-chat/structured-agent-command-resolution.ts
+diff --git a/src/main/native-chat/agent-launch/structured-agent-command-resolution.test.ts b/src/main/native-chat/agent-launch/structured-agent-command-resolution.test.ts
+new file mode 100644
+index 00000000..6b922dfa
+--- /dev/null
++++ b/src/main/native-chat/agent-launch/structured-agent-command-resolution.test.ts
+@@ -0,0 +1,33 @@
++import { describe, expect, it, vi } from 'vitest'
++import { resolveStructuredAgentCommand } from './structured-agent-command-resolution'
++
++vi.mock('../../../shared/nix-global-settings', () => ({
++  nixGlobalSettings: {
++    agentCmdOverrides: {
++      codex: `/bin/sh -c 'exec sandbox-launcher "$@"' orca-sandbox codex`,
++      claude: `/bin/sh -c 'exec sandbox-launcher "$@"' orca-sandbox claude`
++    }
++  }
++}))
++
++const NOT_RUNNABLE = expect.objectContaining({
++  name: 'AgentSessionPreSpawnError',
++  reason: 'agentCommandNotRunnable'
++})
++
++describe('structured agent executable resolution', () => {
++  it.skipIf(process.platform === 'win32')('preserves declared Codex and Claude shell wrapper argv', () => {
++    for (const agent of ['codex', 'claude'] as const) {
++      const command = `/bin/sh -c 'exec sandbox-launcher "$@"' orca-sandbox ${agent}`
++      expect(resolveStructuredAgentCommand(agent, {
++        agentCmdOverrides: { [agent]: command }
++      })).toEqual({
++        command: '/bin/sh',
++        prefixArgs: ['-c', 'exec sandbox-launcher "$@"', 'orca-sandbox', agent]
++      })
++      expect(() => resolveStructuredAgentCommand(agent, {
++        agentCmdOverrides: { [agent]: command + ' ; echo changed' }
++      })).toThrow(NOT_RUNNABLE)
++    }
++  })
++})
+diff --git a/src/main/native-chat/agent-launch/structured-agent-command-resolution.ts b/src/main/native-chat/agent-launch/structured-agent-command-resolution.ts
+index 731b755f..f5ac963a 100644
+--- a/src/main/native-chat/agent-launch/structured-agent-command-resolution.ts
++++ b/src/main/native-chat/agent-launch/structured-agent-command-resolution.ts
 @@ -1,4 +1,6 @@
- import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-+import { nixGlobalSettings } from '../../shared/nix-global-settings'
-+import { parseAgentCommand } from '../../shared/agent-launch/startup/agent-command-plan'
+ import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
++import { nixGlobalSettings } from '../../../shared/nix-global-settings'
++import { parseAgentCommand } from '../../../shared/agent-launch/startup/agent-command-plan'
  import { homedir } from 'node:os'
  import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
- import type { GlobalSettings } from '../../shared/global-settings-types'
-@@ -47,10 +49,19 @@
+ import type { GlobalSettings } from '../../../shared/global-settings-types'
+@@ -50,10 +52,19 @@ function resolveOverride(
    settings: CommandSettings | null | undefined,
    options: CommandOptions
  ) {
@@ -31,46 +72,3 @@
    const overlay = settings?.agentDefaultEnv?.[agent]
    const command = plan
      ? resolveExecutableCommand(plan.program, {
---- a/src/main/native-chat/structured-agent-command-resolution.test.ts
-+++ b/src/main/native-chat/structured-agent-command-resolution.test.ts
-@@ -1,8 +1,17 @@
- import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
- import { tmpdir } from 'node:os'
- import { join } from 'node:path'
--import { afterEach, describe, expect, it } from 'vitest'
-+import { afterEach, describe, expect, it, vi } from 'vitest'
- import { resolveStructuredAgentCommand } from './structured-agent-command-resolution'
-+
-+vi.mock('../../shared/nix-global-settings', () => ({
-+  nixGlobalSettings: {
-+    agentCmdOverrides: {
-+      codex: `/bin/sh -c 'exec sandbox-launcher "$@"' orca-sandbox codex`,
-+      claude: `/bin/sh -c 'exec sandbox-launcher "$@"' orca-sandbox claude`
-+    }
-+  }
-+}))
- 
- const NOT_RUNNABLE = expect.objectContaining({
-   name: 'AgentSessionPreSpawnError',
-@@ -26,6 +35,21 @@
- }
- 
- describe('structured agent executable resolution', () => {
-+  it.skipIf(process.platform === 'win32')('preserves declared Codex and Claude shell wrapper argv', () => {
-+    for (const agent of ['codex', 'claude'] as const) {
-+      const command = `/bin/sh -c 'exec sandbox-launcher "$@"' orca-sandbox ${agent}`
-+      expect(resolveStructuredAgentCommand(agent, {
-+        agentCmdOverrides: { [agent]: command }
-+      })).toEqual({
-+        command: '/bin/sh',
-+        prefixArgs: ['-c', 'exec sandbox-launcher "$@"', 'orca-sandbox', agent]
-+      })
-+      expect(() => resolveStructuredAgentCommand(agent, {
-+        agentCmdOverrides: { [agent]: command + ' ; echo changed' }
-+      })).toThrow(NOT_RUNNABLE)
-+    }
-+  })
-+
-   it('resolves a basename through the configured PATH and a home-relative path through the host home', () => {
-     const { directory, command } = executable()
-     const basenameCommand = join(directory, 'agent-custom')

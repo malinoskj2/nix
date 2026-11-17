@@ -1,8 +1,8 @@
 diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index e4462748..94520949 100644
+index c6dce5c6..4d89b080 100644
 --- a/src/renderer/src/assets/main.css
 +++ b/src/renderer/src/assets/main.css
-@@ -320,28 +320,28 @@
+@@ -335,28 +335,28 @@
  }
  
  .dark {
@@ -51,9 +51,9 @@ index e4462748..94520949 100644
 +  --editor-surface: #1e1e2e;
 +  --foreground: #cdd6f4;
    --chat-canvas-mix: 5%;
-   --chat-foreground-mix: 78%;
-   --chat-strong-mix: 90%;
-@@ -358,59 +358,59 @@
+   --chat-foreground-mix: 88%;
+   --chat-strong-mix: 98%;
+@@ -373,62 +373,62 @@
    --chat-composer-border-mix: 9%;
    --chat-selection-mix: 40%;
    --chat-content-max-width: 46rem;
@@ -78,6 +78,31 @@ index e4462748..94520949 100644
 -  --ai-action-accent: var(--color-violet-400);
 -  --agent-question: var(--color-orange-500);
 -  --agent-question-text: var(--color-orange-300);
++  --card: #181825;
++  --card-foreground: #cdd6f4;
++  --popover: #181825;
++  --popover-foreground: #cdd6f4;
++  --floating-surface: rgb(17 17 27 / 0.72);
++  --dialog-surface: rgb(24 24 37 / 0.96);
++  --primary: #cba6f7;
++  --primary-foreground: #11111b;
++  --secondary: #313244;
++  --secondary-foreground: #cdd6f4;
++  --muted: #313244;
++  --muted-foreground: #a6adc8;
++  --accent: #45475a;
++  --accent-foreground: #cdd6f4;
++  --border: #313244;
++  --input: #45475a;
++  --ring: #cba6f7;
++  --terminal-pane-locate: #89b4fa;
++  --ai-action-accent: #cba6f7;
++  --agent-question: #fab387;
++  --agent-question-text: #f9e2af;
++  --agent-working: #f9e2af;
+   --question-card-border-mix: 16%;
+   --question-option-border-mix: 12%;
+-  --unread: var(--color-blue-400);
 -  --workspace-status-done: #c7a594;
 -  --workspace-status-review: #16a34a;
 -  --workspace-status-progress: #d4a300;
@@ -110,28 +135,7 @@ index e4462748..94520949 100644
 -  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255);
 -  --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
 -  --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
-+  --card: #181825;
-+  --card-foreground: #cdd6f4;
-+  --popover: #181825;
-+  --popover-foreground: #cdd6f4;
-+  --floating-surface: rgb(17 17 27 / 0.72);
-+  --dialog-surface: rgb(24 24 37 / 0.96);
-+  --primary: #cba6f7;
-+  --primary-foreground: #11111b;
-+  --secondary: #313244;
-+  --secondary-foreground: #cdd6f4;
-+  --muted: #313244;
-+  --muted-foreground: #a6adc8;
-+  --accent: #45475a;
-+  --accent-foreground: #cdd6f4;
-+  --border: #313244;
-+  --input: #45475a;
-+  --ring: #cba6f7;
-+  --terminal-pane-locate: #89b4fa;
-+  --ai-action-accent: #cba6f7;
-+  --agent-question: #fab387;
-+  --agent-question-text: #f9e2af;
-+  --agent-working: #f9e2af;
++  --unread: #89b4fa;
 +  --workspace-status-done: #f5e0dc;
 +  --workspace-status-review: #a6e3a1;
 +  --workspace-status-progress: #f9e2af;
@@ -166,7 +170,7 @@ index e4462748..94520949 100644
    --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
    --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
    --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
-@@ -418,24 +418,32 @@
+@@ -436,24 +436,32 @@
    --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
    --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
    --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
@@ -212,7 +216,7 @@ index e4462748..94520949 100644
  /* Status and diff colors follow the chat scheme without copying the app palette. */
  :root,
  .native-chat-appearance[data-native-chat-scheme='light'] {
-@@ -478,28 +486,27 @@
+@@ -496,28 +504,27 @@
  .dark,
  .native-chat-appearance[data-native-chat-scheme='dark'] {
    color-scheme: dark;
@@ -297,12 +301,12 @@ index a903f2b6..ec82056d 100644
  }
  
 diff --git a/src/renderer/src/lib/editor/monaco/monaco-setup.ts b/src/renderer/src/lib/editor/monaco/monaco-setup.ts
-index fbe14dcb..455dbbd4 100644
+index b40a9b87..51c4555e 100644
 --- a/src/renderer/src/lib/editor/monaco/monaco-setup.ts
 +++ b/src/renderer/src/lib/editor/monaco/monaco-setup.ts
 @@ -30,6 +30,7 @@ import { installMonacoDiffViewportTokenization } from './monaco-diff-viewport-to
  import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
- import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
+ import { installMonacoContextMenuPaste } from '@/components/editor/monaco/install-monaco-context-menu-paste'
  import { runMonacoSetupSteps } from './monaco-setup-steps'
 +import { CATPPUCCIN_MOCHA_MONACO_THEME, catppuccinMochaTheme } from '../../monaco-catppuccin-mocha-theme'
  import { installMonacoTsWorkerIdleStop } from './monaco-ts-worker-idle-stop'
@@ -465,7 +469,7 @@ index 00000000..b2d93124
 +  }
 +}
 diff --git a/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts b/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts
-index 8c134d3c..326f8df1 100644
+index 42be53ca..1ce59ee6 100644
 --- a/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts
 +++ b/src/renderer/src/lib/monaco-languages/markdown-textmate-tokens.ts
 @@ -2,12 +2,14 @@ import type * as Monaco from 'monaco-editor'
@@ -483,8 +487,8 @@ index 8c134d3c..326f8df1 100644
  
  type MonacoModule = {
    editor: Pick<typeof Monaco.editor, 'defineTheme'>
-@@ -58,13 +60,15 @@ export async function createMarkdownTokensProvider(
-     { default: markdownGrammars },
+@@ -59,14 +61,16 @@ export async function createMarkdownTokensProvider(
+     { default: yamlGrammars },
      { bundledLanguagesInfo },
      { rules: darkRules },
 -    { rules: lightRules }
@@ -493,15 +497,16 @@ index 8c134d3c..326f8df1 100644
    ] = await Promise.all([
      loadEditorCore(),
      import('shiki/langs/markdown.mjs'),
+     import('shiki/langs/yaml.mjs'),
      import('shiki/langs'),
      loadBuiltInMarkdownRules('dark'),
 -    loadBuiltInMarkdownRules('light')
 +    loadBuiltInMarkdownRules('light'),
 +    import('shiki/themes/catppuccin-mocha.mjs')
    ])
-   await editorCore.core.loadLanguage(...markdownGrammars)
- 
-@@ -76,9 +80,14 @@ export async function createMarkdownTokensProvider(
+   // Why: frontmatter embeds YAML at the document start, with no fence label to trigger a lazy load.
+   await editorCore.core.loadLanguage(...markdownGrammars, ...yamlGrammars)
+@@ -79,9 +83,14 @@ export async function createMarkdownTokensProvider(
      colors: {}
    })
    monaco.editor.defineTheme('vs', { base: 'vs', inherit: true, rules: lightRules, colors: {} })
@@ -517,23 +522,3 @@ index 8c134d3c..326f8df1 100644
          rule.token.slice(MARKDOWN_TOKEN_PREFIX.length)
        ),
        ...MARKDOWN_THEMABLE_SCOPES
-diff --git a/src/renderer/src/hooks/use-monaco-theme.test.tsx b/src/renderer/src/hooks/use-monaco-theme.test.tsx
-index d9b84cae..3d53c583 100644
---- a/src/renderer/src/hooks/use-monaco-theme.test.tsx
-+++ b/src/renderer/src/hooks/use-monaco-theme.test.tsx
-@@ -14,7 +14,7 @@ afterEach(() => {
- 
- it('uses the built-in theme until the plugin theme is defined, then switches to it', async () => {
-   const { result, rerender } = renderHook(() => useMonacoTheme())
--  expect(result.current).toBe('vs-dark')
-+  expect(result.current).toBe('catppuccin-mocha')
- 
-   const data = { base: 'vs-dark' as const, inherit: true, rules: [], colors: {} }
-   useCodeEditorThemeStore.setState({ monaco: { name: 'orca-plugin-test', data } })
-@@ -30,5 +30,5 @@ it('uses the built-in theme until the plugin theme is defined, then switches to
- 
-   useCodeEditorThemeStore.setState({ monaco: null, override: null })
-   rerender()
--  expect(result.current).toBe('vs-dark')
-+  expect(result.current).toBe('catppuccin-mocha')
- })

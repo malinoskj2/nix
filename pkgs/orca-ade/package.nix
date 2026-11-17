@@ -54,18 +54,18 @@ let
     rev = "eae3fa08f21323c5679a7dbbeced2a1777a272a1";
     hash = "sha256-U2ptKTryfYbkP8Kbsnm1rEpXA0axxhO9zath37Mt4CU=";
   };
-  sourceCommit = "c91a7a6ee3dc76090cafb33943961ae2235246d6";
+  sourceCommit = "92d4266cc4ffa945dbc1fa52850e62448d2dfc1c";
   arch = stdenv.hostPlatform.node.arch;
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "orca-ade";
-  version = "1.4.258";
+  version = "1.4.261";
 
   src = fetchFromGitHub {
     owner = "stablyai";
     repo = "orca";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-v9cTSTJ5442a5CfEYHNvO3R75ztx0RxIuW7mNGYQyuE=";
+    hash = "sha256-4aIBe7DHQ/WeIMGU92vg8K+39Oj1n3Q2PdEDezNimpE=";
   };
 
   patches = [
@@ -222,7 +222,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     inherit (finalAttrs) env;
     fetcherVersion = 4;
-    hash = "sha256-+ts4iOZiXu8TNI5Yzfxh6F0kD6bA1ucCOx9Uw4dXlF8=";
+    hash = "sha256-kRgtYE1DdSSzjy6HCYlAhpF4VbJNROleidQj9UNpcwg=";
   };
 
   mobilePnpmDeps = fetchPnpmDeps {
@@ -231,7 +231,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     sourceRoot = "${finalAttrs.src.name}/mobile";
     fetcherVersion = 4;
-    hash = "sha256-RIiK06S4mQxPr7e6srBR/H5cPknpLdoQKwcVnuFelNI=";
+    hash = "sha256-AoAhcY6xj/E0uZe8F3A0O6uz+0ip99UdvvsMU7PWMXk=";
   };
 
   nativeBuildInputs = [
@@ -276,9 +276,9 @@ stdenv.mkDerivation (finalAttrs: {
 
     pnpm run build:packages
     pnpm exec vitest run --config config/vitest.config.ts \
-      src/main/native-chat/structured-agent-command-resolution.test.ts \
+      src/main/native-chat/agent-launch/structured-agent-command-resolution.test.ts \
       src/main/native-chat/nix-sandbox-launch-environment.test.ts \
-      src/main/codex-accounts/runtime-home-session-discovery-read-only.test.ts \
+      src/main/codex-accounts/runtime-home/routing/runtime-home-sandbox-session-discovery.test.ts \
       src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts \
       src/main/runtime/agent-session/structured-agent-session-integration.test.ts \
       src/renderer/src/components/StructuredSessionSandboxBadge.test.tsx \
@@ -286,7 +286,6 @@ stdenv.mkDerivation (finalAttrs: {
       src/renderer/src/lib/terminal-container-state.test.ts \
       src/shared/terminal/output/terminal-container-report.test.ts \
       src/shared/terminal/output/terminal-container-relay.test.ts \
-      src/renderer/src/hooks/use-monaco-theme.test.tsx \
       src/main/runtime/construction/orca-runtime.test.ts
     pnpm exec tsc -p config/tsconfig.build.cli.json --outDir out --composite false --incremental false
     node config/scripts/cli-build/verify-cli-bin.mjs --fix-executable --fix-package-json
@@ -356,7 +355,7 @@ stdenv.mkDerivation (finalAttrs: {
       {
         src = fetchurl {
           url = "https://github.com/stablyai/orca/releases/download/v${finalAttrs.version}/orca-ide_${finalAttrs.version}_amd64.deb";
-          hash = "sha256-zHAKpeFXQrG6KUTp1IqCYyYR1uMqwFPR9Uu+gaX/Aeo=";
+          hash = "sha256-hnVbTG5+JdLvSq3V0lCL9SUg0V+O9F+pnnTOx0MeXBw=";
         };
         nativeBuildInputs = [ dpkg ];
       }

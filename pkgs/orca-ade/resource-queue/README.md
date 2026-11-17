@@ -21,7 +21,7 @@ lists `jesse.resource-queue` in `approvedPlugins`. User disablement still wins.
 There are no new private UI APIs, launch hooks, cloud calls or network requests.
 
 The worker uses supported `panels.handle`, `workspace.list` and `workspace.open` APIs
-on Orca >=1.4.248 (the repository pins 1.4.258). The HTML panel uses Orca theme
+on Orca >=1.4.248 (the repository pins 1.4.261). The HTML panel uses Orca theme
 variables and the frame request bridge, as the bundled Usage Insights integration
 does. Worktree IDs, legacy `repo::path` IDs and paths resolve to open workspaces;
 removed worktrees retain their historical identity. This Orca API has no action to
