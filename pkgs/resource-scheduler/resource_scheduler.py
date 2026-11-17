@@ -1555,6 +1555,30 @@ class Backend:
         self.slurm.cancel(job["slurm_job_id"])
         self.event(job, "large_lane_handoff", reason="Managed CPU/RAM limits; original execution namespace retained")
 
+    def cancelled_service_gone(self, job, status):
+        """Confirm cleanup after systemd collected an explicitly stopped unit."""
+        if not (
+            job.get("host_cancel_requested")
+            and job.get("host_phase") == "running"
+            and job.get("started_at") is not None
+            and status.get("LoadState") == "not-found"
+            and status.get("ActiveState") == "inactive"
+            and status.get("SubState") == "dead"
+            and status.get("ExecMainPID") == "0"
+        ):
+            return False
+        unit = f"resource-{job['execution']}-{job['id']}.service"
+        if job.get("systemd_unit") != unit:
+            return False
+        parent = Path(self.config["cgroup_root"]) / "system.slice"
+        # Missing or unreadable cgroup telemetry must never count as cleanup.
+        parent.stat()
+        try:
+            (parent / unit).stat()
+        except FileNotFoundError:
+            return True
+        return False
+
     def tick_host_job(self, job, now):
         # Managed large jobs and both explicit overrides share service lifecycle.
         # Keep host_phase compatible with existing persisted overrides.
@@ -1597,6 +1621,11 @@ class Backend:
                 self.changed(job, "pending", f"Starting {description} process")
                 self.host.start(job, self.directory / job["id"])
             status = self.host.status(job["systemd_unit"])
+            if self.cancelled_service_gone(job, status):
+                # systemd has discarded its exit status. Preserve unknown rather
+                # than inventing a successful command exit; waiters return 130.
+                self.finish_host_job(job, "cancelled", None, "systemd-unit-and-cgroup-removed", now)
+                return
             if status.get("LoadState") != "loaded":
                 raise ValueError("Host unit identity unavailable")
             required = ("ActiveState", "SubState", "Result", "ExecMainCode", "ExecMainStatus", "ExecMainPID")

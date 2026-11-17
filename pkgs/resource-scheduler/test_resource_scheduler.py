@@ -1584,6 +1584,42 @@ class SchedulerTests(unittest.TestCase):
         for value in (None, False, dict(set=False, number=0), dict(set=True, infinite=True, number=0)):
             self.assertFalse(rs.slurm_held(dict(job_state=["PENDING"], priority=value)))
 
+    def test_collected_cancelled_service_releases_lane_without_relaunch(self):
+        job = self.large_ready()
+        self.backend.tick()
+        self.backend.tick()
+        self.control("terminate", job)
+        gone = dict(LoadState="not-found", ActiveState="inactive", SubState="dead", ExecMainPID="0")
+        self.host.units[job["systemd_unit"]] = gone
+        successor = self.large_ready()
+        self.backend.tick()
+        self.assertEqual(job["state"], "cancelled")
+        self.assertIsNone(job["exit_code"])
+        self.assertEqual(job["cleanup"], "systemd-unit-and-cgroup-removed")
+        self.assertEqual(successor["execution"], "large")
+        self.assertEqual(self.host.started, [job["id"]])
+        self.assertFalse((Path(self.temp.name) / job["id"] / "payload.json").exists())
+
+    def test_missing_service_requires_cancel_intent_and_confirmed_cgroup_removal(self):
+        job = self.large_ready()
+        self.backend.tick()
+        self.backend.tick()
+        gone = dict(LoadState="not-found", ActiveState="inactive", SubState="dead", ExecMainPID="0")
+        self.assertFalse(self.backend.cancelled_service_gone(job, gone))
+        self.control("terminate", job)
+        group = Path(self.backend.config["cgroup_root"]) / "system.slice" / job["systemd_unit"]
+        group.mkdir()
+        self.assertFalse(self.backend.cancelled_service_gone(job, gone))
+        group.rmdir()
+        self.assertTrue(self.backend.cancelled_service_gone(job, gone))
+        for field, value in (("ActiveState", "active"), ("ExecMainPID", "123"), ("SubState", None)):
+            self.assertFalse(self.backend.cancelled_service_gone(job, {**gone, field: value}))
+        with patch.object(rs.Path, "stat", side_effect=PermissionError("unreadable")):
+            with self.assertRaises(PermissionError):
+                self.backend.cancelled_service_gone(job, gone)
+        job["host_phase"] = "starting"
+        self.assertFalse(self.backend.cancelled_service_gone(job, gone))
+
     def test_large_ambiguous_start_is_never_retried_after_restart(self):
         job = self.large_ready()
         self.backend.tick()
