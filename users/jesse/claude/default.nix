@@ -55,6 +55,8 @@ in
       laravel-orchestrator = ./skills/laravel-orchestrator;
       laravel-review-jesse = ./skills/laravel-review-jesse;
       media-gallery = ./skills/media-gallery;
+      qwen-prompt = ./skills/qwen-prompt;
+      qwen-uncensored-prompt = ./skills/qwen-uncensored-prompt;
       recommit = ./skills/recommit;
       rust-build-jesse = ./skills/rust-build-jesse;
       rust-design-jesse = ./skills/rust-design-jesse;

@@ -137,6 +137,7 @@
           "playwright-browsers"
           "pubip"
           "pyghidra-mcp"
+          "qwen-prompt"
           "resource-scheduler"
           "switch-and-reset-sandboxes"
           "tiktok-search"

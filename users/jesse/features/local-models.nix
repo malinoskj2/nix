@@ -53,7 +53,10 @@ in
 {
   options.services.local-models.historical = lib.mkEnableOption "historical TikTok model downloads";
   config = {
-    home.packages = [ pkgs.local-models ];
+    home.packages = [
+      pkgs.local-models
+      pkgs.qwen-prompt
+    ];
     home.sessionVariables = {
       MODEL_ROOT = root;
       HF_HUB_CACHE = "${root}/huggingface";

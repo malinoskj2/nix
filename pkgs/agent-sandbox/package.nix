@@ -78,6 +78,7 @@
   markdown-to-pdf,
   media-gallery,
   media-transcribe,
+  qwen-prompt,
   mediainfo,
   mold,
   mpv,
@@ -356,6 +357,7 @@ let
       markdown-to-pdf
       media-gallery
       media-transcribe
+      qwen-prompt
       mediainfo
       mold
       mpv
