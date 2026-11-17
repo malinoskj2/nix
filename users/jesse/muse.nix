@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  osConfig,
   pkgs,
   ...
 }:
@@ -10,7 +11,9 @@ let
     ${builtins.readFile ./muse-resources.py}
   '';
   instructions = pkgs.writeText "muse-resource-instructions.md" (
-    builtins.readFile ./claude/rules/gpu.md + "\n" + builtins.readFile ./claude/rules/resources.md
+    lib.optionalString (osConfig.services.resourceScheduler.queue.enable or false) (
+      builtins.readFile ./claude/rules/gpu.md + "\n" + builtins.readFile ./claude/rules/resources.md
+    )
   );
 in
 {

@@ -1,10 +1,18 @@
 {
   config,
   lib,
+  osConfig,
   pkgs,
   ...
 }:
 let
+  queue = osConfig.services.resourceScheduler.queue.enable or false;
+  queueSkills = [
+    "audio-transcribe"
+    "qwen-prompt"
+    "qwen-uncensored-prompt"
+    "work-queue"
+  ];
   tomlFormat = pkgs.formats.toml { };
   claudeAgents = ../claude/agents;
   agents = {
@@ -81,23 +89,36 @@ in
   programs.codex = {
     enable = true;
     package = pkgs.unstable.codex;
-    skills = ../claude/skills;
+    skills =
+      if queue then
+        ../claude/skills
+      else
+        builtins.path {
+          name = "skills";
+          path = ../claude/skills;
+          filter =
+            path: _: !(dirOf path == toString ../claude/skills && lib.elem (baseNameOf path) queueSkills);
+        };
     settings = modelSettings // {
       tui.alternate_screen = "never";
       sandbox_mode = "danger-full-access";
       approval_policy = "never";
     };
     context =
-      lib.concatMapStringsSep "\n" builtins.readFile [
-        ../claude/rules/worktrees.md
-        ../claude/rules/gpu.md
-        ../claude/rules/resources.md
-        ../claude/rules/local-models.md
-        ../claude/rules/media.md
-        ../claude/rules/sandbox-display.md
-        ../claude/rules/sandbox-previews.md
-        ../claude/rules/tool-output.md
-      ]
+      lib.concatMapStringsSep "\n" builtins.readFile (
+        [ ../claude/rules/worktrees.md ]
+        ++ lib.optionals queue [
+          ../claude/rules/gpu.md
+          ../claude/rules/resources.md
+        ]
+        ++ [
+          ../claude/rules/local-models.md
+          ../claude/rules/media.md
+          ../claude/rules/sandbox-display.md
+          ../claude/rules/sandbox-previews.md
+          ../claude/rules/tool-output.md
+        ]
+      )
       + ''
 
         # Codex questions

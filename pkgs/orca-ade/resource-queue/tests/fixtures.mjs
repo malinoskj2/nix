@@ -25,6 +25,12 @@ export function fixture(name = 'overlap') {
   if (name === 'resident') { base.jobs[1].label = 'Model server · residency reservation'; base.jobs[1].wait_reason = ''; base.telemetry.gpu.utilization_percent = 0; base.errors.push('Model residency state is unavailable. A running reservation may cover an idle model server; zero device compute does not release its budget.'); }
   if (name === 'partial') { base.telemetry.gpu = {}; base.telemetry.errors = ['NVIDIA telemetry unavailable; GPU values are unknown.']; }
   if (name === 'hold') base.mode = 'manual_hold';
+  if (name === 'direct' || name === 'hostonly') {
+    base.mode = 'direct';
+    base.queue = { enabled: false, available: name === 'direct' };
+    Object.assign(base.capabilities, { queue_toggle: name === 'direct', pause: name === 'direct', resume: name === 'direct' });
+    base.jobs = base.jobs.slice(0, 3).map((item) => ({ ...item, execution: item.origin.startsWith('agent-sandbox-') ? 'sandbox' : 'host', direct: true, host_phase: item.state === 'running' ? 'running' : 'launch', state: item.state === 'running' ? 'running' : 'pending', slurm_job_id: null, wait_reason: item.state === 'running' ? '' : 'Queue off; starting directly on the sandbox' }));
+  }
   return base;
 }
 export const fixtureTime = NOW * 1000;

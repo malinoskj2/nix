@@ -43,7 +43,7 @@ export function orderJobs(jobs) {
 }
 export function eligibleActions(snapshot, job, now = Date.now()) {
   if (freshness(snapshot, now) !== 'live') return [];
-  return (job?.actions ?? snapshot.actions ?? []).filter((action) => ['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'run-sandbox', 'priority', 'unload', 'pause', 'resume', 'game'].includes(action));
+  return (job?.actions ?? snapshot.actions ?? []).filter((action) => ['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'run-sandbox', 'priority', 'unload', 'pause', 'resume', 'queue-on', 'queue-off', 'game'].includes(action));
 }
 export function journalQuery(id) {
   // Quote the field value for a shell; never insert command labels or raw arguments.

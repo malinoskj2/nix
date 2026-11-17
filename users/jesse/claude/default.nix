@@ -1,11 +1,13 @@
 {
   config,
   lib,
+  osConfig,
   pkgs,
   ...
 }:
 let
   cfg = config.programs.claude-code;
+  queue = osConfig.services.resourceScheduler.queue.enable or false;
   settingsFile = "${cfg.configDir}/settings.json";
   settingsSource = config.home.file.${settingsFile}.source;
   merge-settings = pkgs.writeShellApplication {
@@ -47,7 +49,6 @@ in
       rust-reviewer = ./agents/rust-reviewer.md;
     };
     skills = {
-      audio-transcribe = ./skills/audio-transcribe;
       codex-image = ./codex-image;
       game-latency = ./skills/game-latency;
       gauntlet = ./skills/gauntlet;
@@ -55,8 +56,6 @@ in
       laravel-orchestrator = ./skills/laravel-orchestrator;
       laravel-review-jesse = ./skills/laravel-review-jesse;
       media-gallery = ./skills/media-gallery;
-      qwen-prompt = ./skills/qwen-prompt;
-      qwen-uncensored-prompt = ./skills/qwen-uncensored-prompt;
       recommit = ./skills/recommit;
       rust-build-jesse = ./skills/rust-build-jesse;
       rust-design-jesse = ./skills/rust-design-jesse;
@@ -65,12 +64,15 @@ in
       tiktok-search = ./skills/tiktok-search;
       true-random = ./skills/true-random;
       video-download = ./skills/video-download;
-      work-queue = ./skills/work-queue;
       youtube-search = ./skills/youtube-search;
+    }
+    // lib.optionalAttrs queue {
+      audio-transcribe = ./skills/audio-transcribe;
+      qwen-prompt = ./skills/qwen-prompt;
+      qwen-uncensored-prompt = ./skills/qwen-uncensored-prompt;
+      work-queue = ./skills/work-queue;
     };
     rules = {
-      gpu = ./rules/gpu.md;
-      resources = ./rules/resources.md;
       local-models = ./rules/local-models.md;
       media = ./rules/media.md;
       rust = ./rules/rust.md;
@@ -78,6 +80,10 @@ in
       sandbox-previews = ./rules/sandbox-previews.md;
       tool-output = ./rules/tool-output.md;
       worktrees = ./rules/worktrees.md;
+    }
+    // lib.optionalAttrs queue {
+      gpu = ./rules/gpu.md;
+      resources = ./rules/resources.md;
     };
 
     settings = {

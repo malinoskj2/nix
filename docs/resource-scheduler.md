@@ -23,6 +23,8 @@ resource-control run-host FULL_JOB_ID --revision JOB_REVISION --confirm
 resource-control run-sandbox FULL_JOB_ID --revision JOB_REVISION --confirm
 resource-control pause --confirm
 resource-control resume --confirm
+resource-control queue-off --confirm
+resource-control queue-on --confirm
 ```
 
 CPU units are **Slurm CPUs**, governed by the configured node topology and
@@ -341,6 +343,15 @@ Controls use actions `cancel|terminate`, immutable `id`, exact job `revision` an
 `confirm:true`. Queued cancellation and running termination are distinct. The
 reply marks the action pending; terminal cleanup is confirmed only by Slurm.
 `pause|resume` requires `confirm:true` and affects admission, not running processes.
+`queue-off|queue-on` requires `confirm:true` and switches the persisted queue mode.
+While the queue is off, new submissions skip Slurm and start at once where they
+were submitted: in their own sandbox for sandbox-origin jobs, otherwise on the
+host. Waiting jobs leave Slurm the same way, after confirmed cancellation; jobs
+already allocated keep running in Slurm. These jobs carry `direct: true`, have
+no allocation, and their budgets are neither reserved nor enforced. Status
+reports `mode: "direct"` and `queue: {enabled, available}`. A host without the
+Slurm queue (`queue_available: false`) runs every job this way and refuses both
+actions.
 Changing priority after submission is not yet supported (`priority:false`).
 Safe recent lifecycle events are included in status; no arbitrary journal text
 or job stdout is exposed in that API. The foreground client uses owner-only

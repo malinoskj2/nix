@@ -30,6 +30,9 @@ assert policy == {
     "large_gpu_lane": True,
     "large_lane_project_ids": ["24291623818044406835024016436979284527", "246305380162557260146525484389874795221"],
     "ram_capacity_mib": 24576,
+    "queue_available": True,
+    "queue_default": True,
+    "gpu_telemetry": True,
 }
 
 config = Path(os.environ["SLURM_CONFIG"])

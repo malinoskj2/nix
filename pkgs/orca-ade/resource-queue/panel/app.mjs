@@ -96,6 +96,8 @@ function confirm(action, jobId = state.selected) {
     cancel: { title: `Cancel “${job?.label}”?`, description: 'Remove this queued workload from admission.', consequence: 'The submitting command will receive the scheduler cancellation result.' },
     terminate: { title: `Terminate “${job?.label}”?`, description: 'Ask the scheduler to stop this running workload and its tracked descendants.', consequence: 'In-progress work may be lost. Resources remain reserved until the scheduler confirms cleanup.' },
     pause: { title: 'Pause new admissions?', description: 'Jobs already running will continue. Waiting jobs remain queued.', consequence: 'This does not suspend processes or reclaim memory.' },
+    'queue-off': { title: 'Turn the queue off?', description: 'New jobs start immediately where they were submitted: on the host, or in their own sandbox. Waiting jobs leave Slurm and start the same way. Running jobs continue unchanged.', consequence: 'CPU, RAM and VRAM are not reserved or limited while the queue is off.' },
+    'queue-on': { title: 'Turn the queue on?', description: 'New jobs wait for Slurm admission and run within their reserved budgets again.', consequence: 'Jobs already started directly keep running without limits.' },
     resume: { title: 'Resume new admissions?', description: 'Let the scheduler admit eligible queued work again.', consequence: 'Resource and desktop headroom checks still apply.' }
   }[action];
   state.confirm = { ...info, action, ...(['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'run-sandbox'].includes(action) ? { id: job.id, revision: job.revision, owner: ownerLabel(job.owner) } : {}) };
@@ -166,7 +168,7 @@ app.addEventListener('click', async (event) => {
     case 'refreshLogs': await readLogs(); draw(); break;
     case 'dismiss': state.confirm = null; draw(); lastFocus?.focus(); break;
     case 'confirm': await execute(); break;
-    default: if (['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'run-sandbox', 'pause', 'resume'].includes(action)) confirm(action, control.dataset.queueJob);
+    default: if (['cancel', 'terminate', 'force-run', 'run-next', 'run-host', 'run-sandbox', 'pause', 'resume', 'queue-on', 'queue-off'].includes(action)) confirm(action, control.dataset.queueJob);
   }
 });
 app.addEventListener('keydown', (event) => {

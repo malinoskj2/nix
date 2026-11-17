@@ -1,7 +1,17 @@
 # Resource scheduler deployment and migration
 
-The `home` host enables the shared scheduler with
-`services.resourceScheduler.enable = true` and a 28-CPU admission ceiling. Applying this configuration activates
+Every workstation host runs the scheduler daemon
+(`services.resourceScheduler.enable`, on by default through `workstation.nix`),
+which executes `resource-run` jobs and reports them to Orca's Resource Queue
+panel. Only `home` enables the Slurm queue itself with
+`services.resourceScheduler.queue.enable = true` and a 28-CPU admission ceiling.
+Without the queue, katana and mac-vm install no Slurm, Munge, mode marker,
+completion notifier or legacy GPU adapter, and run every job directly on the
+host. Their Claude, Codex and Muse configuration omits the queue rules and the
+skills that depend on it (`audio-transcribe`, `qwen-prompt`,
+`qwen-uncensored-prompt`, `work-queue`), so agents there never learn of it.
+On `home`, the panel's Controls tab can switch the queue off at runtime; new
+and waiting jobs then run directly where they were submitted. Applying this configuration activates
 Slurm and replaces legacy GPU admission; follow the drained cutover below before
 switching. Editing or building the configuration does not activate it.
 The exported `nixosModules.resource-scheduler` module is also available to consumers.
@@ -17,7 +27,7 @@ After the validation and drain below, enable the normal host path with:
 
 ```nix
 services.resourceScheduler = {
-  enable = true;
+  queue.enable = true;
   cpuCapacity = 28;
   policyVersion = "4";
 };

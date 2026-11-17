@@ -27,7 +27,6 @@ in
     ../common/optional/hyprland.nix
     ../common/optional/nh.nix
     ../common/optional/pipewire.nix
-    ../common/optional/resource-scheduler.nix
     ../common/optional/workstation.nix
     ../common/users/jesse
     ../common/users/jesse/interactive.nix
@@ -53,7 +52,7 @@ in
   };
 
   services.resourceScheduler = {
-    enable = true;
+    queue.enable = true;
     # Match the idle sandbox pool: 14 cores with two SMT threads each.
     cpuCapacity = 28;
     policyVersion = "7";

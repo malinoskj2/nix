@@ -93,6 +93,7 @@ in
     };
     services.resourceScheduler = {
       enable = true;
+      queue.enable = true;
       package = pkgs.resource-scheduler;
       cpuCapacity = 4;
       gameCpuCapacity = 1;

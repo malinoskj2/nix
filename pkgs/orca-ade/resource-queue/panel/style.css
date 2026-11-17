@@ -158,6 +158,9 @@ header {
   border-radius:0 9px 9px 0;
   margin-bottom:16px
 }
+.mode.queue-off {
+  border-left-color:var(--warn)
+}
 .mode h2 {
   font-size:14px;
   margin:0;

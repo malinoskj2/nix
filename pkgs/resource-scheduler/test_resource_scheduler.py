@@ -1979,3 +1979,86 @@ class SchedulerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class QueueModeTests(unittest.TestCase):
+    setUp = SchedulerTests.setUp
+    tearDown = SchedulerTests.tearDown
+    request = SchedulerTests.request
+
+    def submit_direct(self, **kwargs):
+        result = self.backend.handle(self.request(**kwargs), os.getuid())
+        return next(j for j in self.backend.state["jobs"] if j["id"] == result["id"])
+
+    def toggle(self, action):
+        return self.backend.handle(dict(version=1, action=action, confirm=True), os.getuid())
+
+    def test_queue_off_runs_new_jobs_where_submitted_without_slurm(self):
+        self.toggle("queue-off")
+        host = self.submit_direct(cpu=64)
+        sandbox = self.submit_direct(origin="agent-sandbox-test")
+        self.assertEqual(self.slurm.counter, 0)
+        self.assertEqual((host["execution"], sandbox["execution"]), ("host", "sandbox"))
+        self.backend.tick()
+        self.assertEqual(self.host.started, [host["id"], sandbox["id"]])
+        self.assertEqual({host["state"], sandbox["state"]}, {"running"})
+        status = self.backend.status()
+        self.assertEqual(status["mode"], "direct")
+        self.assertEqual(status["queue"], {"enabled": False, "available": True})
+        self.assertTrue(all(job["direct"] and job["allocation"] is None for job in status["jobs"]))
+
+    def test_queue_off_moves_waiting_jobs_off_slurm_and_leaves_running_ones(self):
+        self.snapshot = snapshot(ram=100)
+        waiting = self.submit_direct(origin="agent-sandbox-test")
+        self.backend.tick()
+        self.assertEqual(waiting["state"], "queued")
+        self.toggle("queue-off")
+        self.backend.tick()
+        self.assertEqual(self.slurm.cancelled, [waiting["slurm_job_id"]])
+        self.assertEqual((waiting["execution"], waiting["host_phase"]), ("sandbox", "cancelling-slurm"))
+        self.assertEqual(self.host.started, [])
+        self.backend.tick()
+        self.assertEqual(self.host.started, [waiting["id"]])
+        self.assertEqual(self.slurm.released, [])
+
+    def test_direct_job_can_be_cancelled_before_launch(self):
+        self.toggle("queue-off")
+        job = self.submit_direct()
+        self.backend.handle(
+            dict(version=1, action="cancel", id=job["id"], revision=job["revision"], confirm=True), os.getuid()
+        )
+        self.backend.tick()
+        self.assertEqual(job["state"], "cancelled")
+        self.assertEqual(self.host.started, [])
+
+    def test_queue_on_restores_slurm_submission(self):
+        self.toggle("queue-off")
+        self.toggle("queue-on")
+        job = self.submit_direct()
+        self.assertEqual(job["slurm_job_id"], "1")
+        self.assertTrue(self.backend.status()["queue"]["enabled"])
+
+    def test_unavailable_queue_never_touches_slurm_or_offers_toggle(self):
+        os.close(self.backend.lock_fd)
+        self.slurm.fail = True
+        self.backend = rs.Backend(
+            dict(
+                state_dir=self.temp.name,
+                allowed_uid=os.getuid(),
+                cgroup_root=str(Path(self.temp.name) / "cgroups"),
+                queue_available=False,
+            ),
+            self.slurm,
+            lambda: copy.deepcopy(self.snapshot),
+            host=self.host,
+        )
+        job = self.submit_direct()
+        self.backend.tick()
+        self.assertEqual(job["state"], "running")
+        self.assertIsNone(job["wait_reason"])
+        self.assertEqual(self.backend.errors, [])
+        status = self.backend.status()
+        self.assertEqual(status["queue"], {"enabled": False, "available": False})
+        self.assertFalse(status["capabilities"]["queue_toggle"])
+        with self.assertRaises(ValueError):
+            self.toggle("queue-on")

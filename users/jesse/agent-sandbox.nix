@@ -7,7 +7,7 @@
 }:
 let
   ssh = "${config.xdg.dataHome}/agent-sandbox/ssh";
-  legacyGpu = !(osConfig.services.resourceScheduler.enable or false);
+  legacyGpu = !(osConfig.services.resourceScheduler.queue.enable or false);
 in
 {
   # Orca resumes agents when it reopens; this resumes the ones `sandbox` started in a sandbox again.

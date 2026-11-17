@@ -31,8 +31,12 @@ agent/session identifier and links the containing worktree when it is resolvable
 ## Panel layout
 
 Queue, Resources, History and Controls tabs separate active work, capacity readings,
-completed jobs and scheduler admission controls. Controls contains the sharing status
-and pause/resume action; cancel/terminate remain in the job inspector. Tabs support
+completed jobs and scheduler admission controls. Controls contains the queue on/off
+switch, the sharing status and pause/resume action; cancel/terminate remain in the
+job inspector. While the queue is off, the header reads "All work on host · Queue
+off", the Queue tab says so, and jobs show a "direct, no queue" execution badge.
+On a host without the Slurm queue, the switch and pause are hidden and every job
+appears this way. Tabs support
 arrow keys, Home and End, and survive status refreshes.
 Job inspection opens on selection. Routine disclaimers, the host pressure expander
 and diagnostics export controls are omitted. Connection errors and actual backend
@@ -97,6 +101,7 @@ Supported controls (shown only when advertised by the backend):
 - `resource-control cancel ID --revision N --confirm`
 - `resource-control terminate ID --revision N --confirm`
 - `resource-control pause --confirm` and `resume --confirm`
+- `resource-control queue-off --confirm` and `queue-on --confirm`
 - `resource-control run-next ID --revision N --confirm`
 - `resource-control force-run ID --revision N --confirm`
 - `resource-control run-host ID --revision N --confirm`

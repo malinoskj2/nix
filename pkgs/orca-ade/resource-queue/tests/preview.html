@@ -13,6 +13,7 @@ if (query.get('theme') === 'light') document.documentElement.className = 'light'
 const snapshot = adaptStatus(fixture(scenario));
 if (scenario === 'stale') snapshot.at = new Date(fixtureTime - 60_000).toISOString();
 const options = { selected: query.has('inspect') ? jobId(3) : null, samples: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19].map((i) => i === 6 || i === 7 ? { at: new Date(fixtureTime - (20 - i) * 2000).toISOString(), gap: true } : { at: new Date(fixtureTime - (20 - i) * 2000).toISOString(), running: i < 5 ? 1 : 2, waiting: i > 14 ? 2 : i > 9 ? 3 : 1 }) };
+if (query.get('tab')) options.tab = query.get('tab');
 if (scenario === 'disconnected') Object.assign(options, { snapshot: null, error: 'Host socket is unreachable. Retrying with bounded backoff.' });
 if (scenario === 'error') options.error = 'Scheduler response schema is unsupported. Update the plugin and backend together.';
 showFixture(snapshot, options);

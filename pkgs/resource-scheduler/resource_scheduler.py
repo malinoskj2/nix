@@ -48,6 +48,9 @@ DEFAULTS = dict(
     game_cpu_capacity=4,
     game_marker_path="/run/resource-scheduler-game-active",
     cgroup_root="/sys/fs/cgroup",
+    queue_available=True,
+    queue_default=True,
+    gpu_telemetry=True,
 )
 TOOL_PATH = "@resourceToolPath@"
 SAFE_ENV = {
@@ -82,6 +85,8 @@ def validate_config(config):
         raise ValueError("Lane project identifiers must be decimal strings")
     if type(config["adaptive_ram"]) is not bool or type(config["large_gpu_lane"]) is not bool:
         raise ValueError("Invalid adaptive RAM policy")
+    if any(type(config[key]) is not bool for key in ("queue_available", "queue_default", "gpu_telemetry")):
+        raise ValueError("Invalid queue mode configuration")
     if (
         config["allowed_uid"] == 0
         or config["cpu_capacity"] < 1
@@ -215,7 +220,7 @@ def gpu_process_allocations(xml, gpu_uuid, proc_root=Path("/proc")):
     return amounts
 
 
-def telemetry():
+def telemetry(gpu_enabled=True):
     result = {"sampled_at": time.time(), "errors": [], "pressure": pressure()}
     try:
         counters = [int(value) for value in Path("/proc/stat").read_text().splitlines()[0].split()[1:9]]
@@ -252,33 +257,34 @@ def telemetry():
         allocations_mib={},
         attribution_confidence="unavailable",
     )
-    try:
-        row = (
-            checked(
-                [
-                    "nvidia-smi",
-                    "--id=0",
-                    "--query-gpu=uuid,memory.total,memory.used,utilization.gpu",
-                    "--format=csv,noheader,nounits",
-                ]
+    if gpu_enabled:
+        try:
+            row = (
+                checked(
+                    [
+                        "nvidia-smi",
+                        "--id=0",
+                        "--query-gpu=uuid,memory.total,memory.used,utilization.gpu",
+                        "--format=csv,noheader,nounits",
+                    ]
+                )
+                .strip()
+                .split(",")
             )
-            .strip()
-            .split(",")
-        )
-        gpu, total, used, utilization = (item.strip() for item in row)
-        total, used, utilization = int(total), int(used), int(utilization)
-        if total <= 0 or not 0 <= used <= total or not 0 <= utilization <= 100:
-            raise ValueError("Invalid GPU telemetry")
-        result["gpu"].update(total_mib=total, used_mib=used, free_mib=total - used, utilization_percent=utilization)
-        # Attribute by kernel cgroup path, not an environment marker clients can forge.
-        amounts = gpu_process_allocations(checked(["nvidia-smi", "--id=0", "--query", "--xml-format"]), gpu)
-        if sum(amounts.values()) > used:
-            raise ValueError("GPU attribution exceeds device usage")
-        result["gpu"].update(
-            allocations_mib=amounts, attribution_confidence="cgroup-gpu-processes", process_inventory_complete=True
-        )
-    except (OSError, ValueError, subprocess.SubprocessError):
-        result["errors"].append("GPU telemetry or process attribution unavailable")
+            gpu, total, used, utilization = (item.strip() for item in row)
+            total, used, utilization = int(total), int(used), int(utilization)
+            if total <= 0 or not 0 <= used <= total or not 0 <= utilization <= 100:
+                raise ValueError("Invalid GPU telemetry")
+            result["gpu"].update(total_mib=total, used_mib=used, free_mib=total - used, utilization_percent=utilization)
+            # Attribute by kernel cgroup path, not an environment marker clients can forge.
+            amounts = gpu_process_allocations(checked(["nvidia-smi", "--id=0", "--query", "--xml-format"]), gpu)
+            if sum(amounts.values()) > used:
+                raise ValueError("GPU attribution exceeds device usage")
+            result["gpu"].update(
+                allocations_mib=amounts, attribution_confidence="cgroup-gpu-processes", process_inventory_complete=True
+            )
+        except (OSError, ValueError, subprocess.SubprocessError):
+            result["errors"].append("GPU telemetry or process attribution unavailable")
     # Cgroup v2 high-water marks are authoritative where available; missing stays null.
     result["cgroups"] = {}
     try:
@@ -778,6 +784,10 @@ class HostRunner:
         checked(["systemctl", "reset-failed", unit])
 
 
+def direct_target(origin):
+    return "sandbox" if re.fullmatch(r"agent-sandbox-[A-Za-z0-9_.-]{1,128}", origin) else "host"
+
+
 def managed(job):
     return job.get("execution", "slurm") in ("slurm", "large")
 
@@ -847,6 +857,9 @@ class Backend:
         )
         self.state.setdefault("profiles", {})
         self.state.setdefault("profile_salt", os.urandom(32).hex())
+        self.state.setdefault("queue_enabled", self.config["queue_default"])
+        if not self.config["queue_available"]:
+            self.state["queue_enabled"] = False
         self.slurm = slurm or Slurm(self.config)
         self.host = host or HostRunner()
         self.sample = sample
@@ -933,7 +946,7 @@ class Backend:
             if type(req.get(name)) is not int or req[name] < (0 if name == "vram_mib" else 1):
                 raise ValueError("Invalid resource budget")
         req = {key: req[key] for key in ("cpu", "ram_mib", "vram_mib")}
-        if req["cpu"] > self.config["cpu_capacity"]:
+        if self.state["queue_enabled"] and req["cpu"] > self.config["cpu_capacity"]:
             raise ValueError("CPU request exceeds configured background capacity")
         mode = request.get("mode", "shared")
         if mode not in ("shared", "exclusive"):
@@ -1100,6 +1113,20 @@ class Backend:
         if profile:
             self.state["profiles"].setdefault(key, {**new_profile(profile), "automatic": automatic})
         self.state["jobs"].append(job)
+        if not self.state["queue_enabled"]:
+            # The queue is off: the job runs at once where it was submitted, without Slurm or budgets.
+            target = direct_target(origin)
+            job.update(
+                execution=target,
+                direct=True,
+                host_phase="launch",
+                systemd_unit="resource-" + target + "-" + job_id + ".service",
+                state="pending",
+                wait_reason=f"Queue off; starting directly on the {target}" if self.config["queue_available"] else None,
+            )
+            self.save()
+            self.event(job, "submission", execution=target, direct=True)
+            return {"id": job_id, "revision": job["revision"]}
         self.save()  # Persist UUID before submitting; interrupted submission is reconciled by name.
         self.event(job, "submission")
         try:
@@ -1135,6 +1162,9 @@ class Backend:
         for job in self.state["jobs"]:
             if not slurm_managed(job) and job["state"] not in TERMINAL:
                 self.tick_host_job(job, now)
+        if not self.config["queue_available"]:
+            self.finish_tick(now)
+            return
         try:
             rows = self.slurm.jobs()
             by_id = {str(row["job_id"]): row for row in rows}
@@ -1325,7 +1355,9 @@ class Backend:
             self.healthy_since = None
         elif self.healthy_since is None:
             self.healthy_since = now
-        if not self.state["paused"]:
+        if not self.state["queue_enabled"]:
+            self.drain_to_direct()
+        if self.state["queue_enabled"] and not self.state["paused"]:
             for job in self.state["jobs"]:
                 if (
                     slurm_managed(job)
@@ -1341,7 +1373,11 @@ class Backend:
                     self.start_large_handoff(job)
                     break
         queued = sorted(
-            (job for job in self.state["jobs"] if job["state"] == "queued" and managed(job)),
+            (
+                job
+                for job in self.state["jobs"]
+                if job["state"] == "queued" and managed(job) and self.state["queue_enabled"]
+            ),
             key=lambda j: queue_key(j, now, self.config),
         )
         barrier = None
@@ -1393,6 +1429,9 @@ class Backend:
                 except (OSError, subprocess.SubprocessError):
                     self.errors.append("Slurm release failed; reconciliation required")
                 break
+        self.finish_tick(now)
+
+    def finish_tick(self, now):
         if now - self.last_sample_event >= 30 and any(j["state"] in ACTIVE for j in self.state["jobs"]):
             self.event({}, "sample", snapshot=self.public_telemetry())
             self.last_sample_event = now
@@ -1416,6 +1455,36 @@ class Backend:
                 directory.rmdir()
         self.state["jobs"] = [j for j in self.state["jobs"] if j["state"] not in TERMINAL or j["id"] in keep]
         self.save()
+
+    def drain_to_direct(self):
+        """With the queue off, waiting jobs leave Slurm and run where they were submitted."""
+        for job in self.state["jobs"]:
+            if (
+                not slurm_managed(job)
+                or job["state"] != "queued"
+                or job.get("released")
+                or job.get("cleanup") == "cancellation-requested"
+                or not job["slurm_job_id"]
+            ):
+                continue
+            try:
+                current = self.slurm.detail(job["slurm_job_id"])
+                if current.get("name") != "rs-" + job["id"] or slurm_state(current) != "pending":
+                    continue
+                target = direct_target(job["origin"])
+                # Cancellation is confirmed on a later tick before any command starts.
+                self.slurm.cancel(job["slurm_job_id"])
+            except (OSError, ValueError, KeyError, IndexError, subprocess.SubprocessError):
+                self.errors.append("Moving waiting job off the queue needs reconciliation: " + job["id"])
+                continue
+            job.update(
+                execution=target,
+                direct=True,
+                host_phase="cancelling-slurm",
+                systemd_unit="resource-" + target + "-" + job["id"] + ".service",
+            )
+            self.event(job, target + "_run_requested", reason="Queue switched off; running directly")
+            self.changed(job, "pending", f"Queue off; waiting for Slurm cancellation before {target} launch")
 
     def prepare_notification(self, job):
         notice = job.get("notification")
@@ -1634,16 +1703,17 @@ class Backend:
         target = job["execution"]
         description = "Managed large lane" if target == "large" else f"Unmanaged {target}"
         try:
-            if job["host_phase"] == "cancelling-slurm":
-                row = self.slurm.detail(job["slurm_job_id"])
-                if row.get("name") != "rs-" + job["id"]:
-                    raise ValueError("Slurm identity mismatch during service handoff")
-                if target == "large" and slurm_held(row):
-                    self.slurm.cancel(job["slurm_job_id"])
-                    return
-                if slurm_state(row) != "cancelled":
-                    self.changed(job, reason=f"Waiting for confirmed Slurm cancellation before {target} launch")
-                    return
+            if job["host_phase"] in ("cancelling-slurm", "launch"):
+                if job["host_phase"] == "cancelling-slurm":
+                    row = self.slurm.detail(job["slurm_job_id"])
+                    if row.get("name") != "rs-" + job["id"]:
+                        raise ValueError("Slurm identity mismatch during service handoff")
+                    if target == "large" and slurm_held(row):
+                        self.slurm.cancel(job["slurm_job_id"])
+                        return
+                    if slurm_state(row) != "cancelled":
+                        self.changed(job, reason=f"Waiting for confirmed Slurm cancellation before {target} launch")
+                        return
                 if job.get("host_cancel_requested"):
                     self.finish_host_job(job, "cancelled", 130, "slurm-terminal", now)
                     return
@@ -1897,7 +1967,7 @@ class Backend:
             key=lambda j: queue_key(j, time.time(), self.config),
         )
         positions = {job["id"]: index + 1 for index, job in enumerate(queued)}
-        mode = "manual_hold" if self.state["paused"] else "normal"
+        mode = "direct" if not self.state["queue_enabled"] else "manual_hold" if self.state["paused"] else "normal"
         if mode == "normal" and (
             self.healthy_since is None or time.time() - self.healthy_since < self.config["stability_seconds"]
         ):
@@ -1917,6 +1987,7 @@ class Backend:
             generated_at=time.time(),
             connected=True,
             mode=mode,
+            queue=dict(enabled=self.state["queue_enabled"], available=self.config["queue_available"]),
             capabilities=dict(
                 cancel=True,
                 terminate=True,
@@ -1930,8 +2001,9 @@ class Backend:
                 completion_notifications=True,
                 adaptive_ram=self.config["adaptive_ram"],
                 large_gpu_lane=self.config["large_gpu_lane"],
-                pause=True,
-                resume=True,
+                pause=self.config["queue_available"],
+                resume=self.config["queue_available"],
+                queue_toggle=self.config["queue_available"],
                 priority=False,
                 unload=False,
                 model_reports=True,
@@ -1995,6 +2067,15 @@ class Backend:
             }
         if action == "submit":
             return self.submit(request, uid)
+        if action in ("queue-on", "queue-off"):
+            if request.get("confirm") is not True:
+                raise ValueError("Explicit confirmation required")
+            if not self.config["queue_available"]:
+                raise ValueError("The queue is not available on this host")
+            self.state["queue_enabled"] = action == "queue-on"
+            self.event({}, action.replace("-", "_"))
+            self.save()
+            return {"revision": self.state["revision"], "queue_enabled": self.state["queue_enabled"]}
         if action in ("pause", "resume"):
             if request.get("confirm") is not True:
                 raise ValueError("Explicit confirmation required")
@@ -2121,7 +2202,7 @@ class Backend:
         if not slurm_managed(job):
             if action not in ("cancel", "terminate"):
                 raise ValueError("Service execution cannot be released or reordered in Slurm")
-            if job["host_phase"] == "cancelling-slurm":
+            if job["host_phase"] in ("cancelling-slurm", "launch"):
                 job["host_cancel_requested"] = True
             else:
                 if action != "terminate":
@@ -2207,7 +2288,7 @@ def daemon(config_path):
         raise RuntimeError("The admission service requires the trusted host root service")
     config = {**DEFAULTS, **json.loads(Path(config_path).read_text())}
     legacy_guard(config["allowed_uid"])
-    backend = Backend(config)
+    backend = Backend(config, sample=lambda: telemetry(gpu_enabled=config["gpu_telemetry"]))
     path = Path(config["socket_path"])
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
     path.unlink(missing_ok=True)
@@ -2571,7 +2652,7 @@ def run(args):
                         dict(
                             action="cancel"
                             if job["state"] in ("queued", "pending")
-                            and (slurm_managed(job) or job.get("host_phase") == "cancelling-slurm")
+                            and (slurm_managed(job) or job.get("host_phase") in ("cancelling-slurm", "launch"))
                             else "terminate",
                             id=job_id,
                             revision=job["revision"],
@@ -2751,7 +2832,18 @@ def main():
     control = actions.add_parser("control")
     control.add_argument(
         "operation",
-        choices=("cancel", "terminate", "force-run", "run-next", "run-host", "run-sandbox", "pause", "resume"),
+        choices=(
+            "cancel",
+            "terminate",
+            "force-run",
+            "run-next",
+            "run-host",
+            "run-sandbox",
+            "pause",
+            "resume",
+            "queue-on",
+            "queue-off",
+        ),
     )
     control.add_argument("id", nargs="?")
     control.add_argument("--revision", type=int)

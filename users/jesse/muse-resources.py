@@ -11,6 +11,9 @@ END = "<!-- nix-resource-scheduler:end -->"
 
 
 def merge(instructions, target):
+    text = instructions.read_text()
+    if not text.strip() and not target.exists():
+        return
     data = json.loads(target.read_text()) if target.exists() else {}
     data.setdefault("schema_version", 1)
     run = data.setdefault("run", {})
@@ -23,7 +26,10 @@ def merge(instructions, target):
             raise ValueError("Incomplete managed resource guidance; refusing to overwrite")
         _, suffix = rest.split(END, 1)
         prompt = prefix + suffix
-    run["developer_prompt"] = prompt.rstrip() + "\n\n" + START + "\n" + instructions.read_text() + END + "\n"
+    # Empty guidance removes the managed block from hosts without the queue.
+    run["developer_prompt"] = (
+        prompt.rstrip() + "\n\n" + START + "\n" + text + END + "\n" if text.strip() else prompt.rstrip() + "\n"
+    )
     target.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(dir=target.parent, prefix=".resources-")
     try:

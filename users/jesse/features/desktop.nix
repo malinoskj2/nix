@@ -122,7 +122,7 @@ in
     ];
 
     systemd.user.services.resource-job-notifications =
-      lib.mkIf (pkgs.stdenv.isLinux && (osConfig.services.resourceScheduler.enable or false))
+      lib.mkIf (pkgs.stdenv.isLinux && (osConfig.services.resourceScheduler.queue.enable or false))
         {
           Unit = {
             Description = "Deliver resource job completions to their submitting Orca sessions";

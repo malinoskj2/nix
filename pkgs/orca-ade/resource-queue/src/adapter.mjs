@@ -4,7 +4,7 @@ const metric = (value) => typeof value === 'number' && Number.isFinite(value) &&
 const text = (value, fallback = '') => typeof value === 'string' ? value.slice(0, 2048) : fallback;
 const date = (value) => typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 8640000000000 ? new Date(value * 1000).toISOString() : null;
 const states = new Set(['queued', 'pending', 'running', 'completed', 'failed', 'cancelled', 'unknown']);
-const modes = new Set(['normal', 'manual_hold', 'pressure_hold', 'game_pending', 'game_running', 'exclusive_pending', 'exclusive_running']);
+const modes = new Set(['normal', 'direct', 'manual_hold', 'pressure_hold', 'game_pending', 'game_running', 'exclusive_pending', 'exclusive_running']);
 const modelStates = new Set(['loading', 'ready', 'busy', 'idle', 'unloaded']);
 function reportedModel(raw) {
   if (!raw || !modelStates.has(raw.state) || raw.attribution_confidence !== 'owner-reported') return null;
@@ -33,7 +33,7 @@ export function adaptStatus(raw) {
       vramEstimate: text(job.vram_estimate, job.vram_auto ? 'all-available' : 'declared-peak'),
       measured: { cpu: metric(job.observed?.cpu_percent), ram: gib(job.observed?.ram_peak_mib), vram: gib(job.observed?.vram_peak_mib), confidence: text(job.observed?.attribution_confidence, 'Unavailable') },
       queuePosition: Number.isSafeInteger(job.queue_position) && job.queue_position > 0 ? job.queue_position : null,
-      execution: ['host', 'sandbox', 'large'].includes(job.execution) ? job.execution : 'slurm', hostPhase: text(job.host_phase),
+      execution: ['host', 'sandbox', 'large'].includes(job.execution) ? job.execution : 'slurm', hostPhase: text(job.host_phase), direct: job.direct === true,
       largeGpuLane: job.execution === 'large' || job.large_gpu_lane === true,
       profileAutomatic: job.profile_automatic === true,
       memoryPolicy: text(job.memory_policy),
@@ -46,7 +46,7 @@ export function adaptStatus(raw) {
       events: lifecycle.length ? lifecycle : [{ at: date(job.created_at), label: 'Submitted' }, { at: date(job.started_at), label: 'Started' }, { at: date(job.ended_at), label: `Finished · ${state}` }].filter((e) => e.at).slice(-MAX_EVENTS),
       logs: lifecycle.map((event) => ({ at: event.at, event: event.label, message: event.message })),
       admission: [...lifecycle].reverse().find((event) => event.snapshot)?.snapshot ?? null,
-      actions: ['host', 'sandbox', 'large'].includes(job.execution) ? actions.filter((a) => job.state !== 'completed' && job.state !== 'failed' && job.state !== 'cancelled' && (a === 'terminate' || (a === 'cancel' && job.host_phase === 'cancelling-slurm'))) : state === 'waiting' ? actions.filter((a) => a === 'cancel' || (job.state === 'queued' && !job.released && job.cleanup !== 'cancellation-requested' && ['force-run', 'run-next', 'run-host', 'run-sandbox'].includes(a) && (a !== 'run-sandbox' || /^agent-sandbox-[A-Za-z0-9_.-]{1,128}$/.test(job.origin)))) : state === 'running' ? actions.filter((a) => a === 'terminate') : []
+      actions: ['host', 'sandbox', 'large'].includes(job.execution) ? actions.filter((a) => job.state !== 'completed' && job.state !== 'failed' && job.state !== 'cancelled' && (a === 'terminate' || (a === 'cancel' && ['cancelling-slurm', 'launch'].includes(job.host_phase)))) : state === 'waiting' ? actions.filter((a) => a === 'cancel' || (job.state === 'queued' && !job.released && job.cleanup !== 'cancellation-requested' && ['force-run', 'run-next', 'run-host', 'run-sandbox'].includes(a) && (a !== 'run-sandbox' || /^agent-sandbox-[A-Za-z0-9_.-]{1,128}$/.test(job.origin)))) : state === 'running' ? actions.filter((a) => a === 'terminate') : []
     };
   };
   const telemetry = raw.telemetry ?? {};
@@ -55,7 +55,8 @@ export function adaptStatus(raw) {
     notifications: (Array.isArray(raw.notifications) ? raw.notifications : []).filter((n) => /^[a-f0-9]{32}$/.test(n.id) && ['pending', 'sending', 'unavailable', 'delivered'].includes(n.notification?.state) && (n.ready || n.notification.state !== 'pending')).slice(0, 100).map((n) => ({ id: n.id, label: text(n.label, 'Job'), state: text(n.state), delivery: n.notification.state, detail: text(n.notification.detail), exit: n.exit_code, failure: text(n.failure) })),
     notificationCount: Number.isSafeInteger(raw.notification_count) ? raw.notification_count : 0,
     schemaVersion: 1, revision: raw.revision, at: date(raw.generated_at), sampledAt: date(telemetry.sampled_at), policy: String(raw.policy_version ?? 'Unknown'), host: text(raw.host, 'Shared host'),
-    mode: raw.mode, actions: actions.filter((a) => a === 'pause' || a === 'resume'),
+    mode: raw.mode, queue: { enabled: raw.queue?.enabled !== false, available: raw.queue?.available !== false },
+    actions: [...actions.filter((a) => a === 'pause' || a === 'resume'), ...(caps.queue_toggle === true ? [raw.queue?.enabled === false ? 'queue-on' : 'queue-off'] : [])],
     capacity: {
       cpu: { total: metric(cpu.capacity), reserved: metric(cpu.reserved), actual: metric(cpu.actual), hostActual: metric(cpu.host_actual), hostTotal: metric(cpu.logical_cpus), external: metric(cpu.external), attribution: text(cpu.attribution_confidence, 'Unavailable'), headroom: null, effectiveBackground: metric(cpu.effective_background_capacity), gameActive: cpu.game_active === true, gameProtectionErrors: Array.isArray(cpu.game_protection_errors) ? cpu.game_protection_errors.filter((error) => typeof error === 'string').map((error) => error.slice(0, 1024)).slice(0, 20) : [] },
       ram: { hostGrowth: gib(ram.growth_buffer_mib), policy: text(ram.admission_policy), growth: gib(ram.growth_allowance_mib), slurmCapacity: gib(ram.slurm_capacity_mib), total: gib(ram.total_mib), reserved: gib(ram.reserved_mib), actual: gib(ram.managed_actual_mib), available: gib(ram.available_mib), swapUsed: gib(ram.swap_used_mib), external: null, headroom: gib(ram.headroom_mib) },

@@ -195,3 +195,41 @@ test('delivered running updates remain reviewable without a fake exit code', () 
   assert.match(html, /Mark reviewed/);
   assert.doesNotMatch(html, /Running · Exit/);
 });
+
+test('controls offer turning the queue off, and an off queue shows the on-host indicator', () => {
+  const raw = fixture();
+  raw.capabilities.queue_toggle = true;
+  raw.queue = { enabled: true, available: true };
+  let snapshot = adaptStatus(raw);
+  assert.ok(eligibleActions(snapshot, null, fixtureTime).includes('queue-off'));
+  let html = page(snapshot, { tab: 'controls' });
+  assert.match(html, /data-action="queue-off"[^>]*>Turn queue off/);
+  assert.match(html, /data-action="pause"/);
+  assert.doesNotMatch(page(snapshot), /QUEUE OFF/);
+
+  Object.assign(raw, { mode: 'direct', queue: { enabled: false, available: true } });
+  Object.assign(raw.jobs[2], { execution: 'sandbox', direct: true, host_phase: 'launch', state: 'pending', slurm_job_id: null });
+  snapshot = adaptStatus(raw);
+  assert.ok(eligibleActions(snapshot, null, fixtureTime).includes('queue-on'));
+  assert.deepEqual(snapshot.jobs[2].actions, ['cancel', 'terminate']);
+  html = page(snapshot, { tab: 'controls' });
+  assert.match(html, /data-action="queue-on"[^>]*>Turn queue on/);
+  assert.doesNotMatch(html, /data-action="pause"/);
+  html = page(snapshot, { selected: snapshot.jobs[2].id });
+  assert.match(html, /ALL WORK ON HOST · QUEUE OFF/);
+  assert.match(html, /Queue off\.<\/strong> All work runs directly/);
+  assert.match(html, /Sandbox · direct, no queue/);
+  assert.match(html, /The queue was off, so this job ran directly in the submitting sandbox/);
+});
+
+test('a host without the queue shows jobs as on-host and offers no queue controls', () => {
+  const raw = fixture();
+  Object.assign(raw, { mode: 'direct', queue: { enabled: false, available: false } });
+  Object.assign(raw.capabilities, { queue_toggle: false, pause: false, resume: false });
+  const snapshot = adaptStatus(raw);
+  assert.deepEqual(eligibleActions(snapshot, null, fixtureTime), []);
+  const html = page(snapshot, { tab: 'controls' });
+  assert.doesNotMatch(html, /data-action="queue-(on|off)"|data-action="pause"/);
+  assert.match(html, /All work runs directly on this host,/);
+  assert.match(html, /ALL WORK ON HOST · QUEUE OFF/);
+});
