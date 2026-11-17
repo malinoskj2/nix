@@ -302,7 +302,7 @@ Treat a bump as a hardware change and test it on the device.
     without a consent prompt, and that on `home` its panel lists the sandbox
     Codex folder as a source;
   - check that Getting started shows Enable Orca CLI as done. It only looks
-    for the `orca-cli`, `computer-use` and `orchestration` skills, which
+    for the `orca-cli`, `orca-computer-use` and `orchestration` skills, which
     [`features/desktop.nix`](../users/jesse/features/desktop.nix) links from
     the release's `skills/`, so a renamed or added skill leaves it undone.
 - **Eisvogel.** [`pkgs/markdown-to-pdf/`](../pkgs/markdown-to-pdf) typesets

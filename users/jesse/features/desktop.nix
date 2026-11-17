@@ -66,7 +66,7 @@ let
     inherit (config.orca) agentResumeWrapper codexAccountHomes usageInsightsSettings;
   };
   orcaSkills = [
-    "computer-use"
+    "orca-computer-use"
     "orca-cli"
     "orchestration"
   ];
