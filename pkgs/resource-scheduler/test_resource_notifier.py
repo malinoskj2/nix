@@ -52,6 +52,8 @@ class NotifierTests(unittest.TestCase):
         self.assertIn("resource-job inspect " + "a" * 32, body)
         self.assertIn("does not authorize automatic retries", body)
         self.assertNotIn("untrusted label", body)
+        self.assertNotIn("larger --ram", body)
+        self.assertIn("larger --ram", notifier.message({**self.item, "failure": "ram_oom"}))
         notifier.deliver_once("/trusted/orca", self.call, self.request)
         self.assertEqual(len(self.calls), 2)
 

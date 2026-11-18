@@ -321,11 +321,18 @@ def telemetry(gpu_enabled=True):
     return result
 
 
-def ram_estimate(job, jobs, config, now):
-    """Peak share of the hard limit learned from the project's same-category runs; None keeps the limit."""
+def learned_need(job, jobs, config, now, resource="ram"):
+    """Peak share of the request learned from the project's same-category runs; None keeps the request."""
     project = (job.get("profile") or {}).get("project")
-    limit = job["requested"]["ram_mib"]
-    if not config.get("adaptive_ram") or job.get("memory_policy") == "strict" or not project or not limit:
+    field = resource + "_mib"
+    limit = job["requested"][field]
+    if (
+        not config.get("adaptive_ram")
+        or job.get("memory_policy") == "strict"
+        or job.get("vram_auto")
+        or not project
+        or not limit
+    ):
         return None
     runs = [
         item
@@ -334,26 +341,66 @@ def ram_estimate(job, jobs, config, now):
         and item["state"] in TERMINAL
         and (item.get("profile") or {}).get("project") == project
         and item.get("category") == job.get("category")
+        and item["requested"][field]
         and 0 <= now - (item.get("ended_at") or 0) < 30 * 86400
     ]
-    if any(item.get("failure") == "ram_oom" for item in runs):
-        return None
+    if resource == "ram":
+        oom = "ram_oom"
+
+        def measured(item):
+            return item.get("ram_good_samples", 0) >= 2 and not item.get("ram_missing_samples")
+    else:
+        oom = "gpu_oom_reported"
+
+        def measured(item):
+            return (
+                item.get("gpu_samples", 0) >= 2
+                and not item.get("gpu_missing_samples")
+                and item["observed"].get("attribution_confidence") == "cgroup-gpu-processes"
+            )
+
+    # An OOM used its whole request; it counts as such rather than stopping learning for the project.
     shares = sorted(
-        item["observed"]["ram_peak_mib"] / item["requested"]["ram_mib"]
-        for item in runs
-        if item["state"] == "completed"
-        and item.get("exit_code") == 0
-        and not item.get("failure")
-        and item["observed"].get("ram_peak_mib") is not None
-        and item.get("ram_good_samples", 0) >= 2
-        and not item.get("ram_missing_samples")
-        and item["requested"]["ram_mib"]
+        [1.0 for item in runs if item.get("failure") == oom]
+        + [
+            item["observed"][resource + "_peak_mib"] / item["requested"][field]
+            for item in runs
+            if item["state"] == "completed"
+            and item.get("exit_code") == 0
+            and not item.get("failure")
+            and item["observed"].get(resource + "_peak_mib") is not None
+            and measured(item)
+        ]
     )
     if len(shares) < 5:
         return None
     # Nearest-rank p90: one outlier among many runs does not set every admission.
     peak = limit * shares[math.ceil(len(shares) * 0.9) - 1]
     return min(limit, math.ceil(max(peak * 1.25, peak + 1024)))
+
+
+def vram_outstanding(job, config, now):
+    """Unused VRAM a running job may still claim: its observed peak plus margin once attribution is proven."""
+    current = job["observed"].get("vram_mib")
+    strict = max(0, job["requested"]["vram_mib"] - (current or 0))
+    if current is None:
+        return strict
+    peak = max(current, job["observed"].get("vram_peak_mib") or 0)
+    if (
+        config.get("adaptive_ram")
+        and job.get("memory_policy") != "strict"
+        and job["state"] == "running"
+        and job.get("gpu_samples", 0) >= 3
+        and not job.get("gpu_missing_samples")
+        and job["observed"].get("attribution_confidence") == "cgroup-gpu-processes"
+        and job.get("started_at")
+        and now - job["started_at"] >= config["ram_startup_seconds"]
+    ):
+        return min(strict, max(0, peak + max(1024, peak * 0.1) - current))
+    estimate = job.get("vram_estimate_mib")
+    if estimate is not None and peak <= estimate:
+        return min(strict, max(0, estimate - current))
+    return strict
 
 
 def ram_allowance(job, config, now=None):
@@ -554,11 +601,9 @@ def admission_reason(job, jobs, snapshot, config):
     gpu = snapshot["gpu"]
     if gpu["free_mib"] is None:
         return "GPU telemetry unavailable"
-    outstanding = sum(
-        max(0, item["requested"]["vram_mib"] - (item["observed"].get("vram_mib") or 0)) for item in gpu_jobs
-    )
+    outstanding = sum(vram_outstanding(item, config, time.time()) for item in gpu_jobs)
     # Exclusive reserves the cooperative pool but external desktop use can fluctuate.
-    needed = request["vram_mib"]
+    needed = job.get("vram_estimate_mib") or request["vram_mib"]
     if job.get("vram_auto") and job["mode"] == "exclusive":
         needed = max(1, min(config["gpu_capacity_mib"], gpu["free_mib"]) - config["vram_headroom_mib"])
     if gpu["free_mib"] - config["vram_headroom_mib"] - outstanding < needed:
@@ -591,7 +636,7 @@ def external_block_reason(job, jobs, snapshot, config):
             return "GPU telemetry unavailable; CPU-only jobs may pass"
         vram = [item["observed"].get("vram_mib") for item in active if item["requested"]["vram_mib"]]
         if all(value is not None for value in vram):
-            needed = 1 if job.get("vram_auto") else request["vram_mib"]
+            needed = 1 if job.get("vram_auto") else job.get("vram_estimate_mib") or request["vram_mib"]
             if free + sum(vram) - config["vram_headroom_mib"] < needed:
                 return "Host VRAM shortage remains after running jobs finish; smaller jobs may pass"
     return None
@@ -656,6 +701,17 @@ def public_profile(record):
             "advisory": "Observed workload settings only; sampled GPU peaks can miss short spikes. Review before declaring budgets.",
         },
     }
+
+
+def oom_advice(job):
+    limit = job["requested"]["ram_mib"]
+    peak = job.get("observed", {}).get("ram_peak_mib") or limit
+    suggested = math.ceil(max(limit * 1.5, peak * 1.25, limit + 1024) / 1024)
+    return (
+        f"the job reached its {limit} MiB RAM limit and was killed. Resubmitting the same work with a larger "
+        f"--ram (for example --ram {suggested}GiB) is part of the existing task, not a blind retry; "
+        "a request the queue can never fit is rejected at submission."
+    )
 
 
 def failure_kind(job, directory):
@@ -914,7 +970,7 @@ class Backend:
         self.game_protection_errors = []
         self.game_active = False
         self.previous_cpu = None
-        self.previous_ram = None
+        self.ram_history = []
         self.save()
 
     def save(self):
@@ -1138,6 +1194,16 @@ class Backend:
             model=None,
             events=[],
         )
+        if (
+            self.state["queue_enabled"]
+            and self.config["adaptive_ram"]
+            and req["ram_mib"] > self.config["ram_capacity_mib"]
+            and not large_gpu_job(job, self.config)
+        ):
+            # Otherwise it would wait forever for a Slurm allocation that can never fit.
+            raise ValueError(
+                f"RAM request exceeds the {self.config['ram_capacity_mib']} MiB Slurm capacity; reduce workload settings"
+            )
         directory = self.directory / job_id
         directory.mkdir(mode=0o700)
         atomic(
@@ -1343,7 +1409,14 @@ class Backend:
                 self.record_profile(job)
         for job in self.state["jobs"]:
             if job["state"] in ("queued", "pending", "running") and managed(job):
-                job["ram_estimate_mib"] = ram_estimate(job, self.state["jobs"], self.config, now)
+                record = self.state["profiles"].get(json.dumps(job.get("profile"), sort_keys=True), {})
+                # A resubmission after its own OOM keeps its full revised request until it recovers.
+                job["ram_estimate_mib"] = (
+                    None
+                    if record.get("ram_learning_blocked")
+                    else learned_need(job, self.state["jobs"], self.config, now)
+                )
+                job["vram_estimate_mib"] = learned_need(job, self.state["jobs"], self.config, now, "vram")
         for job in self.state["jobs"]:
             if job["state"] != "running" or not managed(job):
                 continue
@@ -1384,15 +1457,17 @@ class Backend:
                 or memory.get("some", {}).get("avg10", 0) >= 5
             )
         available = self.snapshot["ram"]["available_mib"]
-        previous_ram = self.previous_ram
-        self.snapshot["ram"]["growth_buffer_mib"] = (
-            max(0, previous_ram[1] - available) * 15 / (now - previous_ram[0])
+        # Net decline over a short window, so one noisy poll does not project a large buffer.
+        window = max(10, self.config["poll_seconds"] * 5)
+        self.ram_history = (
+            [sample for sample in self.ram_history if 0 < now - sample[0] <= window] + [(now, available)]
             if available is not None
-            and previous_ram is not None
-            and 0 < now - previous_ram[0] <= max(10, self.config["poll_seconds"] * 3)
-            else 0
+            else []
         )
-        self.previous_ram = (now, available) if available is not None else None
+        oldest = self.ram_history[0] if self.ram_history else None
+        self.snapshot["ram"]["growth_buffer_mib"] = (
+            max(0, oldest[1] - available) * 15 / (now - oldest[0]) if oldest and now > oldest[0] else 0
+        )
         low_ram = (
             self.snapshot["ram"]["available_mib"] is None
             or self.snapshot["ram"]["available_mib"] < self.config["ram_headroom_mib"]
@@ -2673,6 +2748,8 @@ def run(args):
                         f"resource-run: {job_id} {job['state']}; exit={code}; outcome={job.get('failure') or job['state']}; inspect: resource-job inspect {job_id}",
                         file=sys.stderr,
                     )
+                    if job.get("failure") == "ram_oom":
+                        print("resource-run: " + oom_advice(job), file=sys.stderr)
                     if job.get("profile"):
                         print(
                             "resource-run: profile "

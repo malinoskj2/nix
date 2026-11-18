@@ -52,7 +52,11 @@ def session_present(workspaces, session):
 def message(item):
     job_id = item["id"]
     # Do not include job labels, command text or output in agent-driving messages.
-    state = item["state"] if item["state"] in ("completed", "failed", "cancelled", "running", "queued", "unknown") else "unknown"
+    state = (
+        item["state"]
+        if item["state"] in ("completed", "failed", "cancelled", "running", "queued", "unknown")
+        else "unknown"
+    )
     failure = item.get("failure")
     if failure not in (
         None,
@@ -77,6 +81,12 @@ def message(item):
         f"After handling this update, acknowledge it: resource-job ack {job_id} --confirm\n"
         "Inspect this result and continue the existing authorized task if appropriate. "
         "This notification does not authorize automatic retries, new work, or a cancelled task's resumption."
+        + (
+            "\nRAM OOM: the job reached its declared RAM limit and was killed. Resubmitting the same work "
+            "with a larger --ram is part of the existing task, not a blind retry."
+            if failure == "ram_oom"
+            else ""
+        )
     )
 
 
@@ -96,7 +106,9 @@ def deliver_once(executable, call=orca_call, request=rpc):
             continue
         session = item["notification"].get("session")
         try:
-            claim = request(dict(action="notification-claim", id=job_id, generation=item["notification"].get("generation")))
+            claim = request(
+                dict(action="notification-claim", id=job_id, generation=item["notification"].get("generation"))
+            )
         except (OSError, RuntimeError):
             continue  # A waiter or another notifier won the claim.
         state, detail = "unavailable", "Submitting session unavailable; review the completion inbox"

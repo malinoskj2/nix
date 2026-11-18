@@ -417,6 +417,34 @@ class SchedulerTests(unittest.TestCase):
         self.finish(explicit)
         self.assertEqual(self.profile()["consecutive_probe_failures"], 0)
 
+    def test_host_growth_buffer_follows_net_decline_not_one_noisy_poll(self):
+        for at, available in ((100, 10000), (102, 9400), (104, 10000), (106, 10000)):
+            self.snapshot["ram"]["available_mib"] = available
+            with patch.object(rs.time, "time", return_value=at):
+                self.backend.tick()
+            if at == 102:
+                self.assertEqual(self.backend.snapshot["ram"]["growth_buffer_mib"], 4500)
+        self.assertEqual(self.backend.snapshot["ram"]["growth_buffer_mib"], 0)
+        for at, available in ((108, 9000), (110, 8000)):
+            self.snapshot["ram"]["available_mib"] = available
+            with patch.object(rs.time, "time", return_value=at):
+                self.backend.tick()
+        self.assertEqual(self.backend.snapshot["ram"]["growth_buffer_mib"], 3000)
+
+    def test_oom_resubmission_with_revised_ram_is_accepted_at_its_full_request(self):
+        self.backend.config["adaptive_ram"] = True
+        first = self.submit(ram=3072)
+        self.finish(first, "OUT_OF_MEMORY", 137)
+        self.assertEqual(first["failure"], "ram_oom")
+        self.assertIn("--ram 5GiB", rs.oom_advice(first))
+        retry = self.submit(ram=6144)
+        self.assertEqual(retry["profile"], first["profile"])
+        self.backend.tick()
+        self.assertIsNone(retry["ram_estimate_mib"])
+        capacity = self.backend.config["ram_capacity_mib"]
+        with self.assertRaisesRegex(ValueError, "Slurm capacity"):
+            self.submit(ram=capacity + 1)
+
     def test_profile_keys_separate_workload_settings_and_reject_duplicates(self):
         probe = self.profiled()
         with self.assertRaisesRegex(ValueError, "active work"):

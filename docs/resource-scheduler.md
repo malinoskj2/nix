@@ -559,8 +559,21 @@ five clean, fully sampled completions in the last 30 days. Then it is the
 nearest-rank 90th percentile of their peak-to-request shares, applied to this
 job's request, plus the larger of 25% or 1 GiB, capped at the request. No naming
 or explicit profile is required, because agents tend to scale declarations with
-the job. Any RAM OOM in that history, a strict job or a host without adaptive RAM
-falls back to the full request.
+the job. A RAM OOM in that history counts as a run that used its whole request,
+so a few OOMs raise the estimate without stopping learning for the project. A
+strict job, a host without adaptive RAM, or a resubmission whose own profile has
+an unresolved OOM uses the full request.
+
+The same estimate applies to shared VRAM, from runs with complete cgroup GPU
+attribution; `gpu_oom_reported` counts as a full-request run. A running job
+holds its learned VRAM need until its observed peak exceeds it, then its full
+unused request. Exclusive automatic VRAM requests are unchanged.
+
+On an adaptive host, a RAM request above the Slurm capacity is rejected at
+submission unless it qualifies for the large GPU lane, so a resubmission after an
+OOM never waits for an allocation that cannot exist. `resource-run` follows a
+`ram_oom` outcome with a suggested larger `--ram`, and the completion
+notification says that resubmitting with more RAM is part of the existing task.
 
 A running adaptive job retains its full unused allowance for at least 30 seconds
 of uninterrupted cgroup observations and at least three samples, except that a
@@ -579,8 +592,9 @@ The growth rate is the maximum positive rate among observations from the last
 10 seconds (or five poll intervals, if longer). Regrowth to an earlier peak is
 already covered by the baseline, so a finished load spike no longer holds the
 allowance near the hard limit.
-The independent host buffer projects the latest decrease in MemAvailable over
-15 seconds; this deliberately errs conservatively during concurrent growth.
+The independent host buffer projects the net decrease in MemAvailable over the
+same recent window onto 15 seconds, so one noisy poll does not hold admissions;
+it still errs conservatively during concurrent growth.
 The lifetime peak remains protected even after unloading or between phases.
 New admissions stop on unavailable memory PSI, full PSI avg10 ≥1%, some PSI
 avg10 ≥5%, unavailable/stale memory readings, or desktop headroom shortage.

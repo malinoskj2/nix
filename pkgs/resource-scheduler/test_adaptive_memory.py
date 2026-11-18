@@ -100,21 +100,78 @@ class AdaptiveMemoryTests(unittest.TestCase):
             requested=dict(cpu=4, ram_mib=8192, vram_mib=0),
         )
         shares = [0.1] * 9 + [0.2] + [0.7]
-        self.assertEqual(rs.ram_estimate(job, self.history(shares), self.config, self.now), 2663)
-        self.assertEqual(rs.ram_estimate(job, self.history(shares[-5:]), self.config, self.now), 7168)
-        self.assertIsNone(rs.ram_estimate(job, self.history(shares[-4:]), self.config, self.now))
+        self.assertEqual(rs.learned_need(job, self.history(shares), self.config, self.now), 2663)
+        self.assertEqual(rs.learned_need(job, self.history(shares[-5:]), self.config, self.now), 7168)
+        self.assertIsNone(rs.learned_need(job, self.history(shares[-4:]), self.config, self.now))
         oom = self.history([0.1], state="failed", exit_code=137, failure="ram_oom")
-        self.assertIsNone(rs.ram_estimate(job, self.history(shares) + oom, self.config, self.now))
+        self.assertEqual(rs.learned_need(job, self.history(shares) + oom, self.config, self.now), 7168)
+        self.assertEqual(rs.learned_need(job, oom * 5, self.config, self.now), 8192)
         for other in (
             dict(category="build"),
             dict(profile=dict(project="other")),
             dict(ended_at=self.now - 31 * 86400),
         ):
             runs = [{**run, **other} for run in self.history(shares)]
-            self.assertIsNone(rs.ram_estimate(job, runs, self.config, self.now))
+            self.assertIsNone(rs.learned_need(job, runs, self.config, self.now))
         for changes in (dict(memory_policy="strict"), dict(profile=None)):
-            self.assertIsNone(rs.ram_estimate({**job, **changes}, self.history(shares), self.config, self.now))
-        self.assertIsNone(rs.ram_estimate(job, self.history(shares), {**self.config, "adaptive_ram": False}, self.now))
+            self.assertIsNone(rs.learned_need({**job, **changes}, self.history(shares), self.config, self.now))
+        self.assertIsNone(rs.learned_need(job, self.history(shares), {**self.config, "adaptive_ram": False}, self.now))
+
+    def test_vram_need_learns_only_from_complete_gpu_attribution(self):
+        job = dict(
+            state="queued",
+            mode="shared",
+            memory_policy="adaptive",
+            category="render",
+            profile=dict(project="riso", name="auto-v1", variant="new"),
+            requested=dict(cpu=4, ram_mib=8192, vram_mib=4096),
+        )
+        gpu = dict(gpu_samples=4, requested=dict(cpu=4, ram_mib=4096, vram_mib=3072))
+        runs = [
+            {**run, **gpu, "observed": dict(vram_peak_mib=3072 * 0.3, attribution_confidence="cgroup-gpu-processes")}
+            for run in self.history([0] * 6)
+        ]
+        self.assertEqual(rs.learned_need(job, runs, self.config, self.now, "vram"), 2253)
+        partial = [{**run, "gpu_missing_samples": 1} for run in runs]
+        self.assertIsNone(rs.learned_need(job, partial, self.config, self.now, "vram"))
+        failed = self.history([0], state="failed", exit_code=1, failure="gpu_oom_reported", **gpu)
+        self.assertEqual(rs.learned_need(job, runs + failed * 2, self.config, self.now, "vram"), 4096)
+        self.assertIsNone(rs.learned_need({**job, "vram_auto": True}, runs, self.config, self.now, "vram"))
+
+    def test_running_vram_holds_learned_need_until_it_outgrows_it(self):
+        job = dict(
+            state="running",
+            requested=dict(vram_mib=6144),
+            observed=dict(vram_mib=500, vram_peak_mib=900),
+            vram_estimate_mib=2000,
+        )
+        self.assertEqual(rs.vram_outstanding(job, self.config, self.now), 1500)
+        job["observed"]["vram_peak_mib"] = 2100
+        self.assertEqual(rs.vram_outstanding(job, self.config, self.now), 5644)
+        job["observed"] = dict(vram_mib=None, vram_peak_mib=None)
+        self.assertEqual(rs.vram_outstanding(job, self.config, self.now), 6144)
+
+    def test_observed_gpu_job_holds_its_peak_plus_margin(self):
+        job = dict(
+            state="running",
+            memory_policy="adaptive",
+            requested=dict(vram_mib=28672),
+            observed=dict(vram_mib=22156, vram_peak_mib=22156, attribution_confidence="cgroup-gpu-processes"),
+            gpu_samples=10,
+            started_at=self.now - 60,
+        )
+        self.assertEqual(round(rs.vram_outstanding(job, self.config, self.now)), 2216)
+        job["observed"]["vram_mib"] = 10000
+        self.assertEqual(round(rs.vram_outstanding(job, self.config, self.now)), 14372)
+        for changes in (
+            dict(gpu_missing_samples=1),
+            dict(gpu_samples=2),
+            dict(started_at=self.now - 10),
+            dict(memory_policy="strict"),
+        ):
+            self.assertEqual(rs.vram_outstanding({**job, **changes}, self.config, self.now), 18672)
+        strict = {**self.config, "adaptive_ram": False}
+        self.assertEqual(rs.vram_outstanding(job, strict, self.now), 18672)
 
     def test_estimated_need_admits_where_hard_limit_would_not(self):
         self.candidate["requested"]["ram_mib"] = 12288
