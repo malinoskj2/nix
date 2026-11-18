@@ -83,7 +83,9 @@ seconds gains an age fence ahead of newly arriving interactive jobs. Within that
 ordering, smaller jobs that fit may pass a head job short of RAM, VRAM or CPU
 for its first 10 minutes of capacity waiting. After that, the head job protects
 its place when running jobs finishing could make it fit, so capacity drains to
-it instead of being taken by a stream of small jobs. When measured available RAM/VRAM plus attributable running-job memory
+it instead of being taken by a stream of small jobs. Such a starved job also ranks
+with large GPU lane work by age, and newer lane jobs wait behind it, so a stream
+of large jobs cannot hold it back either. When measured available RAM/VRAM plus attributable running-job memory
 would still be insufficient, smaller eligible jobs may pass it. CPU-only work
 may also pass a GPU job blocked by external GameMode or missing GPU telemetry.
 The game CPU cap still applies. Unknown managed allocations or missing relevant

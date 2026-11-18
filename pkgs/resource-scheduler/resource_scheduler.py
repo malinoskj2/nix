@@ -788,11 +788,16 @@ def failure_kind(job, directory):
     return "command_failed"
 
 
+def starving(job, now):
+    return job["state"] == "queued" and now - job.get("blocked_since", now) >= BACKFILL_SECONDS
+
+
 def queue_key(job, now, config=None):
     return (
         0 if job.get("run_next_requested_at") is not None else 1,
         -(job.get("run_next_requested_at") or 0),
-        0 if large_gpu_job(job, config or DEFAULTS) else 1,
+        # A job starved of capacity past the backfill window ranks with large-lane work, by age.
+        0 if large_gpu_job(job, config or DEFAULTS) or starving(job, now) else 1,
         0 if job["priority"] == "game" else 1,
         0 if now - job["created_at"] >= 60 else 1,
         0 if now - job["created_at"] >= 60 or job["priority"] == "interactive" else 1,
@@ -1551,9 +1556,12 @@ class Backend:
             elif job.get("cleanup") == "cancellation-requested":
                 reason = "Waiting for Slurm cancellation"
             elif large_gpu_job(job, self.config):
-                reason = large_gpu_reason(job, self.state["jobs"], self.snapshot, self.config)
-                if reason:
-                    bypassed.append(job["id"])
+                if barrier:
+                    reason = "Behind earlier job " + barrier["id"]
+                else:
+                    reason = large_gpu_reason(job, self.state["jobs"], self.snapshot, self.config)
+                    if reason:
+                        bypassed.append(job["id"])
             elif self.game_protection_errors:
                 reason = "Game CPU protection unavailable; new admissions stopped"
             elif self.healthy_since is None or now - self.healthy_since < self.config["stability_seconds"]:

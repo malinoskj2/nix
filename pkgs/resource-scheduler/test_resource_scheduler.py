@@ -1593,6 +1593,27 @@ class SchedulerTests(unittest.TestCase):
         self.snapshot["pressure"]["memory"] = dict(full=dict(avg10=0), some=dict(avg10=0))
         return self.submit(ram=16384, vram=24576, origin="agent-sandbox-test")
 
+    def test_starving_job_holds_back_newer_large_lane_work(self):
+        self.backend.config.update(adaptive_ram=True, large_gpu_lane=True)
+        self.snapshot["sampled_at"] = rs.time.time()
+        self.snapshot["pressure"]["memory"] = dict(full=dict(avg10=0), some=dict(avg10=0))
+        active = self.submit(ram=5000)
+        self.backend.tick()
+        self.snapshot["cgroups"][active["slurm_job_id"]] = {"memory.current": 5000}
+        self.snapshot["ram"]["available_mib"] = 6000
+        waiting = self.submit(ram=4096)
+        self.backend.tick()
+        self.assertIn("Insufficient RAM", waiting["wait_reason"])
+        self.assertIn("smaller jobs may pass", waiting["wait_reason"])
+        large = self.submit(ram=1024, vram=24576, origin="agent-sandbox-test")
+        waiting["blocked_since"] -= rs.BACKFILL_SECONDS
+        self.backend.tick()
+        self.assertEqual(large["state"], "queued")
+        self.assertIn(waiting["id"], large["wait_reason"])
+        self.snapshot["ram"]["available_mib"] = 20000
+        self.backend.tick()
+        self.assertEqual(waiting["state"], "pending")
+
     def test_numeric_project_exception_shares_one_slot_with_one_gpu_job(self):
         self.backend.config["large_gpu_lane"] = True
         first = self.submit(ram=12288)
@@ -2013,7 +2034,6 @@ class SchedulerTests(unittest.TestCase):
                 self.assertEqual(rpc.call_args_list[0].args[0]["agent"], "actual-session")
 
 
-
 class ReconnectTests(unittest.TestCase):
     def test_observers_ride_out_restarts_but_not_scheduler_errors(self):
         calls = [ConnectionRefusedError(), RuntimeError("Scheduler disconnected"), {"job": "ok"}]
@@ -2036,6 +2056,7 @@ class ReconnectTests(unittest.TestCase):
             ):
                 with self.assertRaises(ConnectionResetError):
                     rs.poll_rpc({}, "resource-run")
+
 
 if __name__ == "__main__":
     unittest.main()
