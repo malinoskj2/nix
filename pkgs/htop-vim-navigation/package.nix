@@ -16,9 +16,10 @@ htop.overrideAttrs (old: {
 
   patches = (old.patches or [ ]) ++ [
     ./vim-navigation.patch
+    ./vram-meter.patch
   ];
 
   meta = old.meta // {
-    description = "${old.meta.description}, with h/j/k/l navigation";
+    description = "${old.meta.description}, with h/j/k/l navigation and a VRAM meter";
   };
 })

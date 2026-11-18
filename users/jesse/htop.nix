@@ -22,6 +22,7 @@ in
       (bar "LeftCPUs4")
       (bar "Memory")
       (bar "Swap")
+      (bar "VRAM")
     ]
     // rightMeters [
       (bar "RightCPUs4")
