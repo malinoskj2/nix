@@ -84,6 +84,7 @@ in
     // lib.optionalAttrs queue {
       gpu = ./rules/gpu.md;
       resources = ./rules/resources.md;
+      host-switch = ./rules/host-switch.md;
     };
 
     settings = {

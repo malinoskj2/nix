@@ -107,7 +107,8 @@ run a `switch` unless explicitly asked. Hosts are applied with `nh os switch`, a
 another host, with `--target-host` (`docs/bootstrap.md`). No host needs
 `--impure`. Don't copy secrets into the repository.
 
-When asked to switch `home`, including from inside the agent sandbox, commit
+Only when explicitly asked to switch `home` in the current conversation
+(`users/jesse/claude/rules/host-switch.md`), including from inside the agent sandbox, commit
 on `main`, build the host through the resource scheduler, then run
 `host-switch` (or `nix run /home/jesse/nix#host-switch` in a sandbox that predates
 it). Root's `host-switch` service on `home` builds and activates exactly the head

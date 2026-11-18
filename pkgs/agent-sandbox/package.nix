@@ -484,6 +484,8 @@ let
           + builtins.readFile ../../users/jesse/claude/rules/gpu.md
           + "\n"
           + builtins.readFile ../../users/jesse/claude/rules/resources.md
+          + "\n"
+          + builtins.readFile ../../users/jesse/claude/rules/host-switch.md
         )
       } etc/claude-code/CLAUDE.md
       ln -s ${claudeManagedSettings} etc/claude-code/managed-settings.json

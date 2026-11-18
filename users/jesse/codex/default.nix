@@ -110,6 +110,7 @@ in
         ++ lib.optionals queue [
           ../claude/rules/gpu.md
           ../claude/rules/resources.md
+          ../claude/rules/host-switch.md
         ]
         ++ [
           ../claude/rules/local-models.md
