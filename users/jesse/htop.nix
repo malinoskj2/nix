@@ -23,6 +23,7 @@ in
       (bar "Memory")
       (bar "Swap")
       (bar "VRAM")
+      (bar "GPUUsage")
     ]
     // rightMeters [
       (bar "RightCPUs4")

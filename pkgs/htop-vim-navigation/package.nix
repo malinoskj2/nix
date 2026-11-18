@@ -20,6 +20,6 @@ htop.overrideAttrs (old: {
   ];
 
   meta = old.meta // {
-    description = "${old.meta.description}, with h/j/k/l navigation and a VRAM meter";
+    description = "${old.meta.description}, with h/j/k/l navigation and NVIDIA VRAM and usage meters";
   };
 })

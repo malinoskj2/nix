@@ -19,7 +19,7 @@ index 52134df..2418120 100644
  	zfs/ZfsArcMeter.c \
  	zfs/ZfsCompressedArcMeter.c
 diff --git a/linux/Platform.c b/linux/Platform.c
-index cecaf3b..ed44126 100644
+index cecaf3b..40218e7 100644
 --- a/linux/Platform.c
 +++ b/linux/Platform.c
 @@ -56,6 +56,7 @@ in the source distribution for its full text.
@@ -30,20 +30,21 @@ index cecaf3b..ed44126 100644
  #include "linux/ZramMeter.h"
  #include "linux/ZramStats.h"
  #include "linux/ZswapStats.h"
-@@ -277,6 +278,7 @@ const MeterClass* const Platform_meterTypes[] = {
+@@ -277,6 +278,8 @@ const MeterClass* const Platform_meterTypes[] = {
     &OpenRCUserMeter_class,
     &FileDescriptorMeter_class,
     &GPUMeter_class,
 +   &VRAMMeter_class,
++   &GPUUsageMeter_class,
     NULL
  };
  
 diff --git a/linux/VRAMMeter.c b/linux/VRAMMeter.c
 new file mode 100644
-index 0000000..c62f103
+index 0000000..268aaa4
 --- /dev/null
 +++ b/linux/VRAMMeter.c
-@@ -0,0 +1,134 @@
+@@ -0,0 +1,195 @@
 +/*
 +htop - linux/VRAMMeter.c
 +Released under the GNU GPLv2+, see the COPYING file
@@ -71,10 +72,16 @@ index 0000000..c62f103
 +   unsigned long long used;
 +} NvmlMemory;
 +
++typedef struct {
++   unsigned int gpu;
++   unsigned int memory;
++} NvmlUtilization;
++
 +typedef int (*NvmlInit)(void);
 +typedef int (*NvmlDeviceCount)(unsigned int*);
 +typedef int (*NvmlDeviceByIndex)(unsigned int, void**);
 +typedef int (*NvmlDeviceMemory)(void*, NvmlMemory*);
++typedef int (*NvmlDeviceUtilization)(void*, NvmlUtilization*);
 +
 +static struct {
 +   bool tried;
@@ -82,6 +89,7 @@ index 0000000..c62f103
 +   unsigned int count;
 +   NvmlDeviceByIndex byIndex;
 +   NvmlDeviceMemory memory;
++   NvmlDeviceUtilization utilization;
 +} nvml;
 +
 +static void* openNvml(void) {
@@ -108,6 +116,7 @@ index 0000000..c62f103
 +   NvmlDeviceCount count = (NvmlDeviceCount)dlsym(handle, "nvmlDeviceGetCount_v2");
 +   nvml.byIndex = (NvmlDeviceByIndex)dlsym(handle, "nvmlDeviceGetHandleByIndex_v2");
 +   nvml.memory = (NvmlDeviceMemory)dlsym(handle, "nvmlDeviceGetMemoryInfo");
++   nvml.utilization = (NvmlDeviceUtilization)dlsym(handle, "nvmlDeviceGetUtilizationRates");
 +   if (!init || !count || !nvml.byIndex || !nvml.memory || init() != 0 || count(&nvml.count) != 0)
 +      return;
 +
@@ -178,12 +187,65 @@ index 0000000..c62f103
 +   .uiName = "VRAM",
 +   .caption = "VRM"
 +};
++
++static void GPUUsageMeter_updateValues(Meter* this) {
++   if (!nvml.tried)
++      loadNvml();
++
++   unsigned int sum = 0;
++   unsigned int devices = 0;
++   if (nvml.ready && nvml.utilization) {
++      for (unsigned int i = 0; i < nvml.count; i++) {
++         void* device;
++         NvmlUtilization utilization;
++         if (nvml.byIndex(i, &device) == 0 && nvml.utilization(device, &utilization) == 0) {
++            sum += utilization.gpu;
++            devices++;
++         }
++      }
++   }
++
++   if (devices == 0) {
++      this->values[0] = 0.0;
++      xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "N/A");
++      return;
++   }
++
++   this->values[0] = (double)sum / devices;
++   xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "%.0f%%", this->values[0]);
++}
++
++static void GPUUsageMeter_display(const Object* cast, RichString* out) {
++   const Meter* this = (const Meter*)cast;
++   RichString_writeAscii(out, CRT_colors[METER_VALUE], this->txtBuffer);
++}
++
++static const int GPUUsageMeter_attributes[] = {
++   GPU_ENGINE_1,
++};
++
++const MeterClass GPUUsageMeter_class = {
++   .super = {
++      .extends = Class(Meter),
++      .delete = Meter_delete,
++      .display = GPUUsageMeter_display,
++   },
++   .updateValues = GPUUsageMeter_updateValues,
++   .defaultMode = BAR_METERMODE,
++   .supportedModes = METERMODE_DEFAULT_SUPPORTED,
++   .maxItems = 1,
++   .total = 100.0,
++   .attributes = GPUUsageMeter_attributes,
++   .name = "GPUUsage",
++   .uiName = "GPU usage (NVIDIA)",
++   .caption = "GPU"
++};
 diff --git a/linux/VRAMMeter.h b/linux/VRAMMeter.h
 new file mode 100644
-index 0000000..c56f52a
+index 0000000..57f4fb6
 --- /dev/null
 +++ b/linux/VRAMMeter.h
-@@ -0,0 +1,13 @@
+@@ -0,0 +1,15 @@
 +#ifndef HEADER_VRAMMeter
 +#define HEADER_VRAMMeter
 +/*
@@ -195,5 +257,7 @@ index 0000000..c56f52a
 +#include "Meter.h"
 +
 +extern const MeterClass VRAMMeter_class;
++
++extern const MeterClass GPUUsageMeter_class;
 +
 +#endif
