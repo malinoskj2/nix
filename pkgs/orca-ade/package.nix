@@ -20,7 +20,8 @@
   globalSettings ? { },
   approvedPlugins ? [ ],
   # Canonical host clients used by the bundled Resource Queue worker.
-  resourceSchedulerPackage ? null,
+  # A fixed directory, not a store path, so scheduler changes never rebuild Orca.
+  resourceSchedulerBin ? "",
   discordPresenceSettings ? { },
   # Setting key to its lines, e.g. { extraCodexFolders = [ "~/backup/.codex" ]; }.
   usageInsightsSettings ? { },
@@ -138,21 +139,9 @@ stdenv.mkDerivation (finalAttrs: {
     cat > $launch/jesse.resource-queue/src/config.mjs <<'EOF'
     export const commands = Object.freeze(${
       builtins.toJSON {
-        status =
-          if resourceSchedulerPackage == null then
-            "resource-status"
-          else
-            "${resourceSchedulerPackage}/bin/resource-status";
-        control =
-          if resourceSchedulerPackage == null then
-            "resource-control"
-          else
-            "${resourceSchedulerPackage}/bin/resource-control";
-        job =
-          if resourceSchedulerPackage == null then
-            "resource-job"
-          else
-            "${resourceSchedulerPackage}/bin/resource-job";
+        status = "${resourceSchedulerBin}resource-status";
+        control = "${resourceSchedulerBin}resource-control";
+        job = "${resourceSchedulerBin}resource-job";
       }
     });
     EOF
