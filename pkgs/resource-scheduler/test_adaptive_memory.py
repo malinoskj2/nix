@@ -277,6 +277,32 @@ class AdaptiveMemoryTests(unittest.TestCase):
         self.candidate["execution"] = "host"
         self.assertFalse(rs.large_gpu_job(self.candidate, self.config))
 
+    def test_gpu_lane_job_shares_slot_with_running_cpu_only_occupant(self):
+        self.config["large_gpu_lane"] = True
+        self.snapshot["gpu"] = dict(free_mib=26000)
+        self.snapshot["pressure"]["memory"]["some"] = dict(avg10=0)
+        self.job.update(execution="large", large_gpu=False)
+        self.candidate["requested"].update(vram_mib=26000, ram_mib=24576)
+        with patch.object(rs.time, "time", return_value=self.now):
+            self.assertIsNone(rs.admission_reason(self.candidate, [self.job], self.snapshot, self.config))
+            # A CPU-only candidate may join a running GPU occupant, but never a second CPU-only one.
+            gpu = {**copy.deepcopy(self.candidate), "state": "running", "execution": "large", "observed": dict(ram_mib=20000)}
+            cpu = {**copy.deepcopy(self.job), "state": "queued"}
+            cpu.pop("execution")
+            self.config["large_lane_project_ids"] = [rs.lane_project_id({"project": "p"})]
+            cpu["project"] = "p"
+            self.assertIsNone(rs.admission_reason(cpu, [gpu], self.snapshot, self.config))
+            self.assertIn("occupied", rs.admission_reason(cpu, [self.job], self.snapshot, self.config))
+            self.assertIn("occupied", rs.admission_reason(self.candidate, [gpu], self.snapshot, self.config))
+            self.assertIn("occupied", rs.admission_reason(self.candidate, [self.job, gpu], self.snapshot, self.config))
+            # A pending handoff keeps the slot; the occupant's growth allowance counts against the critical gate.
+            self.job["state"] = "pending"
+            self.assertIn("occupied", rs.admission_reason(self.candidate, [self.job], self.snapshot, self.config))
+            self.job["state"] = "running"
+            self.snapshot["ram"]["available_mib"] = 2500
+            self.assertIn("Critical", rs.admission_reason(self.candidate, [self.job], self.snapshot, self.config))
+            self.assertIsNone(rs.admission_reason(self.candidate, [], self.snapshot, self.config))
+
     def test_worktree_scope_uses_common_git_repository(self):
         result = type("Result", (), {"stdout": "/repo/.git\n/worktrees/child\n"})()
         with (

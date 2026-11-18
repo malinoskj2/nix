@@ -1593,7 +1593,7 @@ class SchedulerTests(unittest.TestCase):
         self.snapshot["pressure"]["memory"] = dict(full=dict(avg10=0), some=dict(avg10=0))
         return self.submit(ram=16384, vram=24576, origin="agent-sandbox-test")
 
-    def test_numeric_project_exception_shares_one_slot_with_all_large_jobs(self):
+    def test_numeric_project_exception_shares_one_slot_with_one_gpu_job(self):
         self.backend.config["large_gpu_lane"] = True
         first = self.submit(ram=12288)
         second = self.profiled(ram=16384, vram=26000)
@@ -1608,14 +1608,16 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(first["execution"], "large")
         self.assertEqual(first["state"], "running")
         self.assertEqual(first["requested"]["vram_mib"], 0)
-        first["observed"]["vram_mib"] = 300
-        self.assertEqual(self.backend.status()["telemetry"]["gpu"]["managed_actual_mib"], 300)
-        self.assertEqual(second["state"], "queued")
-        self.assertIn("occupied", second["wait_reason"])
-        self.host.units[first["systemd_unit"]].update(ActiveState="active", SubState="exited")
         self.backend.tick()
         self.backend.tick()
         self.assertEqual(second["execution"], "large")
+        first["observed"]["vram_mib"] = 300
+        second["observed"]["vram_mib"] = 20000
+        self.assertEqual(self.backend.status()["telemetry"]["gpu"]["managed_actual_mib"], 20300)
+        third = self.submit(ram=4096, vram=12000)
+        self.backend.tick()
+        self.assertEqual(third["state"], "queued")
+        self.assertIn("occupied", third["wait_reason"])
         self.assertTrue(second["explore"])
         self.assertEqual(second["state"], "running")
         with patch.object(rs, "checked") as checked:

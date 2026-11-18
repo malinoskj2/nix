@@ -530,7 +530,14 @@ def large_gpu_reason(job, jobs, snapshot, config):
     active = [item for item in jobs if item["state"] in ACTIVE and managed(item)]
     if any(item["state"] == "unknown" for item in active):
         return "Slurm state unknown; large GPU lane held until reconciled"
-    if any(large_gpu_job(item, config) for item in active):
+    occupants = [item for item in active if large_gpu_job(item, config)]
+    # The slot guards the GPU: one GPU workload may share it with a running CPU-only occupant.
+    gpu_users = [item for item in [job, *occupants] if item["requested"]["vram_mib"]]
+    if occupants and (
+        len(gpu_users) != 1
+        or len(occupants) + 1 - len(gpu_users) > 1
+        or any(item["state"] != "running" for item in occupants)
+    ):
         return "Large GPU lane occupied; smaller jobs may pass"
     sampled = snapshot.get("sampled_at")
     memory = snapshot.get("pressure", {}).get("memory")
@@ -546,7 +553,8 @@ def large_gpu_reason(job, jobs, snapshot, config):
         or memory.get("some", {}).get("avg10") is None
     ):
         return "Resource telemetry unavailable or stale; large GPU lane held"
-    if available < 1024 or free < 512:
+    shared = sum(ram_allowance(item, config)[0] for item in occupants)
+    if available - shared < 1024 or free < 512:
         return "Critical memory shortage; large GPU lane needs 1 GiB host RAM and 512 MiB free VRAM"
     if memory["full"]["avg10"] >= 10 or memory["some"]["avg10"] >= 50:
         return "Severe memory pressure; large GPU lane held"

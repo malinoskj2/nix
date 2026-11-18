@@ -669,7 +669,12 @@ The first large job precedes ordinary queued work and may be released despite
 ordinary pressure holds, startup guards, expected memory demand, and unused RAM
 or VRAM reservations. It does **not** need its declared peak to fit current free
 memory. Another large job waits while any large job is pending, running or
-unresolved. Small work still uses normal admission. Operator pause and confirmed
+unresolved, with one exception: the slot guards the GPU, so a single GPU-using
+lane job may run beside one running zero-VRAM lane occupant (a CPU-only project
+exception, below), in either order. Two GPU users or two CPU-only occupants never
+share it, and a pending handoff keeps the slot. While sharing, the critical RAM
+gate below is applied after subtracting the occupants' adaptive growth
+allowances. Small work still uses normal admission. Operator pause and confirmed
 cancellation remain authoritative. Human run-next/force controls retain their
 explicit override semantics; the automatic single-slot rule is not a prohibition
 on deliberate human overrides.
@@ -722,7 +727,8 @@ names or command-name heuristics appear in the admission implementation.
 
 Allowlisted projects automatically qualify even with a zero-VRAM request or an
 exploratory submission. They share the **same one active slot** with every other
-large-lane workload; there is not one slot per identifier. Explicit strict-memory
+large-lane workload; there is not one slot per identifier. A zero-VRAM exception
+does not block one GPU-using lane job, and vice versa (see above). Explicit strict-memory
 submissions still opt out. Existing queued jobs qualify without resubmission;
 running Slurm jobs are not moved. Removing an identifier does not free the slot
 occupied by a managed lane job that is still running.
