@@ -2013,6 +2013,30 @@ class SchedulerTests(unittest.TestCase):
                 self.assertEqual(rpc.call_args_list[0].args[0]["agent"], "actual-session")
 
 
+
+class ReconnectTests(unittest.TestCase):
+    def test_observers_ride_out_restarts_but_not_scheduler_errors(self):
+        calls = [ConnectionRefusedError(), RuntimeError("Scheduler disconnected"), {"job": "ok"}]
+
+        def fake(request):
+            item = calls.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+        with patch.object(rs, "rpc", side_effect=fake), patch.object(rs.time, "sleep"):
+            self.assertEqual(rs.poll_rpc({}, "resource-run"), {"job": "ok"})
+            with patch.object(rs, "rpc", side_effect=RuntimeError("Unknown job")):
+                with self.assertRaisesRegex(RuntimeError, "Unknown job"):
+                    rs.poll_rpc({}, "resource-run")
+            clock = iter([0, rs.RECONNECT_SECONDS + 1])
+            with (
+                patch.object(rs, "rpc", side_effect=ConnectionResetError()),
+                patch.object(rs.time, "monotonic", side_effect=lambda: next(clock)),
+            ):
+                with self.assertRaises(ConnectionResetError):
+                    rs.poll_rpc({}, "resource-run")
+
 if __name__ == "__main__":
     unittest.main()
 

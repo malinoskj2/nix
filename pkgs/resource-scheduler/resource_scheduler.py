@@ -165,6 +165,29 @@ def read_message(stream):
     return value
 
 
+RECONNECT_SECONDS = 900
+
+
+def poll_rpc(request, prefix):
+    """Ride out daemon restarts and transient socket errors while observing a job."""
+    deadline = None
+    while True:
+        try:
+            result = rpc(request)
+            if deadline is not None:
+                print(prefix + ": reconnected to the scheduler", file=sys.stderr, flush=True)
+            return result
+        except (OSError, RuntimeError) as error:
+            if isinstance(error, RuntimeError) and str(error) != "Scheduler disconnected":
+                raise
+            if deadline is None:
+                deadline = time.monotonic() + RECONNECT_SECONDS
+                print(prefix + ": scheduler unreachable; reconnecting", file=sys.stderr, flush=True)
+            elif time.monotonic() >= deadline:
+                raise
+            time.sleep(2)
+
+
 def rpc(request):
     address = os.environ.get("RESOURCE_SCHEDULER_SOCKET", DEFAULTS["socket_path"])
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
@@ -2754,7 +2777,7 @@ def run(args):
     previous = {sig: signal.signal(sig, interrupt) for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)}
     try:
         while True:
-            result = rpc(dict(action="output", id=job_id, waiter_token=waiter_token, **offsets))
+            result = poll_rpc(dict(action="output", id=job_id, waiter_token=waiter_token, **offsets), "resource-run")
             for name, stream in (("stdout", sys.stdout), ("stderr", sys.stderr)):
                 stream.write(result[name])
                 stream.flush()
@@ -2866,7 +2889,7 @@ def resource_job(args):
     offsets = dict(stdout_offset=args.stdout_offset, stderr_offset=args.stderr_offset)
     start = time.monotonic()
     while True:
-        result = rpc(dict(action="output", id=args.id, waiter_token=token, **offsets))
+        result = poll_rpc(dict(action="output", id=args.id, waiter_token=token, **offsets), "resource-job")
         job = result["job"]
         if args.operation == "logs":
             if args.json:

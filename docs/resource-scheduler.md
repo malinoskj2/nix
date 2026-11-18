@@ -478,7 +478,10 @@ response objects with chunks, next offsets and output metadata. Stored output is
 capped at 8 MiB per stream; metadata reports known truncation. Output is retained
 with the job, not an unlimited archive. Successful log reads exit zero; `wait`
 returns the job's exit code. Observation timeout returns 124 without cancelling
-or resubmitting the job.
+or resubmitting the job. A waiting `resource-run`, `wait` or `logs --follow`
+reconnects for up to 15 minutes when the socket refuses, resets or drops
+(daemon restarts, host switches) instead of exiting; scheduler errors such as an
+unknown job still end it immediately.
 
 New submissions preserve the submitting Orca session identity. Foreground clients
 and `resource-job wait` record output consumption, not agent acknowledgement.
