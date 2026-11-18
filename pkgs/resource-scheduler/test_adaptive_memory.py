@@ -131,7 +131,7 @@ class AdaptiveMemoryTests(unittest.TestCase):
             {**run, **gpu, "observed": dict(vram_peak_mib=3072 * 0.3, attribution_confidence="cgroup-gpu-processes")}
             for run in self.history([0] * 6)
         ]
-        self.assertEqual(rs.learned_need(job, runs, self.config, self.now, "vram"), 2253)
+        self.assertEqual(rs.learned_need(job, runs, self.config, self.now, "vram"), 1741)
         partial = [{**run, "gpu_missing_samples": 1} for run in runs]
         self.assertIsNone(rs.learned_need(job, partial, self.config, self.now, "vram"))
         failed = self.history([0], state="failed", exit_code=1, failure="gpu_oom_reported", **gpu)

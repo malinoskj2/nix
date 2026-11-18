@@ -376,7 +376,8 @@ def learned_need(job, jobs, config, now, resource="ram"):
         return None
     # Nearest-rank p90: one outlier among many runs does not set every admission.
     peak = limit * shares[math.ceil(len(shares) * 0.9) - 1]
-    return min(limit, math.ceil(max(peak * 1.25, peak + 1024)))
+    # GPU allocations step at load and stay flat; host RAM churns more, so it keeps a larger floor.
+    return min(limit, math.ceil(max(peak * 1.25, peak + (1024 if resource == "ram" else 512))))
 
 
 def vram_outstanding(job, config, now):

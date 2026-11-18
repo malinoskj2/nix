@@ -564,8 +564,8 @@ so a few OOMs raise the estimate without stopping learning for the project. A
 strict job, a host without adaptive RAM, or a resubmission whose own profile has
 an unresolved OOM uses the full request.
 
-The same estimate applies to shared VRAM, from runs with complete cgroup GPU
-attribution; `gpu_oom_reported` counts as a full-request run. A running job
+The same estimate applies to shared VRAM, with a 512 MiB floor instead of 1 GiB,
+from runs with complete cgroup GPU attribution; `gpu_oom_reported` counts as a full-request run. A running job
 holds its learned VRAM need until its observed peak exceeds it, then its full
 unused request. Exclusive automatic VRAM requests are unchanged.
 
