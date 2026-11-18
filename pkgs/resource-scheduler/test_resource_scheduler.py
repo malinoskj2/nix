@@ -739,6 +739,7 @@ class SchedulerTests(unittest.TestCase):
         self.snapshot["cgroups"][active["slurm_job_id"]] = {"memory.current": 5000}
         self.snapshot["ram"]["available_mib"] = 9000
         large = self.submit(ram=9000)
+        large["blocked_since"] = rs.time.time() - rs.BACKFILL_SECONDS
         small = self.submit(ram=500)
         self.backend.tick()
         self.assertEqual(small["state"], "queued")
@@ -1118,7 +1119,7 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(positions[first["id"]], 1)
         self.assertEqual(positions[second["id"]], 2)
 
-    def test_joint_reservations_and_no_small_job_overtaking(self):
+    def test_joint_reservations_and_bounded_small_job_overtaking(self):
         first = self.submit(ram=10000, vram=10000)
         second = self.submit(ram=10000, vram=10000)
         third = self.submit(ram=1000)
@@ -1127,8 +1128,13 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(first["state"], "running")
         self.assertEqual(second["state"], "queued")
         self.assertIn("RAM", second["wait_reason"])
-        self.assertIn(second["id"], third["wait_reason"])
-        self.assertEqual(self.slurm.released, [first["slurm_job_id"]])
+        self.assertIn("smaller jobs may pass", second["wait_reason"])
+        self.assertEqual(self.slurm.released, [first["slurm_job_id"], third["slurm_job_id"]])
+        later = self.submit(ram=1000)
+        with patch.object(rs.time, "time", return_value=second["blocked_since"] + rs.BACKFILL_SECONDS):
+            self.backend.tick()
+        self.assertEqual(later["state"], "queued")
+        self.assertIn(second["id"], later["wait_reason"])
 
     def test_compatible_jobs_overlap(self):
         self.submit(vram=4000)

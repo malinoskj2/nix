@@ -25,6 +25,13 @@ import xml.etree.ElementTree as ET
 VERSION = 1
 MAX_MESSAGE = 1024 * 1024
 TERMINAL = {"completed", "failed", "cancelled"}
+CAPACITY_REASONS = (
+    "Insufficient RAM",
+    "Insufficient VRAM",
+    "CPU reservation capacity",
+    "Slurm RAM reservation capacity",
+)
+BACKFILL_SECONDS = 600
 ACTIVE = {"pending", "running", "unknown"}
 DEFAULTS = dict(
     socket_path="/run/resource-scheduler/control.sock",
@@ -1540,6 +1547,13 @@ class Backend:
                         bypassed.append(job["id"])
                     elif external:
                         reason = external
+                        bypassed.append(job["id"])
+                    elif (
+                        reason.startswith(CAPACITY_REASONS)
+                        and now - job.setdefault("blocked_since", now) < BACKFILL_SECONDS
+                    ):
+                        # Smaller work may pass for a while; then capacity drains to the waiting job.
+                        reason += "; smaller jobs may pass"
                         bypassed.append(job["id"])
                     else:
                         barrier = job
