@@ -58,6 +58,9 @@ in
     cpuCapacity = 28;
     policyVersion = "7";
     adaptiveRam = true;
+    # Just under the 31.6 GiB slurmd detects, so declarations stop capping admission
+    # long before real memory does, without slurmd draining the node.
+    memoryMiB = 30720;
     largeGpuLane = true;
     largeLaneProjectIds = [
       "24291623818044406835024016436979284527"
