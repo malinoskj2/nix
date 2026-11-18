@@ -395,9 +395,14 @@ def learned_need(job, jobs, config, now, resource="ram"):
         + [
             item["observed"][resource + "_peak_mib"] / item["requested"][field]
             for item in runs
-            if item["state"] == "completed"
-            and item.get("exit_code") == 0
-            and not item.get("failure")
+            if (
+                not item.get("failure")
+                and item["state"] == "completed"
+                and item.get("exit_code") == 0
+                # A failing test or build still measured its real peak; an early crash may not have.
+                or item.get("failure") in ("command_failed", "time_limit")
+                and (item.get("ended_at") or 0) - (item.get("started_at") or 0) >= config["ram_startup_seconds"]
+            )
             and item["observed"].get(resource + "_peak_mib") is not None
             and measured(item)
         ]

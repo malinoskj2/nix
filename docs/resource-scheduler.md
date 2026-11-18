@@ -562,7 +562,9 @@ second release. The sum of full Slurm RAM allocations must also fit the configur
 Slurm `RealMemory`; estimated spare host RAM cannot override this second limit.
 
 The need is the full request unless the same project and category have at least
-five clean, fully sampled completions in the last 30 days. Then it is the
+five fully sampled runs in the last 30 days: clean completions, plus
+`command_failed` or `time_limit` runs that lasted past the 30-second startup, since
+a failing test or build still reaches its real peak. Then it is the
 nearest-rank 90th percentile of their peak-to-request shares, applied to this
 job's request, plus the larger of 25% or 1 GiB, capped at the request. No naming
 or explicit profile is required, because agents tend to scale declarations with

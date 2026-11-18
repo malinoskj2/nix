@@ -117,6 +117,24 @@ class AdaptiveMemoryTests(unittest.TestCase):
             self.assertIsNone(rs.learned_need({**job, **changes}, self.history(shares), self.config, self.now))
         self.assertIsNone(rs.learned_need(job, self.history(shares), {**self.config, "adaptive_ram": False}, self.now))
 
+    def test_long_command_failures_count_but_early_crashes_do_not(self):
+        job = dict(
+            state="queued",
+            memory_policy="adaptive",
+            category="render",
+            profile=dict(project="riso", name="auto-v1", variant="new"),
+            requested=dict(cpu=4, ram_mib=8192, vram_mib=0),
+        )
+        failed = dict(state="failed", exit_code=101, failure="command_failed", started_at=self.now - 600)
+        runs = self.history([0.1] * 3) + self.history([0.1] * 2, **failed)
+        self.assertEqual(rs.learned_need(job, runs, self.config, self.now), 1844)
+        early = {**failed, "started_at": self.now - 70}
+        runs = self.history([0.1] * 3) + self.history([0.1] * 2, **early)
+        self.assertIsNone(rs.learned_need(job, runs, self.config, self.now))
+        cancelled = {**failed, "state": "cancelled", "failure": "cancelled"}
+        runs = self.history([0.1] * 3) + self.history([0.1] * 2, **cancelled)
+        self.assertIsNone(rs.learned_need(job, runs, self.config, self.now))
+
     def test_vram_need_learns_only_from_complete_gpu_attribution(self):
         job = dict(
             state="queued",
@@ -286,7 +304,12 @@ class AdaptiveMemoryTests(unittest.TestCase):
         with patch.object(rs.time, "time", return_value=self.now):
             self.assertIsNone(rs.admission_reason(self.candidate, [self.job], self.snapshot, self.config))
             # A CPU-only candidate may join a running GPU occupant, but never a second CPU-only one.
-            gpu = {**copy.deepcopy(self.candidate), "state": "running", "execution": "large", "observed": dict(ram_mib=20000)}
+            gpu = {
+                **copy.deepcopy(self.candidate),
+                "state": "running",
+                "execution": "large",
+                "observed": dict(ram_mib=20000),
+            }
             cpu = {**copy.deepcopy(self.job), "state": "queued"}
             cpu.pop("execution")
             self.config["large_lane_project_ids"] = [rs.lane_project_id({"project": "p"})]
