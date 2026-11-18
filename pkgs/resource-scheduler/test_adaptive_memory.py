@@ -64,6 +64,77 @@ class AdaptiveMemoryTests(unittest.TestCase):
         self.job["observed"]["ram_mib"] = 100
         self.assertEqual(rs.ram_allowance(self.job, self.config, self.now)[0], 2972)
 
+    def test_load_spike_stops_inflating_growth_once_it_leaves_the_recent_window(self):
+        self.job["requested"]["ram_mib"] = 8192
+        self.job["observed"] = dict(ram_mib=991, ram_peak_mib=2210)
+        self.job["ram_samples"] = [[940, 100], [942, 2210]] + [[t, 991] for t in range(944, 1001, 2)]
+        self.assertEqual(rs.ram_allowance(self.job, self.config, self.now), (2243, "adaptive"))
+        self.job["ram_samples"] = self.job["ram_samples"][:-25] + [[995, 100], [997, 991]]
+        self.assertEqual(rs.ram_allowance(self.job, self.config, 997)[0], 8192 - 991)
+
+    def history(self, shares, **changes):
+        return [
+            {
+                **dict(
+                    state="completed",
+                    exit_code=0,
+                    failure=None,
+                    category="render",
+                    profile=dict(project="riso", name="auto-v1", variant=str(i)),
+                    requested=dict(cpu=4, ram_mib=4096, vram_mib=0),
+                    observed=dict(ram_peak_mib=4096 * share),
+                    ram_good_samples=5,
+                    ended_at=self.now - 60,
+                ),
+                **changes,
+            }
+            for i, share in enumerate(shares)
+        ]
+
+    def test_project_category_history_estimates_need_from_robust_peak_share(self):
+        job = dict(
+            state="queued",
+            memory_policy="adaptive",
+            category="render",
+            profile=dict(project="riso", name="auto-v1", variant="new"),
+            requested=dict(cpu=4, ram_mib=8192, vram_mib=0),
+        )
+        shares = [0.1] * 9 + [0.2] + [0.7]
+        self.assertEqual(rs.ram_estimate(job, self.history(shares), self.config, self.now), 2663)
+        self.assertEqual(rs.ram_estimate(job, self.history(shares[-5:]), self.config, self.now), 7168)
+        self.assertIsNone(rs.ram_estimate(job, self.history(shares[-4:]), self.config, self.now))
+        oom = self.history([0.1], state="failed", exit_code=137, failure="ram_oom")
+        self.assertIsNone(rs.ram_estimate(job, self.history(shares) + oom, self.config, self.now))
+        for other in (
+            dict(category="build"),
+            dict(profile=dict(project="other")),
+            dict(ended_at=self.now - 31 * 86400),
+        ):
+            runs = [{**run, **other} for run in self.history(shares)]
+            self.assertIsNone(rs.ram_estimate(job, runs, self.config, self.now))
+        for changes in (dict(memory_policy="strict"), dict(profile=None)):
+            self.assertIsNone(rs.ram_estimate({**job, **changes}, self.history(shares), self.config, self.now))
+        self.assertIsNone(rs.ram_estimate(job, self.history(shares), {**self.config, "adaptive_ram": False}, self.now))
+
+    def test_estimated_need_admits_where_hard_limit_would_not(self):
+        self.candidate["requested"]["ram_mib"] = 12288
+        with patch.object(rs.time, "time", return_value=self.now):
+            self.assertIn("Insufficient RAM", rs.admission_reason(self.candidate, [], self.snapshot, self.config))
+            self.candidate["ram_estimate_mib"] = 3000
+            self.assertIsNone(rs.admission_reason(self.candidate, [], self.snapshot, self.config))
+            strict = {**self.config, "adaptive_ram": False}
+            self.assertIn("Insufficient RAM", rs.admission_reason(self.candidate, [], self.snapshot, strict))
+
+    def test_startup_uses_estimate_until_the_job_leaves_its_envelope(self):
+        self.job["ram_observed_since"] = 995
+        self.job["ram_estimate_mib"] = 2000
+        self.assertEqual(rs.ram_allowance(self.job, self.config, self.now), (1200, "learned-startup"))
+        self.job["observed"]["ram_peak_mib"] = 2100
+        self.assertEqual(rs.ram_allowance(self.job, self.config, self.now), (2272, "strict/startup/unknown"))
+        self.job["observed"]["ram_peak_mib"] = 1400
+        self.job["memory_policy"] = "strict"
+        self.assertEqual(rs.ram_allowance(self.job, self.config, self.now)[1], "strict/startup/unknown")
+
     def test_missing_pressure_and_stale_host_snapshot_stop_admission(self):
         with patch.object(rs.time, "time", return_value=self.now):
             self.snapshot["pressure"]["memory"] = None

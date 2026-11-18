@@ -549,15 +549,25 @@ only on a host that enables it. Neither flag changes CPU or GPU admission, Slurm
 `--mem`, the hard cgroup RAM limit, or automatic retries.
 
 Admission starts with `MemAvailable`, subtracting the existing desktop reserve,
-running-job growth allowances, a host memory-growth buffer, and the **full**
-incoming RAM request. No swap is counted. Pending/unknown jobs still prevent a
+running-job growth allowances, a host memory-growth buffer, and the incoming
+job's RAM need. No swap is counted. Pending/unknown jobs still prevent a
 second release. The sum of full Slurm RAM allocations must also fit the configured
 Slurm `RealMemory`; estimated spare host RAM cannot override this second limit.
 
+The need is the full request unless the same project and category have at least
+five clean, fully sampled completions in the last 30 days. Then it is the
+nearest-rank 90th percentile of their peak-to-request shares, applied to this
+job's request, plus the larger of 25% or 1 GiB, capped at the request. No naming
+or explicit profile is required, because agents tend to scale declarations with
+the job. Any RAM OOM in that history, a strict job or a host without adaptive RAM
+falls back to the full request.
+
 A running adaptive job retains its full unused allowance for at least 30 seconds
-of uninterrupted cgroup observations and at least three samples. Missing current
-or peak readings, stale readings, strict jobs and unresolved profile OOMs retain
-full unused allowances. Thereafter its additional allowance is:
+of uninterrupted cgroup observations and at least three samples, except that a
+job with a learned need holds only that need while its observed peak stays within
+it. Missing current or peak readings, stale readings, strict jobs and unresolved
+profile OOMs retain full unused allowances. Thereafter its additional allowance
+is:
 
 ```
 baseline = max(current RAM, lifetime observed peak, learned full-run peak)
@@ -565,7 +575,10 @@ margin = max(1 GiB, 25% of baseline, recent positive growth rate × 15 seconds)
 allowance = min(unused hard limit, max(0, baseline + margin - current RAM))
 ```
 
-The growth rate is the maximum positive rate in up to 32 recent observations.
+The growth rate is the maximum positive rate among observations from the last
+10 seconds (or five poll intervals, if longer). Regrowth to an earlier peak is
+already covered by the baseline, so a finished load spike no longer holds the
+allowance near the hard limit.
 The independent host buffer projects the latest decrease in MemAvailable over
 15 seconds; this deliberately errs conservatively during concurrent growth.
 The lifetime peak remains protected even after unloading or between phases.

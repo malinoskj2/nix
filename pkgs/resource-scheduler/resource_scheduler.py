@@ -321,6 +321,41 @@ def telemetry(gpu_enabled=True):
     return result
 
 
+def ram_estimate(job, jobs, config, now):
+    """Peak share of the hard limit learned from the project's same-category runs; None keeps the limit."""
+    project = (job.get("profile") or {}).get("project")
+    limit = job["requested"]["ram_mib"]
+    if not config.get("adaptive_ram") or job.get("memory_policy") == "strict" or not project or not limit:
+        return None
+    runs = [
+        item
+        for item in jobs
+        if item is not job
+        and item["state"] in TERMINAL
+        and (item.get("profile") or {}).get("project") == project
+        and item.get("category") == job.get("category")
+        and 0 <= now - (item.get("ended_at") or 0) < 30 * 86400
+    ]
+    if any(item.get("failure") == "ram_oom" for item in runs):
+        return None
+    shares = sorted(
+        item["observed"]["ram_peak_mib"] / item["requested"]["ram_mib"]
+        for item in runs
+        if item["state"] == "completed"
+        and item.get("exit_code") == 0
+        and not item.get("failure")
+        and item["observed"].get("ram_peak_mib") is not None
+        and item.get("ram_good_samples", 0) >= 2
+        and not item.get("ram_missing_samples")
+        and item["requested"]["ram_mib"]
+    )
+    if len(shares) < 5:
+        return None
+    # Nearest-rank p90: one outlier among many runs does not set every admission.
+    peak = limit * shares[math.ceil(len(shares) * 0.9) - 1]
+    return min(limit, math.ceil(max(peak * 1.25, peak + 1024)))
+
+
 def ram_allowance(job, config, now=None):
     """Additional growth allowance, never a change to Slurm's allocation/limit."""
     now = time.time() if now is None else now
@@ -336,15 +371,22 @@ def ram_allowance(job, config, now=None):
         or job["state"] != "running"
         or current is None
         or peak is None
-        or len(samples) < 3
+        or not samples
         or now - samples[-1][0] > max(10, config["poll_seconds"] * 3)
         or now - samples[-1][0] < 0
-        or now - job.get("ram_observed_since", now) < config["ram_startup_seconds"]
     ):
+        return strict, "strict/startup/unknown"
+    if len(samples) < 3 or now - job.get("ram_observed_since", now) < config["ram_startup_seconds"]:
+        estimate = job.get("ram_estimate_mib")
+        # A job already past its learned envelope gets no credit until it is observed.
+        if estimate is not None and peak <= estimate:
+            return min(strict, max(0, estimate - current)), "learned-startup"
         return strict, "strict/startup/unknown"
     # Retain the full observed high-water mark, including idle-after-load phases.
     baseline = max(current, peak, job.get("learned_ram_peak_mib") or 0)
-    growth = max((max(0, b[1] - a[1]) / (b[0] - a[0]) for a, b in zip(samples, samples[1:]) if b[0] > a[0]), default=0)
+    # The high-water baseline already covers regrowth, so only recent slope predicts new territory.
+    recent = [s for s in samples if samples[-1][0] - s[0] <= max(10, config["poll_seconds"] * 5)]
+    growth = max((max(0, b[1] - a[1]) / (b[0] - a[0]) for a, b in zip(recent, recent[1:]) if b[0] > a[0]), default=0)
     margin = max(1024, baseline * 0.25, growth * 15)
     return min(strict, max(0, baseline + margin - current)), "adaptive"
 
@@ -491,7 +533,8 @@ def admission_reason(job, jobs, snapshot, config):
             return "Slurm RAM reservation capacity exhausted"
     outstanding = sum(ram_allowance(item, config)[0] for item in running)
     host_growth = snapshot["ram"].get("growth_buffer_mib", 0) if config.get("adaptive_ram") else 0
-    if available - config["ram_headroom_mib"] - outstanding - host_growth < request["ram_mib"]:
+    need = (job.get("ram_estimate_mib") if config.get("adaptive_ram") else None) or request["ram_mib"]
+    if available - config["ram_headroom_mib"] - outstanding - host_growth < need:
         return (
             "Insufficient RAM after growth allowances and desktop headroom"
             if config.get("adaptive_ram")
@@ -532,7 +575,8 @@ def external_block_reason(job, jobs, snapshot, config):
     available = snapshot["ram"]["available_mib"]
     ram = [item["observed"].get("ram_mib") for item in active]
     if available is not None and all(value is not None for value in ram):
-        if available + sum(ram) - config["ram_headroom_mib"] < request["ram_mib"]:
+        need = (job.get("ram_estimate_mib") if config.get("adaptive_ram") else None) or request["ram_mib"]
+        if available + sum(ram) - config["ram_headroom_mib"] < need:
             return "Host RAM shortage remains after running jobs finish; smaller jobs may pass"
     game_active = snapshot.get("game_active") or any(
         managed(item) and item["priority"] == "game" and item["state"] == "queued" for item in jobs
@@ -1298,6 +1342,9 @@ class Backend:
             if job["state"] in TERMINAL:
                 self.record_profile(job)
         for job in self.state["jobs"]:
+            if job["state"] in ("queued", "pending", "running") and managed(job):
+                job["ram_estimate_mib"] = ram_estimate(job, self.state["jobs"], self.config, now)
+        for job in self.state["jobs"]:
             if job["state"] != "running" or not managed(job):
                 continue
             observed = job["observed"]
@@ -1323,6 +1370,7 @@ class Backend:
                 basis=basis,
                 learned_runs=len(recent),
                 learned_peak_mib=job["learned_ram_peak_mib"],
+                estimate_mib=job["ram_estimate_mib"],
             )
         self.protect_exploration()
         self.apply_game_protection()
