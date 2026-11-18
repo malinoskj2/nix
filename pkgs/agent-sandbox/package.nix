@@ -54,6 +54,7 @@
   gobject-introspection,
   grim,
   gpu-scheduler,
+  host-switch,
   resource-scheduler,
   gzip,
   htop-vim-navigation,
@@ -336,6 +337,7 @@ let
       gnused
       gnutar
       gpu-scheduler
+      host-switch
       resource-scheduler
       grim
       gzip

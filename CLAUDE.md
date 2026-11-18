@@ -107,6 +107,15 @@ run a `switch` unless explicitly asked. Hosts are applied with `nh os switch`, a
 another host, with `--target-host` (`docs/bootstrap.md`). No host needs
 `--impure`. Don't copy secrets into the repository.
 
+When asked to switch `home`, including from inside the agent sandbox, commit
+on `main`, build the host through the resource scheduler, then run
+`host-switch` (or `nix run /home/jesse/nix#host-switch` in a sandbox that predates
+it). Root's `host-switch` service on `home` builds and activates exactly the head
+of `main`, never a working tree or another branch, and refuses anything else.
+The command waits and prints the result; its log is
+`.tmp/host-switch/<commit>.log`. A switch that restarts Docker also restarts the
+sandboxes, including the one that asked.
+
 ## Desktop design
 
 `docs/design.md` describes the `home` desktop's design language: color roles,
@@ -123,8 +132,8 @@ restating rules here. On top of it, for agents:
 
 - Build the affected host (`nix flake check`, or
   `nix build .#nixosConfigurations.<host>.config.system.build.toplevel`) before
-  proposing an apply. Never run `nh os switch`, `nixos-rebuild switch` or
-  `home-manager switch` unless explicitly asked.
+  proposing an apply. Never run `nh os switch`, `nixos-rebuild switch`,
+  `home-manager switch` or `host-switch` unless explicitly asked.
 - `git add` new files before evaluating; flakes only see tracked files.
 - Never bump `system.stateVersion` or `home.stateVersion`, and never hand-edit
   `hardware-configuration.nix`.

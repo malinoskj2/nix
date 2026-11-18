@@ -120,6 +120,7 @@
           "git-commitu"
           "git-open-branch"
           "gpu-scheduler"
+          "host-switch"
           "htop-vim-navigation"
           "hy3dgen"
           "hyprglass"
