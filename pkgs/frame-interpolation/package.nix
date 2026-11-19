@@ -109,6 +109,9 @@ let
     ])
   );
 
+  # cupy compiles its kernels at run time.
+  nvrtc = "${lib.getLib cudaPackages.cuda_nvrtc}/lib";
+
   comfyui-frame-interpolation = fetchFromGitHub {
     owner = "Fannovel16";
     repo = "ComfyUI-Frame-Interpolation";
@@ -165,6 +168,14 @@ stdenvNoCC.mkDerivation {
     def soft_empty_cache():
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+
+    def is_nvidia():
+        return torch.cuda.is_available() and torch.version.cuda is not None
+
+
+    def get_torch_device_name(device):
+        return torch.cuda.get_device_name(device) if device.type == "cuda" else str(device)
     EOF
     substituteInPlace $share/comfyui-frame-interpolation/vfi_utils.py \
       --replace-fail 'os.path.dirname(__file__), config["ckpts_path"], model_type' \
@@ -181,9 +192,11 @@ stdenvNoCC.mkDerivation {
     cp ${./frame_interp.py} $share/frame_interp.py
     makeWrapper ${python.interpreter} $out/bin/frame-interp \
       --add-flags $share/frame_interp.py \
-      --set FRAME_INTERP_SHARE $share
+      --set FRAME_INTERP_SHARE $share \
+      --prefix LD_LIBRARY_PATH : ${nvrtc}
 
     makeWrapper ${python.interpreter} $out/bin/tooncrafter \
+      --prefix LD_LIBRARY_PATH : ${nvrtc} \
       --add-flags "$share/tooncrafter/scripts/evaluation/inference.py" \
       --run 'models=''${MODEL_ROOT:-/home/jesse/.local/share/models}/by-name' \
       --run 'export TOONCRAFTER_OPENCLIP=''${TOONCRAFTER_OPENCLIP:-$models/openclip-vit-h-14/open_clip_model.safetensors}' \
@@ -193,7 +206,8 @@ stdenvNoCC.mkDerivation {
       --add-flags '--ddim_steps 50 --ddim_eta 1.0 --text_input --video_length 16 --frame_stride 10' \
       --add-flags "--timestep_spacing uniform_trailing --guidance_rescale 0.7 --perframe_ae --interp"
 
-    ln -s ${python}/bin/python $out/bin/frame-interp-python
+    makeWrapper ${python.interpreter} $out/bin/frame-interp-python \
+      --prefix LD_LIBRARY_PATH : ${nvrtc}
     runHook postInstall
   '';
 
