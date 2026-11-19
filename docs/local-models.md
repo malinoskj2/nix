@@ -2,7 +2,11 @@
 
 The `home` Home Manager profile declares the catalog in
 `pkgs/local-models/catalog.json`, plus Real-ESRGAN files supplied by Nix.
-Large weights live in `/home/jesse/.local/share/models`, outside the Nix store.
+Large weights live in `services.local-models.root`, outside the Nix store. It
+defaults to `~/.local/share/models`; `home` puts it on the external USB SSD at
+`/mnt/ext-ssd/models` (`hosts/home/external-ssd.nix`). Activation links the
+catalog and this README into the root, and skips synchronization while the
+drive is absent.
 This change does not deploy itself, download the bulk catalog during a build,
 install model runtimes, or claim that available files have passed inference tests.
 

@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory() as directory:
     spy = home / "systemctl"
     spy.write_text("#!" + os.environ["TEST_BASH"] + '\nprintf "%s\\n" "$*" >> "$SPY_LOG"\n')
     spy.chmod(0o755)
-    script = activation.replace("/home/jesse/.local/share/models", str(root)).replace(os.environ["SYSTEMCTL"], str(spy))
+    script = activation.replace(os.environ["MODEL_ROOT"], str(root)).replace(os.environ["SYSTEMCTL"], str(spy))
     script = 'set -eu\nrun() { if [ -z "${DRY_RUN_CMD:-}" ]; then "$@"; fi; }\n' + script
     environment = {**os.environ, "HOME": str(home), "SPY_LOG": str(log)}
     subprocess.run([os.environ["TEST_BASH"], "-c", script], env={**environment, "DRY_RUN_CMD": "echo"}, check=True)

@@ -6,7 +6,7 @@
 }:
 let
   cfg = config.services.local-models;
-  root = "${config.home.homeDirectory}/.local/share/models";
+  inherit (cfg) root;
   executable = lib.getExe pkgs.local-models;
   source = builtins.fromJSON (builtins.readFile ../../../pkgs/local-models/catalog.json);
   packaged = model: {
@@ -51,7 +51,14 @@ let
   );
 in
 {
-  options.services.local-models.historical = lib.mkEnableOption "historical TikTok model downloads";
+  options.services.local-models = {
+    historical = lib.mkEnableOption "historical TikTok model downloads";
+    root = lib.mkOption {
+      type = lib.types.str;
+      default = "${config.xdg.dataHome}/models";
+      description = "Directory holding the catalog and weights. Activation skips it while it can't be created.";
+    };
+  };
   config = {
     home.packages = [
       pkgs.local-models
@@ -63,8 +70,7 @@ in
       IMG2VIDEO_MODELS = "${root}/by-name/img2video";
       SAM = "${root}/by-name/sam2.1";
     };
-    home.file.".local/share/models/catalog.json".source = catalog;
-    home.file.".local/share/models/README.md".source = ../../../docs/local-models.md;
+    xdg.configFile."local-models/root".text = root;
     home.file.".config/local-models/voice-compose.yaml".text = ''
       services:
         voice:
@@ -126,17 +132,23 @@ in
       };
     };
     home.activation.localModels = lib.hm.dag.entryAfter [ "reloadSystemd" ] ''
-      run mkdir -p ${root}/.state "$HOME/.config/local-models"
+      run mkdir -p "$HOME/.config/local-models"
       run chmod 0700 "$HOME/.config/local-models"
       if [ -f "$HOME/.config/local-models/hf-token" ]; then
         run chmod 0600 "$HOME/.config/local-models/hf-token"
       fi
-      run ${executable} request --root ${root}
-      # Units/catalog have been linked and the user manager reloaded. No boot/timer job.
-      if [ -z "''${DRY_RUN_CMD:-}" ]; then
-        ${pkgs.systemd}/bin/systemctl --user start --no-block local-models-sync.path || true
-        ${pkgs.systemd}/bin/systemctl --user start --no-block local-models-sync.service || true
-        echo "Model synchronization requested; run local-models status or journalctl --user -u local-models-sync"
+      if ! run mkdir -p ${root}/.state 2>/dev/null; then
+        echo "Model root ${root} is unavailable; skipping model synchronization"
+      else
+        run ln -sfn ${catalog} ${root}/catalog.json
+        run ln -sfn ${../../../docs/local-models.md} ${root}/README.md
+        run ${executable} request --root ${root}
+        # Units have been linked and the user manager reloaded. No boot/timer job.
+        if [ -z "''${DRY_RUN_CMD:-}" ]; then
+          ${pkgs.systemd}/bin/systemctl --user start --no-block local-models-sync.path || true
+          ${pkgs.systemd}/bin/systemctl --user start --no-block local-models-sync.service || true
+          echo "Model synchronization requested; run local-models status or journalctl --user -u local-models-sync"
+        fi
       fi
     '';
   };

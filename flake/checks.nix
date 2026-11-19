@@ -101,6 +101,7 @@
                 PATH_UNIT = pkgs.writeText "local-models-path.json" (
                   builtins.toJSON home.systemd.user.paths.local-models-sync
                 );
+                MODEL_ROOT = home.services.local-models.root;
                 SYSTEMCTL = "${pkgs.systemd}/bin/systemctl";
                 TEST_BASH = "${pkgs.bash}/bin/bash";
               }

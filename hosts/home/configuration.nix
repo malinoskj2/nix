@@ -35,6 +35,7 @@ in
     ./boot.nix
     ./gaming.nix
     ./host-switch.nix
+    ./external-ssd.nix
     ./media-share.nix
     ./memory-notifications.nix
     ./nvidia.nix

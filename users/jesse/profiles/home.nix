@@ -35,6 +35,8 @@
 
   wallpaper.launcher.enable = true;
 
+  services.local-models.root = "/mnt/ext-ssd/models";
+
   services.discord-context.excludedGuilds = [
     "902708289098375209" # ogchat
   ];

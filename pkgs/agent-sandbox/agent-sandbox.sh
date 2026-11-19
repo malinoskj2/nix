@@ -28,6 +28,9 @@ done
 data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
 sandbox_home=$data/home
 model_root=$HOME/.local/share/models
+if [[ -s $HOME/.config/local-models/root ]]; then
+  model_root=$(<"$HOME/.config/local-models/root")
+fi
 steam_common=$HOME/.local/share/Steam/steamapps/common
 shared=(
   "$HOME/projects"
@@ -258,7 +261,8 @@ mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.config/g
 for dir in "${shared[@]}"; do
   mkdir -p "$dir" "$sandbox_home${dir#"$HOME"}"
 done
-mkdir -p "$screenshots" "$media" "$model_root"
+mkdir -p "$screenshots" "$media"
+mkdir -p "$model_root" 2>/dev/null || true
 mount_readonly "$model_root"
 mkdir -p "$orca_relay_dir"
 chmod 700 "$orca_relay_dir"
