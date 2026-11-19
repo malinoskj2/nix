@@ -15,5 +15,11 @@
     };
   };
 
+  # The ASM4242 xHCI times out entering runtime suspend and stays wedged until a
+  # cold boot, taking the rear USB4 Type-C ports with it.
+  services.udev.extraRules = ''
+    ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x1b21", ATTR{device}=="0x2425|0x2426", ATTR{power/control}="on"
+  '';
+
   environment.systemPackages = [ pkgs.sbctl ];
 }
