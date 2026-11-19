@@ -175,6 +175,8 @@ pythonPackages.buildPythonPackage {
       "$out/${pythonPackages.python.sitePackages}/hy3dgen/texgen/differentiable_renderer/"
   '';
 
+  passthru = { inherit pythonPackages; };
+
   pythonImportsCheck = [
     "hy3dgen.shapegen"
     "hy3dgen.texgen"

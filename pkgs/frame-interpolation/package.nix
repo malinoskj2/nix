@@ -8,7 +8,16 @@
 }:
 
 let
-  inherit (hy3dgen) pythonPackages;
+  pythonPackages = hy3dgen.pythonPackages.overrideScope (
+    final: prev: {
+      # torch-bin brings its own triton; a second one fails the closure conflict check.
+      triton = final.triton-bin;
+      # Needs Inductor's C compiler, which the build sandbox lacks.
+      timm = prev.timm.overridePythonAttrs (old: {
+        disabledTests = (old.disabledTests or [ ]) ++ [ "test_kron" ];
+      });
+    }
+  );
 
   cudaOverrides = {
     cudaSupport = true;
@@ -58,9 +67,18 @@ let
     });
 
   causal-conv1d = capThreads (onlySm120 (pythonPackages.causal-conv1d.override cudaOverrides));
-  mamba-ssm = capThreads (
-    onlySm120 (pythonPackages.mamba-ssm.override (cudaOverrides // { inherit causal-conv1d; }))
-  );
+  mamba-ssm =
+    (capThreads (
+      onlySm120 (pythonPackages.mamba-ssm.override (cudaOverrides // { inherit causal-conv1d; }))
+    )).overridePythonAttrs
+      (old: {
+        # transformers 5 merged the greedy and sample outputs into one class.
+        postPatch = (old.postPatch or "") + ''
+          substituteInPlace mamba_ssm/utils/generation.py --replace-fail \
+            "GreedySearchDecoderOnlyOutput, SampleDecoderOnlyOutput, TextStreamer" \
+            "GenerateDecoderOnlyOutput as GreedySearchDecoderOnlyOutput, GenerateDecoderOnlyOutput as SampleDecoderOnlyOutput, TextStreamer"
+        '';
+      });
   cupy = capThreads pythonPackages.cupy;
 
   python = pythonPackages.python.withPackages (

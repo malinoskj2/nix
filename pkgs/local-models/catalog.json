@@ -3308,6 +3308,598 @@
       },
       "compatibility": "consumer-evidenced",
       "loader": "Mount complete MODEL_ROOT at same absolute path plus MODEL_ROOT/by-name/voices at /models; read-only; runtime remains separate"
+    },
+    "rife": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "url": "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation/releases/download/models/rife47.pth",
+          "path": "rife47.pth",
+          "target": "rife47.pth",
+          "size": 21344827,
+          "sha256": "6a8a825ab2750558bdd20dcced386fd82b7222c7ba58c11d3b611d9c44f1be63",
+          "imports": []
+        },
+        {
+          "url": "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation/releases/download/models/rife49.pth",
+          "path": "rife49.pth",
+          "target": "rife49.pth",
+          "size": 21345274,
+          "sha256": "e55fd00f3cc184e3c65961f4bb827a9da022e78eed36b055242c0ac30000d533",
+          "imports": []
+        },
+        {
+          "url": "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation/releases/download/models/rife417.pth",
+          "path": "rife417.pth",
+          "target": "rife417.pth",
+          "size": 21497983,
+          "sha256": "f6b1561354dda3b31606190cba1d1009ea001558c1b9c9cef2d03939bb381ee5",
+          "imports": []
+        },
+        {
+          "url": "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation/releases/download/models/rife426.pth",
+          "path": "rife426.pth",
+          "target": "rife426.pth",
+          "size": 24620531,
+          "sha256": "606421fe2148a9fdeca14e58d94dc339e87b87e0ebcc5dec84a50d6f488cfe7b",
+          "imports": []
+        },
+        {
+          "repository": "x0unmaze/gmfss",
+          "revision": "ba912c3ad964bbf49ccd98ccf636e2253c785306",
+          "path": "union/rife.pkl",
+          "target": "rife46.pth",
+          "size": 21261539,
+          "sha256": "a222360fa1b3e794d2d5236a3b8513f4c9c09960b0742733546888930f383e56",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "frame-interp --model rife49 (ComfyUI-Frame-Interpolation IFNet); rife46.pth is GMFSS union's IFNet"
+    },
+    "gmfss-fortuna": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "x0unmaze/gmfss",
+          "revision": "ba912c3ad964bbf49ccd98ccf636e2253c785306",
+          "path": "union/feat.pkl",
+          "target": "GMFSS_fortuna_union_feat.pkl",
+          "size": 3259059,
+          "sha256": "3de9e046c68b8cdedaba7490c7b33d50bca69f4b2e8932b23b28836f5c2d81f9",
+          "imports": []
+        },
+        {
+          "repository": "x0unmaze/gmfss",
+          "revision": "ba912c3ad964bbf49ccd98ccf636e2253c785306",
+          "path": "union/flownet.pkl",
+          "target": "GMFSS_fortuna_flownet.pkl",
+          "size": 18916681,
+          "sha256": "31fa34960d6326f231c35db9070728419dbad78b463567601dfb6b34049789ef",
+          "imports": []
+        },
+        {
+          "repository": "x0unmaze/gmfss",
+          "revision": "ba912c3ad964bbf49ccd98ccf636e2253c785306",
+          "path": "union/fusionnet.pkl",
+          "target": "GMFSS_fortuna_union_fusionnet.pkl",
+          "size": 31423429,
+          "sha256": "6098e143f239aedcac854267df251ff6945a10d8ca14e0b1ac9afe5f51c36474",
+          "imports": []
+        },
+        {
+          "repository": "x0unmaze/gmfss",
+          "revision": "ba912c3ad964bbf49ccd98ccf636e2253c785306",
+          "path": "union/metric.pkl",
+          "target": "GMFSS_fortuna_union_metric.pkl",
+          "size": 484523,
+          "sha256": "b4fe92d9fb0d18cca98989f28733a45b9fbf0c3a23e1a9d8a19f4df42680e519",
+          "imports": []
+        }
+      ],
+      "dependencies": [
+        "rife"
+      ],
+      "compatibility": "unverified",
+      "loader": "frame-interp --model gmfss-fortuna-union; needs rife46.pth from the rife alias"
+    },
+    "film": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "url": "https://github.com/dajes/frame-interpolation-pytorch/releases/download/v1.0.0/film_net_fp32.pt",
+          "path": "film_net_fp32.pt",
+          "target": "film_net_fp32.pt",
+          "size": 137905674,
+          "sha256": "10aadc0d25ad586e3af7dd7703f75ec1186fbfe2e11c0d219d30ecfe2db10aa3",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "frame-interp --model film (TorchScript, torch.jit.load)"
+    },
+    "frame-interpolation": {
+      "enabled": true,
+      "kind": "pipeline",
+      "files": [],
+      "dependencies": [
+        "rife",
+        "gmfss-fortuna",
+        "film"
+      ],
+      "compatibility": "unverified",
+      "loader": "FRAME_INTERP_CKPTS=$MODEL_ROOT/by-name/frame-interpolation; ComfyUI-Frame-Interpolation ckpts layout",
+      "views": {
+        "rife": "rife",
+        "gmfss_fortuna": "gmfss-fortuna",
+        "film": "film"
+      }
+    },
+    "ema-vfi": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "WAS/EMA-VFI",
+          "revision": "472227a3f98e0e3618beb42c995bd0693da4e005",
+          "path": "ours_small_t.safetensors",
+          "target": "ours_small_t.safetensors",
+          "size": 57978300,
+          "sha256": "b1e1a5d5a16e881cc104aef762c539a83a5515bb4143b6fd0ce94b0dfe5ced51",
+          "imports": []
+        },
+        {
+          "repository": "WAS/EMA-VFI",
+          "revision": "472227a3f98e0e3618beb42c995bd0693da4e005",
+          "path": "ours_t.safetensors",
+          "target": "ours_t.safetensors",
+          "size": 262677348,
+          "sha256": "473044050e891ab640bf32be5adcccc8e55ad02ce12fda68c1cf5cb2a9f5aa92",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "frame-interp --model ema-vfi|ema-vfi-small; safetensors conversion of the official ours_t/ours_small_t .pkl"
+    },
+    "vfimamba": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "MCG-NJU/VFIMamba_ckpts",
+          "revision": "7c383874883191d240bcc9435590eecc573f1055",
+          "path": "ckpt/VFIMamba.pkl",
+          "target": "VFIMamba.pkl",
+          "size": 264414373,
+          "sha256": "c1dac5b08f4c41e95452f7a41b35347409fc58b0e25b3ba8de899144ff28a350",
+          "imports": []
+        },
+        {
+          "repository": "MCG-NJU/VFIMamba_ckpts",
+          "revision": "7c383874883191d240bcc9435590eecc573f1055",
+          "path": "ckpt/VFIMamba_S.pkl",
+          "target": "VFIMamba_S.pkl",
+          "size": 67298181,
+          "sha256": "ddc1e07e5917f1bbd254ca77e077354cf822c9af6cacd1434136e86b9961acc7",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "frame-interp --model vfimamba|vfimamba-s"
+    },
+    "openclip-vit-h-14": {
+      "enabled": true,
+      "kind": "component",
+      "files": [
+        {
+          "repository": "laion/CLIP-ViT-H-14-laion2B-s32B-b79K",
+          "revision": "1c2b8495b28150b8a4922ee1c8edee224c284c0c",
+          "path": "open_clip_config.json",
+          "target": "open_clip_config.json",
+          "size": 637,
+          "gitSha1": "a7e04ce761ac15fc0edd245e5ddc0e88fabdf67a",
+          "imports": []
+        },
+        {
+          "repository": "laion/CLIP-ViT-H-14-laion2B-s32B-b79K",
+          "revision": "1c2b8495b28150b8a4922ee1c8edee224c284c0c",
+          "path": "open_clip_model.safetensors",
+          "target": "open_clip_model.safetensors",
+          "size": 3944517836,
+          "sha256": "0084e75319a50ad85ef45377bad5bc38f2f58824459eb690048d51c9f8863be5",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "open_clip.create_model_and_transforms('ViT-H-14', pretrained=<path to open_clip_model.safetensors>)"
+    },
+    "tooncrafter": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "Doubiiu/ToonCrafter",
+          "revision": "7c56c5a23d9f8a9d99398e2a2491fff4bd6cffaf",
+          "path": "model.ckpt",
+          "target": "model.ckpt",
+          "size": 10502492136,
+          "sha256": "e4df5aecd9919af2f41a92912bb6391e03531b269785a7448d87e964462edf53",
+          "imports": []
+        }
+      ],
+      "dependencies": [
+        "openclip-vit-h-14"
+      ],
+      "compatibility": "unverified",
+      "loader": "tooncrafter --prompt_dir DIR --savedir OUT (512x320, 16 frames)"
+    },
+    "wan2.1-flf2v": {
+      "enabled": true,
+      "kind": "pipeline",
+      "files": [
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "image_encoder/config.json",
+          "target": "image_encoder/config.json",
+          "size": 583,
+          "gitSha1": "3f766f0db627d36d8de98752a2abc2c7d121da3c",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "image_encoder/model.safetensors",
+          "target": "image_encoder/model.safetensors",
+          "size": 1264217760,
+          "sha256": "f5c0bbf4f43f319a80335387d371742333807589c5bb4130a1a2a5d4abf6bf72",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "image_processor/merges.txt",
+          "target": "image_processor/merges.txt",
+          "size": 524619,
+          "gitSha1": "76e821f1b6f0a9709293c3b6b51ed90980b3166b",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "image_processor/preprocessor_config.json",
+          "target": "image_processor/preprocessor_config.json",
+          "size": 504,
+          "gitSha1": "6b87f9bc7511073f32189607eaf7d534529b025d",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "image_processor/special_tokens_map.json",
+          "target": "image_processor/special_tokens_map.json",
+          "size": 588,
+          "gitSha1": "cf0682d6de72c1547f41b4f6d7c59f62deffef94",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "image_processor/tokenizer.json",
+          "target": "image_processor/tokenizer.json",
+          "size": 3642073,
+          "gitSha1": "bd1e367764006ad6a2249b1dcc0b20879c7c211f",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "image_processor/tokenizer_config.json",
+          "target": "image_processor/tokenizer_config.json",
+          "size": 774,
+          "gitSha1": "bf15baa6c38888ed20f3d2f0ea2a6383bea620fd",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "image_processor/vocab.json",
+          "target": "image_processor/vocab.json",
+          "size": 862328,
+          "gitSha1": "182766ce89b439768edadda342519f33802f5364",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "model_index.json",
+          "target": "model_index.json",
+          "size": 562,
+          "gitSha1": "7c249d1dccacec2a5f2809accfa2e2120494096f",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "scheduler/scheduler_config.json",
+          "target": "scheduler/scheduler_config.json",
+          "size": 752,
+          "gitSha1": "48820d3c6b5863cab30fe550510b3484a23b526b",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "text_encoder/config.json",
+          "target": "text_encoder/config.json",
+          "size": 854,
+          "gitSha1": "2fd01c57dddd8ae386d518c69c087c8ba8c73804",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "text_encoder/model-00001-of-00005.safetensors",
+          "target": "text_encoder/model-00001-of-00005.safetensors",
+          "size": 4972389712,
+          "sha256": "c0ef3a140898e228a3520c9adec60743d2e8e5b3d229651bb37f1a3921919f99",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "text_encoder/model-00002-of-00005.safetensors",
+          "target": "text_encoder/model-00002-of-00005.safetensors",
+          "size": 4899225672,
+          "sha256": "481c7b2b39771c44df6dd8d13ee12ed072d731b4a650bd092885d4d52db229ad",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "text_encoder/model-00003-of-00005.safetensors",
+          "target": "text_encoder/model-00003-of-00005.safetensors",
+          "size": 4966309504,
+          "sha256": "f93148bcc04052a169e1e49bfcf6125df6cf9bf243cb9c627da75266cf8e35c3",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "text_encoder/model-00004-of-00005.safetensors",
+          "target": "text_encoder/model-00004-of-00005.safetensors",
+          "size": 4999880704,
+          "sha256": "a451792c739c05bca4606190cc2dd16731411bac03b4cf6aacc5767321f857c9",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "text_encoder/model-00005-of-00005.safetensors",
+          "target": "text_encoder/model-00005-of-00005.safetensors",
+          "size": 2885866152,
+          "sha256": "7e76e18d224531b8197a46231cb53daf7f2f6ca707130252becf933026ac4eea",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "text_encoder/model.safetensors.index.json",
+          "target": "text_encoder/model.safetensors.index.json",
+          "size": 22476,
+          "gitSha1": "60ece61b46ecb3e6a5b705ea304bc97535317c2a",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "tokenizer/special_tokens_map.json",
+          "target": "tokenizer/special_tokens_map.json",
+          "size": 7079,
+          "gitSha1": "2ed25bf989a28d20b5d4b5822fbc24666d12a6f7",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "tokenizer/spiece.model",
+          "target": "tokenizer/spiece.model",
+          "size": 4548313,
+          "sha256": "e3909a67b780650b35cf529ac782ad2b6b26e6d1f849d3fbb6a872905f452458",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "tokenizer/tokenizer.json",
+          "target": "tokenizer/tokenizer.json",
+          "size": 16837459,
+          "sha256": "20a46ac256746594ed7e1e3ef733b83fbc5a6f0922aa7480eda961743de080ef",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "tokenizer/tokenizer_config.json",
+          "target": "tokenizer/tokenizer_config.json",
+          "size": 61758,
+          "gitSha1": "09d434f9457238f697f4c208aab47f58caa15bfe",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/config.json",
+          "target": "transformer/config.json",
+          "size": 494,
+          "gitSha1": "2a3bb016824249f19cb18bd50ac12a50724a0407",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model-00001-of-00014.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00001-of-00014.safetensors",
+          "size": 4931751664,
+          "sha256": "6bfe9811d1f0fcddea310e68ab0e37ba2a59d7db63182fdfc996658e402635df",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model-00002-of-00014.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00002-of-00014.safetensors",
+          "size": 4950949632,
+          "sha256": "a4548d19b8723a76e421096912f067a4c13f5bdf9bef4da734c262a8d708f557",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model-00003-of-00014.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00003-of-00014.safetensors",
+          "size": 4950949632,
+          "sha256": "b9004f07b874aa52e8705d7f04dc897ab698393ca428bc6480ceb6c1aa46db4e",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model-00004-of-00014.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00004-of-00014.safetensors",
+          "size": 4951011392,
+          "sha256": "5439e95e5443546e280b8edd8830b11f1f944e60644b645d36e20a8f1eea316f",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model-00005-of-00014.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00005-of-00014.safetensors",
+          "size": 4846071440,
+          "sha256": "3ef80e425724d24085dda3dccea76b4c129cb8274b0234a14660c111404c56ed",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model-00006-of-00014.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00006-of-00014.safetensors",
+          "size": 4846071440,
+          "sha256": "3c4cf3fcec64c0af0535cd441d34aacab6ca9245b9d38c3b6c58d67090445923",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model-00007-of-00014.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00007-of-00014.safetensors",
+          "size": 4846071440,
+          "sha256": "5a645ce6efdc91eb95c3ab4692260d549469aba0bbae18fd01673e18fc9f4d2d",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model-00008-of-00014.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00008-of-00014.safetensors",
+          "size": 4846071440,
+          "sha256": "7da71b5b00e2ef3da9be96b59bec6b1ba53a4c704ee324c7037344610d9ed01c",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model-00009-of-00014.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00009-of-00014.safetensors",
+          "size": 4846071440,
+          "sha256": "2d0521429f02d5d765a286bdb7f7de5e5881731aa25190b3a4eb1ff6d8b5984b",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model-00010-of-00014.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00010-of-00014.safetensors",
+          "size": 4846071440,
+          "sha256": "cff55b12239fb72ff599c326d4acb6d8c1f688a0e34035d6bc694c2cf40d7c6d",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model-00011-of-00014.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00011-of-00014.safetensors",
+          "size": 4846071440,
+          "sha256": "6438dd33fb8a166fb14406e81a6828bde190c51db1f071f49cacb7783896933e",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model-00012-of-00014.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00012-of-00014.safetensors",
+          "size": 4846071440,
+          "sha256": "d1286eacdf92429cdcc851023b987eaca05dc27a78ba6ae954b9f6c9692ac4e6",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model-00013-of-00014.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00013-of-00014.safetensors",
+          "size": 4846071440,
+          "sha256": "30d6af2c7d57fa58c2200fabade2c41383d4ce578286bb7cc6426be0b47100d3",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model-00014-of-00014.safetensors",
+          "target": "transformer/diffusion_pytorch_model-00014-of-00014.safetensors",
+          "size": 2182975528,
+          "sha256": "0c79bcf3cace0a9f85d0464d47b4e2b0a923ba1e9e7c2c6fced27a993d1bd258",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "transformer/diffusion_pytorch_model.safetensors.index.json",
+          "target": "transformer/diffusion_pytorch_model.safetensors.index.json",
+          "size": 117160,
+          "gitSha1": "d6509891a7e5d816b02b66eba893d28591008b60",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "vae/config.json",
+          "target": "vae/config.json",
+          "size": 724,
+          "gitSha1": "a5be94e360479a8b513ced12e5d5032bcbd9e60d",
+          "imports": []
+        },
+        {
+          "repository": "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers",
+          "revision": "17c30769b1e0b5dcaa1799b117bf20a9c31f59d7",
+          "path": "vae/diffusion_pytorch_model.safetensors",
+          "target": "vae/diffusion_pytorch_model.safetensors",
+          "size": 507591892,
+          "sha256": "d6e524b3fffede1787a74e81b30976dce5400c4439ba64222168e607ed19e793",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "diffusers.WanImageToVideoPipeline.from_pretrained(path, torch_dtype=torch.bfloat16)(image=first, last_image=last, ...)"
     }
   },
   "runtimeSources": {

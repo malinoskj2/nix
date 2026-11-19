@@ -53,6 +53,7 @@
   gnutar,
   gobject-introspection,
   grim,
+  frame-interpolation,
   gpu-scheduler,
   host-switch,
   resource-scheduler,
@@ -321,6 +322,7 @@ let
       file
       findutils
       foot
+      frame-interpolation
       gawk
       (lib.hiPrio gcc)
       gh

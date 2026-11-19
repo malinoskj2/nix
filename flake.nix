@@ -113,6 +113,7 @@
           "deepsec"
           "discord-context"
           "find-service"
+          "frame-interpolation"
           "game-background-engine"
           "game-background-limit"
           "game-latency-check"
