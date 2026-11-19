@@ -1760,6 +1760,29 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(self.host.started, [job["id"]])
         self.assertFalse((Path(self.temp.name) / job["id"] / "payload.json").exists())
 
+    def test_terminate_accepts_collected_unit_and_releases_lane(self):
+        job = self.large_ready()
+        self.backend.tick()
+        self.backend.tick()
+        gone = dict(LoadState="not-found", ActiveState="inactive", SubState="dead", ExecMainPID="0")
+        self.host.units[job["systemd_unit"]] = gone
+        self.backend.tick()
+        self.assertEqual(job["state"], "unknown")
+        with patch.object(self.host, "stop", side_effect=subprocess.CalledProcessError(5, "systemctl")):
+            self.control("terminate", job)
+        self.backend.tick()
+        self.assertEqual(job["state"], "cancelled")
+        self.assertEqual(job["cleanup"], "systemd-unit-and-cgroup-removed")
+
+    def test_terminate_failure_on_loaded_unit_is_rejected(self):
+        job = self.large_ready()
+        self.backend.tick()
+        self.backend.tick()
+        with patch.object(self.host, "stop", side_effect=subprocess.CalledProcessError(1, "systemctl")):
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.control("terminate", job)
+        self.assertFalse(job.get("host_cancel_requested"))
+
     def test_missing_service_requires_cancel_intent_and_confirmed_cgroup_removal(self):
         job = self.large_ready()
         self.backend.tick()

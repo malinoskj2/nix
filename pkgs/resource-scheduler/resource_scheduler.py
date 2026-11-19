@@ -2389,7 +2389,12 @@ class Backend:
             else:
                 if action != "terminate":
                     raise ValueError("Service process may have started; use terminate")
-                self.host.stop(job["systemd_unit"])
+                try:
+                    self.host.stop(job["systemd_unit"])
+                except subprocess.SubprocessError:
+                    # A collected unit cannot be stopped; reconciliation still requires its cgroup gone.
+                    if self.host.status(job["systemd_unit"]).get("LoadState") != "not-found":
+                        raise
                 job["host_cancel_requested"] = True
             self.event(job, job["execution"] + "_termination_requested")
             self.changed(job)
