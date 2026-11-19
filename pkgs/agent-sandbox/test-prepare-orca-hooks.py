@@ -65,6 +65,33 @@ class PrepareOrcaHooksTest(unittest.TestCase):
             self.assertEqual(config["projects"]["/work"]["trust_level"], "trusted")
             self.assertEqual(config_text.count(f"[hooks.state.{json.dumps(sandbox_key)}]"), 1)
 
+    def test_antigravity_hooks_and_trust_reach_the_sandbox(self):
+        with tempfile.TemporaryDirectory() as root:
+            host = Path(root) / "host"
+            sandbox = Path(root) / "sandbox"
+            (host / ".orca/agent-hooks").mkdir(parents=True)
+            (host / ".orca/agent-hooks/antigravity-hook.sh").write_text("hook\n")
+            (host / ".gemini/config").mkdir(parents=True)
+            (host / ".gemini/config/hooks.json").write_text('{"orca-status":{}}\n')
+            host_settings = host / ".gemini/antigravity-cli/settings.json"
+            host_settings.parent.mkdir(parents=True)
+            host_settings.write_text('{"toolPermission":"always-proceed","trustedWorkspaces":["/a"]}\n')
+
+            subprocess.run([sys.executable, SCRIPT, host, sandbox], check=True)
+            sandbox_settings = sandbox / ".gemini/antigravity-cli/settings.json"
+            self.assertEqual(sandbox_settings.read_bytes(), host_settings.read_bytes())
+            self.assertEqual((sandbox / ".orca/agent-hooks/antigravity-hook.sh").read_text(), "hook\n")
+            self.assertEqual((sandbox / ".gemini/config/hooks.json").read_text(), '{"orca-status":{}}\n')
+
+            sandbox_settings.write_text('{"model":"m","trustedWorkspaces":["/b","/a"]}\n')
+            host_settings.write_text('{"trustedWorkspaces":["/a","/c",3]}\n')
+            for _ in range(2):
+                subprocess.run([sys.executable, SCRIPT, host, sandbox], check=True)
+            self.assertEqual(
+                json.loads(sandbox_settings.read_text()),
+                {"model": "m", "trustedWorkspaces": ["/b", "/a", "/c"]},
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

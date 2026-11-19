@@ -7,6 +7,7 @@
 {
   imports = [
     ./unreal-mcp.nix
+    ../antigravity
     ../muse.nix
   ];
 

@@ -151,6 +151,15 @@ Treat a bump as a hardware change and test it on the device.
   `alsa-lib` in the override: the wrapper puts it on `LD_LIBRARY_PATH`, every
   command Claude runs inherits that, and unstable's build needs a newer glibc
   than release programs that load libasound, such as mpv.
+- **Antigravity CLI.** [`pkgs/antigravity-cli/`](../pkgs/antigravity-cli)
+  builds the `agy` release it names on `pkgs.unstable`'s derivation, with its
+  self-updater off. To move it, read the version from
+  `https://storage.googleapis.com/antigravity-public/antigravity-cli/latest`,
+  then copy the build ID and each Linux platform's `sha512` from
+  `<version>/manifest.json`. Drop the override once `nixpkgs-unstable` catches
+  up. Orca reads agy's hook payloads and transcripts, so check that an agy
+  session in a sandbox shows working and done in Orca's sidebar and resumes
+  in a sandbox after Orca restarts.
 - **htop.** [`pkgs/htop-vim-navigation/`](../pkgs/htop-vim-navigation) asserts
   the htop versions its patch was checked against. If a nixpkgs update trips
   it, re-check the patch next to it and add the new version.
@@ -245,8 +254,9 @@ Treat a bump as a hardware change and test it on the device.
   official, and [`approved-plugins.patch`](../pkgs/orca-ade/approved-plugins.patch),
   which treats the plugins in `approvedPlugins` as consented. Rebase
   [`agent-resume-wrapper.patch`](../pkgs/orca-ade/agent-resume-wrapper.patch),
-  which runs the Claude, Codex and Muse resumes Orca starts when it reopens
-  through `agentResumeWrapper`, for local workspaces only. `home` sets it to
+  which runs the Claude, Codex, Muse and Antigravity resumes Orca starts when
+  it reopens through `agentResumeWrapper` as `<wrapper> <agent> <args>`, for
+  local workspaces only. `home` sets it to
   `agent-sandbox-resume` (`orca.agentResumeWrapper` in
   [`agent-sandbox.nix`](../users/jesse/agent-sandbox.nix)), which resumes in a
   sandbox the sessions a sandbox started; other hosts leave it unset. Upstream

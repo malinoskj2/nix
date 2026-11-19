@@ -20,6 +20,12 @@ spec.loader.exec_module(proxy)
 CONTAINER = Path("/home/test/.codex")
 HOST = Path("/data/agent-sandbox/home/.codex")
 TRANSCRIPT = "sessions/2026/11/07/rollout-test.jsonl"
+GEMINI_CONTAINER = Path("/home/test/.gemini")
+GEMINI_HOST = Path("/data/agent-sandbox/home/.gemini")
+AGY_TRANSCRIPT = "antigravity-cli/brain/6bba92d4/transcript.jsonl"
+ROOTS = proxy.transcript_roots(str(CONTAINER), str(HOST), str(GEMINI_CONTAINER), str(GEMINI_HOST))
+CODEX = ROOTS[b"/hook/codex"]
+SAME = proxy.TranscriptRoot(CODEX.keys, CODEX.container, CODEX.container)
 
 
 class TranscriptTest(unittest.TestCase):
@@ -28,12 +34,12 @@ class TranscriptTest(unittest.TestCase):
 
     def test_private_home_mapping_does_not_depend_on_file_existence(self):
         # Mapping follows the mount, never whichever copy happens to exist.
-        result = proxy.translate_transcript(json.dumps(self.payload()).encode(), "application/json", CONTAINER, HOST)
+        result = proxy.translate_transcript(json.dumps(self.payload()).encode(), "application/json", CODEX)
         self.assertEqual(json.loads(result), self.payload(str(HOST / TRANSCRIPT)))
 
     def test_explicit_account_mount_stays_byte_for_byte_unchanged(self):
         body = json.dumps(self.payload()).encode()
-        self.assertEqual(proxy.translate_transcript(body, "application/json", CONTAINER, CONTAINER), body)
+        self.assertEqual(proxy.translate_transcript(body, "application/json", SAME), body)
 
     def test_other_paths_and_invalid_payloads_are_unchanged(self):
         for body in [b"not json", b"null", b"[]", b"{}", b'{"transcript_path":null}'] + [
@@ -46,11 +52,11 @@ class TranscriptTest(unittest.TestCase):
             )
         ]:
             with self.subTest(body=body):
-                self.assertEqual(proxy.translate_transcript(body, "application/json", CONTAINER, HOST), body)
+                self.assertEqual(proxy.translate_transcript(body, "application/json", CODEX), body)
 
     def test_form_transport_preserves_metadata_and_prompt(self):
         body = urlencode([("paneKey", "pane+one"), ("payload", json.dumps(self.payload())), ("empty", "")]).encode()
-        result = proxy.translate_transcript(body, "application/x-www-form-urlencoded", CONTAINER, HOST)
+        result = proxy.translate_transcript(body, "application/x-www-form-urlencoded", CODEX)
         fields = dict(parse_qsl(result.decode(), keep_blank_values=True))
         self.assertEqual(fields["paneKey"], "pane+one")
         self.assertEqual(fields["empty"], "")
@@ -80,7 +86,7 @@ class TranscriptTest(unittest.TestCase):
             thread = threading.Thread(target=send)
             thread.start()
             try:
-                request = proxy.translate_request(reader, head, b"", CONTAINER, HOST)
+                request = proxy.translate_request(reader, head, b"", ROOTS)
             finally:
                 thread.join(timeout=3)
             self.assertFalse(thread.is_alive())
@@ -91,9 +97,33 @@ class TranscriptTest(unittest.TestCase):
         self.assertNotIn(b"Expect:", new_head)
         self.assertEqual(json.loads(new_body), self.payload(str(HOST / TRANSCRIPT)))
 
+    def test_antigravity_form_maps_transcript_and_agent_process(self):
+        payload = {"hook_event_name": "PreInvocation", "transcriptPath": str(GEMINI_CONTAINER / AGY_TRANSCRIPT)}
+        process = json.dumps({"pid": 7, "startTime": "x"})
+        body = urlencode([("paneKey", "p"), ("agentProcess", process), ("payload", json.dumps(payload))]).encode()
+        head = (
+            b"POST /hook/antigravity HTTP/1.1\r\nContent-Type: application/x-www-form-urlencoded\r\n"
+            b"Content-Length: " + str(len(body)).encode()
+        )
+        original = proxy.host_pid
+        proxy.host_pid = lambda peer, pid: 4242 if (peer, pid) == (99, 7) else None
+        try:
+            request = proxy.translate_request(None, head, body, ROOTS, 99)
+        finally:
+            proxy.host_pid = original
+        fields = dict(parse_qsl(request.partition(b"\r\n\r\n")[2].decode(), keep_blank_values=True))
+        self.assertEqual(fields["paneKey"], "p")
+        self.assertEqual(json.loads(fields["agentProcess"]), {"pid": 4242, "startTime": "x"})
+        self.assertEqual(json.loads(fields["payload"])["transcriptPath"], str(GEMINI_HOST / AGY_TRANSCRIPT))
+
+    def test_untranslatable_form_agent_process_is_cleared(self):
+        body = urlencode([("agentProcess", json.dumps({"pid": 7}))]).encode()
+        result = proxy.translate_transcript(body, "application/x-www-form-urlencoded", CODEX, 99)
+        self.assertEqual(dict(parse_qsl(result.decode(), keep_blank_values=True))["agentProcess"], "")
+
     def test_unrelated_requests_remain_unchanged(self):
         head = b"POST /hook/claude HTTP/1.1\r\nContent-Length: 2"
-        self.assertEqual(proxy.translate_request(None, head, b"{}", CONTAINER, HOST), head + b"\r\n\r\n{}")
+        self.assertEqual(proxy.translate_request(None, head, b"{}", ROOTS), head + b"\r\n\r\n{}")
 
     def test_relay_forwards_translated_transcript_and_returns_response(self):
         with tempfile.TemporaryDirectory() as directory, socket.socket() as listener:
@@ -101,7 +131,7 @@ class TranscriptTest(unittest.TestCase):
             listener.listen()
             listener.settimeout(3)
             path = str(Path(directory) / "hook.sock")
-            with proxy.HookServer(path, "", listener.getsockname()[1], CONTAINER, HOST) as server:
+            with proxy.HookServer(path, "", listener.getsockname()[1], ROOTS) as server:
                 thread = threading.Thread(target=server.handle_request, daemon=True)
                 thread.start()
                 with socket.socket(socket.AF_UNIX) as client:
@@ -142,7 +172,7 @@ class TranscriptTest(unittest.TestCase):
             for length in (10, proxy.MAX_BODY + 1, -1):
                 head = b"POST /hook/codex HTTP/1.1\r\nContent-Length: " + str(length).encode()
                 with self.subTest(length=length), self.assertRaises(ValueError):
-                    proxy.translate_request(reader, head, b"", CONTAINER, HOST)
+                    proxy.translate_request(reader, head, b"", ROOTS)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ import socketserver
 import struct
 import sys
 import threading
+from typing import NamedTuple
 from urllib.parse import parse_qsl, urlencode
 
 MAX_HEAD = 65536
@@ -46,24 +47,27 @@ def host_pid(peer: int, container_pid: int) -> int | None:
     return None
 
 
-def translate_agent_process(head: bytes, peer: int) -> bytes:
+def translate_process(value: str, peer: int) -> str:
     # Orca checks the agent's pid on the host to tell whether it has exited, but
     # the hook reports the container's pid for it. Untranslatable means unknown.
+    try:
+        process = json.loads(value)
+        pid = host_pid(peer, int(process["pid"]))
+        if pid is not None:
+            process["pid"] = pid
+            return json.dumps(process, separators=(",", ":"))
+    except (ValueError, TypeError, KeyError):
+        pass
+    return ""
+
+
+def translate_agent_process(head: bytes, peer: int) -> bytes:
     lines = head.split(b"\r\n")
     for index, line in enumerate(lines):
         name, sep, value = line.partition(b":")
         if not sep or name.strip().lower() != b"x-orca-agent-process":
             continue
-        translated = b""
-        try:
-            process = json.loads(value)
-            pid = host_pid(peer, int(process["pid"]))
-            if pid is not None:
-                process["pid"] = pid
-                translated = json.dumps(process, separators=(",", ":")).encode()
-        except (ValueError, TypeError, KeyError):
-            pass
-        lines[index] = b"X-Orca-Agent-Process: " + translated
+        lines[index] = b"X-Orca-Agent-Process: " + translate_process(value.decode(errors="replace"), peer).encode()
     return b"\r\n".join(lines)
 
 
@@ -79,21 +83,33 @@ def read_head(sock: socket.socket) -> bytes | None:
     return data
 
 
-def translate_transcript(body: bytes, content_type: str, container_home: Path, host_home: Path) -> bytes:
-    """Translate only Codex's transcript field, using this launch's account mount."""
+class TranscriptRoot(NamedTuple):
+    """Transcripts the agent writes under container, which Orca reads under host."""
+
+    keys: tuple[str, ...]
+    container: Path
+    host: Path
+
+
+def translate_transcript(body: bytes, content_type: str, root: TranscriptRoot, peer: int | None = None) -> bytes:
+    """Translate the agent's transcript field, and a form's agent process, for this launch's mounts."""
 
     def translate(payload):
-        if not isinstance(payload, dict) or not isinstance(payload.get("transcript_path"), str):
+        if not isinstance(payload, dict) or root.container == root.host:
             return False
-        path = Path(payload["transcript_path"])
-        try:
-            relative = path.relative_to(container_home / "sessions")
-        except ValueError:
-            return False
-        if ".." in relative.parts or container_home == host_home:
-            return False
-        payload["transcript_path"] = str(host_home / "sessions" / relative)
-        return True
+        changed = False
+        for key in root.keys:
+            if not isinstance(payload.get(key), str):
+                continue
+            try:
+                relative = Path(payload[key]).relative_to(root.container)
+            except ValueError:
+                continue
+            if ".." in relative.parts:
+                continue
+            payload[key] = str(root.host / relative)
+            changed = True
+        return changed
 
     try:
         if content_type == "application/json":
@@ -109,6 +125,9 @@ def translate_transcript(body: bytes, content_type: str, container_home: Path, h
                     if translate(payload):
                         fields[index] = (key, json.dumps(payload, separators=(",", ":")))
                         changed = True
+                elif key == "agentProcess" and value and peer is not None:
+                    fields[index] = (key, translate_process(value, peer))
+                    changed = True
             if changed:
                 return urlencode(fields).encode()
     except (ValueError, UnicodeError):
@@ -116,9 +135,13 @@ def translate_transcript(body: bytes, content_type: str, container_home: Path, h
     return body
 
 
-def translate_request(sock: socket.socket, head: bytes, body: bytes, container_home: Path, host_home: Path) -> bytes:
+def translate_request(
+    sock: socket.socket, head: bytes, body: bytes, roots: dict[bytes, TranscriptRoot], peer: int | None = None
+) -> bytes:
     lines = head.split(b"\r\n")
-    if lines[0].split()[:2] != [b"POST", b"/hook/codex"]:
+    request = lines[0].split()[:2]
+    root = roots.get(request[1]) if len(request) == 2 and request[0] == b"POST" else None
+    if root is None:
         return head + b"\r\n\r\n" + body
     headers = {}
     for line in lines[1:]:
@@ -139,7 +162,7 @@ def translate_request(sock: socket.socket, head: bytes, body: bytes, container_h
             raise ValueError("incomplete hook body")
         body += chunk
     content_type = headers.get(b"content-type", b"").split(b";", 1)[0].strip().decode("ascii")
-    translated = translate_transcript(body[:length], content_type, container_home, host_home)
+    translated = translate_transcript(body[:length], content_type, root, peer)
     lines = [line for line in lines if line.partition(b":")[0].strip().lower() not in (b"content-length", b"expect")]
     lines.append(b"Content-Length: " + str(len(translated)).encode())
     return b"\r\n".join(lines) + b"\r\n\r\n" + translated + body[length:]
@@ -168,11 +191,10 @@ class HookServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     daemon_threads = True
     request_queue_size = MAX_CONNECTIONS
 
-    def __init__(self, socket_path: str, endpoint_path: str, fallback_port: int, container_home: Path, host_home: Path):
+    def __init__(self, socket_path: str, endpoint_path: str, fallback_port: int, roots: dict[bytes, TranscriptRoot]):
         self.endpoint_path = endpoint_path
         self.fallback_port = fallback_port
-        self.container_home = container_home
-        self.host_home = host_home
+        self.roots = roots
         self.slots = threading.BoundedSemaphore(MAX_CONNECTIONS)
         super().__init__(socket_path, HookHandler)
         os.chmod(socket_path, 0o600)
@@ -216,8 +238,9 @@ class HookHandler(socketserver.BaseRequestHandler):
             if data is None:
                 return
             head, _, body = data.partition(b"\r\n\r\n")
-            head = translate_agent_process(head, peer_pid(self.request))
-            data = translate_request(self.request, head, body, server.container_home, server.host_home)
+            peer = peer_pid(self.request)
+            head = translate_agent_process(head, peer)
+            data = translate_request(self.request, head, body, server.roots, peer)
             self.request.settimeout(None)
             upstream = socket.create_connection(("127.0.0.1", server.current_port()), timeout=CONNECT_TIMEOUT)
         except (OSError, ValueError):
@@ -230,10 +253,22 @@ class HookHandler(socketserver.BaseRequestHandler):
             relay(self.request, upstream)
 
 
+def transcript_roots(codex_container: str, codex_host: str, gemini_container: str, gemini_host: str):
+    return {
+        b"/hook/codex": TranscriptRoot(
+            ("transcript_path",), Path(codex_container) / "sessions", Path(codex_host) / "sessions"
+        ),
+        b"/hook/antigravity": TranscriptRoot(
+            ("transcriptPath", "transcript_path"), Path(gemini_container), Path(gemini_host)
+        ),
+    }
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 6:
+    if len(sys.argv) != 8:
         raise SystemExit(
             "usage: hook-proxy <socket> <endpoint-file> <fallback-port> <container-codex-home> <host-codex-home>"
+            " <container-gemini-home> <host-gemini-home>"
         )
-    with HookServer(sys.argv[1], sys.argv[2], int(sys.argv[3]), Path(sys.argv[4]), Path(sys.argv[5])) as proxy:
+    with HookServer(sys.argv[1], sys.argv[2], int(sys.argv[3]), transcript_roots(*sys.argv[4:])) as proxy:
         proxy.serve_forever(poll_interval=0.2)

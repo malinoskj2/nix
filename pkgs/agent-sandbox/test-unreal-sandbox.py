@@ -65,6 +65,10 @@ class UnrealSandboxTests(unittest.TestCase):
             data = tomlkit.parse((Path(directory) / ".codex/config.toml").read_text())
             self.assertFalse(data["mcp_servers"]["unreal-mcp"]["enabled"])
             self.assertEqual(data["mcp_servers"]["unreal-mcp"]["url"], unreal.URL)
+            agy = json.loads((Path(directory) / ".gemini/config/mcp_config.json").read_text())
+            self.assertEqual(
+                agy["mcpServers"]["unreal-mcp"], {"disabled": True, "serverUrl": unreal.URL, "timeoutSeconds": 120}
+            )
 
     def test_prepare_preserves_project_and_ini_preferences(self):
         with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):

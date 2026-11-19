@@ -7,13 +7,17 @@ if [[ ${1:-} == --display ]]; then
 fi
 
 if [[ $# -lt 1 ]]; then
-  echo 'usage: agent-sandbox-exec [--display] <claude|codex|muse> [agent arguments...]' >&2
+  echo 'usage: agent-sandbox-exec [--display] <claude|codex|muse|antigravity> [agent arguments...]' >&2
   exit 2
 fi
 
 agent=$1
 shift
-if [[ $agent != claude && $agent != codex && $agent != muse ]]; then
+# Orca names Antigravity's harness after the product; its command is agy.
+if [[ $agent == agy ]]; then
+  agent=antigravity
+fi
+if [[ $agent != claude && $agent != codex && $agent != muse && $agent != antigravity ]]; then
   echo "agent-sandbox-exec: unsupported agent: $agent" >&2
   exit 2
 fi
@@ -70,9 +74,10 @@ stop_hook_bridge() {
 # desktop loopback; the container sees a Unix socket under its bind-mounted
 # runtime directory. Its curl shim uses that socket only for Orca hook URLs.
 start_hook_bridge() {
-  local relay_root container_codex_home host_codex_home
+  local relay_root container_codex_home host_codex_home sandbox_home
   relay_root=/run/user/$(id -u)/agent-sandbox-orca
-  "$AGENT_SANDBOX_PREPARE_ORCA_HOOKS" "$HOME" "${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox/home"
+  sandbox_home=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox/home
+  "$AGENT_SANDBOX_PREPARE_ORCA_HOOKS" "$HOME" "$sandbox_home"
 
   mkdir -p "$relay_root"
   chmod 700 "$relay_root"
@@ -82,9 +87,11 @@ start_hook_bridge() {
   # Explicit accounts are bind-mounted at the same path. Without CODEX_HOME,
   # Codex writes into the sandbox's private home, which Orca cannot see there.
   container_codex_home=${CODEX_HOME:-$HOME/.codex}
-  host_codex_home=${CODEX_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox/home/.codex}
+  host_codex_home=${CODEX_HOME:-$sandbox_home/.codex}
+  # Orca reads agy's transcripts to tell its root conversation, the one it resumes, from subagents.
   "$AGENT_SANDBOX_HOOK_PROXY" "$proxy_socket" "${ORCA_AGENT_HOOK_ENDPOINT:-}" \
-    "$ORCA_AGENT_HOOK_PORT" "$container_codex_home" "$host_codex_home" >"$relay_dir/proxy.log" 2>&1 &
+    "$ORCA_AGENT_HOOK_PORT" "$container_codex_home" "$host_codex_home" \
+    "$HOME/.gemini" "$sandbox_home/.gemini" >"$relay_dir/proxy.log" 2>&1 &
   proxy_pid=$!
   for _ in {1..100}; do
     [[ -S $proxy_socket ]] && break

@@ -1,4 +1,5 @@
 {
+  antigravity-cli,
   at-spi2-core,
   bacon,
   bashInteractive,
@@ -291,6 +292,7 @@ let
     # Match the host's development and inspection tools so agents can use PATH
     # instead of searching the shared store. Keep GCC as the default C compiler.
     paths = [
+      antigravity-cli
       at-spi2-core
       bacon
       bashInteractive
@@ -456,6 +458,16 @@ let
     }
   );
 
+  instructions = writeText "agent-sandbox-instructions.md" (
+    builtins.readFile ./CLAUDE.md
+    + "\n"
+    + builtins.readFile ../../users/jesse/claude/rules/gpu.md
+    + "\n"
+    + builtins.readFile ../../users/jesse/claude/rules/resources.md
+    + "\n"
+    + builtins.readFile ../../users/jesse/claude/rules/host-switch.md
+  );
+
   caBundle = "${cacert}/etc/ssl/certs/ca-bundle.crt";
 
   # The image carries no store paths: the launcher mounts the host store read-only,
@@ -479,17 +491,7 @@ let
       ln -s ${caBundle} etc/ssl/certs/ca-certificates.crt
       ln -s ${./sway.conf} etc/sway/config
       ln -s ${./nested-sway.conf} etc/sway/nested
-      ln -s ${
-        writeText "agent-sandbox-instructions.md" (
-          builtins.readFile ./CLAUDE.md
-          + "\n"
-          + builtins.readFile ../../users/jesse/claude/rules/gpu.md
-          + "\n"
-          + builtins.readFile ../../users/jesse/claude/rules/resources.md
-          + "\n"
-          + builtins.readFile ../../users/jesse/claude/rules/host-switch.md
-        )
-      } etc/claude-code/CLAUDE.md
+      ln -s ${instructions} etc/claude-code/CLAUDE.md
       ln -s ${claudeManagedSettings} etc/claude-code/managed-settings.json
       echo 'hosts: files dns' > etc/nsswitch.conf
     '';
@@ -577,6 +579,8 @@ let
       # The PATH an agent with an Orca hook bridge runs with: the curl shim leads,
       # so hook URLs route through the private relay socket.
       AGENT_SANDBOX_ORCA_PATH = "${orcaCurl}/bin:${env}/bin:/usr/bin";
+      # Claude reads these from the image; agy reads them as its global AGENTS.md.
+      AGENT_SANDBOX_INSTRUCTIONS = "${instructions}";
     };
     text = builtins.readFile ./agent-sandbox.sh;
   };
@@ -665,7 +669,7 @@ symlinkJoin {
     sshProxy
   ];
   meta = {
-    description = "Run Claude Code, Codex or Muse Code in a Docker sandbox with the GPU and a headless Wayland session";
+    description = "Run Claude Code, Codex, Muse Code or Antigravity in a Docker sandbox with the GPU and a headless Wayland session";
     mainProgram = "agent-sandbox";
     platforms = [ "x86_64-linux" ];
   };

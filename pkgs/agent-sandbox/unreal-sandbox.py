@@ -56,6 +56,11 @@ def sync_harnesses() -> None:
     }
     write(path, tomlkit.dumps(config))
 
+    path = home / ".gemini/config/mcp_config.json"
+    config = load_json(path)
+    config.setdefault("mcpServers", {})["unreal-mcp"] = {"disabled": True, "serverUrl": URL, "timeoutSeconds": 120}
+    write_json(path, config)
+
 
 def engine_root() -> Path:
     return checked_engine(Path(os.environ.get("UE_ROOT", INSTALL_DIR / "current")).expanduser())
@@ -240,7 +245,7 @@ def doctor() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("sync-harnesses", help="Refresh the Unreal MCP entry in Codex")
+    sub.add_parser("sync-harnesses", help="Refresh the Unreal MCP entry in Codex and Antigravity")
     sub.add_parser("doctor", help="Check the engine, GPU, display and live MCP tools")
     sub.add_parser("mcp-check", help="Make a read-only call to the running editor")
     sub.add_parser("install", help="Extract Epic's Linux installed build").add_argument("archive", type=Path)

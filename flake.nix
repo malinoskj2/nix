@@ -108,6 +108,7 @@
           "cargo-preferences"
           "agent-sandbox"
           "ai-usage"
+          "antigravity-cli"
           "ata-devs"
           "battery"
           "deepsec"

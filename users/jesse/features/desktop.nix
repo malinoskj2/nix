@@ -50,6 +50,7 @@ let
     }
     // lib.optionalAttrs (config.orca.agentResumeWrapper != null) {
       agentCmdOverrides = lib.genAttrs [
+        "antigravity"
         "claude"
         "codex"
         "muse"
@@ -60,8 +61,7 @@ let
       "etherll.usage-insights"
       "jesse.resource-queue"
     ];
-    resourceSchedulerBin = lib.optionalString (
-      osConfig.services.resourceScheduler.enable or false
+    resourceSchedulerBin = lib.optionalString (osConfig.services.resourceScheduler.enable or false
     ) "/run/current-system/sw/bin/";
     # Generic keeps workspace, branch and machine names out of the activity.
     discordPresenceSettings.detailLevel = "generic";
@@ -72,11 +72,11 @@ let
     "orca-cli"
     "orchestration"
   ];
-  skillsFor =
-    agent:
+  skillsIn =
+    directory:
     lib.genAttrs' orcaSkills (
       skill:
-      lib.nameValuePair ".${agent}/skills/${skill}" {
+      lib.nameValuePair "${directory}/${skill}" {
         source = "${orca-ade}/share/orca-ade/skills/${skill}";
       }
     );
@@ -92,7 +92,7 @@ in
   options.orca.agentResumeWrapper = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
     default = null;
-    description = "Command that Orca's automatic Claude, Codex and Muse resumes in local workspaces run through.";
+    description = "Command that Orca's automatic Claude, Codex, Muse and Antigravity resumes in local workspaces run through.";
   };
 
   options.orca.usageInsightsSettings = lib.mkOption {
@@ -139,7 +139,8 @@ in
           Install.WantedBy = [ "graphical-session.target" ];
         };
 
-    home.file = skillsFor "claude" // skillsFor "codex";
+    home.file =
+      skillsIn ".claude/skills" // skillsIn ".codex/skills" // skillsIn ".gemini/config/skills";
 
     home.sessionVariables = {
       DOWNLOAD = "/media/scratch/download";

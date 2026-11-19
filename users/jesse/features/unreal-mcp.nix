@@ -13,4 +13,9 @@ in
     startup_timeout_sec = 30;
     tool_timeout_sec = 120;
   };
+  programs.antigravity.mcpServers.unreal-mcp = {
+    disabled = true;
+    serverUrl = unrealMcp.url;
+    timeoutSeconds = 120;
+  };
 }

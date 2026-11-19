@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 if [[ $# -lt 1 ]]; then
-  echo 'usage: agent-sandbox-resume <claude|codex|muse> [agent arguments...]' >&2
+  echo 'usage: agent-sandbox-resume <claude|codex|muse|antigravity> [agent arguments...]' >&2
   exit 2
 fi
 
@@ -12,7 +12,7 @@ sandbox_home=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox/home
 session=
 previous=
 for arg in "$@"; do
-  if [[ $previous == resume || $previous == --resume ]]; then
+  if [[ $previous == resume || $previous == --resume || $previous == --conversation ]]; then
     session=$arg
   fi
   previous=$arg
@@ -25,12 +25,16 @@ started_in_sandbox() {
     claude) return 0 ;;
     codex) [[ -n $session ]] && compgen -G "$sandbox_home/.codex/sessions/*/*/*/rollout-*-$session.jsonl" >/dev/null ;;
     muse) [[ -n $session ]] && compgen -G "$sandbox_home/.local/share/muse/sessions/*/*/*/$session" >/dev/null ;;
+    antigravity) [[ -n $session && $session != */* && -e $sandbox_home/.gemini/antigravity-cli/brain/$session ]] ;;
     *) return 1 ;;
   esac
 }
 
 # agent-sandbox-exec names its sandbox after the Git repository it runs in.
 if ! started_in_sandbox || ! git rev-parse --show-toplevel >/dev/null 2>&1; then
+  if [[ $agent == antigravity ]]; then
+    exec agy "$@"
+  fi
   exec "$agent" "$@"
 fi
 

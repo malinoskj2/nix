@@ -16,7 +16,7 @@ while [[ $# -gt 0 ]]; do
       display=1
       shift
       ;;
-    --claude | --codex | --muse)
+    --claude | --codex | --muse | --antigravity)
       agent=${1#--}
       shift
       break
@@ -146,6 +146,19 @@ configure_muse() {
   seed_if_empty "$HOME/.config/muse/settings.json" "$sandbox_home/.config/muse/settings.json"
 }
 
+configure_antigravity() {
+  # Without a Secret Service in the container, agy keeps its login in this file. A host whose agy
+  # also falls back to it shares its login, as with Codex.
+  copy_if_newer "$HOME/.gemini/antigravity-cli/antigravity-oauth-token" \
+    "$sandbox_home/.gemini/antigravity-cli/antigravity-oauth-token"
+  # agy saves trust, model and /config choices here; Home Manager re-merges Nix's keys on each switch.
+  seed_if_empty "$HOME/.gemini/antigravity-cli/settings.json" "$sandbox_home/.gemini/antigravity-cli/settings.json"
+
+  mount_readonly "$HOME/.gemini/GEMINI.md"
+  mount_readonly "$HOME/.gemini/config/skills"
+  mount_readonly "$AGENT_SANDBOX_INSTRUCTIONS" "$HOME/.gemini/config/AGENTS.md"
+}
+
 # Proton and the Steam Linux Runtimes a sandbox client installs before launching a game, which
 # the sandbox keeps its own copies of so that it never rewrites the host's.
 is_steam_tool() {
@@ -257,7 +270,8 @@ wl-paste --type image --watch agent-sandbox-clipboard-sync "$clipboard_dir" \
   >/dev/null 2>"$clipboard_dir/watcher.log" &
 clipboard_watcher_pid=$!
 
-mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.config/git" "$sandbox_home/.config/muse"
+mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.config/git" "$sandbox_home/.config/muse" \
+  "$sandbox_home/.gemini/antigravity-cli" "$sandbox_home/.gemini/config"
 for dir in "${shared[@]}"; do
   mkdir -p "$dir" "$sandbox_home${dir#"$HOME"}"
 done
@@ -291,6 +305,7 @@ fi
 configure_claude
 configure_codex
 configure_muse
+configure_antigravity
 configure_steam
 
 sandbox_instance=${AGENT_SANDBOX_NAME:-agent-sandbox-$(basename "$workdir")-$$}
@@ -503,6 +518,7 @@ case $agent in
   claude) set -- claude --dangerously-skip-permissions "$@" ;;
   codex) set -- codex --dangerously-bypass-approvals-and-sandbox "$@" ;;
   muse) set -- muse --yolo "$@" ;;
+  antigravity) set -- agy --dangerously-skip-permissions "$@" ;;
 esac
 
 # Serialize port selection with container creation across concurrent

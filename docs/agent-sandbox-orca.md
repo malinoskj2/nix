@@ -1,10 +1,11 @@
 # Orca terminals in an agent sandbox
 
-On `home`, the Nix-built Orca configures the Claude, Codex and Muse launch
-buttons to use a sandbox command. Linux launches use `agent-sandbox-exec`.
+On `home`, the Nix-built Orca configures the Claude, Codex, Muse and
+Antigravity launch buttons to use a sandbox command. Linux launches use `agent-sandbox-exec`.
 On Darwin execution hosts, the command searches `PATH` in order and invokes
 the first executable file matching `sandbox-*`, passing the harness name
-(`claude`, `codex` or `muse`) followed by Orca's launch arguments. Matches
+(`claude`, `codex`, `muse` or `antigravity`) followed by Orca's launch
+arguments. Matches
 within a PATH directory follow shell glob order. If no matching executable
 exists, the launch fails with an error. Restart Orca after rebuilding to
 load these overrides.
@@ -25,6 +26,7 @@ From a repository or a local Orca worktree, launch an agent with:
 agent-sandbox-exec codex
 agent-sandbox-exec claude
 agent-sandbox-exec muse
+agent-sandbox-exec antigravity   # or agy
 ```
 
 The sandbox name is derived from the Git repository name: `j2bar` becomes
@@ -101,7 +103,10 @@ requests use normal curl. Orca's hook token still authenticates each event.
 The socket and proxy are removed when the agent exits. Each direct launch syncs
 Orca's managed hook scripts and settings into the sandbox, including changes
 from an Orca update. Codex's managed hook trust hashes are refreshed while
-preserving other sandbox configuration and per-hook enabled choices.
+preserving other sandbox configuration and per-hook enabled choices. Orca's
+`~/.gemini/config/hooks.json` for Antigravity is copied as it is, and the
+workspaces Orca pre-trusts in the host's agy `settings.json` are added to the
+sandbox's, so agy's trust menu can't swallow a drafted prompt.
 
 The bridge was checked from an isolated Docker container against the live
 Orca listener. An unsigned request received HTTP 403, and a signed Codex
@@ -110,8 +115,11 @@ Orca's persisted status. A separate test confirmed the proxy follows an
 endpoint port change.
 
 The direct launch remains experimental. The local Orca process cannot see the
-agent process directly. The hook bridge translates process IDs and Codex
-transcript paths to their host locations. The Nix-built Orca also recognizes
+agent process directly. The hook bridge translates process IDs, in the header
+and in the form field Antigravity's hook posts, and Codex and Antigravity
+transcript paths to their host locations. Orca reads the first record of agy's
+transcript to tell the root conversation it resumes from a subagent's, so
+without that translation a sandboxed agy session would have no resume ID. The Nix-built Orca also recognizes
 `~/.local/share/agent-sandbox/home/.codex` as a local account home for history,
 resume and **Continue in chat**. Usage Insights' `extraCodexFolders` setting is
 separate and does not register an account home with Orca.

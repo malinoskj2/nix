@@ -10,6 +10,8 @@ import tempfile
 import tomllib
 
 CODEX_RUNTIME_HOME = Path(".config/orca/codex-runtime-home/home")
+ANTIGRAVITY_HOOKS = Path(".gemini/config/hooks.json")
+ANTIGRAVITY_SETTINGS = Path(".gemini/antigravity-cli/settings.json")
 
 
 def atomic_write(destination: Path, content: bytes, mode: int) -> None:
@@ -103,6 +105,34 @@ def add_codex_trust(host_home: Path, sandbox_home: Path) -> None:
     atomic_write(target_config, updated.encode(), 0o600)
 
 
+def add_antigravity_trust(host_home: Path, sandbox_home: Path) -> None:
+    """Orca pre-trusts each workspace in the host's settings, so agy's trust menu can't eat a draft."""
+    source = host_home / ANTIGRAVITY_SETTINGS
+    target = sandbox_home / ANTIGRAVITY_SETTINGS
+    try:
+        host_settings = json.loads(source.read_text())
+    except (OSError, ValueError):
+        return
+    if not isinstance(host_settings, dict):
+        return
+    if not target.exists():
+        atomic_write(target, source.read_bytes(), 0o600)
+        return
+    try:
+        settings = json.loads(target.read_text())
+    except ValueError:
+        return
+    if not isinstance(settings, dict) or not isinstance(settings.get("trustedWorkspaces", []), list):
+        return
+    trusted = settings.get("trustedWorkspaces", [])
+    additions = [
+        path for path in host_settings.get("trustedWorkspaces", []) if isinstance(path, str) and path not in trusted
+    ]
+    if additions:
+        settings["trustedWorkspaces"] = trusted + additions
+        atomic_write(target, (json.dumps(settings, indent=2) + "\n").encode(), 0o600)
+
+
 def main() -> None:
     host_home, sandbox_home = map(Path, sys.argv[1:])
     host_hooks = host_home / ".orca/agent-hooks"
@@ -110,7 +140,7 @@ def main() -> None:
     sandbox_hooks.mkdir(parents=True, exist_ok=True)
     with (sandbox_hooks / ".prepare.lock").open("a+b") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        for name in ("claude-hook.sh", "codex-hook.sh", "claude-statusline.sh"):
+        for name in ("claude-hook.sh", "codex-hook.sh", "claude-statusline.sh", "antigravity-hook.sh"):
             sync_managed_file(host_hooks / name, sandbox_hooks / name, 0o700)
         sync_managed_file(host_hooks / "claude-settings.json", sandbox_hooks / "claude-settings.json", 0o600)
         sync_managed_file(
@@ -119,6 +149,8 @@ def main() -> None:
             0o600,
         )
         add_codex_trust(host_home, sandbox_home)
+        sync_managed_file(host_home / ANTIGRAVITY_HOOKS, sandbox_home / ANTIGRAVITY_HOOKS, 0o600)
+        add_antigravity_trust(host_home, sandbox_home)
 
 
 if __name__ == "__main__":

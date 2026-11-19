@@ -9,6 +9,7 @@ keep=(
   .codex/auth.json
   .config/muse/auth.json
   .gemini/oauth_creds.json
+  .gemini/antigravity-cli/antigravity-oauth-token
   .local/share/opencode/auth.json
   .zcode/cli/config.json
   .ssh
