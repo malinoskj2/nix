@@ -150,6 +150,34 @@ body.fit .thumb img, body.fit .thumb video { object-fit: contain; }
 .vmeta span.kind { border-color: var(--ink); color: var(--ink); }
 .unseen { position: absolute; top: 0.7rem; right: 0.7rem; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--paper-bright); }
 .info { padding: 0.55rem 0.15rem 0.1rem; min-width: 0; }
+.download {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+  min-height: 44px; padding: 0.5rem 0.8rem; margin-top: 0.65rem;
+  border: 1px solid var(--rule-strong); border-radius: 6px;
+  background: var(--paper-bright); color: var(--ink); text-decoration: none;
+  font: 500 0.78rem/1.3 var(--mono);
+}
+.download:hover { background: var(--paper-deep); }
+.ask {
+  margin: 0.55rem 0 0; padding: 0.15rem 0 0.15rem 0.65rem; border-left: 2px solid var(--accent);
+  color: var(--ink); font-size: 0.86rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.download[hidden] { display: none; }
+.vbar .download { margin-top: 0; flex: none; }
+.subhead {
+  grid-column: 1 / -1; margin: 0.4rem 0 -0.3rem; color: var(--ink-soft);
+  font: 500 0.7rem/1.5 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+}
+.subhead:first-child { margin-top: 0; }
+.card.moved {
+  justify-content: center; gap: 0.3rem; min-height: 5.5rem; padding: 0.9rem; text-align: left;
+  border-style: dashed; background: transparent; box-shadow: none; color: var(--ink-soft);
+  font: 400 0.75rem/1.4 var(--mono); overflow-wrap: anywhere;
+}
+.card.moved b { color: var(--accent); font-weight: 500; }
+.card.moved span { color: var(--ink); }
+.toggle { height: 2.1rem; margin-top: 1rem; justify-self: start; }
+.group.collapsed .grid { display: none; }
 .cap { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sub { color: var(--ink-soft); font: 400 0.68rem/1.5 var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sub b { color: var(--accent); font-weight: 500; }
@@ -214,6 +242,7 @@ body.fit .thumb img, body.fit .thumb video { object-fit: contain; }
 }
 .sheet-inner { max-width: 44rem; margin: 0 auto; }
 .vask { color: var(--accent); font: 500 0.7rem/1.5 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.vprompt { margin: 0.15rem 0 0.45rem; padding-left: 0.65rem; border-left: 2px solid var(--accent); font-size: 0.98rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
 .vcap { font: 400 1.35rem/1.15 var(--serif); letter-spacing: -0.01em; }
 .vnote { color: var(--ink-soft); font-size: 0.92rem; line-height: 1.55; margin-top: 0.3rem; white-space: pre-wrap; max-height: 22vh; overflow: auto; }
 .vmeta { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
@@ -246,6 +275,7 @@ body.fit .thumb img, body.fit .thumb video { object-fit: contain; }
   <div class="vbar chrome">
     <button class="ibtn" id="close" type="button" aria-label="Close">✕</button>
     <div class="vtitle"><b id="vname"></b><span id="vpos"></span></div>
+    <a class="download" id="vdownload" hidden>↓ Download</a>
     <a class="ibtn" id="vopen" target="_blank" rel="noopener" aria-label="Open original">↗</a>
   </div>
   <button class="ibtn nav prev chrome" id="prev" type="button" aria-label="Previous">‹</button>
@@ -253,6 +283,7 @@ body.fit .thumb img, body.fit .thumb video { object-fit: contain; }
   <div class="sheet chrome" id="sheet">
     <div class="sheet-inner">
       <div class="vask" id="vask"></div>
+      <div class="vprompt" id="vprompt"></div>
       <div class="vcap" id="vcap"></div>
       <div class="vnote" id="vnote"></div>
       <div class="vmeta" id="vmeta"></div>
@@ -303,6 +334,7 @@ function ago(t) {
   return new Date(t * 1000).toLocaleDateString();
 }
 const mediaUrl = (it) => `media/${encodeURIComponent(it.id)}?v=${it.v}`;
+const downloadUrl = (it) => `${mediaUrl(it)}&dl=1`;
 const thumbUrl = (it) => `thumb/${encodeURIComponent(it.id)}?v=${it.v}`;
 
 let data = null;
@@ -312,23 +344,45 @@ let firstLoad = true;
 let seen = {};
 let seenKey = null;
 let currentChip = null;
+let openBatches = new Set();
+let openKey = null;
 const cards = new Map();
 const sections = new Map();
 
+function bySection(items) {
+  const parts = new Map(data.sections.map((sec) => [sec.name, []]));
+  for (const it of items) {
+    if (!parts.has(it.section)) parts.set(it.section, []);
+    parts.get(it.section).push(it);
+  }
+  return [...parts].filter(([, list]) => list.length);
+}
+
+const currentBatch = () => data.batches[data.batches.length - 1];
+
 function groupItems() {
   const groups = [];
+  const cur = currentBatch()?.id;
   const review = data.items.filter((it) => it.status === "review");
   const fresh = data.items.filter((it) => it.status === "new");
   if (review.length) groups.push({ key: "review", label: "Needs review", kind: "review", items: review });
   if (fresh.length) groups.push({ key: "new", label: "New", kind: "new", items: fresh });
-  const named = new Map(data.sections.map((s) => [s.name, { ...s, items: [] }]));
-  for (const it of data.items) {
-    if (it.status === "review" || it.status === "new") continue;
-    if (!named.has(it.section)) named.set(it.section, { name: it.section, note: "", items: [] });
-    named.get(it.section).items.push(it);
+  for (const [name, items] of bySection(data.items.filter((it) => it.status === "done" && it.batch === cur))) {
+    groups.push({ key: `s:${name}`, label: name, kind: "plain", note: sectionNote(name), items });
   }
-  for (const s of named.values()) {
-    if (s.items.length) groups.push({ key: `s:${s.name}`, label: s.name, kind: "plain", note: s.note, items: s.items });
+  for (const b of [...data.batches].reverse()) {
+    if (b.id === cur) continue;
+    const items = data.items.filter((it) => it.status === "done" && it.batch === b.id);
+    const moved = data.items.filter((it) => (it.history || []).includes(b.id));
+    if (!items.length && !moved.length) continue;
+    const parts = bySection(items);
+    const rows = [];
+    for (const [name, list] of parts) {
+      if (parts.length > 1) rows.push({ head: name });
+      rows.push(...list.map((it) => ({ it })));
+    }
+    rows.push(...moved.map((it) => ({ moved: it })));
+    groups.push({ key: `b:${b.id}`, label: `Batch ${b.id}`, kind: "past", batch: b, items, rows, moved });
   }
   return groups;
 }
@@ -361,12 +415,18 @@ function buildCard(it, group) {
   }
   const sub = h("div", { class: "sub" }, h("b", { text: `#${it.id}` }), ` — ${it.name}`);
   const info = h("div", { class: "info" }, h("div", { class: "cap", text: it.caption || it.name }), sub);
+  if (it.ask) info.append(h("p", { class: "ask", text: it.ask }));
+  if (!it.missing) {
+    info.append(h("a", { class: "download", href: downloadUrl(it), download: it.name,
+      "aria-label": `Download #${it.id}: ${it.caption || it.name}`, text: "↓ Download" }));
+  }
   return h("article", { class: "card" }, thumb, info);
 }
 
 function render() {
-  document.title = data.title;
-  $("title").textContent = data.title;
+  const heading = currentBatch()?.title || data.title;
+  document.title = heading;
+  $("title").textContent = heading;
   updateMeta();
   const groups = groupItems();
   const main = $("main");
@@ -386,12 +446,12 @@ function render() {
     anchor = sec.el;
     sec.label.replaceChildren(h("span", { class: "index", text: String(index + 1).padStart(2, "0") }), g.label);
     sec.head.replaceChildren(...sectionHead(g));
-    g.items.forEach((it, i) => {
-      const key = `${g.key}|${it.id}`;
-      const sig = JSON.stringify([it, seen[it.id] === it.v]);
+    sec.el.classList.toggle("collapsed", g.kind === "past" && !openBatches.has(g.batch.id));
+    (g.rows || g.items.map((it) => ({ it }))).forEach((row, i) => {
+      const { key, sig, build } = rowSpec(row, g);
       let entry = cards.get(key);
       if (!entry || entry.sig !== sig) {
-        const card = buildCard(it, g);
+        const card = build();
         if (entry) entry.el.replaceWith(card);
         entry = { el: card, sig };
         cards.set(key, entry);
@@ -410,11 +470,40 @@ function render() {
   if (viewer.open) refreshViewer();
 }
 
+function rowSpec(row, g) {
+  if (row.head) return { key: `${g.key}|h:${row.head}`, sig: row.head, build: () => h("p", { class: "subhead", text: row.head }) };
+  if (row.moved) {
+    const it = row.moved;
+    return {
+      key: `${g.key}|m:${it.id}`, sig: `${it.batch}`,
+      build: () => h("button", { class: "card moved", type: "button", "data-open": it.id },
+        h("b", { text: `#${it.id}` }), ` ${it.name}`, h("span", { text: `Redone in batch ${it.batch} →` })),
+    };
+  }
+  const it = row.it;
+  return { key: `${g.key}|${it.id}`, sig: JSON.stringify([it, seen[it.id] === it.v]), build: () => buildCard(it, g) };
+}
+
+function toggleBatch(id, open) {
+  if (open ?? !openBatches.has(id)) openBatches.add(id); else openBatches.delete(id);
+  if (openKey) store.set(openKey, [...openBatches]);
+  render();
+}
+
 const counted = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 function sectionHead(g) {
   if (g.kind === "review") return [h("h2", { class: "title", text: `${counted(g.items.length, "item")} for you to look at.` })];
   if (g.kind === "new") return [h("h2", { class: "title", text: `${counted(g.items.length, "new item")} from the agent.` })];
+  if (g.kind === "past") {
+    const open = openBatches.has(g.batch.id);
+    const parts = [counted(g.items.length, "item"), g.moved.length ? `${g.moved.length} redone later` : "", ago(g.batch.created)].filter(Boolean);
+    return [
+      h("h2", { class: "title", text: g.batch.title || `Batch ${g.batch.id}` }),
+      h("p", { class: "lede", text: parts.join(" · ") }),
+      h("button", { class: "key toggle", type: "button", "data-toggle": g.batch.id, "aria-expanded": String(open), text: open ? "Hide" : "Show" }),
+    ];
+  }
   const short = g.note && g.note.length <= 90;
   const out = [h("h2", { class: "title", text: short ? g.note : g.label })];
   if (g.note && !short) out.push(h("p", { class: "lede", text: g.note }));
@@ -434,7 +523,8 @@ function renderChips(groups) {
 function updateMeta() {
   if (!data) return;
   const n = data.items.length;
-  $("meta").textContent = `Media gallery · ${counted(n, "item")} · updated ${ago(data.updated)}`;
+  const b = currentBatch();
+  $("meta").textContent = ["Media gallery", b && data.batches.length > 1 ? `Batch ${b.id}` : "", counted(n, "item"), `updated ${ago(data.updated)}`].filter(Boolean).join(" · ");
 }
 
 const sectionObserver = new IntersectionObserver((entries) => {
@@ -452,10 +542,14 @@ function observeSections() { for (const s of sections.values()) if (!observed.ha
 $("chips").addEventListener("click", (e) => {
   const chip = e.target.closest(".chip");
   if (!chip) return;
+  const g = chip.dataset.chip.startsWith("b:") ? Number(chip.dataset.chip.slice(2)) : null;
+  if (g !== null && !openBatches.has(g)) toggleBatch(g, true);
   sections.get(chip.dataset.chip)?.el.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
 $("main").addEventListener("click", (e) => {
+  const toggle = e.target.closest("[data-toggle]");
+  if (toggle) return toggleBatch(Number(toggle.dataset.toggle));
   const t = e.target.closest("[data-open]");
   if (t) openViewer(t.dataset.open, t.dataset.group);
 });
@@ -493,7 +587,12 @@ function apply(next) {
   const prevV = data ? new Map(data.items.map((it) => [it.id, it.v])) : null;
   data = next;
   const key = `mg:seen:${location.host}:${data.created}`;
-  if (key !== seenKey) { seenKey = key; seen = store.get(key, {}); }
+  if (key !== seenKey) {
+    seenKey = key;
+    seen = store.get(key, {});
+    openKey = `mg:open:${location.host}:${data.created}`;
+    openBatches = new Set(store.get(openKey, []));
+  }
   render();
   observeSections();
   if (prevIds) {
@@ -616,10 +715,16 @@ function show(direction) {
   const label = (groupItems().find((g) => g.key === viewer.group) || {}).label || "All";
   $("vpos").textContent = `${viewer.index + 1} of ${viewer.ids.length} · ${label}`;
   $("vopen").href = mediaUrl(it);
+  $("vdownload").hidden = it.missing;
+  $("vdownload").href = downloadUrl(it);
+  $("vdownload").download = it.name;
+  $("vdownload").setAttribute("aria-label", `Download #${it.id}: ${it.caption || it.name}`);
   $("vcap").textContent = it.caption || "";
   $("vcap").hidden = !it.caption;
   $("vnote").textContent = it.note || "";
   $("vnote").hidden = !it.note;
+  $("vprompt").textContent = it.ask || "";
+  $("vprompt").hidden = !it.ask;
   const meta = [it.kind === "video" ? "Video" : "Image", it.section, it.width && it.height ? `${it.width}×${it.height}` : "", it.duration ? fmtDur(it.duration) : "", fmtSize(it.size), `added ${ago(it.added)}`].filter(Boolean);
   $("vmeta").replaceChildren(...meta.map((m, i) => h("span", { class: i === 0 ? "kind" : null, text: m })));
   $("vask").textContent = it.status === "review" ? "Needs review" : it.status === "new" ? "New" : "";

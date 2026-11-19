@@ -70,6 +70,68 @@ class GalleryTest(unittest.TestCase):
         self.cli("remove", "#1")
         self.assertEqual([i["id"] for i in self.manifest()["items"]], ["2"])
 
+    def statuses(self):
+        return {i["id"]: i["status"] for i in self.manifest()["items"]}
+
+    def batch(self, spec):
+        path = self.root / "spec.json"
+        path.write_text(json.dumps(spec))
+        return self.cli("batch", str(path))
+
+    def test_batch_retires_open_items_and_tracks_history(self):
+        self.cli("add", str(self.png), "--review")
+        self.cli("add", str(self.mp4))
+        third = self.root / "c.png"
+        third.write_bytes(b"x")
+        self.batch(
+            {
+                "title": "Pass 2",
+                "sections": {"Hero": "Warm grades"},
+                "items": [
+                    {"path": str(third), "status": "review", "section": "Hero", "ask": "Pick one?"},
+                    {"path": str(self.png), "status": "review", "caption": "v2"},
+                ],
+            }
+        )
+        data = self.manifest()
+        self.assertEqual(self.statuses(), {"1": "review", "2": "done", "3": "review"})
+        self.assertEqual([(b["id"], b["title"]) for b in data["batches"]], [(1, ""), (2, "Pass 2")])
+        by_id = {i["id"]: i for i in data["items"]}
+        self.assertEqual((by_id["1"]["batch"], by_id["1"]["history"], by_id["1"]["caption"]), (2, [1], "v2"))
+        self.assertEqual((by_id["2"]["batch"], by_id["3"]["ask"]), (1, "Pick one?"))
+        self.assertEqual(data["sections"][-1], {"name": "Hero", "note": "Warm grades"})
+
+    def test_batch_keep_leaves_open_items(self):
+        self.cli("add", str(self.png), "--review")
+        self.batch({"keep": True, "items": [{"path": str(self.mp4), "status": "review"}]})
+        self.assertEqual(self.statuses(), {"1": "review", "2": "review"})
+
+    def test_batch_is_all_or_nothing(self):
+        self.cli("add", str(self.png), "--review")
+        before = self.manifest()
+        for spec in (
+            {"items": [{"path": str(self.mp4)}, {"path": str(self.root / "missing.png")}]},
+            {"items": [{"path": str(self.mp4), "colour": "red"}]},
+            {"items": [{"path": str(self.mp4), "status": "maybe"}]},
+            {"items": []},
+            {"title": "x", "itmes": []},
+        ):
+            with contextlib.redirect_stderr(io.StringIO()):
+                code, _ = self.batch(spec)
+            self.assertEqual(code, 1, spec)
+        self.assertEqual(self.manifest(), before)
+
+    def test_reads_manifest_without_batches(self):
+        self.cli("add", str(self.png))
+        data = self.manifest()
+        del data["batches"]
+        for item in data["items"]:
+            del item["batch"], item["history"]
+        (self.dir / "gallery.json").write_text(json.dumps(data))
+        view = mg.Gallery(self.dir).view()
+        self.assertEqual(len(view["batches"]), 1)
+        self.assertEqual((view["items"][0]["batch"], view["items"][0]["history"]), (1, []))
+
 
 class RangeTest(unittest.TestCase):
     def test_ranges(self):
@@ -120,6 +182,12 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(r.status, 206)
         self.assertEqual(r.headers["Content-Range"], "bytes 4-7/1024")
         self.assertEqual(r.read(), bytes([4, 5, 6, 7]))
+
+    def test_download_attachment(self):
+        self.assertIsNone(self.get("/media/1").headers["Content-Disposition"])
+        self.assertEqual(
+            self.get("/media/1?v=1&dl=1").headers["Content-Disposition"], "attachment; filename*=UTF-8''a.png"
+        )
 
     def test_only_listed_files(self):
         for path in ("/media/2", "/media/..%2Fsecret.png", "/media/1/../../secret.png"):

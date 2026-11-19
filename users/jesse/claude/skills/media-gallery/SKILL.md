@@ -10,31 +10,40 @@ description: Present images and videos to the human in a live, mobile-friendly g
 ## Workflow
 
 1. Save the media under the repo's `.tmp/` as usual.
-2. Start a fresh gallery for a new task or batch. Skip this when adding to the gallery you're already using:
-   `media-gallery init --title "<what this batch is>"`
-3. Add items. Each file gets a stable `#id`.
-   - `--review` for anything you need the human to look at or decide on. These go in the pinned **Needs review** section.
-   - The default status is **new**: work worth seeing that doesn't need a decision.
-   - `--done` for context, references or earlier accepted work.
-   - `--section <name>` groups items by what they are (e.g. "Hero shots", "Walk cycle"); `--section-note` describes the group in one short sentence.
-   - `--caption` is a short label; `--note` is the context for judging it: what changed, what to compare, the prompt or parameters.
+2. For a new task, start a fresh gallery: `media-gallery init --title "<the task>"`. Skip this for follow-up batches in the same task.
+3. Publish each batch you show the human with one `batch` command and a JSON spec on stdin. Every item is checked before anything changes, so a missing file or unknown key fails the whole batch.
 
    ```sh
-   media-gallery add .tmp/hero-a.png .tmp/hero-b.png --review --section "Hero shots" \
-     --caption "Warm grade" --note "B crops tighter; both at 1600x1200"
-   media-gallery add .tmp/walk.mp4 --section "Walk cycle" --caption "Loop at 24 fps"
+   media-gallery batch <<'EOF'
+   {
+     "title": "Hero shots, pass 2",
+     "sections": {"Hero shots": "Warm grade at 1600x1200"},
+     "items": [
+       {"path": ".tmp/hero-a.png", "status": "review", "section": "Hero shots",
+        "caption": "Tight crop", "note": "Cropped 10% closer than pass 1", "ask": "Which crop?"},
+       {"path": ".tmp/hero-b.png", "status": "review", "section": "Hero shots",
+        "caption": "Wide crop", "ask": "Which crop?"},
+       {"path": ".tmp/walk.mp4", "section": "Walk cycle", "caption": "Loop at 24 fps"}
+     ]
+   }
+   EOF
    ```
+
+   - `title` names the batch and heads the page. `sections` sets notes shown under section headings.
+   - `status`: `review` for anything the human must look at or decide on (the pinned **Needs review** section); `new` (the default) for work worth seeing without a decision; `done` for context or references.
+   - `section` groups items by what they are; `caption` is a short label; `note` is the context for judging it: what changed, what to compare, the prompt or parameters.
+   - `ask` is the question or request shown under the item in the grid and the viewer. Give every `review` item one, so the human knows what to judge.
+   - A batch marks every earlier review and new item done, so the top of the page only holds the current batch. Earlier batches stay below as collapsed groups. Set `"keep": true` only when earlier questions are still open, such as when the human hasn't answered the previous batch yet.
+   - Re-rendering to an earlier path keeps that item's `#id` and moves it into the new batch; its old batch links to it.
+   - Paths are relative to the working directory. The command prints each item's `#id`.
 4. `media-gallery serve` starts the server in the background (or finds the running one) and prints the URL. Give the human that exact URL and say what you want from them, e.g. "#1 and #2 need a pick". Then end your turn.
 5. When the human replies, map their `#id`s with `media-gallery list`.
-6. After acting on their reply:
-   - Re-render to the same path and `add` it again with `--review`. It keeps its id and shows as updated.
-   - `media-gallery mark <ids> --done` once something is settled, so Needs review only holds open questions.
-   - `media-gallery mark --all --done` before adding the next batch, so "New" means new since they last looked.
+6. For a small fix within the current batch, such as one re-render, `media-gallery add <file> --review` (with `--caption`, `--note`, `--ask`, `--section`) adds to or refreshes it in the current batch without retiring anything. `media-gallery mark <ids> --done` settles items within a batch.
 
 ## Other commands
 
-- `media-gallery list`: every item with its id, status and section.
-- `media-gallery edit <id> --caption/--note/--section`, `media-gallery remove <ids>`.
+- `media-gallery list`: every item with its id, status, batch and section.
+- `media-gallery edit <id> --caption/--note/--ask/--section`, `media-gallery remove <ids>`.
 - `media-gallery section <name> --note <text>`.
 - `media-gallery url`, `media-gallery stop`.
 - `--dir <path>` before the command uses another gallery directory, for a separate gallery in the same repo.
@@ -44,4 +53,5 @@ description: Present images and videos to the human in a live, mobile-friendly g
 - The server only serves files listed in the gallery, and the page is reachable from the LAN without a login, so don't add anything private.
 - In the agent sandbox, `serve` uses a free preview port and prints its `$AGENT_PREVIEW_URL_*` link. On a host, it prints the host's LAN address.
 - Browsers can't play every format. Prefer H.264 `.mp4` (`-pix_fmt yuv420p`) or `.webm` for video, and PNG, JPEG or WebP for images.
+- Every item has a download button in the grid and the viewer.
 - Use the gallery instead of listing file paths. Still mention the files' absolute paths once if the human may want them on disk.

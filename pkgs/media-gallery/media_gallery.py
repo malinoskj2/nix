@@ -66,7 +66,16 @@ def default_dir():
 
 def empty_manifest(title):
     now = time.time()
-    return {"version": 1, "title": title, "created": now, "updated": now, "next_id": 1, "sections": [], "items": []}
+    return {
+        "version": 1,
+        "title": title,
+        "created": now,
+        "updated": now,
+        "next_id": 1,
+        "batches": [],
+        "sections": [],
+        "items": [],
+    }
 
 
 def media_kind(path):
@@ -150,9 +159,17 @@ class Gallery:
     def read(self):
         try:
             with self.manifest.open() as f:
-                return json.load(f)
+                data = json.load(f)
         except FileNotFoundError:
             return empty_manifest(f"{repo_root(self.root.parent).name} gallery")
+        data.pop("published", None)
+        data.pop("batch", None)
+        if "batches" not in data:
+            data["batches"] = [{"id": 1, "title": "", "created": data["created"]}] if data["items"] else []
+        for item in data["items"]:
+            item.setdefault("batch", 1)
+            item.setdefault("history", [])
+        return data
 
     @contextlib.contextmanager
     def edit(self):
@@ -179,7 +196,10 @@ class Gallery:
                 size, version, missing = stat.st_size, stat.st_mtime_ns, False
             except OSError:
                 size, version, missing = None, 0, True
-            entry = {k: item.get(k) for k in ("id", "kind", "section", "status", "caption", "note", "added")}
+            entry = {
+                k: item.get(k)
+                for k in ("id", "kind", "section", "status", "caption", "note", "ask", "added", "batch", "history")
+            }
             for key in ("width", "height", "duration"):
                 if key in item:
                     entry[key] = item[key]
@@ -187,6 +207,7 @@ class Gallery:
             items.append(entry)
         return {
             "title": data["title"],
+            "batches": data["batches"],
             "created": data["created"],
             "updated": data["updated"],
             "sections": data["sections"],
@@ -261,7 +282,8 @@ def make_handler(gallery):
                     if not item or not Path(item["path"]).is_file():
                         self.send_json(404, {"error": "not found"}, body)
                     elif parts[0] == "media":
-                        self.send_file(Path(item["path"]), body)
+                        query = urllib.parse.parse_qs(url.query)
+                        self.send_file(Path(item["path"]), body, attachment="dl" in query)
                     else:
                         thumb = gallery.thumbnail(item)
                         if thumb:
@@ -296,7 +318,7 @@ def make_handler(gallery):
             if body:
                 self.wfile.write(payload)
 
-        def send_file(self, path, body, ctype=None):
+        def send_file(self, path, body, ctype=None, attachment=False):
             size = path.stat().st_size
             try:
                 span = parse_range(self.headers.get("Range"), size)
@@ -314,6 +336,9 @@ def make_handler(gallery):
             self.send_header("Accept-Ranges", "bytes")
             # Media URLs carry the file's mtime, so a changed file gets a new URL.
             self.send_header("Cache-Control", "private, max-age=86400")
+            if attachment:
+                quoted = urllib.parse.quote(path.name)
+                self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quoted}")
             if span:
                 self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
             self.end_headers()
@@ -401,33 +426,117 @@ def ensure_section(data, name, note=None):
     return section
 
 
+def media_file(name):
+    path = Path(name).expanduser().resolve()
+    if not path.is_file():
+        raise GalleryError(f"not a file: {name}")
+    kind = media_kind(path)
+    if not kind:
+        raise GalleryError(f"not an image or video: {name}")
+    return path, kind, probe(path)
+
+
+def current_batch(data, title=None):
+    if not data["batches"]:
+        data["batches"].append({"id": 1, "title": title or "", "created": time.time()})
+    return data["batches"][-1]["id"]
+
+
+def put_item(data, path, kind, info, status, batch):
+    item = next((i for i in data["items"] if i["path"] == str(path)), None)
+    if item is None:
+        item = {"id": str(data["next_id"]), "path": str(path), "history": []}
+        data["next_id"] += 1
+        data["items"].append(item)
+    elif item.get("batch") != batch:
+        item.setdefault("history", []).append(item["batch"])
+    item.update(kind=kind, status=status, added=time.time(), batch=batch, **info)
+    return item
+
+
 def cmd_add(gallery, args):
-    files = []
-    for name in args.files:
-        path = Path(name).expanduser().resolve()
-        if not path.is_file():
-            raise GalleryError(f"not a file: {name}")
-        kind = media_kind(path)
-        if not kind:
-            raise GalleryError(f"not an image or video: {name}")
-        files.append((path, kind, probe(path)))
+    files = [media_file(name) for name in args.files]
     with gallery.edit() as data:
         if args.title:
             data["title"] = args.title
+        batch = current_batch(data)
         for path, kind, info in files:
-            item = next((i for i in data["items"] if i["path"] == str(path)), None)
-            if item is None:
-                item = {"id": str(data["next_id"]), "path": str(path)}
-                data["next_id"] += 1
-                data["items"].append(item)
-            item.update(kind=kind, status=args.status, added=time.time(), **info)
+            item = put_item(data, path, kind, info, args.status, batch)
             item["section"] = args.section or item.get("section") or DEFAULT_SECTION
-            if args.caption is not None or "caption" not in item:
-                item["caption"] = args.caption or ""
-            if args.note is not None or "note" not in item:
-                item["note"] = args.note or ""
+            for key in ("caption", "note", "ask"):
+                if getattr(args, key) is not None or key not in item:
+                    item[key] = getattr(args, key) or ""
             ensure_section(data, item["section"], args.section_note)
             print(f"{describe(item)} ({args.status})")
+    hint_url(gallery)
+
+
+BATCH_KEYS = {"title", "keep", "sections", "items"}
+ITEM_KEYS = {"path", "status", "section", "caption", "note", "ask"}
+
+
+def parse_spec(text, base):
+    try:
+        spec = json.loads(text)
+    except ValueError as e:
+        raise GalleryError(f"batch spec is not valid JSON: {e}") from None
+    if not isinstance(spec, dict):
+        raise GalleryError("batch spec must be a JSON object")
+    if unknown := set(spec) - BATCH_KEYS:
+        raise GalleryError(f"unknown batch keys: {', '.join(sorted(unknown))}")
+    sections = spec.get("sections", {})
+    if not isinstance(sections, dict) or not all(isinstance(v, str) for v in sections.values()):
+        raise GalleryError('"sections" must map section names to notes')
+    items = spec.get("items")
+    if not isinstance(items, list) or not items:
+        raise GalleryError('"items" must be a non-empty list')
+    entries, seen = [], set()
+    for n, entry in enumerate(items, 1):
+        if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
+            raise GalleryError(f'item {n} needs a "path"')
+        if unknown := set(entry) - ITEM_KEYS:
+            raise GalleryError(f"item {n}: unknown keys: {', '.join(sorted(unknown))}")
+        if entry.get("status", "new") not in STATUSES:
+            raise GalleryError(f"item {n}: status must be one of {', '.join(STATUSES)}")
+        for key in ITEM_KEYS - {"path", "status"}:
+            if not isinstance(entry.get(key, ""), str):
+                raise GalleryError(f"item {n}: {key} must be a string")
+        path, kind, info = media_file(base / Path(entry["path"]).expanduser())
+        if path in seen:
+            raise GalleryError(f"item {n}: {entry['path']} is listed twice")
+        seen.add(path)
+        entries.append((entry, path, kind, info))
+    title = spec.get("title", "")
+    if not isinstance(title, str):
+        raise GalleryError('"title" must be a string')
+    return title, bool(spec.get("keep")), sections, entries
+
+
+def cmd_batch(gallery, args):
+    text = Path(args.file).read_text() if args.file and args.file != "-" else sys.stdin.read()
+    title, keep, sections, entries = parse_spec(text, Path.cwd())
+    with gallery.edit() as data:
+        retired = []
+        if not keep:
+            for item in data["items"]:
+                if item["status"] in ("review", "new"):
+                    item["status"] = "done"
+                    retired.append(f"#{item['id']}")
+        batch = (data["batches"][-1]["id"] + 1) if data["batches"] else 1
+        data["batches"].append({"id": batch, "title": title, "created": time.time()})
+        for name, note in sections.items():
+            ensure_section(data, name, note)
+        print(f"batch {batch}" + (f": {title}" if title else ""))
+        if retired:
+            print(f"earlier review and new items marked done: {' '.join(retired)}")
+        for entry, path, kind, info in entries:
+            status = entry.get("status", "new")
+            item = put_item(data, path, kind, info, status, batch)
+            item["section"] = entry.get("section") or item.get("section") or DEFAULT_SECTION
+            for key in ("caption", "note", "ask"):
+                item[key] = entry.get(key, "")
+            ensure_section(data, item["section"])
+            print(f"{status:<6} {describe(item)}")
     hint_url(gallery)
 
 
@@ -442,7 +551,7 @@ def cmd_mark(gallery, args):
 def cmd_edit(gallery, args):
     with gallery.edit() as data:
         item = select(gallery, data, args.id)
-        for key in ("caption", "note", "section"):
+        for key in ("caption", "note", "ask", "section"):
             if getattr(args, key) is not None:
                 item[key] = getattr(args, key)
         ensure_section(data, item["section"])
@@ -473,7 +582,7 @@ def cmd_list(gallery, args):
     data = gallery.read()
     print(f"{data['title']} ({len(data['items'])} items) {gallery.manifest}")
     for item in data["items"]:
-        print(f"{item['status']:<6} {describe(item)}")
+        print(f"{item['status']:<6} b{item['batch']:<3} {describe(item)}")
     hint_url(gallery)
 
 
@@ -551,7 +660,16 @@ def parser():
     s.add_argument("--title")
     s.set_defaults(func=cmd_init)
 
-    s = sub.add_parser("add", help="add files, or refresh ones already in the gallery")
+    s = sub.add_parser(
+        "batch",
+        help="start a new batch from a JSON spec, marking earlier review and new items done",
+        description='Spec: {"title": str, "keep": bool, "sections": {name: note}, "items": [{"path", "status" '
+        '(review|new|done), "section", "caption", "note", "ask"}]}. Paths are relative to the working directory.',
+    )
+    s.add_argument("file", nargs="?", help="spec file (default: stdin)")
+    s.set_defaults(func=cmd_batch)
+
+    s = sub.add_parser("add", help="add files to the current batch, or refresh ones already in the gallery")
     s.add_argument("files", nargs="+")
     s.add_argument("--section", help=f"group heading (default: the item's current one, else {DEFAULT_SECTION})")
     s.add_argument("--section-note", help="text shown under the section heading")
@@ -561,6 +679,7 @@ def parser():
     s.set_defaults(status="new")
     s.add_argument("--caption")
     s.add_argument("--note", help="longer context shown in the viewer")
+    s.add_argument("--ask", help="question or request for the human, shown under the item")
     s.add_argument("--title", help="gallery title")
     s.set_defaults(func=cmd_add)
 
@@ -576,6 +695,7 @@ def parser():
     s.add_argument("id")
     s.add_argument("--caption")
     s.add_argument("--note")
+    s.add_argument("--ask")
     s.add_argument("--section")
     s.set_defaults(func=cmd_edit)
 
