@@ -44,6 +44,9 @@ let
       terminalThemeDark = "Catppuccin Mocha";
       # Orca otherwise uses its launcher's SHELL, which a dev shell sets to bash.
       terminalDefaultShell = "/run/current-system/sw/bin/zsh";
+      # On would bypass Auto's DOM fallback on Wayland, where WebGL context
+      # creation can wedge terminal input before any recoverable context loss.
+      terminalGpuAcceleration = "auto";
       pluginSystemEnabled = true;
       # The glass titlebar needs an alpha-capable window for Hyprland's blur.
       windowMaterial = "translucent";
