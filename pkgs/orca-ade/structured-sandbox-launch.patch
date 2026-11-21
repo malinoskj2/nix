@@ -1,9 +1,9 @@
-diff --git a/src/main/native-chat/agent-launch/structured-agent-command-resolution.test.ts b/src/main/native-chat/agent-launch/structured-agent-command-resolution.test.ts
+diff --git a/src/main/native-chat/agent-launch/nix-structured-agent-command-resolution.test.ts b/src/main/native-chat/agent-launch/nix-structured-agent-command-resolution.test.ts
 new file mode 100644
 index 00000000..6b922dfa
 --- /dev/null
-+++ b/src/main/native-chat/agent-launch/structured-agent-command-resolution.test.ts
-@@ -0,0 +1,33 @@
++++ b/src/main/native-chat/agent-launch/nix-structured-agent-command-resolution.test.ts
+@@ -0,0 +1,34 @@
 +import { describe, expect, it, vi } from 'vitest'
 +import { resolveStructuredAgentCommand } from './structured-agent-command-resolution'
 +
@@ -29,7 +29,8 @@ index 00000000..6b922dfa
 +        agentCmdOverrides: { [agent]: command }
 +      })).toEqual({
 +        command: '/bin/sh',
-+        prefixArgs: ['-c', 'exec sandbox-launcher "$@"', 'orca-sandbox', agent]
++        prefixArgs: ['-c', 'exec sandbox-launcher "$@"', 'orca-sandbox', agent],
++        configuredProgram: 'sh'
 +      })
 +      expect(() => resolveStructuredAgentCommand(agent, {
 +        agentCmdOverrides: { [agent]: command + ' ; echo changed' }
@@ -38,17 +39,17 @@ index 00000000..6b922dfa
 +  })
 +})
 diff --git a/src/main/native-chat/agent-launch/structured-agent-command-resolution.ts b/src/main/native-chat/agent-launch/structured-agent-command-resolution.ts
-index 731b755f..f5ac963a 100644
+index acc2dfd5..03201c9e 100644
 --- a/src/main/native-chat/agent-launch/structured-agent-command-resolution.ts
 +++ b/src/main/native-chat/agent-launch/structured-agent-command-resolution.ts
 @@ -1,4 +1,6 @@
  import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 +import { nixGlobalSettings } from '../../../shared/nix-global-settings'
 +import { parseAgentCommand } from '../../../shared/agent-launch/startup/agent-command-plan'
- import { homedir } from 'node:os'
- import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
- import type { GlobalSettings } from '../../../shared/global-settings-types'
-@@ -50,10 +52,19 @@ function resolveOverride(
+ import { delimiter, isAbsolute, posix, resolve as resolvePath, win32 } from 'node:path'
+ import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+@@ -59,10 +61,19 @@ function resolveOverride(
    settings: CommandSettings | null | undefined,
    options: CommandOptions
  ) {

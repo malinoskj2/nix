@@ -52,18 +52,18 @@ let
     rev = "eae3fa08f21323c5679a7dbbeced2a1777a272a1";
     hash = "sha256-U2ptKTryfYbkP8Kbsnm1rEpXA0axxhO9zath37Mt4CU=";
   };
-  sourceCommit = "92d4266cc4ffa945dbc1fa52850e62448d2dfc1c";
+  sourceCommit = "5dc5548b4570b276f231d81fbb51f8f7a066e40d";
   arch = stdenv.hostPlatform.node.arch;
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "orca-ade";
-  version = "1.4.261";
+  version = "1.4.268";
 
   src = fetchFromGitHub {
     owner = "stablyai";
     repo = "orca";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-4aIBe7DHQ/WeIMGU92vg8K+39Oj1n3Q2PdEDezNimpE=";
+    hash = "sha256-kMXQ8CMfzSRDM97y6ZdYsooI39RTa9KOXOm9kHoxX6k=";
   };
 
   patches = [
@@ -87,7 +87,7 @@ stdenv.mkDerivation (finalAttrs: {
     # Apply declarative settings to new and existing profiles at startup,
     # without replacing Orca's mutable workspace/session state.
     cat > src/shared/nix-global-settings.ts <<'EOF'
-    import type { GlobalSettings } from './global-settings-types'
+    import type { GlobalSettings } from './settings/global-settings-types'
     export const nixGlobalSettings = ${builtins.toJSON globalSettings} satisfies Partial<GlobalSettings>
     EOF
     cat > src/shared/nix-agent-resume-wrapper.ts <<'EOF'
@@ -99,10 +99,10 @@ stdenv.mkDerivation (finalAttrs: {
     # Keep the declarative overrides after the defaults without TS2783's duplicate-key error
     # for overrides also named explicitly in the defaults object.
     sed -i \
-      -e "1i import { nixGlobalSettings } from './nix-global-settings'" \
+      -e "1i import { nixGlobalSettings } from '../nix-global-settings'" \
       -e 's/^  return {$/  return Object.assign<GlobalSettings, Partial<GlobalSettings>>({/' \
       -e 's/^  }$/  }, nixGlobalSettings)/' \
-      src/shared/default-global-settings.ts
+      src/shared/settings/default-global-settings.ts
     # Loading re-normalizes some saved fields after spreading them, so the overrides wrap the result.
     sed -i "1i import { nixGlobalSettings } from '../../../../shared/nix-global-settings'" \
       src/main/persistence/loading-store/profile-loading/normalize-loaded-global-settings.ts
@@ -116,7 +116,7 @@ stdenv.mkDerivation (finalAttrs: {
     }
     EOF
 
-    substituteInPlace src/shared/default-global-settings.ts \
+    substituteInPlace src/shared/settings/default-global-settings.ts \
       --replace-fail "keepComputerAwakeWhileAgentsRun: false," "keepComputerAwakeWhileAgentsRun: true,"
 
     # Declared plugins run without the consent prompt; disabling one still sticks.
@@ -174,6 +174,12 @@ stdenv.mkDerivation (finalAttrs: {
     substituteInPlace config/electron-builder.config.cjs \
       --replace-fail 'verifyLinuxGlibcFloor(context.appOutDir, { targetArch })' 'void context.appOutDir'  \
       --replace-fail "appImageNodeRuntime = await placeAppImageNodeRuntime(resourcesDir, targetArch)" ""
+    # Upstream builds the provider exec helper and journal lock in Docker; the host compiler
+    # builds them instead.
+    substituteInPlace config/provider-exec-resources.cjs \
+      --replace-fail "'build-provider-exec.mjs')," "'build-provider-exec.mjs'), '--host-compiler',"
+    substituteInPlace config/electron-builder.config.cjs \
+      --replace-fail "glibcFloor: context.electronPlatformName === 'linux' ? 'desktop' : false" "glibcFloor: false"
     # Upstream builds the Wayland clipboard helper in Docker; buildPhase compiles it instead.
     python3 - <<'PYTHON'
     from pathlib import Path
@@ -195,7 +201,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     inherit (finalAttrs) env;
     fetcherVersion = 4;
-    hash = "sha256-kRgtYE1DdSSzjy6HCYlAhpF4VbJNROleidQj9UNpcwg=";
+    hash = "sha256-bLn0P+PYX65arwAwqKxHjOGgdys3kuezGEWgi7bB3VU=";
   };
 
   mobilePnpmDeps = fetchPnpmDeps {
@@ -204,7 +210,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit pnpm;
     sourceRoot = "${finalAttrs.src.name}/mobile";
     fetcherVersion = 4;
-    hash = "sha256-AoAhcY6xj/E0uZe8F3A0O6uz+0ip99UdvvsMU7PWMXk=";
+    hash = "sha256-cXJzIshOyRPlJjwkzD3Q4g+XzZQpbXnWLS4rcNSCAj8=";
   };
 
   nativeBuildInputs = [
@@ -249,11 +255,11 @@ stdenv.mkDerivation (finalAttrs: {
 
     pnpm run build:packages
     pnpm exec vitest run --config config/vitest.config.ts \
-      src/main/native-chat/agent-launch/structured-agent-command-resolution.test.ts \
+      src/main/native-chat/agent-launch/nix-structured-agent-command-resolution.test.ts \
       src/main/native-chat/nix-sandbox-launch-environment.test.ts \
       src/main/codex-accounts/runtime-home/routing/runtime-home-sandbox-session-discovery.test.ts \
       src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts \
-      src/main/runtime/agent-session/structured-agent-session-integration.test.ts \
+      src/main/runtime/agent-session/installation/nix-sandbox-launch-integration.test.ts \
       src/renderer/src/components/StructuredSessionSandboxBadge.test.tsx \
       src/renderer/src/components/TerminalContainerBadge.test.tsx \
       src/renderer/src/lib/terminal-container-state.test.ts \
@@ -328,7 +334,7 @@ stdenv.mkDerivation (finalAttrs: {
       {
         src = fetchurl {
           url = "https://github.com/stablyai/orca/releases/download/v${finalAttrs.version}/orca-ide_${finalAttrs.version}_amd64.deb";
-          hash = "sha256-hnVbTG5+JdLvSq3V0lCL9SUg0V+O9F+pnnTOx0MeXBw=";
+          hash = "sha256-zgiqS7BZcu46zIn2yXzmFAyEAUoUsMfnD+bs4bQLKKc=";
         };
         nativeBuildInputs = [ dpkg ];
       }

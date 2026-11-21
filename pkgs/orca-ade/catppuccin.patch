@@ -1,8 +1,8 @@
 diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index c6dce5c6..4d89b080 100644
+index 9d002d99..b8ff6f3c 100644
 --- a/src/renderer/src/assets/main.css
 +++ b/src/renderer/src/assets/main.css
-@@ -335,28 +335,28 @@
+@@ -354,28 +354,28 @@
  }
  
  .dark {
@@ -53,12 +53,14 @@ index c6dce5c6..4d89b080 100644
    --chat-canvas-mix: 5%;
    --chat-foreground-mix: 88%;
    --chat-strong-mix: 98%;
-@@ -373,62 +373,62 @@
+@@ -392,64 +392,64 @@
    --chat-composer-border-mix: 9%;
    --chat-selection-mix: 40%;
    --chat-content-max-width: 46rem;
 -  --card: #171717;
 -  --card-foreground: #f0f0f0;
+-  --brand-mark: #fff;
+-  --brand-mark-foreground: #0a0a0a;
 -  --popover: #171717;
 -  --popover-foreground: #f0f0f0;
 -  --floating-surface: rgba(0, 0, 0, 0.72);
@@ -80,6 +82,8 @@ index c6dce5c6..4d89b080 100644
 -  --agent-question-text: var(--color-orange-300);
 +  --card: #181825;
 +  --card-foreground: #cdd6f4;
++  --brand-mark: #cdd6f4;
++  --brand-mark-foreground: #11111b;
 +  --popover: #181825;
 +  --popover-foreground: #cdd6f4;
 +  --floating-surface: rgb(17 17 27 / 0.72);
@@ -170,7 +174,7 @@ index c6dce5c6..4d89b080 100644
    --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
    --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
    --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
-@@ -436,24 +436,32 @@
+@@ -457,24 +457,32 @@
    --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
    --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
    --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
@@ -216,7 +220,7 @@ index c6dce5c6..4d89b080 100644
  /* Status and diff colors follow the chat scheme without copying the app palette. */
  :root,
  .native-chat-appearance[data-native-chat-scheme='light'] {
-@@ -496,28 +504,27 @@
+@@ -519,13 +527,12 @@
  .dark,
  .native-chat-appearance[data-native-chat-scheme='dark'] {
    color-scheme: dark;
@@ -234,9 +238,10 @@ index c6dce5c6..4d89b080 100644
    --status-warning-text: var(--status-warning);
    --jira-priority-high: var(--destructive);
    --jira-priority-medium: var(--status-warning);
-   --jira-priority-low: var(--callout-note);
-   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+@@ -534,15 +541,15 @@
    --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+   /* Warning text on a plain surface; the bare hue is ~3:1 on light backgrounds. */
+   --status-warning-foreground: color-mix(in srgb, var(--status-warning) 70%, var(--foreground));
 -  --callout-note: #4493f8;
 -  --callout-important: #ab7df8;
 -  --git-decoration-added: #81b88b;
@@ -258,31 +263,8 @@ index c6dce5c6..4d89b080 100644
    --diff-added: var(--git-decoration-added);
    --diff-removed: var(--git-decoration-deleted);
    --diff-added-background: color-mix(in srgb, var(--diff-added) 16%, transparent);
-diff --git a/src/renderer/src/hooks/use-monaco-theme.ts b/src/renderer/src/hooks/use-monaco-theme.ts
-index 57187807..14aff5e4 100644
---- a/src/renderer/src/hooks/use-monaco-theme.ts
-+++ b/src/renderer/src/hooks/use-monaco-theme.ts
-@@ -1,6 +1,7 @@
- import { useEffect, useState } from 'react'
- import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
- import { useCodeEditorThemeStore } from '@/store/appearance/code-editor-theme'
-+import { CATPPUCCIN_MOCHA_MONACO_THEME } from '@/lib/monaco-catppuccin-mocha-theme'
- 
- const definedThemes = new Set<string>()
- 
-@@ -46,5 +47,9 @@ export function useMonacoTheme(isDarkOverride?: boolean): string {
-   }, [pluginTheme])
- 
-   // Why the built-in until defined: Monaco silently ignores a theme name it doesn't know yet.
--  return pluginTheme && defined.has(pluginTheme.name) ? pluginTheme.name : isDark ? 'vs-dark' : 'vs'
-+  return pluginTheme && defined.has(pluginTheme.name)
-+    ? pluginTheme.name
-+    : isDark
-+      ? CATPPUCCIN_MOCHA_MONACO_THEME
-+      : 'vs'
- }
 diff --git a/src/renderer/src/lib/editor/appearance/code-editor-theme.ts b/src/renderer/src/lib/editor/appearance/code-editor-theme.ts
-index a903f2b6..ec82056d 100644
+index 0e48df17..5cfb95c3 100644
 --- a/src/renderer/src/lib/editor/appearance/code-editor-theme.ts
 +++ b/src/renderer/src/lib/editor/appearance/code-editor-theme.ts
 @@ -37,10 +37,10 @@ const BUILT_IN_COLORS: Record<ThemeBase, CodeEditorColors> = {
@@ -300,6 +282,29 @@ index a903f2b6..ec82056d 100644
    }
  }
  
+diff --git a/src/renderer/src/lib/editor/appearance/use-monaco-theme.ts b/src/renderer/src/lib/editor/appearance/use-monaco-theme.ts
+index 22e90f31..458a25f1 100644
+--- a/src/renderer/src/lib/editor/appearance/use-monaco-theme.ts
++++ b/src/renderer/src/lib/editor/appearance/use-monaco-theme.ts
+@@ -1,6 +1,7 @@
+ import { useEffect, useState } from 'react'
+ import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
+ import { useCodeEditorThemeStore } from '@/store/appearance/code-editor-theme'
++import { CATPPUCCIN_MOCHA_MONACO_THEME } from '@/lib/monaco-catppuccin-mocha-theme'
+ 
+ const definedThemes = new Set<string>()
+ 
+@@ -46,5 +47,9 @@ export function useMonacoTheme(isDarkOverride?: boolean): string {
+   }, [pluginTheme])
+ 
+   // Why the built-in until defined: Monaco silently ignores a theme name it doesn't know yet.
+-  return pluginTheme && defined.has(pluginTheme.name) ? pluginTheme.name : isDark ? 'vs-dark' : 'vs'
++  return pluginTheme && defined.has(pluginTheme.name)
++    ? pluginTheme.name
++    : isDark
++      ? CATPPUCCIN_MOCHA_MONACO_THEME
++      : 'vs'
+ }
 diff --git a/src/renderer/src/lib/editor/monaco/monaco-setup.ts b/src/renderer/src/lib/editor/monaco/monaco-setup.ts
 index b40a9b87..51c4555e 100644
 --- a/src/renderer/src/lib/editor/monaco/monaco-setup.ts

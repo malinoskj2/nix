@@ -1,8 +1,9 @@
 diff --git a/src/renderer/src/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup.ts b/src/renderer/src/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup.ts
-index b6ea82bd..3cdcce7d 100644
+index 4471036b..bb7e37fd 100644
 --- a/src/renderer/src/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup.ts
 +++ b/src/renderer/src/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup.ts
-@@ -1,8 +1,11 @@
+@@ -1,9 +1,12 @@
+ import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 +import { nixAgentResumeWrapper } from '../../../../../../shared/nix-agent-resume-wrapper'
 +import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 +import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -10,12 +11,12 @@ index b6ea82bd..3cdcce7d 100644
    getConnectionIdForWorktreeCopy,
    getConnectionIdFromState
  } from '@/lib/workspace/ownership/connection-owner-resolution'
--import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
-+import { normalizeExecutionHostId, parseExecutionHostId } from '../../../../../../shared/execution-host'
+-import { normalizeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
++import { normalizeExecutionHostId, parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
  import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
  import { useAppStore } from '@/store/index'
  import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
-@@ -113,8 +116,12 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
+@@ -117,8 +120,12 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
      const startupPlan = buildAgentResumeStartupPlan({
        agent,
        providerSession,
@@ -30,7 +31,7 @@ index b6ea82bd..3cdcce7d 100644
        platform: resumeTarget.platform,
        agentHostPlatform: resumeTarget.agentHostPlatform,
        shell: resumeTarget.shell,
-@@ -159,6 +166,42 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
+@@ -163,6 +170,42 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
    }
  }
  

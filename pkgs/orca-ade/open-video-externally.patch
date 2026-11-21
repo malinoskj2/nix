@@ -1,8 +1,8 @@
 diff --git a/src/renderer/src/components/terminal-pane/links/files/terminal-file-open-routing.ts b/src/renderer/src/components/terminal-pane/links/files/terminal-file-open-routing.ts
-index ffd46282..987a5008 100644
+index b0441ad0..b451bfc7 100644
 --- a/src/renderer/src/components/terminal-pane/links/files/terminal-file-open-routing.ts
 +++ b/src/renderer/src/components/terminal-pane/links/files/terminal-file-open-routing.ts
-@@ -61,6 +61,10 @@ type TerminalFileOpenDeps = {
+@@ -67,6 +67,10 @@ type TerminalFileOpenDeps = {
    openInSourceGroupSurface?: 'internal' | 'browser'
  }
  
@@ -13,7 +13,7 @@ index ffd46282..987a5008 100644
  export function openDetectedFilePath(
    filePath: string,
    line: number | null,
-@@ -93,6 +97,15 @@ export function openDetectedFilePath(
+@@ -100,6 +104,15 @@ export function openDetectedFilePath(
    }
  
    void (async () => {

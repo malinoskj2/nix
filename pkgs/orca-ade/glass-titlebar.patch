@@ -1,8 +1,8 @@
 diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index 4d89b080..376d3560 100644
+index b8ff6f3c..41772a3d 100644
 --- a/src/renderer/src/assets/main.css
 +++ b/src/renderer/src/assets/main.css
-@@ -1197,6 +1197,16 @@ body[data-modal-overlay-open]
+@@ -1295,6 +1295,20 @@ body[data-modal-overlay-open]
    backdrop-filter: none !important;
  }
  
@@ -13,13 +13,17 @@ index 4d89b080..376d3560 100644
 +}
 +
 +html.native-shell.dark .app-layout {
-+  background: linear-gradient(to bottom, transparent 36px, var(--background) 36px);
++  background: linear-gradient(
++    to bottom,
++    transparent var(--app-header-height),
++    var(--background) var(--app-header-height)
++  );
 +}
 +
  /* Why: native windows have a stable content box and need no wake-time viewport reflow. */
  html.native-shell,
  html.native-shell body,
-@@ -1304,6 +1314,21 @@ html.native-shell .app-layout {
+@@ -1455,6 +1469,25 @@ html.native-shell .app-layout {
    background: var(--bg-titlebar, var(--card));
  }
  
@@ -35,17 +39,21 @@ index 4d89b080..376d3560 100644
 +}
 +
 +html.native-shell.dark .orca-right-sidebar-activity-bar {
-+  background: linear-gradient(to bottom, rgb(17 17 27 / 55%) 36px, var(--sidebar) 36px);
++  background: linear-gradient(
++    to bottom,
++    rgb(17 17 27 / 55%) var(--app-header-height),
++    var(--sidebar) var(--app-header-height)
++  );
 +}
 +
  .titlebar-traffic-light-pad {
    width: calc(80px / var(--ui-zoom-factor, 1));
    flex-shrink: 0;
 diff --git a/src/renderer/src/components/right-sidebar/RightSidebar.tsx b/src/renderer/src/components/right-sidebar/RightSidebar.tsx
-index 8e41adf9..a078b879 100644
+index e5ce071d..0e804ad3 100644
 --- a/src/renderer/src/components/right-sidebar/RightSidebar.tsx
 +++ b/src/renderer/src/components/right-sidebar/RightSidebar.tsx
-@@ -136,7 +136,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -145,7 +145,7 @@ function RightSidebarInner(): React.JSX.Element {
    const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
  
    const panelContent = rightSidebarOpen ? (
@@ -54,7 +62,7 @@ index 8e41adf9..a078b879 100644
        {creatingWorktree ? (
          <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
            {t(
-@@ -202,7 +202,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -220,7 +220,7 @@ function RightSidebarInner(): React.JSX.Element {
        )}
      >
        <div
@@ -63,16 +71,16 @@ index 8e41adf9..a078b879 100644
          style={{
            borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
          }}
-@@ -221,7 +221,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -239,7 +239,7 @@ function RightSidebarInner(): React.JSX.Element {
            />
          ) : (
            /* The 40px activity bar absorbs part of the 138px window-control overlay; inset the header by the remaining 98px. */
--          <div className="flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border right-sidebar-header-side-inset right-sidebar-header-drag">
-+          <div className="orca-titlebar-glass flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border right-sidebar-header-side-inset right-sidebar-header-drag">
+-          <div className="flex h-(--app-header-height) min-h-(--app-header-height) items-center justify-between border-b border-border px-3 right-sidebar-header-side-inset right-sidebar-header-drag">
++          <div className="orca-titlebar-glass flex h-(--app-header-height) min-h-(--app-header-height) items-center justify-between border-b border-border px-3 right-sidebar-header-side-inset right-sidebar-header-drag">
              <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
                {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
              </span>
-@@ -246,7 +246,7 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -264,7 +264,7 @@ function RightSidebarInner(): React.JSX.Element {
              onContextMenu={contextPlugin.onContextMenu}
              onPointerDown={contextPlugin.onPointerDown}
            >
@@ -82,47 +90,44 @@ index 8e41adf9..a078b879 100644
              </div>
            </ContextMenuTrigger>
 diff --git a/src/renderer/src/components/right-sidebar/activity-bar/right-sidebar-top-activity-bar.tsx b/src/renderer/src/components/right-sidebar/activity-bar/right-sidebar-top-activity-bar.tsx
-index 9d112ed6..fce5d6a5 100644
+index 4821c5d1..6ea7511c 100644
 --- a/src/renderer/src/components/right-sidebar/activity-bar/right-sidebar-top-activity-bar.tsx
 +++ b/src/renderer/src/components/right-sidebar/activity-bar/right-sidebar-top-activity-bar.tsx
-@@ -45,7 +45,7 @@ export function RightSidebarTopActivityBar({
-   const contextPlugin = useActivityBarContextPlugin()
+@@ -58,7 +58,7 @@ export function RightSidebarTopActivityBar({
+   ))
    return (
      <ContextMenu>
--      <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
-+      <div className="orca-titlebar-glass flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
+-      <div className="flex h-(--app-header-height) min-h-(--app-header-height) items-center overflow-hidden border-b border-border right-sidebar-header-inset right-sidebar-header-drag">
++      <div className="orca-titlebar-glass flex h-(--app-header-height) min-h-(--app-header-height) items-center overflow-hidden border-b border-border right-sidebar-header-inset right-sidebar-header-drag">
          {!hasDesktopWindowChrome && (
            <TooltipProvider>
              <ContextMenuTrigger
 diff --git a/src/renderer/src/components/tab-group/TabGroupPanel.tsx b/src/renderer/src/components/tab-group/TabGroupPanel.tsx
-index ff526ac5..fad3de8f 100644
+index 38ebc8c5..084dab72 100644
 --- a/src/renderer/src/components/tab-group/TabGroupPanel.tsx
 +++ b/src/renderer/src/components/tab-group/TabGroupPanel.tsx
-@@ -287,7 +287,7 @@ export default function TabGroupPanel({
+@@ -284,7 +284,7 @@ export default function TabGroupPanel({
        {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
        {tabStrip !== 'attached' ? null : (
          <div
--          className="h-[32px] shrink-0 border-b border-border bg-tab-bar"
-+          className="orca-titlebar-glass h-[32px] shrink-0 border-b border-border"
+-          className="h-(--workspace-tab-row-height) shrink-0 border-b border-border bg-tab-bar"
++          className="orca-titlebar-glass h-(--workspace-tab-row-height) shrink-0 border-b border-border"
            data-tab-group-strip-id={groupId}
            data-terminal-focus-release-surface="true"
            data-worktree-id={worktreeId}
 diff --git a/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx b/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx
-index 3bbe47cd..7098f52b 100644
+index 9cc6ecaa..b9b73f6a 100644
 --- a/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx
 +++ b/src/renderer/src/components/tab-group/TabGroupSplitLayout.tsx
-@@ -22,7 +22,10 @@ export default function TabGroupSplitLayout({
-           ref={setDragRootNode}
+@@ -24,7 +24,7 @@ export default function TabGroupSplitLayout({
            className="workspace-sidebar-seam flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border"
          >
--          <div className="h-[4px] shrink-0 bg-tab-bar" data-terminal-focus-release-surface="true" />
-+          <div
-+            className="orca-titlebar-glass h-[4px] shrink-0"
-+            data-terminal-focus-release-surface="true"
-+          />
+           <div
+-            className="workspace-tab-drag-strip h-[4px] shrink-0 bg-tab-bar"
++            className="orca-titlebar-glass workspace-tab-drag-strip h-[4px] shrink-0"
+             data-terminal-focus-release-surface="true"
+           />
            <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
-             <TabGroupSplitNodeTree
-               layout={layout}
 diff --git a/src/shared/app-lifecycle/windows/window-material.ts b/src/shared/app-lifecycle/windows/window-material.ts
 index f45aa131..23711925 100644
 --- a/src/shared/app-lifecycle/windows/window-material.ts

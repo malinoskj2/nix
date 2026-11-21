@@ -217,7 +217,8 @@ Treat a bump as a hardware change and test it on the device.
   lands. The Vulkan transcription backend also needs `vulkan-loader` during
   ELF fixup; discard Koffi's bundled musl variant on these glibc systems.
   The package build runs the sandbox launch, container indicator, theme and
-  runtime tests before packaging. Build the configured Home Manager package
+  runtime tests before packaging. Tests the patches add on their own go in
+  `nix-` files, so upstream can move or rewrite its own test files freely. Build the configured Home Manager package
   as well as the default package to check declarative settings and plugins.
   Rebase
   [`catppuccin.patch`](../pkgs/orca-ade/catppuccin.patch), which maps Orca's
@@ -233,7 +234,9 @@ Treat a bump as a hardware change and test it on the device.
   setting in [`features/desktop.nix`](../users/jesse/features/desktop.nix) for
   an alpha-capable window, and keeps that material on for Linux in
   `resolveWindowMaterial`, which upstream turns off unless terminals are
-  translucent; confirm only the 36px titlebar band shows compositor blur. Rebase
+  translucent; confirm only the titlebar band shows compositor blur. That band
+  is `--app-header-height`, 36px unless Linux tiling window mode shrinks it to
+  the tab row. Rebase
   [`claude-hooks.patch`](../pkgs/orca-ade/claude-hooks.patch): it keeps Orca out
   of the Nix-managed `~/.claude/settings.json` by writing its hooks to
   `~/.orca/agent-hooks/claude-settings.json` and passing that file with
@@ -279,7 +282,8 @@ Treat a bump as a hardware change and test it on the device.
   `~/.claude/projects`. The `postPatch` also edits upstream source in place: it drops
   the AppImage's glibc floor check and its downloaded Node runtime, skips the
   Docker build of the Wayland clipboard helper, which `buildPhase` compiles
-  instead, turns on keeping the computer awake while agents run, and makes
+  instead, builds the provider exec helper and the journal file lock with the
+  host compiler instead of Docker, turns on keeping the computer awake while agents run, and makes
   directories it uploads over SSH writable after they're extracted on the
   remote. Each uses `--replace-fail`, so a moved line fails the build; find
   where the new release does the same thing. Then, in Orca:

@@ -1,5 +1,5 @@
 diff --git a/src/main/claude/child-process/claude-agent-sdk-process-spawn.ts b/src/main/claude/child-process/claude-agent-sdk-process-spawn.ts
-index 68d3fe0a..db47ecd4 100644
+index dbe5b64b..1c9264f9 100644
 --- a/src/main/claude/child-process/claude-agent-sdk-process-spawn.ts
 +++ b/src/main/claude/child-process/claude-agent-sdk-process-spawn.ts
 @@ -8,6 +8,7 @@ import {
@@ -10,7 +10,7 @@ index 68d3fe0a..db47ecd4 100644
  
  export type ClaudeCodeProcessSpawn = {
    /** SDK spawn hook; Orca retains process ownership. */
-@@ -57,7 +58,7 @@ export function createClaudeCodeProcessSpawn(
+@@ -58,7 +59,7 @@ export function createClaudeCodeProcessSpawn(
    let managed: ManagedProviderProcess | null = null
    return {
      spawn: (options) => {
@@ -239,16 +239,16 @@ index 00000000..f830ee53
 +}
 \ No newline at end of file
 diff --git a/src/main/ipc/pty/host-env/assembly.ts b/src/main/ipc/pty/host-env/assembly.ts
-index 0c13fd2b..976dc8e4 100644
+index 1bbd9f7e..d523c1c0 100644
 --- a/src/main/ipc/pty/host-env/assembly.ts
 +++ b/src/main/ipc/pty/host-env/assembly.ts
 @@ -1,3 +1,5 @@
 +import { delimiter } from 'node:path'
 +import { ensureClaudeSessionShimDir } from '../../../claude/session-settings'
  import { applyClaudeAgentViewEnv } from './claude-agent-view'
- import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal/images/terminal-inline-images-settings'
  import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
-@@ -35,6 +37,7 @@ import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
+ import {
+@@ -36,6 +38,7 @@ import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
  import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
  import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
  import { applyRemoteViewerClipboardEnv } from './remote-viewer-clipboard-env'
@@ -256,9 +256,9 @@ index 0c13fd2b..976dc8e4 100644
  
  /** Mutate host-local PTY environment only for local execution; SSH cannot use these loopback endpoints or filesystem paths. */
  export function buildPtyHostEnv(
-@@ -304,6 +307,14 @@ export function buildPtyHostEnv(
-     resourcesPath: opts.resourcesPath
+@@ -298,6 +301,14 @@ export function buildPtyHostEnv(
    })
+   appendManagedAgentDirsToChildPath(baseEnv)
  
 +  const claudeShimDir = opts.agentStatusHooksEnabled ? ensureClaudeSessionShimDir() : null
 +  if (claudeShimDir) {

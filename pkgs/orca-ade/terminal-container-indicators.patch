@@ -34,12 +34,12 @@ index b918e3fa..50c0686d 100644
    | { kind: 'bell' }
    | { kind: 'command-finished'; exitCode: number | null }
    | { kind: 'pr-link'; link: TerminalGitHubPRLink }
-diff --git a/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts-part-02.spec.ts b/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts-part-02.spec.ts
-index 2f04219e..da50cc8c 100644
---- a/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts-part-02.spec.ts
-+++ b/src/main/runtime/orca-runtime-tests/terminal-side-effect-facts-part-02.spec.ts
-@@ -7,6 +7,40 @@ import { syncSinglePty, store } from './orca-runtime-test-fixtures.spec'
- import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.spec'
+diff --git a/src/main/runtime/terminal/output/terminal-side-effect-facts-part-02.spec.ts b/src/main/runtime/terminal/output/terminal-side-effect-facts-part-02.spec.ts
+index 536436c6..12e1bcb2 100644
+--- a/src/main/runtime/terminal/output/terminal-side-effect-facts-part-02.spec.ts
++++ b/src/main/runtime/terminal/output/terminal-side-effect-facts-part-02.spec.ts
+@@ -7,6 +7,40 @@ import { syncSinglePty } from '../../construction/test-context/orca-runtime-test
+ import { createSideEffectRuntime } from '../../construction/test-context/orca-runtime-test-scenario-builders.spec'
  
  describe('terminal side-effect fact channel', () => {
 +  it('retains each container report for reattach and clears it after launcher exit', () => {
@@ -76,11 +76,11 @@ index 2f04219e..da50cc8c 100644
 +    })
 +  })
 +
-   it('bounds a hung authoritative provider acquisition and reuses its fallback', async () => {
-     vi.useFakeTimers()
-     try {
+   it('keeps mode transitions that race a provider snapshot response', async () => {
+     const { runtime } = createSideEffectRuntime()
+     let resolveProviderSnapshot:
 diff --git a/src/main/runtime/terminal/output/terminal-title-tracker.ts b/src/main/runtime/terminal/output/terminal-title-tracker.ts
-index 72405b00..3ef6ea7f 100644
+index 89856393..d738c7ed 100644
 --- a/src/main/runtime/terminal/output/terminal-title-tracker.ts
 +++ b/src/main/runtime/terminal/output/terminal-title-tracker.ts
 @@ -74,6 +74,9 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
@@ -94,10 +94,10 @@ index 72405b00..3ef6ea7f 100644
            const live = this.ptyTitleTrackersByPtyId.get(ptyId)
            const gateKey = this.makeDecorativeTitleGateKey(rawTitle, normalizedTitle)
 diff --git a/src/main/runtime/terminal/output/terminal-transient-facts.ts b/src/main/runtime/terminal/output/terminal-transient-facts.ts
-index 8fca1181..4c8ce7dc 100644
+index 8fd42318..67950309 100644
 --- a/src/main/runtime/terminal/output/terminal-transient-facts.ts
 +++ b/src/main/runtime/terminal/output/terminal-transient-facts.ts
-@@ -28,6 +28,15 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
+@@ -29,6 +29,15 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     *  between chunks, so recordTerminalSideEffectFact emits it immediately. */
    emitDaemonPtyTransientFact(ptyId: string, fact: PtyTransientFact): void {
      switch (fact.kind) {
@@ -113,7 +113,7 @@ index 8fca1181..4c8ce7dc 100644
        case 'bell':
          this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
          return
-@@ -157,7 +166,8 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
+@@ -160,7 +169,8 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
        recordTitle && (normalizedTitle === null || !isCursorNativeAgentTitle(recordTitle))
          ? recordTitle
          : null
@@ -123,7 +123,7 @@ index 8fca1181..4c8ce7dc 100644
        return null
      }
      return {
-@@ -165,11 +175,18 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
+@@ -168,11 +178,18 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
        seq: this.ptyOutputSequenceById.get(ptyId) ?? 0,
        replay: true,
        facts: [
@@ -348,7 +348,7 @@ index 00000000..da48ec3a
 +  return <ContainerBadge names={names} />
 +}
 diff --git a/src/renderer/src/components/dashboard/DashboardAgentRow.tsx b/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
-index a86997c7..ef3007a6 100644
+index bc60a840..e0a4ee1d 100644
 --- a/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
 +++ b/src/renderer/src/components/dashboard/DashboardAgentRow.tsx
 @@ -1,3 +1,4 @@
@@ -365,14 +365,14 @@ index a86997c7..ef3007a6 100644
          <span
            className={cn(
 diff --git a/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx b/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
-index b90f15b5..c83c3580 100644
+index 2a47d109..d417572d 100644
 --- a/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
 +++ b/src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
 @@ -1,3 +1,4 @@
 +import { PaneContainerBadge } from '@/components/TerminalContainerBadge'
  import React, { useCallback, useEffect, useRef } from 'react'
  import { DashboardAgentChildDisclosure } from '@/components/dashboard/rows/DashboardAgentChildDisclosure'
- import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
+ import {
 @@ -243,6 +244,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
              progress={presentation.progress}
              unread={isUnvisited}
@@ -381,15 +381,15 @@ index b90f15b5..c83c3580 100644
            {!hideIcon && (
              <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
                <AgentTypeIcon agentType={agent.agentType} size={13} />
-diff --git a/src/renderer/src/components/tab-bar/TerminalSortableTab.tsx b/src/renderer/src/components/tab-bar/TerminalSortableTab.tsx
-index b388f334..4196d5b4 100644
---- a/src/renderer/src/components/tab-bar/TerminalSortableTab.tsx
-+++ b/src/renderer/src/components/tab-bar/TerminalSortableTab.tsx
+diff --git a/src/renderer/src/components/tab-bar/terminal-tabs/TerminalSortableTab.tsx b/src/renderer/src/components/tab-bar/terminal-tabs/TerminalSortableTab.tsx
+index 703c0e4a..a2b4815c 100644
+--- a/src/renderer/src/components/tab-bar/terminal-tabs/TerminalSortableTab.tsx
++++ b/src/renderer/src/components/tab-bar/terminal-tabs/TerminalSortableTab.tsx
 @@ -1,3 +1,4 @@
 +import { TerminalTabContainerContext } from '@/components/TerminalContainerBadge'
  import { useTabAgent } from '@/lib/agent-session/tab-identity/use-tab-agent'
  import SortableTab from './SortableTab'
- import type { SortableTabProps } from './SortableTab'
+ import type { SortableTabProps } from './sortable-tab-props'
 @@ -8,5 +9,9 @@ type TerminalSortableTabProps = Omit<SortableTabProps, 'tab' | 'agent'> & { tab:
  /** A terminal pane can change agents, so its identity is inferred from live pane signals. */
  export default function TerminalSortableTab(props: TerminalSortableTabProps): React.JSX.Element {
@@ -401,17 +401,17 @@ index b388f334..4196d5b4 100644
 +    </TerminalTabContainerContext.Provider>
 +  )
  }
-diff --git a/src/renderer/src/components/tab-bar/TerminalTabLeadingIcon.tsx b/src/renderer/src/components/tab-bar/TerminalTabLeadingIcon.tsx
-index 68182cf9..42a9d6bf 100644
---- a/src/renderer/src/components/tab-bar/TerminalTabLeadingIcon.tsx
-+++ b/src/renderer/src/components/tab-bar/TerminalTabLeadingIcon.tsx
+diff --git a/src/renderer/src/components/tab-bar/terminal-tabs/TerminalTabLeadingIcon.tsx b/src/renderer/src/components/tab-bar/terminal-tabs/TerminalTabLeadingIcon.tsx
+index ff06ba03..31029ef5 100644
+--- a/src/renderer/src/components/tab-bar/terminal-tabs/TerminalTabLeadingIcon.tsx
++++ b/src/renderer/src/components/tab-bar/terminal-tabs/TerminalTabLeadingIcon.tsx
 @@ -1,3 +1,5 @@
 +import { useContext } from 'react'
 +import { TabContainerBadge, TerminalTabContainerContext } from '@/components/TerminalContainerBadge'
- import { AgentStateDot } from '@/components/AgentStateDot'
+ import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
  import { AgentIcon } from '@/components/agent/icons/AgentIcon'
  import { cn } from '@/lib/class-names'
-@@ -44,7 +46,17 @@ function TerminalTabAgentIdentityIcon({
+@@ -46,7 +48,17 @@ function TerminalTabAgentIdentityIcon({
    )
  }
  
@@ -431,14 +431,14 @@ index 68182cf9..42a9d6bf 100644
    activityStatus,
    shell,
 diff --git a/src/renderer/src/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler.ts b/src/renderer/src/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler.ts
-index 7c36954e..62f4739b 100644
+index fbaa08c2..920c0eee 100644
 --- a/src/renderer/src/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler.ts
 +++ b/src/renderer/src/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler.ts
 @@ -1,3 +1,4 @@
 +import { beginTerminalContainerTracking, forgetTerminalContainer, observeTerminalContainers } from '@/lib/terminal-container-state'
  /** One fact consumer per local-main/SSH PTY, mounted or parked. Never-consumed PTYs drop attention facts; recently unregistered consumers alone open a bounded handoff buffer. */
  import type { AgentIdleEdgeMeta } from '../../../../../../shared/terminal/output/terminal-output-side-effects'
- import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+ import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 @@ -223,6 +224,7 @@ function drainHandoffFactBuffer(ptyId: string, entry: ConsumerEntry): void {
  }
  
@@ -474,22 +474,22 @@ index 7c36954e..62f4739b 100644
            }
          })
 diff --git a/src/renderer/src/components/terminal-pane/titles/TerminalPaneHeaderOverlay.tsx b/src/renderer/src/components/terminal-pane/titles/TerminalPaneHeaderOverlay.tsx
-index caa7170c..5c7eab7e 100644
+index 18b67e5e..a282b7cf 100644
 --- a/src/renderer/src/components/terminal-pane/titles/TerminalPaneHeaderOverlay.tsx
 +++ b/src/renderer/src/components/terminal-pane/titles/TerminalPaneHeaderOverlay.tsx
 @@ -1,3 +1,4 @@
 +import { PaneContainerBadge } from '@/components/TerminalContainerBadge'
+ import { TerminalPaneRecentImages } from './TerminalRecentImages'
+ import { useAppStore } from '@/store'
  import type { PaneTitleOverlayRect } from './pane-title-overlay-rects'
- import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
- import type { CSSProperties, RefObject } from 'react'
-@@ -208,6 +209,7 @@ export default function TerminalPaneHeaderOverlay({
-                     {title}
-                   </button>
-                 ) : null}
-+                <PaneContainerBadge paneKey={makePaneKey(tabId, pane.leafId)} />
-                 <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
-                   {canContinueAgentSessionInNewSession && isActivePane ? (
-                     <Tooltip>
+@@ -195,6 +196,7 @@ export default function TerminalPaneHeaderOverlay({
+                   {title}
+                 </button>
+               ) : null}
++              <PaneContainerBadge paneKey={makePaneKey(tabId, pane.leafId)} />
+               {paneCount > 1 && !isChromeless && (
+                 <div
+                   className="pane-title-drag-handle"
 diff --git a/src/renderer/src/lib/terminal-container-state.test.ts b/src/renderer/src/lib/terminal-container-state.test.ts
 new file mode 100644
 index 00000000..c2fec4f5

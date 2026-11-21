@@ -83,7 +83,7 @@ index 00000000..3242380b
 +  })
 +})
 diff --git a/src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts b/src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts
-index cb6de319..1b988e85 100644
+index 31f898ac..f40ee6a2 100644
 --- a/src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts
 +++ b/src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts
 @@ -1,3 +1,4 @@
@@ -91,7 +91,7 @@ index cb6de319..1b988e85 100644
  import { posix as pathPosix } from 'node:path'
  import {
    parseWslUncPath,
-@@ -34,7 +35,7 @@ import { CodexRuntimeHomeManagedHome } from './runtime-home-service-managed-home
+@@ -35,7 +36,7 @@ import { CodexRuntimeHomeManagedHome } from './runtime-home-service-managed-home
  export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHome {
    getHostCodexHomePathsForSessionDiscovery(): string[] {
      // Transcript polling must resolve the mirror path without creating it.
