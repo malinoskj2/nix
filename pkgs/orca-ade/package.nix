@@ -81,6 +81,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./terminal-container-indicators.patch
     ./structured-sandbox-indicators.patch
     ./pending-below-main.patch
+    ./local-default-base.patch
   ];
 
   postPatch = ''
@@ -265,7 +266,8 @@ stdenv.mkDerivation (finalAttrs: {
       src/renderer/src/lib/terminal-container-state.test.ts \
       src/shared/terminal/output/terminal-container-report.test.ts \
       src/shared/terminal/output/terminal-container-relay.test.ts \
-      src/main/runtime/construction/orca-runtime.test.ts
+      src/main/runtime/construction/orca-runtime.test.ts \
+      src/main/workspaces/creation/nix-worktree-create-base.test.ts
     pnpm exec tsc -p config/tsconfig.build.cli.json --outDir out --composite false --incremental false
     node config/scripts/cli-build/verify-cli-bin.mjs --fix-executable --fix-package-json
     pnpm run build:electron-vite

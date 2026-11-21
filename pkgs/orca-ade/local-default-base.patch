@@ -1,0 +1,97 @@
+diff --git a/src/main/workspaces/creation/nix-worktree-create-base.test.ts b/src/main/workspaces/creation/nix-worktree-create-base.test.ts
+new file mode 100644
+index 00000000..fbd6f475
+--- /dev/null
++++ b/src/main/workspaces/creation/nix-worktree-create-base.test.ts
+@@ -0,0 +1,53 @@
++import { describe, expect, it } from 'vitest'
++import { resolveWorktreeCreateBase } from './worktree-create-base'
++
++const resolve = (args: {
++  requestedBaseBranch?: string
++  repoWorktreeBaseRef?: string | null
++  defaultBaseRef: string | null
++  usable: string[]
++}) =>
++  resolveWorktreeCreateBase({
++    requestedBaseBranch: args.requestedBaseBranch,
++    repoWorktreeBaseRef: args.repoWorktreeBaseRef,
++    resolveDefaultBaseRef: async () => args.defaultBaseRef,
++    isBaseUsable: async (candidate) => args.usable.includes(candidate)
++  })
++
++describe('default worktree base', () => {
++  it('prefers the local branch of the detected remote default', async () => {
++    await expect(
++      resolve({ defaultBaseRef: 'origin/main', usable: ['main', 'origin/main'] })
++    ).resolves.toBe('main')
++  })
++
++  it('keeps the remote default when no local branch of that name exists', async () => {
++    await expect(resolve({ defaultBaseRef: 'origin/main', usable: ['origin/main'] })).resolves.toBe(
++      'origin/main'
++    )
++    await expect(resolve({ defaultBaseRef: null, usable: ['main'] })).resolves.toBeNull()
++  })
++
++  it('lets an explicit or persisted base win', async () => {
++    const usable = ['main', 'origin/main', 'origin/release']
++    await expect(
++      resolve({ requestedBaseBranch: 'origin/main', defaultBaseRef: 'origin/main', usable })
++    ).resolves.toBe('origin/main')
++    await expect(
++      resolve({ repoWorktreeBaseRef: 'origin/main', defaultBaseRef: 'origin/main', usable })
++    ).resolves.toBe('origin/main')
++    await expect(
++      resolve({ repoWorktreeBaseRef: 'origin/release', defaultBaseRef: 'origin/main', usable })
++    ).resolves.toBe('origin/release')
++  })
++
++  it('falls back from a stale persisted base to the local default branch', async () => {
++    await expect(
++      resolve({
++        repoWorktreeBaseRef: 'origin/gone',
++        defaultBaseRef: 'origin/main',
++        usable: ['main', 'origin/main']
++      })
++    ).resolves.toBe('main')
++  })
++})
+diff --git a/src/main/workspaces/creation/worktree-create-base.ts b/src/main/workspaces/creation/worktree-create-base.ts
+index 10482cde..02fdd2b9 100644
+--- a/src/main/workspaces/creation/worktree-create-base.ts
++++ b/src/main/workspaces/creation/worktree-create-base.ts
+@@ -5,6 +5,15 @@ type ResolveWorktreeCreateBaseArgs = {
+   isBaseUsable: (baseBranch: string) => Promise<boolean>
+ }
+ 
++// Why: worktrees should start from the local default branch, which may be ahead of the remote.
++async function preferLocalDefaultBranch(
++  defaultBaseRef: string,
++  isBaseUsable: (baseBranch: string) => Promise<boolean>
++): Promise<string> {
++  const branch = defaultBaseRef.startsWith('origin/') ? defaultBaseRef.slice('origin/'.length) : ''
++  return branch && (await isBaseUsable(branch)) ? branch : defaultBaseRef
++}
++
+ export async function resolveWorktreeCreateBase(
+   args: ResolveWorktreeCreateBaseArgs
+ ): Promise<string | null> {
+@@ -15,7 +24,7 @@ export async function resolveWorktreeCreateBase(
+   const defaultBaseRef = await args.resolveDefaultBaseRef()
+   const repoWorktreeBaseRef = args.repoWorktreeBaseRef
+   if (!repoWorktreeBaseRef) {
+-    return defaultBaseRef
++    return defaultBaseRef && preferLocalDefaultBranch(defaultBaseRef, args.isBaseUsable)
+   }
+   if (!defaultBaseRef) {
+     return (await args.isBaseUsable(repoWorktreeBaseRef)) ? repoWorktreeBaseRef : null
+@@ -24,5 +33,7 @@ export async function resolveWorktreeCreateBase(
+     return repoWorktreeBaseRef
+   }
+   // Stale persisted refs fall back to the detected default; usable custom refs stay authoritative.
+-  return (await args.isBaseUsable(repoWorktreeBaseRef)) ? repoWorktreeBaseRef : defaultBaseRef
++  return (await args.isBaseUsable(repoWorktreeBaseRef))
++    ? repoWorktreeBaseRef
++    : preferLocalDefaultBranch(defaultBaseRef, args.isBaseUsable)
+ }

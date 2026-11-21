@@ -251,7 +251,12 @@ Treat a bump as a hardware change and test it on the device.
   Orca's editor,
   [`pending-below-main.patch`](../pkgs/orca-ade/pending-below-main.patch),
   which puts a workspace being created below its project's main worktree
-  instead of above it, and
+  instead of above it,
+  [`local-default-base.patch`](../pkgs/orca-ade/local-default-base.patch),
+  which starts a new worktree from the local default branch (`main`) instead
+  of the detected `origin/main` when neither the caller nor `orca repo
+  set-base-ref` chose a base and that local branch exists, in
+  `resolveWorktreeCreateBase`, which every create path shares, and
   [`bundled-plugins.patch`](../pkgs/orca-ade/bundled-plugins.patch), which lets
   Orca's launch-plugin index carry a third-party plugin without marking it
   official, and [`approved-plugins.patch`](../pkgs/orca-ade/approved-plugins.patch),
