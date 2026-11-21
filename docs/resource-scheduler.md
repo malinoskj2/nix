@@ -176,7 +176,7 @@ can establish zero current usage during idle/loading phases; incomplete inventor
 remain unknown. GPU polling can still miss brief peaks;
 representative input coverage remains the caller's responsibility. Unmanaged host
 and sandbox overrides do not train profiles. Profile identifiers, trial badges and
-failure classifications appear in the plugin inspector; trial allocations are
+failure classifications appear in `resource-job inspect`; trial allocations are
 excluded from reservation-accuracy statistics.
 
 Automated runtime inspection is ordinary background shared work. Human game
@@ -217,7 +217,7 @@ an immutable privileged bootstrap, followed by privilege drop and `no_new_privs`
 No submitted command or environment enters systemd unit arguments. The subreaper
 and systemd control group retain descendant lifetime and termination, but do not
 reserve resource capacity. The same job ID, bounded stdout/stderr stream and files
-remain available to the submitting CLI and plugin. `execution: "host"` or `"sandbox"` and
+remain available to the submitting CLI. `execution: "host"` or `"sandbox"` and
 `systemd_unit` identify the execution mode; its `allocation` is null. Its usage is external
 to Slurm, and it never contributes to queue reservation totals or game CPU quotas.
 Original submission origin remains recorded. Processes receive
@@ -488,8 +488,8 @@ unknown job still end it immediately.
 New submissions preserve the submitting Orca session identity. Foreground clients
 and `resource-job wait` record output consumption, not agent acknowledgement.
 This also applies to older clients using a waiter token: a terminal waiter cannot
-silence an Orca wake-up. Explicit `resource-job ack JOB_ID --confirm` or the plugin's
-**Mark reviewed** action records that a human or agent handled the update.
+silence an Orca wake-up. Explicit `resource-job ack JOB_ID --confirm` records that
+a human or agent handled the update.
 
 The unprivileged `resource-job-notifications` user service sends state changes to
 the exact local structured Orca session: running, unknown, recovery to queued, and
@@ -506,14 +506,14 @@ Messages instruct agents to inspect current state before acting, acknowledge han
 updates, and, for supervised workers, report to their existing coordinator through
 the dispatch mailbox. They do not create a new coordinator route or authorize retries.
 Session matching does not use project names, paths or terminal titles. Terminal-only,
-missing or ambiguous sessions remain in the plugin inbox. The notifier never starts
+missing or ambiguous sessions remain in `resource-job notifications`. The notifier never starts
 a replacement agent or retries the workload.
 
 The scheduler persists a delivery claim before contacting Orca. A lost receipt
 or restart during sending leaves an uncertain outcome in the inbox rather than
 blindly waking the agent again. Orca being unavailable before a send leaves the
 notification pending for a later attempt. Pre-upgrade history is not replayed.
-Use **Mark reviewed** or `resource-job ack` after handling an inbox outcome.
+Use `resource-job ack` after handling an inbox outcome.
 Unresolved outcomes retain their job and output through normal history pruning;
 500 unresolved outcomes block new submissions until reviewed (already admitted
 jobs can still finish). This is bounded retention, not an exactly-once transport
@@ -530,15 +530,12 @@ resource-run --cpu 2 --ram 4GiB --project riso-scene-workflow \
   --parent-worktree-name "UI migration" --name "Vue checks" -- npm test
 ```
 
-The queue shows the repository and parent, with `↳ Vue app` beneath the parent.
-Top-level worktrees omit `--parent-worktree-name` and show their own name directly.
+Top-level worktrees omit `--parent-worktree-name`.
 Names are saved with the job, so history keeps the submitted context even if an
-Orca card is later renamed or closed. Names are searchable and appear in the job
-inspector and confirmation modal. Old clients and jobs without labels still work.
+Orca card is later renamed or closed. Old clients and jobs without labels still work.
 
 `--worktree ID` optionally supplies the exact Orca worktree identity when
-`ORCA_WORKTREE_ID` is absent; that identity supports the existing Open worktree
-control. Display names never substitute for identity or change admission policy.
+`ORCA_WORKTREE_ID` is absent. Display names never substitute for identity or change admission policy.
 Use the session CLI's `worktree current --json` and, for a child, inspect its
 `parentWorktreeId` using `worktree show --worktree id:ID --json`. Do not infer
 parentage from branches or folder layout. Omit unknown metadata; outside Orca,
@@ -642,7 +639,7 @@ and explicit records are protected. If all slots are protected, automatic learni
 is omitted for the new job rather than refusing ordinary work. Existing historical
 jobs are not retrospectively assigned invented workload identities.
 
-The plugin reports RAM admission policy, job growth allowance, host growth buffer,
+`resource-status --json` reports RAM admission policy, job growth allowance, host growth buffer,
 and Slurm RAM capacity separately from actual usage and reserved limits. Inspect
 an individual job to see its allowance basis and matching completed sample count.
 Deploy through the normal authorized system switch; the source change alone does

@@ -2,16 +2,16 @@
 
 Every workstation host runs the scheduler daemon
 (`services.resourceScheduler.enable`, on by default through `workstation.nix`),
-which executes `resource-run` jobs and reports them to Orca's Resource Queue
-panel. Only `home` enables the Slurm queue itself with
+which executes `resource-run` jobs and reports their outcomes to the Orca
+sessions that submitted them. Only `home` enables the Slurm queue itself with
 `services.resourceScheduler.queue.enable = true` and a 28-CPU admission ceiling.
 Without the queue, katana and mac-vm install no Slurm, Munge, mode marker,
 completion notifier or legacy GPU adapter, and run every job directly on the
 host. Their Claude, Codex and Muse configuration omits the queue rules and the
 skills that depend on it (`audio-transcribe`, `qwen-prompt`,
 `qwen-uncensored-prompt`, `work-queue`), so agents there never learn of it.
-On `home`, the panel's Controls tab can switch the queue off at runtime; new
-and waiting jobs then run directly where they were submitted. Applying this configuration activates
+On `home`, `resource-control queue-off --confirm` switches the queue off at
+runtime; new and waiting jobs then run directly where they were submitted. Applying this configuration activates
 Slurm and replaces legacy GPU admission; follow the drained cutover below before
 switching. Editing or building the configuration does not activate it.
 The exported `nixosModules.resource-scheduler` module is also available to consumers.
@@ -107,8 +107,7 @@ Claude rules, Codex global context and the sandbox's managed instructions share
 `users/jesse/claude/rules/resources.md`. Muse receives the same text through its
 supported `run.developer_prompt` setting, merged into writable preferences while
 preserving other settings and existing prompt text. The shared guidance explicitly
-keeps legacy GPU rules in force before the cutover. The Resource Queue plugin is
-approved in the Nix-built Orca configuration and receives absolute backend CLI paths.
+keeps legacy GPU rules in force before the cutover.
 
 Use `resource-run --cpu N --ram SIZE [--vram SIZE|--exclusive] --name LABEL -- command`.
 The examples, priority, status, revision-guarded cancellation, nesting, foreground
@@ -176,7 +175,7 @@ work must run within an existing production GPU reservation through cleanup.
 5. With explicit deployment authorization, activate the enabled configuration.
    Confirm `resource-status --json` reports schema version 1, the configured policy
    and real telemetry. Start fresh sandboxes; verify the same job ID is visible on
-   host and sandbox and in Resource Queue. Run a bounded CPU job before GPU work.
+   host and sandbox. Run a bounded CPU job before GPU work.
 6. Complete the external repository helper migration as one rollout. An unresolved
    legacy helper is a rollout blocker, not authorization to run two authorities.
 
