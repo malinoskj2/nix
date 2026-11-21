@@ -11,13 +11,13 @@
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "last30days";
-  version = "3.39.0";
+  version = "4.5.0";
 
   src = fetchFromGitHub {
     owner = "mvanhorn";
     repo = "last30days-skill";
-    rev = "f0876504bdfcada40fcf5a4a3ada014c9408b9ed";
-    hash = "sha256-PdIYPWn5tXJJH+n33uxxA5ecpYGKp8xZBjnKmUJlkXU=";
+    rev = "8ede659374b298ffb0529e13b802c0bd9637f769";
+    hash = "sha256-gBOUNxI1hE5SkjmZAF27uSM6fx5WodGn2nVtwdVMVsg=";
   };
 
   nativeBuildInputs = [ makeWrapper ];
