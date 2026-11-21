@@ -382,11 +382,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1795221907,
-        "narHash": "sha256-imdHGcfteUquamLxZG0LePDVsoDfz4GU2Yd0qHQbVZk=",
+        "lastModified": 1795285704,
+        "narHash": "sha256-p29zR16eu6T7LUXQAyCL28P7uY7mgku6DI3fRoj2H2M=",
         "owner": "malinoskj2",
         "repo": "tohru",
-        "rev": "937918fe06dce57f375925e53074353d24365e98",
+        "rev": "a3732331bbcdf8fc45a98997a5feb880c19ad6d6",
         "type": "github"
       },
       "original": {
