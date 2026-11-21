@@ -74,6 +74,7 @@ let
         "codex"
       ] sandboxAgentCommand;
     };
+    telemetryOptedIn = false;
     approvedPlugins = [
       "chron0.discord-presence"
       "etherll.usage-insights"

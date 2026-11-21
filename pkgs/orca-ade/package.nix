@@ -27,6 +27,8 @@
   agentResumeWrapper ? null,
   # Additional local account homes whose transcripts may be discovered and resumed.
   codexAccountHomes ? [ ],
+  # Forces "Share anonymous usage data" in existing profiles; null keeps the profile's choice.
+  telemetryOptedIn ? null,
 }:
 
 let
@@ -90,6 +92,7 @@ stdenv.mkDerivation (finalAttrs: {
     cat > src/shared/nix-global-settings.ts <<'EOF'
     import type { GlobalSettings } from './settings/global-settings-types'
     export const nixGlobalSettings = ${builtins.toJSON globalSettings} satisfies Partial<GlobalSettings>
+    export const nixTelemetryOptedIn: boolean | null = ${builtins.toJSON telemetryOptedIn}
     EOF
     cat > src/shared/nix-agent-resume-wrapper.ts <<'EOF'
     export const nixAgentResumeWrapper: string | null = ${builtins.toJSON agentResumeWrapper}
@@ -105,7 +108,7 @@ stdenv.mkDerivation (finalAttrs: {
       -e 's/^  }$/  }, nixGlobalSettings)/' \
       src/shared/settings/default-global-settings.ts
     # Loading re-normalizes some saved fields after spreading them, so the overrides wrap the result.
-    sed -i "1i import { nixGlobalSettings } from '../../../../shared/nix-global-settings'" \
+    sed -i "1i import { nixGlobalSettings, nixTelemetryOptedIn } from '../../../../shared/nix-global-settings'" \
       src/main/persistence/loading-store/profile-loading/normalize-loaded-global-settings.ts
     substituteInPlace src/main/persistence/loading-store/profile-loading/normalize-loaded-global-settings.ts \
       --replace-fail 'export function normalizeLoadedGlobalSettings(' 'function normalizeLoadedGlobalSettingsUpstream('
@@ -113,7 +116,11 @@ stdenv.mkDerivation (finalAttrs: {
     export function normalizeLoadedGlobalSettings(
       ...args: Parameters<typeof normalizeLoadedGlobalSettingsUpstream>
     ): PersistedState['settings'] {
-      return { ...normalizeLoadedGlobalSettingsUpstream(...args), ...nixGlobalSettings }
+      const settings = { ...normalizeLoadedGlobalSettingsUpstream(...args), ...nixGlobalSettings }
+      // The telemetry block also holds the install ID and experiment cohorts, so only consent is forced.
+      return nixTelemetryOptedIn === null || !settings.telemetry
+        ? settings
+        : { ...settings, telemetry: { ...settings.telemetry, optedIn: nixTelemetryOptedIn } }
     }
     EOF
 

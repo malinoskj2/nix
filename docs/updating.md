@@ -291,7 +291,13 @@ Treat a bump as a hardware change and test it on the device.
   host compiler instead of Docker, turns on keeping the computer awake while agents run, and makes
   directories it uploads over SSH writable after they're extracted on the
   remote. Each uses `--replace-fail`, so a moved line fails the build; find
-  where the new release does the same thing. Then, in Orca:
+  where the new release does the same thing. `telemetryOptedIn` forces only
+  `telemetry.optedIn` when a profile loads, since that block also holds the
+  install ID and cohorts. Nothing is sent either way: telemetry needs the
+  PostHog key and build identity that only upstream's CI compiles in, and
+  this build and the release's orcad template both leave them unset; check
+  that `orcad-server.js` still reads `ORCA_POSTHOG_WRITE_KEY` as an unset
+  global. Crashpad keeps its dumps local. Then, in Orca:
   - connect a sandbox workspace over SSH and check that orcad deploys and its
     terminals open;
   - copy text from a terminal and the editor and paste it into another
