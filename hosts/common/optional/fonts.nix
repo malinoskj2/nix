@@ -12,4 +12,9 @@
     sf-mono
     ny
   ];
+  fonts.fontconfig.defaultFonts = {
+    sansSerif = [ "SF Pro Text" ];
+    serif = [ "New York" ];
+    monospace = [ "SF Mono" ];
+  };
 }
