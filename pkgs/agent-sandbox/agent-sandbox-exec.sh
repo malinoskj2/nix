@@ -7,7 +7,7 @@ if [[ ${1:-} == --display ]]; then
 fi
 
 if [[ $# -lt 1 ]]; then
-  echo 'usage: agent-sandbox-exec [--display] <claude|codex|muse|antigravity> [agent arguments...]' >&2
+  echo 'usage: agent-sandbox-exec [--display] <claude|codex|antigravity> [agent arguments...]' >&2
   exit 2
 fi
 
@@ -17,7 +17,7 @@ shift
 if [[ $agent == agy ]]; then
   agent=antigravity
 fi
-if [[ $agent != claude && $agent != codex && $agent != muse && $agent != antigravity ]]; then
+if [[ $agent != claude && $agent != codex && $agent != antigravity ]]; then
   echo "agent-sandbox-exec: unsupported agent: $agent" >&2
   exit 2
 fi

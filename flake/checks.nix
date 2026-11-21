@@ -67,8 +67,6 @@
                 GAME_SERVICE = pkgs.writeText "resource-scheduler-game-service.json" (
                   builtins.toJSON staged.systemd.services.agent-sandbox-gaming.serviceConfig
                 );
-                MUSE_MERGER = ../users/jesse/muse-resources.py;
-                GUIDANCE = ../users/jesse/claude/rules/resources.md;
                 COMPAT = self.nixosConfigurations.home.pkgs.gpu-scheduler;
                 SCHEDULER = staged.services.resourceScheduler.package;
               }

@@ -1,10 +1,8 @@
 """Check the generated opt-in deployment without starting a host service."""
 
-import importlib.util
 import json
 import os
 from pathlib import Path
-import tempfile
 
 
 policy = json.loads(Path(os.environ["POLICY"]).read_text())
@@ -73,34 +71,7 @@ assert "touch /run/resource-scheduler-game-active" in game_service["ExecStartPos
 assert "rm -f /run/resource-scheduler-game-active" in game_service["ExecStopPost"]
 assert "agent-sandbox.slice AllowedCPUs=" in game_service["ExecStart"]
 
-# Existing prompt/settings survive updates; repeated activation is idempotent.
-spec = importlib.util.spec_from_file_location("muse_resources", os.environ["MUSE_MERGER"])
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
-with tempfile.TemporaryDirectory() as temporary:
-    target = Path(temporary) / "muse/settings.json"
-    target.parent.mkdir()
-    target.write_text(json.dumps({"model": "existing", "run": {"developer_prompt": "Personal rules"}}))
-    guidance = Path(os.environ["GUIDANCE"])
-    module.merge(guidance, target)
-    first = target.read_bytes()
-    module.merge(guidance, target)
-    assert target.read_bytes() == first
-    merged = json.loads(target.read_text())
-    assert merged["model"] == "existing"
-    assert merged["schema_version"] == 1
-    assert merged["run"]["developer_prompt"].startswith("Personal rules")
-    assert merged["run"]["developer_prompt"].count(module.START) == 1
-    assert "resource-run" in merged["run"]["developer_prompt"]
-    target.write_text("malformed user settings")
-    try:
-        module.merge(guidance, target)
-    except json.JSONDecodeError:
-        assert target.read_text() == "malformed user settings"
-    else:
-        raise AssertionError("Malformed settings were overwritten")
-
-print("Generated resource policy, Slurm/cgroup configuration and agent guidance verified")
+print("Generated resource policy, Slurm/cgroup configuration verified")
 
 # A boot-time listener failure must recover without another system switch.
 for unit in json.loads(Path(os.environ["SLURM_UNITS"]).read_text()).values():

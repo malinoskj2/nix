@@ -1,10 +1,10 @@
 # Orca terminals in an agent sandbox
 
-On `home`, the Nix-built Orca configures the Claude, Codex, Muse and
+On `home`, the Nix-built Orca configures the Claude, Codex and
 Antigravity launch buttons to use a sandbox command. Linux launches use `agent-sandbox-exec`.
 On Darwin execution hosts, the command searches `PATH` in order and invokes
 the first executable file matching `sandbox-*`, passing the harness name
-(`claude`, `codex`, `muse` or `antigravity`) followed by Orca's launch
+(`claude`, `codex` or `antigravity`) followed by Orca's launch
 arguments. Matches
 within a PATH directory follow shell glob order. If no matching executable
 exists, the launch fails with an error. Restart Orca after rebuilding to
@@ -25,7 +25,6 @@ From a repository or a local Orca worktree, launch an agent with:
 ```sh
 agent-sandbox-exec codex
 agent-sandbox-exec claude
-agent-sandbox-exec muse
 agent-sandbox-exec antigravity   # or agy
 ```
 
@@ -146,7 +145,7 @@ on hosts without the sandbox command run plain `claude` and keep the automatic
 TTL. A running session keeps the TTL it started with until it is relaunched or
 resumed.
 
-Codex, Antigravity and Muse have no setting for this. Codex sends no prompt
+Codex and Antigravity have no setting for this. Codex sends no prompt
 cache lifetime unless a turn asks for its longer `30m` or `12h` options, which
 nothing in its CLI or config requests, so it already gets the API's default.
 

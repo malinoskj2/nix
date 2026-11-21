@@ -37,7 +37,6 @@ Audited from `pkgs/agent-sandbox/agent-sandbox.sh`, `agent-sandbox-clean.sh`, `a
 | **Claude Code** | `~/.claude/.credentials.json`, `.claude.json` in `$sandbox_home`; Chat forwards `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, `AWS_BEARER_TOKEN_BEDROCK` & writable `CLAUDE_CONFIG_DIR` (`agent-sandbox.sh:400-409,464-476`) | **High** — live API/OAuth tokens inside container | Reverse proxy (`ANTHROPIC_BASE_URL`) + host-managed OAuth token broker; separate credentials from transcript dirs |
 | **Codex (OpenAI)** | `copy_if_newer ~/.codex/auth.json` into `$sandbox_home` (`agent-sandbox.sh:133`); shared `agent-sandbox-codex-server` mounts `$sandbox_home`; Chat mounts writable `CODEX_HOME` | **High** — live OpenAI/ChatGPT tokens in container | Reverse proxy (`base_url` / `OPENAI_BASE_URL`) or selective HTTPS proxy + host OAuth refresh broker |
 | **Antigravity (`agy`) / Gemini** | `copy_if_newer ~/.gemini/antigravity-cli/antigravity-oauth-token` (`agent-sandbox.sh:152`); `.gemini/oauth_creds.json` kept in `$sandbox_home` | **High** — live Google OAuth token in container | Selective HTTPS/HTTP2 proxy + host OAuth refresh broker (verify gRPC/TLS behavior per harness) |
-| **Muse Code** | `copy_if_newer ~/.config/muse/auth.json` (`agent-sandbox.sh:145`) | **High** — live Meta auth token in container | Reverse proxy or selective HTTPS proxy + host token broker |
 | **OpenCode / ZCode** | `.local/share/opencode/auth.json`, `.zcode/cli/config.json` kept in `agent-sandbox-clean.sh:13-14` | **Medium/High** — provider API keys if logged in | Reverse/egress proxy with placeholder keys (`qwen-prompt` uses local `llama.cpp` and needs no cloud auth) |
 | **Git HTTPS & `gh` CLI** | `gh` installed (`package.nix:330`), `git` uses `credential.helper = cache` (`git.nix:23`); any `gh auth login` or git push writes tokens into `$sandbox_home` | **High** — broad GitHub OAuth token if authenticated | Git credential helper + `GH_TOKEN` placeholder + host HTTPS proxy injecting fine-grained PAT / GitHub App token with repo/method policy |
 | **Git SSH & Outbound SSH** | `openssh` installed; `.ssh` kept in `$sandbox_home` (`agent-sandbox-clean.sh:15`); host has SSH access to `media`, `pi`, `katana`, `mac-vm`, GitHub | **High** if keys placed in `$sandbox_home/.ssh`; **Unusable** cleanly without keys | Two-layer SSH: (1) filtered `ssh-agent` proxy with destination constraints + (2) terminating SSH bastion proxy for command/repo policy |
@@ -60,7 +59,7 @@ Run a single host-side user daemon (`agent-sandbox-authd`, or modular systemd us
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ Docker Container (agent-sandbox) — ZERO real credentials in env or disk      │
 │                                                                              │
-│  [Claude/Codex/agy/Muse]  [git / gh / last30days / nix]   [ssh / git-ssh]    │
+│  [Claude/Codex/agy]       [git / gh / last30days / nix]   [ssh / git-ssh]    │
 │           │                            │                         │           │
 │           ▼                            ▼                         ▼           │
 │   127.0.0.1:18000              127.0.0.1:18001           SSH_AUTH_SOCK       │
@@ -95,7 +94,7 @@ Run a single host-side user daemon (`agent-sandbox-authd`, or modular systemd us
 `agent-sandbox-exec.sh` already creates a private per-launch socket directory under `/run/user/$UID/agent-sandbox-orca/session.XXXXXXXX`. Using the same pattern for `/run/user/$UID/agent-sandbox-auth/<session-id>/` (or registering a session token with a persistent daemon via an admin control socket at launch time):
 - Eliminates any need for a host TCP port (nothing on `127.0.0.1` or LAN for other processes or containers to hit).
 - Binds every request cryptographically/structurally to **which container made it**:
-  - Agent type (`claude`, `codex`, `muse`, `antigravity`, `codex-server`) — a Codex container cannot access Claude's account or vice versa.
+  - Agent type (`claude`, `codex`, `antigravity`, `codex-server`) — a Codex container cannot access Claude's account or vice versa.
   - Repository identity (derived from `git rev-parse --git-common-dir`, already computed in `agent-sandbox-exec.sh:27`) — enables repo-scoped Git/GitHub write policies (e.g. allow pushing only to the active repo's non-default branches).
   - Orca Chat selected account (from `CODEX_HOME` / `CLAUDE_CONFIG_DIR` at launch) — preserves multi-account Chat support.
 - Survives daemon restarts if the daemon binds sockets inside a mounted directory (or uses a persistent daemon directory + per-session bearer/proxy auth header).
@@ -212,7 +211,7 @@ In `hosts/common/users/jesse/` (or per-host `hosts/media/`, `hosts/pi/`):
 - Add a dedicated **sandbox SSH CA** (`services.openssh.settings.TrustedUserCAKeys`) or dedicated restricted authorized key with `restrict,command="..."` / `AuthorizedPrincipalsFile` so `agent-sandbox-authd` mints **5-minute SSH certificates** with narrow principals (e.g. `agent-diag`, `agent-nix-builder`) instead of holding a permanent unrestricted root-capable SSH key for fleet hosts.
 - Even if a bug existed in the bastion's command parser, the target server itself enforces the restriction.
 
-### 4.4 AI Harnesses & LLM Providers (Claude Code, Codex, Antigravity, Muse, OpenCode)
+### 4.4 AI Harnesses & LLM Providers (Claude Code, Codex, Antigravity, OpenCode)
 
 This is the most nuanced category because some harnesses use **API keys** while others use **OAuth subscription tokens** with client-side refresh/claim inspection.
 
@@ -227,8 +226,8 @@ This is the most nuanced category because some harnesses use **API keys** while 
 - **OpenCode / ZCode (API key providers):**
   - Same reverse-proxy endpoints (`/anthropic`, `/openai`, `/google`, etc.) with placeholder keys.
 
-#### Group B: OAuth subscription logins (Claude Max/Pro, Codex ChatGPT OAuth, Antigravity `agy`, Muse)
-OAuth CLIs typically read a JSON/token file (`~/.claude/.credentials.json`, `~/.codex/auth.json`, `~/.gemini/antigravity-cli/antigravity-oauth-token`, `~/.config/muse/auth.json`), check `expires_at` locally, sometimes decode non-secret JWT claims (email/account ID/plan), and send `Authorization: Bearer <access_token>` (plus occasional refresh POSTs to the OAuth token endpoint).
+#### Group B: OAuth subscription logins (Claude Max/Pro, Codex ChatGPT OAuth, Antigravity `agy`)
+OAuth CLIs typically read a JSON/token file (`~/.claude/.credentials.json`, `~/.codex/auth.json`, `~/.gemini/antigravity-cli/antigravity-oauth-token`), check `expires_at` locally, sometimes decode non-secret JWT claims (email/account ID/plan), and send `Authorization: Bearer <access_token>` (plus occasional refresh POSTs to the OAuth token endpoint).
 
 **Design:**
 1. **Host-side OAuth Token Broker** inside `agent-sandbox-authd`:
@@ -237,7 +236,7 @@ OAuth CLIs typically read a JSON/token file (`~/.claude/.credentials.json`, `~/.
 2. **Synthetic credential file in the container:**
    - Launcher writes a tiny read-only synthetic file containing a **placeholder access token** (and, where a CLI parses JWT payload claims locally, a **unsigned/dummy JWT** with non-secret display claims + a far-future `exp` so the CLI doesn't constantly try to refresh, and **no refresh token**).
 3. **Header substitution in the host proxy:**
-   - On allowlisted provider API hosts (`api.anthropic.com`, `chatgpt.com` / `api.openai.com`, Google/Antigravity API endpoints, Meta/Muse endpoints), the proxy swaps the placeholder `Authorization: Bearer` (and any session cookie/header) for the live host-managed access token.
+   - On allowlisted provider API hosts (`api.anthropic.com`, `chatgpt.com` / `api.openai.com`, Google/Antigravity API endpoints), the proxy swaps the placeholder `Authorization: Bearer` (and any session cookie/header) for the live host-managed access token.
    - Requests to OAuth token/revocation endpoints from inside the container are either intercepted (returning a fresh synthetic token while the host refreshes the real one) or blocked.
 4. **Orca Chat multi-account compatibility (`CODEX_HOME` / `CLAUDE_CONFIG_DIR`) & `agent-sandbox-codex-server`:**
    - Currently `agent-sandbox.sh:461-476` bind-mounts the entire `$CODEX_HOME` or `$CLAUDE_CONFIG_DIR` writable because Orca Chat stores *both* credentials (`auth.json` / `.credentials.json`) and transcripts/sessions in the same directory.
@@ -246,7 +245,7 @@ OAuth CLIs typically read a JSON/token file (`~/.claude/.credentials.json`, `~/.
      - Register the real host account path with `agent-sandbox-authd` for that session so the proxy injects that exact account's token.
      - Route `agent-sandbox-codex-server.service` through the same proxy socket and over-mount its `$sandbox_home/.codex/auth.json` as well.
 5. **Pragmatic rollout / fallback note for closed-source CLIs:**
-   - Each OAuth harness (`claude`, `codex`, `agy`, `muse`) must be tested individually for HTTP/2 / gRPC framing, custom TLS roots, or local JWT signature checks.
+   - Each OAuth harness (`claude`, `codex`, `agy`) must be tested individually for HTTP/2 / gRPC framing, custom TLS roots, or local JWT signature checks.
    - If a specific harness uses a custom TLS stack that ignores `SSL_CERT_FILE`/`NODE_EXTRA_CA_CERTS` or verifies JWT signatures client-side, keep a **documented per-harness fallback** during rollout: host broker writes **short-lived access-token-only** credentials (never the refresh token) into a tmpfs file until full proxying works for that harness.
 
 ### 4.5 Orca Desktop Hooks, Orca CLI, and Discord Context MCP
@@ -291,7 +290,7 @@ Placeholder substitution prevents **credential theft** even while outbound netwo
 ### Host secret storage
 - Store raw credentials strictly on the host under `~/.config/agent-sandbox-auth/` (`0700` dir, `0600` files) or encrypted via `systemd-creds encrypt` (`LoadCredentialEncrypted=`).
 - Never store secrets in `/home/jesse/nix`, `/nix/store`, or `$XDG_DATA_HOME/agent-sandbox/home/`.
-- Clean up `agent-sandbox-clean.sh`: once a harness is migrated off in-sandbox credential files, remove its credential paths (`.claude/.credentials.json`, `.codex/auth.json`, `.config/muse/auth.json`, `.gemini/antigravity-cli/antigravity-oauth-token`, `.gemini/oauth_creds.json`, `.ssh`) from the `keep=()` array and scrub existing copies from `$sandbox_home`.
+- Clean up `agent-sandbox-clean.sh`: once a harness is migrated off in-sandbox credential files, remove its credential paths (`.claude/.credentials.json`, `.codex/auth.json`, `.gemini/antigravity-cli/antigravity-oauth-token`, `.gemini/oauth_creds.json`, `.ssh`) from the `keep=()` array and scrub existing copies from `$sandbox_home`.
 
 ### Systemd unit hardening (`users/jesse/agent-sandbox.nix`)
 Follow the same hardening pattern as `discord-context.nix` and `local-models.nix`:
@@ -402,8 +401,8 @@ Policies live declaratively in Nix (`users/jesse/agent-sandbox.nix`), referencin
   - Signing a git commit with the `SSHSIG`-only key succeeds; attempting to use that same key to SSH into any host is rejected by the agent proxy.
   - Attempting to forward a challenge from an unauthorized host fails `session-bind` verification.
 
-### Phase 4 — AI Harness Auth (Claude Code, Codex, Antigravity, Muse, OpenCode)
-- Migrate one harness at a time (recommended order: **Claude Code** -> **Codex + `agent-sandbox-codex-server`** -> **Antigravity (`agy`)** -> **Muse**):
+### Phase 4 — AI Harness Auth (Claude Code, Codex, Antigravity, OpenCode)
+- Migrate one harness at a time (recommended order: **Claude Code** -> **Codex + `agent-sandbox-codex-server`** -> **Antigravity (`agy`)**):
   1. Add host OAuth refresh broker + reverse/selective-MITM route for the harness.
   2. Over-mount credential files (`auth.json`, `.credentials.json`, `antigravity-oauth-token`) with synthetic read-only files while keeping writable transcript/config dirs intact for Orca Chat.
   3. Test interactive CLI, Orca terminal launch, Orca Chat (`CODEX_HOME` / `CLAUDE_CONFIG_DIR`), `codex-image`, and session resume / **Continue in chat**.

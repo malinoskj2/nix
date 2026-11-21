@@ -16,7 +16,7 @@ while [[ $# -gt 0 ]]; do
       display=1
       shift
       ;;
-    --claude | --codex | --muse | --antigravity)
+    --claude | --codex | --antigravity)
       agent=${1#--}
       shift
       break
@@ -137,13 +137,6 @@ configure_codex() {
   for name in AGENTS.md rules skills plugins; do
     mount_readonly "$HOME/.codex/$name"
   done
-}
-
-configure_muse() {
-  # Keep the Meta login current from either environment. Settings are seeded
-  # once so the sandbox keeps its own saved choices, as with Codex.
-  copy_if_newer "$HOME/.config/muse/auth.json" "$sandbox_home/.config/muse/auth.json"
-  seed_if_empty "$HOME/.config/muse/settings.json" "$sandbox_home/.config/muse/settings.json"
 }
 
 configure_antigravity() {
@@ -270,7 +263,7 @@ wl-paste --type image --watch agent-sandbox-clipboard-sync "$clipboard_dir" \
   >/dev/null 2>"$clipboard_dir/watcher.log" &
 clipboard_watcher_pid=$!
 
-mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.config/git" "$sandbox_home/.config/muse" \
+mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.config/git" \
   "$sandbox_home/.gemini/antigravity-cli" "$sandbox_home/.gemini/config"
 for dir in "${shared[@]}"; do
   mkdir -p "$dir" "$sandbox_home${dir#"$HOME"}"
@@ -304,7 +297,6 @@ fi
 
 configure_claude
 configure_codex
-configure_muse
 configure_antigravity
 configure_steam
 
@@ -517,7 +509,6 @@ fi
 case $agent in
   claude) set -- claude --dangerously-skip-permissions "$@" ;;
   codex) set -- codex --dangerously-bypass-approvals-and-sandbox "$@" ;;
-  muse) set -- muse --yolo "$@" ;;
   antigravity) set -- agy --dangerously-skip-permissions "$@" ;;
 esac
 

@@ -53,7 +53,6 @@ let
         "antigravity"
         "claude"
         "codex"
-        "muse"
       ] sandboxAgentCommand;
     };
     approvedPlugins = [
@@ -89,7 +88,7 @@ in
   options.orca.agentResumeWrapper = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
     default = null;
-    description = "Command that Orca's automatic Claude, Codex, Muse and Antigravity resumes in local workspaces run through.";
+    description = "Command that Orca's automatic Claude, Codex and Antigravity resumes in local workspaces run through.";
   };
 
   options.orca.usageInsightsSettings = lib.mkOption {

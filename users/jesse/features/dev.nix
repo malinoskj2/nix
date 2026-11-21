@@ -8,14 +8,11 @@
   imports = [
     ./unreal-mcp.nix
     ../antigravity
-    ../muse.nix
   ];
 
   home.packages = with pkgs; [
-    deepsec
     gh
     gnumake
-    muse
     nil
     nixfmt
     nodejs

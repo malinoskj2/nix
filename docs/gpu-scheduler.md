@@ -103,9 +103,7 @@ default shared directory.
 Claude's global GPU rule and Codex's global `AGENTS.md` include the same policy:
 reserve before GPU work, estimate peak VRAM, use exclusive mode when uncertain,
 wait rather than bypass, and unload before releasing. The sandbox's system
-Claude instructions include it too. Muse's default foreign personal-context
-import reads Codex's global rules; if that import is disabled, import the GPU
-rule into Muse's personal rules before using it for GPU work.
+Claude instructions include it too.
 
 Build and apply the `home` configuration through the normal NixOS workflow, then
 restart sandboxes to pick up the package and shared mount, restart agent sessions

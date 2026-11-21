@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 if [[ $# -lt 1 ]]; then
-  echo 'usage: agent-sandbox-resume <claude|codex|muse|antigravity> [agent arguments...]' >&2
+  echo 'usage: agent-sandbox-resume <claude|codex|antigravity> [agent arguments...]' >&2
   exit 2
 fi
 
@@ -24,7 +24,6 @@ started_in_sandbox() {
     # resumes there.
     claude) return 0 ;;
     codex) [[ -n $session ]] && compgen -G "$sandbox_home/.codex/sessions/*/*/*/rollout-*-$session.jsonl" >/dev/null ;;
-    muse) [[ -n $session ]] && compgen -G "$sandbox_home/.local/share/muse/sessions/*/*/*/$session" >/dev/null ;;
     antigravity) [[ -n $session && $session != */* && -e $sandbox_home/.gemini/antigravity-cli/brain/$session ]] ;;
     *) return 1 ;;
   esac

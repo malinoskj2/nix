@@ -86,7 +86,6 @@
   mold,
   mpv,
   mpvpaper,
-  muse,
   neovim,
   nil,
   nix,
@@ -375,7 +374,6 @@ let
       mold
       mpv
       mpvpaper
-      muse
       neovim
       nestedHyprland
       nil
@@ -676,7 +674,7 @@ symlinkJoin {
     sshProxy
   ];
   meta = {
-    description = "Run Claude Code, Codex, Muse Code or Antigravity in a Docker sandbox with the GPU and a headless Wayland session";
+    description = "Run Claude Code, Codex or Antigravity in a Docker sandbox with the GPU and a headless Wayland session";
     mainProgram = "agent-sandbox";
     platforms = [ "x86_64-linux" ];
   };

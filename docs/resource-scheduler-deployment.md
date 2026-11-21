@@ -7,7 +7,7 @@ sessions that submitted them. Only `home` enables the Slurm queue itself with
 `services.resourceScheduler.queue.enable = true` and a 28-CPU admission ceiling.
 Without the queue, katana and mac-vm install no Slurm, Munge, mode marker,
 completion notifier or legacy GPU adapter, and run every job directly on the
-host. Their Claude, Codex and Muse configuration omits the queue rules and the
+host. Their Claude and Codex configuration omits the queue rules and the
 skills that depend on it (`audio-transcribe`, `qwen-prompt`,
 `qwen-uncensored-prompt`, `work-queue`), so agents there never learn of it.
 On `home`, `resource-control queue-off --confirm` switches the queue off at
@@ -104,9 +104,7 @@ failure; it never starts a second queue. Each container receives its exact Docke
 name in `AGENT_SANDBOX_INSTANCE`, including unnamed interactive launches.
 
 Claude rules, Codex global context and the sandbox's managed instructions share
-`users/jesse/claude/rules/resources.md`. Muse receives the same text through its
-supported `run.developer_prompt` setting, merged into writable preferences while
-preserving other settings and existing prompt text. The shared guidance explicitly
+`users/jesse/claude/rules/resources.md`. The shared guidance explicitly
 keeps legacy GPU rules in force before the cutover.
 
 Use `resource-run --cpu N --ram SIZE [--vram SIZE|--exclusive] --name LABEL -- command`.
