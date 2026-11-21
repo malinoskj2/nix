@@ -41,7 +41,7 @@ hl.config({
 })
 
 -- Tohru draws, blurs and animates its own surfaces, all on layers named `pleamar`. The launcher's
--- backdrop layer only tells hyprrecede, below, when the launcher is open.
+-- backdrop layer only tells the plugin's recession, below, when the launcher is open.
 hl.layer_rule({ match = { namespace = "^(pleamar|tohru-launcher-backdrop)$" }, no_anim = true })
 
 -- Springs keep their velocity when retargeted mid-animation. Overshoot is 14% for `pop` and 8%
@@ -70,13 +70,13 @@ hl.animation({ leaf = "workspaces", enabled = true, speed = 6, spring = "sway" }
 hl.plugin.load(nix.tohruPlugin)
 
 -- Windows are borderless, so the plugin dips the focused one to make focus changes visible.
--- The file chooser dips through hyprsheet instead, which scales its frame rather than resizing
+-- The file chooser dips through the plugin's sheet instead, which scales its frame rather than resizing
 -- it, so its buttons don't lay out again at each size.
 -- Alacritty and mpv have no title bar of their own, so the plugin gives them a thin one to grab
 -- and double-click.
--- While a file chooser is open, hyprsheet draws the app that opened it scaled into the chooser and
+-- While a file chooser is open, the sheet draws the app that opened it scaled into the chooser and
 -- faded out, so a tiled app keeps its layout and never re-lays out for a size it only appears at.
--- While the launcher is open, hyprrecede leans the windows on its monitor back, shades them from
+-- While the launcher is open, the recession leans the windows on its monitor back, shades them from
 -- the top and blurs them, the way Liquid34 pushes the window behind a modal back.
 hl.config({
   plugin = {
@@ -101,7 +101,7 @@ hl.config({
       -- The chooser takes this share of the app that opened it, but stays usable over small ones.
       parent_share = 0.75,
       min_size = { 700, 450 },
-      -- hyprfocus's shrink_percentage.
+      -- The focus dip's shrink_percentage.
       dip = 0.99,
     },
     hyprrecede = {
@@ -126,7 +126,7 @@ hl.curve("hyprfocusDip", { type = "bezier", points = { { 0.25, 1 }, { 0.5, 1 } }
 
 -- A critically damped spring spends its last stretch creeping through the final pixels, and the
 -- chooser's text shimmers while it's resampled at nearly its own size. `land` is damped just under
--- critical, so it reaches the chooser's size at a small speed, and hyprsheet stops it the moment it
+-- critical, so it reaches the chooser's size at a small speed, and the sheet stops it the moment it
 -- gets there.
 hl.curve("land", { type = "spring", stiffness = 625, dampening = 42.5, mass = 1 })
 

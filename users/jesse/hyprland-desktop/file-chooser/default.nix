@@ -44,8 +44,8 @@ in
     "icons/${name}-Papirus-Dark".source = "${icons}/share/icons/${name}-Papirus-Dark";
   };
 
-  # hyprsheet sizes the chooser from the app that opened it. When it can't tell which app that was,
-  # GTK reopens it at its saved size, and this one gives a 900x560 window.
+  # The Tohru plugin's sheet sizes the chooser from the app that opened it. When it can't tell which
+  # app that was, GTK reopens it at its saved size, and this one gives a 900x560 window.
   dconf.settings."org/gtk/settings/file-chooser".window-size = lib.hm.gvariant.mkTuple [
     900
     506

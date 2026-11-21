@@ -149,8 +149,8 @@ values in text, and it ends with the hem, 12 px below the footer.
 - **The status dot.** A 9 px ● before striped text: peach when active, overlay1
   when muted or off.
 - **The lambda colors.** Peach, yellow, teal, lavender, mauve and pink, in that
-  order. They are the snowflake's lambdas, the workspace pills (workspace *n*
-  takes color *n*), and hyprglass's gleam.
+  order. They are the snowflake's lambdas and the workspace pills (workspace
+  *n* takes color *n*).
 
 ## Motion
 
@@ -166,14 +166,15 @@ Hyprland springs, defined in `hyprland.lua`:
 
 - The polkit prompt scales in with "popin 80%"; the launcher animates itself.
 - Notification banners slide in and out across the screen edge.
-- The file chooser grows its parent window into itself and back (hyprsheet),
-  without resizing either window.
+- The file chooser grows its parent window into itself and back (the Tohru
+  plugin's sheet), without resizing either window.
 - While the launcher, a picker or the polkit prompt is open, the windows behind
   it lean back 16° about the bottom of the screen, shrink to 86%, darken from
-  the top and blur with the wallpaper, and spring back as it closes
-  (hyprrecede).
-- hyprfocus shrinks a window to 99% on focus. An open file chooser dips the same
-  way through hyprsheet, which scales its frame rather than resizing it.
+  the top and blur with the wallpaper, and spring back as it closes (the
+  plugin's recession).
+- The plugin's focus dip shrinks a window to 99% on focus. An open file chooser
+  dips the same way through its sheet, which scales its frame rather than
+  resizing it.
 - Shimmer and gleam effects play on hover or on open, never continuously.
 
 ## Bar and windows
@@ -183,8 +184,8 @@ Hyprland springs, defined in `hyprland.lua`:
   apart), a `✦` separator and the clock.
 - The shell owns the snowflake control button and its system menu.
 - Bar icons have no tooltips when their menu shows the same information.
-- Windows have radius 10 and no border; hyprfocus's dip marks focus. Hyprbars
-  is only a thin drag strip on Alacritty and mpv.
+- Windows have radius 10 and no border; the plugin's focus dip marks focus. Its
+  title bar is only a thin drag strip on Alacritty and mpv.
 - The GTK file chooser uses Couture icons based on Catppuccin Mocha Papirus:
   blue folders, with one accent per place and a gray trash in its list and
   sidebar.
@@ -197,5 +198,5 @@ Before calling a new surface done, check that it:
 - uses the color roles above, peach as the accent, with no new colors;
 - uses SF Pro Text in the menu style;
 - ends a menu with the hem and keeps settings behind the header's value;
-- matches its hyprglass radius to its surface radius;
+- matches its glass radius to its surface radius;
 - has been checked in the running desktop at 1x, not only in a mockup.
