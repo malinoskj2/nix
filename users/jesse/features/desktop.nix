@@ -47,6 +47,22 @@ let
       pluginSystemEnabled = true;
       # The glass titlebar needs an alpha-capable window for Hyprland's blur.
       windowMaterial = "translucent";
+      # A child branch fast-forwarded into local main reads as unchanged, not merged.
+      workspaceCleanupPolicy = {
+        merged.enabled = true;
+        unchanged = {
+          enabled = true;
+          afterDays = 1;
+        };
+        inactive = {
+          enabled = false;
+          afterDays = 30;
+          action = "archive";
+        };
+        automationRuns.enabled = false;
+        orchestrationWorkers.enabled = false;
+        keepWhen = "any-local-files";
+      };
     }
     // lib.optionalAttrs (config.orca.agentResumeWrapper != null) {
       agentCmdOverrides = lib.genAttrs [
