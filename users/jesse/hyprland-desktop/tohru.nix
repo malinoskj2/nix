@@ -20,6 +20,19 @@ in
     polkit.enable = true;
     lock.style = "flooded-monolith";
     settings.bar.preferred_output = config.desktop.monitors.main.output;
+    assistant =
+      let
+        models = "${config.services.local-models.root}/by-name";
+      in
+      {
+        voice = {
+          enable = true;
+          vadModel = "${models}/silero-vad/silero-vad-v6.2.3.onnx";
+          asrModel = "${models}/voice-asr";
+          turnModel = "${models}/voice-turn/smart-turn-v3.2-cpu.onnx";
+        };
+        tts.model = "${models}/voice-kokoro";
+      };
   };
 
   home.packages = [ pkgs.grimblast ];
