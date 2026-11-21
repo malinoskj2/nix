@@ -58,7 +58,7 @@
       type = "github";
       owner = "nixos";
       repo = "nixpkgs";
-      rev = "8ce4ef6cb6f871616146b9fe26d2a5ae594e94fe";
+      rev = "2786a2a72088ecf32aea5b3ec52099e6a7cff78f";
     };
     nixpkgs-unstable = {
       type = "github";

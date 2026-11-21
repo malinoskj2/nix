@@ -48,17 +48,21 @@ the few packages that need something newer.
 plugin (focus dips, title bars, chooser sheets and launcher recession) is built
 against the exact host Hyprland package, and its own `hyprland-nixpkgs` input
 follows `nixpkgs-hyprland`. The desktop assertion in
-`users/jesse/hyprland-desktop/hyprland/default.nix`, the plugin package and the
-first-frame tearing patch assertion in `hosts/home/gaming.nix` require 0.56.2.
+`users/jesse/hyprland-desktop/hyprland/default.nix` and the plugin package
+require 0.57.2. The desktop runs nixpkgs' Hyprland unpatched: 0.57 includes the
+first-frame tearing fix (Hyprland PR 16572) that `home` used to carry as a patch.
 
-To upgrade, review/rebase `hosts/home/tearing-first-frame.patch` against the new
-compositor, including cursor/DRM restrictions. Review the plugin in the Tohru
-repository against the same pinned headers; a successful compile alone does not
-establish compatibility. Check chooser opening/closing from Firefox on both
-normal and rotated monitors, title-bar maximize/unload and launcher recession
-without damage artifacts. Rebase `pkgs/agent-sandbox/aquamarine-nested.patch`
-against the coupled backend, verify `NESTED-1`, update version assertions, and
-build `home` before activation.
+To upgrade, move `nixpkgs-hyprland` to the revision Tohru's
+`hyprland/UPSTREAM.md` reviewed, then `nix flake update tohru`. Review the
+plugin in the Tohru repository against the same pinned headers; a successful
+compile alone does not establish compatibility. Check `look.lua` against any
+config keys or animation leaves the plugin renames, and its Lua configuration
+against compositor API changes. Check chooser opening/closing from Firefox on
+both normal and rotated monitors, title-bar maximize/unload, launcher recession
+without damage artifacts, and live tearing in a game, including cursor/DRM
+restrictions. Rebase `pkgs/agent-sandbox/aquamarine-nested.patch` against the
+coupled Aquamarine, verify `NESTED-1` with the plugin loaded, update version
+assertions, and build `home` before activation.
 
 ### Tohru
 
@@ -374,8 +378,7 @@ Treat a bump as a hardware change and test it on the device.
 ## Background game FPS limiting
 
 There is no background limiter since the move from j2bar to Tohru; see
-[game-latency.md](game-latency.md#background-frame-limit). Preserve GameMode and
-the compositor tearing patch when updating.
+[game-latency.md](game-latency.md#background-frame-limit). Preserve GameMode when updating.
 
 ## Things an update never touches
 

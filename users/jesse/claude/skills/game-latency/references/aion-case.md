@@ -54,7 +54,8 @@ The persistent implementation is:
 - `hosts/home/tearing-first-frame.patch`: ignore only `TC_NOT_TORN` for the
   initial eligibility check; retain real blockers, including the hardware
   cursor check. `gaming.nix` applies it only to the physical desktop's Hyprland
-  0.56.2 package with a version assertion.
+  0.56.2 package with a version assertion. Hyprland 0.57 includes the fix
+  upstream (PR 16572), so the patch was dropped with the move to 0.57.2.
 
 The build passed and subsequent user restarts produced live tearing. Briefly
 forcing software cursors during the original false-tearing investigation did

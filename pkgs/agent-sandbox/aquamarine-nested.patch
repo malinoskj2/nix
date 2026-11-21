@@ -23,7 +23,7 @@ index 6f596b7..22e7420 100644
      for (size_t i = 0; i < (size_t)attrs.planes; ++i) {
          attrs.strides.at(i) = gbm_bo_get_stride_for_plane(bo, i);
 diff --git a/src/backend/Wayland.cpp b/src/backend/Wayland.cpp
-index 8905adc..46134f6 100644
+index 6af7b93..65a4469 100644
 --- a/src/backend/Wayland.cpp
 +++ b/src/backend/Wayland.cpp
 @@ -122,7 +122,7 @@ bool Aquamarine::CWaylandBackend::start() {

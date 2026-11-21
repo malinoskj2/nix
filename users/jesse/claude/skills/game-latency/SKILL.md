@@ -77,10 +77,9 @@ validation limits, not a prescribed fix for every game.
 From the Nix repository root, inspect the current sources of truth:
 
 - `hosts/home/gaming.nix`: Steam's automatic GameMode library, client/helper
-  exclusions, the `gamemode` group and the desktop Hyprland package override.
+  exclusions and the `gamemode` group.
 - `hosts/home/steam-gamemode.patch` and `gamemode-ioprio.patch`: Steam client
   guards and the daemon's distinction between unset and explicit I/O priority.
-- `hosts/home/tearing-first-frame.patch`: the version-specific tearing patch.
 - `users/jesse/hyprland-desktop/hyprland/hyprland.lua`: input and game window rules.
 - `users/jesse/hyprland-desktop/hyprland/look.lua`: tearing and scanout policy.
 - `hosts/home/scheduler.nix`: CPU scheduling and hardware-specific preferences.

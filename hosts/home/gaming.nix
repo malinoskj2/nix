@@ -47,15 +47,6 @@ in
   systemd.user.services.gamemoded.restartTriggers = [ pkgs.gamemode ];
 
   programs = {
-    # Check tearing eligibility before the first frame has been marked torn.
-    # Keep this on the physical desktop; nested agent compositors do not use DRM.
-    hyprland.package =
-      assert lib.assertMsg (
-        pkgs.hyprland.version == "0.56.2"
-      ) "The tearing patch requires review for Hyprland ${pkgs.hyprland.version}.";
-      pkgs.hyprland.overrideAttrs (old: {
-        patches = (old.patches or [ ]) ++ [ ./tearing-first-frame.patch ];
-      });
     gamemode = {
       enable = true;
       settings = {

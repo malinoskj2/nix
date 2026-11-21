@@ -7,7 +7,7 @@
 }:
 let
   inherit (config.palette) alphaHex glass;
-  supportedHyprland = "0.56.2";
+  supportedHyprland = "0.57.2";
   hyprland = osConfig.programs.hyprland.package;
   hyprctl = lib.getExe' hyprland "hyprctl";
   inherit (config.desktop) monitors;
