@@ -95,7 +95,7 @@ limiter. `~/.config/j2bar` and j2bar's state are left in place for rollback.
 release for that Firefox major version. Move them together. Then open Firefox
 and check what [`users/jesse/firefox.nix`](../users/jesse/firefox.nix) depends
 on: the Nova setting, the imported WaveFox CSS, the cascade-layer order and the
-transparent chrome. Firefox 159 also needs the local horizontal-tab overrides for
+transparent chrome. Since Firefox 159 it also needs the local horizontal-tab overrides for
 the inset rounded content frame, navigation spacing, hidden sidebar toggle,
 fallback tab icon and translucent selected tab. Check normal, maximized and
 fullscreen windows when moving these.

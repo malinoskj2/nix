@@ -199,17 +199,17 @@
     },
     "nixpkgs-firefox": {
       "locked": {
-        "lastModified": 1793876309,
-        "narHash": "sha256-Wojg9lIH/hDH91iDVH2/EPw8oDSpxjxhXONbU1yf4Zg=",
+        "lastModified": 1795234589,
+        "narHash": "sha256-f/VVvxf5RsQgWVhUtefoca5ktVg0DA2bnkMOcmSnozo=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "f9a75f41be3a74eab55d3a7679d34ad6cc0da977",
+        "rev": "2786a2a72088ecf32aea5b3ec52099e6a7cff78f",
         "type": "github"
       },
       "original": {
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "f9a75f41be3a74eab55d3a7679d34ad6cc0da977",
+        "rev": "2786a2a72088ecf32aea5b3ec52099e6a7cff78f",
         "type": "github"
       }
     },
@@ -418,16 +418,16 @@
     "wavefox": {
       "flake": false,
       "locked": {
-        "lastModified": 1793036924,
-        "narHash": "sha256-1PLg7Rz+3HFFuP7BRusZrIP7etROjKDDCrhvPEBZTdE=",
+        "lastModified": 1794068633,
+        "narHash": "sha256-4cmxNByP2Lp0cKybqSizxFmE2sPmeqpV9XHFo0incWs=",
         "owner": "QNetITQ",
         "repo": "WaveFox",
-        "rev": "63c677f47baa2dfe8a29a5a1ebcb883e79c30882",
+        "rev": "db74fb415946aefa10d6d4e0c3018248e8c96ff4",
         "type": "github"
       },
       "original": {
         "owner": "QNetITQ",
-        "ref": "0.9.159",
+        "ref": "0.9.160",
         "repo": "WaveFox",
         "type": "github"
       }
