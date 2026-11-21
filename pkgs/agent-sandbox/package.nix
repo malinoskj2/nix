@@ -201,6 +201,13 @@ let
     if [[ -f $settings ]]; then
       set -- --settings "$settings" "$@"
     fi
+    # Child worktrees host short-lived workers, so the 1-hour cache writes would rarely pay off.
+    if [[ -n ''${ORCA_AGENT_SESSION_ID:-}''${ORCA_TERMINAL_HANDLE:-}''${ORCA_PANE_KEY:-} ]] &&
+      parent=$(${lib.getExe' coreutils "timeout"} 3 ${lib.getExe orcaCli} worktree current --json 2>/dev/null |
+        ${lib.getExe jq} -r '.result.worktree.parentWorktreeId // empty' 2>/dev/null) &&
+      [[ -n $parent ]]; then
+      set -- --settings '{"promptCacheTtl":"5m"}' "$@"
+    fi
     exec ${lib.getExe claude-code} --plugin-dir ${claudePlugin} "$@"
   '';
 

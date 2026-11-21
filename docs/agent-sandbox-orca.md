@@ -131,6 +131,25 @@ Chat without copying or moving their history. Chat passes that account's
 host path. Older sessions still reporting the container's `~/.codex` path need
 to be resumed in a terminal with the current launcher first.
 
+## Prompt cache in child worktrees
+
+Workers in child Orca worktrees are short-lived, so the sandbox's `claude`
+wrapper gives them Claude Code's 5-minute prompt cache instead of the 1-hour
+cache a subscription gets automatically. When Orca's session, terminal or pane
+environment is present, it runs `orca-ide worktree current --json` in the
+launch directory, and if the worktree has a `parentWorktreeId` it prepends
+`--settings '{"promptCacheTtl":"5m"}'`. Top-level cards, the main checkout,
+directories outside Orca and launches without Orca's environment keep the
+automatic choice, and a `CLAUDE_CODE_PROMPT_CACHE_TTL` in the environment still
+wins. The lookup has a 3-second limit and is skipped on failure. Orca launches
+on hosts without the sandbox command run plain `claude` and keep the automatic
+TTL. A running session keeps the TTL it started with until it is relaunched or
+resumed.
+
+Codex, Antigravity and Muse have no setting for this. Codex sends no prompt
+cache lifetime unless a turn asks for its longer `30m` or `12h` options, which
+nothing in its CLI or config requests, so it already gets the API's default.
+
 ## Chat interface
 
 Codex and Claude can use Orca's **Chat** interface with the same sandbox launch
