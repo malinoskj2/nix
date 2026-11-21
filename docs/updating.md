@@ -143,14 +143,14 @@ Treat a bump as a hardware change and test it on the device.
   `production` entry. 615 hitches the desktop when the memory clock changes;
   check a new driver against [nvidia-memory-clock.md](nvidia-memory-clock.md).
 - **claude-code.** The `unstable` overlay in
-  [`overlays/default.nix`](../overlays/default.nix) builds claude-code from
-  [`overlays/claude-code/manifest.zst.json`](../overlays/claude-code/manifest.zst.json)
-  instead of the version in `nixpkgs-unstable`. To move it, replace that file
-  with `https://downloads.claude.ai/claude-code-releases/<version>/manifest.zst.json`.
-  Drop the manifest once `nixpkgs-unstable` catches up. Keep the release's
-  `alsa-lib` in the override: the wrapper puts it on `LD_LIBRARY_PATH`, every
-  command Claude runs inherits that, and unstable's build needs a newer glibc
-  than release programs that load libasound, such as mpv.
+  [`overlays/default.nix`](../overlays/default.nix) builds `nixpkgs-unstable`'s
+  claude-code with the release's `alsa-lib`: the wrapper puts it on
+  `LD_LIBRARY_PATH`, every command Claude runs inherits that, and unstable's
+  build needs a newer glibc than release programs that load libasound, such as
+  mpv. To run a release unstable doesn't have yet, give the override a
+  `manifest` from
+  `https://downloads.claude.ai/claude-code-releases/<version>/manifest.zst.json`,
+  and drop it once `nixpkgs-unstable` catches up.
 - **Antigravity CLI.** [`pkgs/antigravity-cli/`](../pkgs/antigravity-cli)
   builds the `agy` release it names on `pkgs.unstable`'s derivation, with its
   self-updater off. To move it, read the version from
@@ -360,24 +360,6 @@ Treat a bump as a hardware change and test it on the device.
 There is no background limiter since the move from j2bar to Tohru; see
 [game-latency.md](game-latency.md#background-frame-limit). Preserve GameMode and
 the compositor tearing patch when updating.
-
-## Codex
-
-`overlays/codex/default.nix` temporarily advances `pkgs.unstable.codex` to
-[0.169.1](https://github.com/openai/codex/releases/tag/rust-v0.169.1) without
-moving the unstable input or unrelated packages. It retains nixpkgs' package
-layout, voice runtime, code-mode helper and Nix compatibility patches. The
-host CLI, sandbox CLI and sandbox app-server all use this override.
-
-For a manual bump, resolve the requested release tag to its full commit SHA,
-update `version`, `buildCommit`, the unpacked source hash and `cargoHash`,
-and compare the release's `codex-rs/Cargo.lock` V8 version with nixpkgs'
-`librusty_v8` and source bindings. Version 0.169.1 still uses V8 152.2.0.
-Build the package and its `tests.app-server-daemon` and `tests.voice-runtime`
-passthru checks; these exercise the package layout and matching helper build
-stamps. Run builds through the shared resource scheduler. Remove the override
-when the locked unstable input supplies the requested version or a deliberately
-approved successor.
 
 ## Things an update never touches
 
