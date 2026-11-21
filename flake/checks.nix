@@ -1,4 +1,9 @@
-{ lib, self, ... }:
+{
+  inputs,
+  lib,
+  self,
+  ...
+}:
 {
   perSystem =
     {
@@ -33,6 +38,12 @@
           resource-scheduler = self'.packages.resource-scheduler.tests.scheduler;
         }
         // lib.optionalAttrs (system == "x86_64-linux") {
+          tohru-greeter-vm = pkgs.testers.runNixOSTest (
+            import ../hosts/home/greeter-test.nix {
+              inherit (inputs) tohru;
+              greeter = self.nixosConfigurations.home.config.services.tohru-greeter;
+            }
+          );
           resource-scheduler-vm = pkgs.testers.runNixOSTest (
             import ../hosts/home/resource-scheduler-test.nix { inherit pkgs; }
           );

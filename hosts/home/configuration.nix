@@ -34,6 +34,7 @@ in
     ./hardware-configuration.nix
     ./boot.nix
     ./gaming.nix
+    ./greeter.nix
     ./host-switch.nix
     ./external-ssd.nix
     ./media-share.nix
