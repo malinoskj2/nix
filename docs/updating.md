@@ -322,8 +322,18 @@ Treat a bump as a hardware change and test it on the device.
     Codex folder as a source;
   - check that Getting started shows Enable Orca CLI as done. It only looks
     for the `orca-cli`, `orca-computer-use` and `orchestration` skills, which
-    [`features/desktop.nix`](../users/jesse/features/desktop.nix) links from
-    the release's `skills/`, so a renamed or added skill leaves it undone.
+    [`features/desktop.nix`](../users/jesse/features/desktop.nix) installs
+    from the release's `skills/`, so a renamed or added skill leaves it undone;
+  - check that Settings → Orchestration shows every detected agent covered,
+    with no Review skill warning. Orca's bundled-skill plan only counts a real
+    `~/.agents/skills/<skill>` folder holding exactly the release's `SKILL.md`
+    (Codex reads it directly), with `~/.claude/skills` and
+    `~/.gemini/config/skills` (Antigravity) linking to that folder; a link
+    into the store reads as another owner's skill. So the activation copies
+    each `SKILL.md` there, and the agent sandbox mounts that folder. If Orca
+    moves a provider's skill folder (`skill-install-providers.ts`) or changes
+    how it classifies a copy (`bundled-skill-classification.ts`,
+    `bundled-skill-plan.ts`), follow it.
 - **Eisvogel.** [`pkgs/markdown-to-pdf/`](../pkgs/markdown-to-pdf) typesets
   with the Eisvogel LaTeX template at `v3.4.0`. Eisvogel 3.5.0 moved from the
   `sourcesanspro` TeX Live package to `sourcesans`, which nixpkgs doesn't

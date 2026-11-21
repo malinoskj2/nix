@@ -68,12 +68,16 @@ let
     "orca-cli"
     "orchestration"
   ];
+  # Orca only counts an agent's copy as its own when the agent folder links to a
+  # real `.agents/skills` folder holding exactly its SKILL.md; a store link reads
+  # as someone else's skill.
+  sharedSkills = "${config.home.homeDirectory}/.agents/skills";
   skillsIn =
     directory:
     lib.genAttrs' orcaSkills (
       skill:
       lib.nameValuePair "${directory}/${skill}" {
-        source = "${orca-ade}/share/orca-ade/skills/${skill}";
+        source = config.lib.file.mkOutOfStoreSymlink "${sharedSkills}/${skill}";
       }
     );
 in
@@ -135,8 +139,22 @@ in
           Install.WantedBy = [ "graphical-session.target" ];
         };
 
-    home.file =
-      skillsIn ".claude/skills" // skillsIn ".codex/skills" // skillsIn ".gemini/config/skills";
+    home.file = skillsIn ".claude/skills" // skillsIn ".gemini/config/skills";
+
+    home.activation.orcaSkills = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+      for skill in ${lib.escapeShellArgs orcaSkills}; do
+        target=${lib.escapeShellArg sharedSkills}/$skill
+        if [ -L "$target" ] || { [ -e "$target" ] && [ ! -d "$target" ]; }; then
+          run rm -f "$target"
+        fi
+        run mkdir -p "$target"
+        run find "$target" -mindepth 1 -maxdepth 1 ! -name SKILL.md -exec rm -rf {} +
+        if ! cmp -s ${orca-ade}/share/orca-ade/skills/$skill/SKILL.md "$target/SKILL.md"; then
+          run rm -f "$target/SKILL.md"
+          run install -m 644 ${orca-ade}/share/orca-ade/skills/$skill/SKILL.md "$target/SKILL.md"
+        fi
+      done
+    '';
 
     home.sessionVariables = {
       DOWNLOAD = "/media/scratch/download";

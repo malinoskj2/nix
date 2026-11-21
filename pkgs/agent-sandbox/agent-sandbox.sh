@@ -295,6 +295,8 @@ if ! docker image inspect "$image_ref" >/dev/null 2>&1; then
   "$AGENT_SANDBOX_IMAGE" | docker load >/dev/null
 fi
 
+# Codex reads it directly; the Claude and Antigravity skill folders link into it.
+mount_readonly "$HOME/.agents/skills"
 configure_claude
 configure_codex
 configure_antigravity
