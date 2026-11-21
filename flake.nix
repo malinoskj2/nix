@@ -6,7 +6,7 @@
       type = "github";
       owner = "Lyndeno";
       repo = "apple-fonts.nix";
-      rev = "3861e2249cb244bfbc7cfab2303c152cf5f9d9e9";
+      rev = "58b7ab5a049c57c4f38f27eac84f45e2903bb687";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     catppuccin = {
