@@ -41,12 +41,18 @@ let
     '';
   };
 
-  # Runs only while hyprlock is up, so the unlocked session keeps its own, longer timeouts.
-  whileLocked = command: "${pidof} hyprlock >/dev/null && ${command}";
+  # Tohru's locker where Tohru runs; hyprlock on hosts without it (mac-vm).
+  tohru = config.programs.tohru.enable;
+  tohruLock = config.programs.tohru.lock.command;
+
+  # Runs only while the session is locked, so the unlocked session keeps its own, longer timeouts.
+  whileLocked =
+    command:
+    if tohru then "${tohruLock} --running && ${command}" else "${pidof} hyprlock >/dev/null && ${command}";
 in
 {
   programs.hyprlock = {
-    enable = true;
+    enable = !tohru;
     # The NixOS module installs it with its PAM service.
     package = osConfig.programs.hyprlock.package;
     settings = {
@@ -124,7 +130,8 @@ in
     enable = true;
     settings = {
       general = {
-        lock_cmd = lib.getExe lock;
+        # tohru-lock sets logind's LockedHint itself, and asking again while locked does nothing.
+        lock_cmd = if tohru then tohruLock else lib.getExe lock;
         before_sleep_cmd = "loginctl lock-session";
         after_sleep_cmd = dpms "on";
         # Suspend waits for the lock surface, so the session never wakes unlocked.
@@ -157,5 +164,5 @@ in
     };
   };
 
-  home.packages = [ lock ];
+  home.packages = lib.optional (!tohru) lock;
 }

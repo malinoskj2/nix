@@ -9,6 +9,8 @@ in
   programs.hyprland.enable = true;
   # The locker, with its PAM service; Home Manager configures it.
   programs.hyprlock.enable = true;
+  # Tohru's locker checks passwords against its own PAM service.
+  security.pam.services.tohru-lock = { };
 
   environment.sessionVariables = {
     GSETTINGS_SCHEMA_DIR = "${schemas}/share/gsettings-schemas/${schemas.name}/glib-2.0/schemas";

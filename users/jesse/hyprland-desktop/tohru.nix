@@ -17,10 +17,10 @@ in
     enable = package != null;
     package = lib.mkIf (package != null) package;
     systemd.enable = true;
+    polkit.enable = true;
+    lock.style = "flooded-monolith";
     settings.bar.preferred_output = config.desktop.monitors.main.output;
   };
-
-  services.hyprpolkitagent.enable = true;
 
   home.packages = [ pkgs.grimblast ];
   home.sessionVariables.XDG_SCREENSHOTS_DIR = "${config.home.homeDirectory}/Pictures/Screenshots";
