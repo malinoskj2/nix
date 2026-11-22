@@ -144,6 +144,8 @@ let
       ./tooncrafter-open-clip-3.patch
       # The dual-ref VAE called xformers whether or not it was installed.
       ./tooncrafter-sdpa.patch
+      # torchvision 0.26 removed write_video, and a savedir containing "samples" was rewritten.
+      ./tooncrafter-save-results.patch
     ];
   };
 in

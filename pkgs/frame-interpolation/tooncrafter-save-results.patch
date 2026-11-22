@@ -1,5 +1,5 @@
 diff --git a/scripts/evaluation/inference.py b/scripts/evaluation/inference.py
-index 334a984..7e20375 100644
+index 334a984..70b2d1a 100644
 --- a/scripts/evaluation/inference.py
 +++ b/scripts/evaluation/inference.py
 @@ -10,6 +10,7 @@ import torchvision
@@ -42,12 +42,23 @@ index 334a984..7e20375 100644
  
  
  def save_results_seperate(prompt, samples, filename, fakedir, fps=10, loop=False):
-@@ -152,7 +169,7 @@ def save_results_seperate(prompt, samples, filename, fakedir, fps=10, loop=False
+@@ -151,8 +168,8 @@ def save_results_seperate(prompt, samples, filename, fakedir, fps=10, loop=False
+             grid = video[i,...]
              grid = (grid + 1.0) / 2.0
              grid = (grid * 255).to(torch.uint8).permute(1, 2, 3, 0) #thwc
-             path = os.path.join(savedirs[idx].replace('samples', 'samples_separate'), f'{filename.split(".")[0]}_sample{i}.mp4')
+-            path = os.path.join(savedirs[idx].replace('samples', 'samples_separate'), f'{filename.split(".")[0]}_sample{i}.mp4')
 -            torchvision.io.write_video(path, grid, fps=fps, video_codec='h264', options={'crf': '10'})
++            path = os.path.join(os.path.dirname(savedirs[idx]), 'samples_separate', f'{filename.split(".")[0]}_sample{i}.mp4')
 +            write_video(path, grid, fps)
  
  def get_latent_z(model, videos):
      b, c, t, h, w = videos.shape
+@@ -346,7 +363,7 @@ def run_inference(args, gpu_num, gpu_no):
+ 
+ def get_parser():
+     parser = argparse.ArgumentParser()
+-    parser.add_argument("--savedir", type=str, default=None, help="results saving path")
++    parser.add_argument("--savedir", type=str, default=None, help="results saving path: samples_separate/<first frame name>_sample<i>.mp4, with its frames as PNGs in the directory of the same name")
+     parser.add_argument("--ckpt_path", type=str, default=None, help="checkpoint path")
+     parser.add_argument("--config", type=str, help="config (yaml) path")
+     parser.add_argument("--prompt_dir", type=str, default=None, help="a data dir containing videos and prompts")
