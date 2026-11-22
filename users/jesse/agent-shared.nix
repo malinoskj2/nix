@@ -14,6 +14,7 @@ in
       ./claude/rules/host-switch.md
     ]
     ++ [
+      ./claude/rules/documentation.md
       ./claude/rules/local-models.md
       ./claude/rules/media.md
       ./claude/rules/sandbox-display.md

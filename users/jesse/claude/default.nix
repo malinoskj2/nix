@@ -72,6 +72,7 @@ in
       qwen-uncensored-prompt = ./skills/qwen-uncensored-prompt;
     };
     rules = {
+      documentation = ./rules/documentation.md;
       local-models = ./rules/local-models.md;
       media = ./rules/media.md;
       rust = ./rules/rust.md;
