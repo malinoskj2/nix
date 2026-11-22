@@ -1,0 +1,48 @@
+diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
+--- a/src/renderer/src/assets/main.css
++++ b/src/renderer/src/assets/main.css
+@@ -354,25 +354,25 @@
+ }
+ 
+ .dark {
+-  --orca-security-background: #0a0a0a;
+-  --orca-security-foreground: #f0f0f0;
+-  --orca-security-card: #171717;
+-  --orca-security-card-foreground: #f0f0f0;
+-  --orca-security-popover: #171717;
+-  --orca-security-popover-foreground: #f0f0f0;
+-  --orca-security-primary: #e5e5e5;
+-  --orca-security-primary-foreground: #171717;
+-  --orca-security-secondary: #262626;
+-  --orca-security-secondary-foreground: #f0f0f0;
+-  --orca-security-muted: #262626;
+-  --orca-security-muted-foreground: #acacac;
+-  --orca-security-accent: #404040;
+-  --orca-security-accent-foreground: #f0f0f0;
+-  --orca-security-border: rgb(255 255 255 / 0.07);
+-  --orca-security-input: rgb(255 255 255 / 0.15);
+-  --orca-security-ring: #737373;
+-  --orca-security-floating-surface: rgba(0, 0, 0, 0.72);
+-  --orca-security-dialog-surface: rgba(23, 23, 23, 0.96);
++  --orca-security-background: #1e1e2e;
++  --orca-security-foreground: #cdd6f4;
++  --orca-security-card: #181825;
++  --orca-security-card-foreground: #cdd6f4;
++  --orca-security-popover: #181825;
++  --orca-security-popover-foreground: #cdd6f4;
++  --orca-security-primary: #cba6f7;
++  --orca-security-primary-foreground: #11111b;
++  --orca-security-secondary: #313244;
++  --orca-security-secondary-foreground: #cdd6f4;
++  --orca-security-muted: #313244;
++  --orca-security-muted-foreground: #a6adc8;
++  --orca-security-accent: #45475a;
++  --orca-security-accent-foreground: #cdd6f4;
++  --orca-security-border: #313244;
++  --orca-security-input: #45475a;
++  --orca-security-ring: #cba6f7;
++  --orca-security-floating-surface: rgb(17 17 27 / 0.72);
++  --orca-security-dialog-surface: rgb(24 24 37 / 0.96);
+   --background: #0a0a0a;
+   --editor-surface: #1e1e1e;
+   --foreground: #f0f0f0;

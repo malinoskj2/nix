@@ -69,21 +69,19 @@ stdenv.mkDerivation (finalAttrs: {
   };
 
   patches = [
-    ./catppuccin.patch
+    ./catppuccin-security.patch
     ./glass-titlebar.patch
     ./claude-hooks.patch
     ./open-video-externally.patch
-    ./nix-syntax.patch
     ./clipboard-shared-media.patch
-    ./bundled-plugins.patch
+    ./legacy-plugin-migration.patch
     ./approved-plugins.patch
-    ./structured-sandbox-launch.patch
+    ./sandbox-wrapper-deployment.patch
     ./agent-resume-wrapper.patch
     ./sandbox-codex-history.patch
     ./terminal-container-indicators.patch
     ./structured-sandbox-indicators.patch
     ./pending-below-main.patch
-    ./local-default-base.patch
   ];
 
   postPatch = ''
@@ -124,17 +122,14 @@ stdenv.mkDerivation (finalAttrs: {
     }
     EOF
 
-    substituteInPlace src/shared/settings/default-global-settings.ts \
-      --replace-fail "keepComputerAwakeWhileAgentsRun: false," "keepComputerAwakeWhileAgentsRun: true,"
-
     # Declared plugins run without the consent prompt; disabling one still sticks.
     cat > src/shared/plugins/approval/nix-approved-plugins.ts <<'EOF'
     export const nixApprovedPlugins: readonly string[] = ${builtins.toJSON approvedPlugins}
     EOF
 
-    # Bundled, so Orca installs and updates them from the package like its own launch plugins.
-    launch=resources/plugins/launch
-    mkdir $launch/chron0.discord-presence $launch/etherll.usage-insights
+    # Native local-folder installs retain declared publisher identities and plugin data.
+    launch=nix-plugins
+    mkdir -p $launch/chron0.discord-presence $launch/etherll.usage-insights
     cp -r ${discord-presence}/{orca-plugin.json,README.md,dist,panel,assets} $launch/chron0.discord-presence
     cp -r ${usage-insights}/{orca-plugin.json,README.md,LICENSE,images,panel,src} $launch/etherll.usage-insights
     chmod -R u+w $launch/chron0.discord-presence $launch/etherll.usage-insights
@@ -144,7 +139,7 @@ stdenv.mkDerivation (finalAttrs: {
     import json
     import sys
     from pathlib import Path
-    launch = Path("resources/plugins/launch")
+    launch = Path("nix-plugins")
     for key in ("chron0.discord-presence", "etherll.usage-insights"):
         path = launch / key / "orca-plugin.json"
         manifest = json.loads(path.read_text())
@@ -162,17 +157,18 @@ stdenv.mkDerivation (finalAttrs: {
       --replace-fail 'normalizeBridgeUrl(source.bridgeUrl);' 'normalizeBridgeUrl(source.bridgeUrl ?? DEFAULT_SETTINGS.bridgeUrl);' \
       --replace-fail 'normalizeBridgeToken(source.bridgeToken);' 'normalizeBridgeToken(source.bridgeToken ?? DEFAULT_SETTINGS.bridgeToken);' \
       --replace-fail 'return "Working in Orca";' 'return "Working in Orca ADE";'
-    node -e '
-      const { readFileSync, writeFileSync } = require("node:fs")
-      const { hashPackagedPluginTree } = require("./config/scripts/desktop-distribution/runtime-verification/verify-packaged-plugin-resources.cjs")
-      const [launch, ...keys] = process.argv.slice(1)
-      const indexPath = launch + "/bundled-plugins.json"
-      const index = JSON.parse(readFileSync(indexPath, "utf8"))
-      for (const key of keys) {
-        index.plugins.push({ pluginKey: key, path: key, contentHash: hashPackagedPluginTree(launch + "/" + key) })
-      }
-      writeFileSync(indexPath, JSON.stringify(index, null, 2))
-    ' $launch chron0.discord-presence etherll.usage-insights
+    cp -r ${./catppuccin} $launch/local.catppuccin-mocha
+    chmod -R u+w $launch/local.catppuccin-mocha
+    # Native same-byte reinstalls preserve prior provenance. Bind the immutable content to
+    # this store source so both the legacy migration and later generations publish a new source.
+    for key in chron0.discord-presence etherll.usage-insights local.catppuccin-mocha; do
+      printf '{"source":"%s"}\n' "$out/share/orca-ade/plugins/$key" > "$launch/$key/nix-installation.json"
+    done
+
+    # Exercise the native APIs and portable deployment without touching a running runtime.
+    cp ${./native-migration.test.ts} src/main/native-chat/nix-native-migration.test.ts
+    cp ${./sandbox-launch.sh} nix-sandbox-launch.sh
+    printf '%s' ${finalAttrs.passthru.orcadTemplate} > nix-orcad-template-path
 
     # Official skill installs pin to the tag's commit, which upstream reads from a git checkout.
     substituteInPlace config/scripts/build-identity/build-source-commit.mjs \
@@ -263,7 +259,9 @@ stdenv.mkDerivation (finalAttrs: {
 
     pnpm run build:packages
     pnpm exec vitest run --config config/vitest.config.ts \
-      src/main/native-chat/agent-launch/nix-structured-agent-command-resolution.test.ts \
+      src/main/native-chat/nix-native-migration.test.ts \
+      src/shared/agent-launch/startup/tui-agent-launch-command-override.test.ts \
+      src/main/managed-server/install/orcad-remote-launch-file-modes.test.ts \
       src/main/native-chat/nix-sandbox-launch-environment.test.ts \
       src/main/codex-accounts/runtime-home/routing/runtime-home-sandbox-session-discovery.test.ts \
       src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts \
@@ -273,8 +271,7 @@ stdenv.mkDerivation (finalAttrs: {
       src/renderer/src/lib/terminal-container-state.test.ts \
       src/shared/terminal/output/terminal-container-report.test.ts \
       src/shared/terminal/output/terminal-container-relay.test.ts \
-      src/main/runtime/construction/orca-runtime.test.ts \
-      src/main/workspaces/creation/nix-worktree-create-base.test.ts
+      src/main/runtime/construction/orca-runtime.test.ts
     pnpm exec tsc -p config/tsconfig.build.cli.json --outDir out --composite false --incremental false
     node config/scripts/cli-build/verify-cli-bin.mjs --fix-executable --fix-package-json
     pnpm run build:electron-vite
@@ -313,6 +310,7 @@ stdenv.mkDerivation (finalAttrs: {
     install -Dm444 resources/icon.png $out/share/icons/hicolor/512x512/apps/orca-ade.png
     mkdir -p $out/share/orca-ade
     cp -r skills $out/share/orca-ade/skills
+    cp -r nix-plugins $out/share/orca-ade/plugins
 
     wrapProgram $out/libexec/orca-ade/orca-ide \
       --prefix XDG_DATA_DIRS : ${glib.getSchemaDataDirPath gsettings-desktop-schemas}:${glib.getSchemaDataDirPath gtk3} \
@@ -345,11 +343,29 @@ stdenv.mkDerivation (finalAttrs: {
           url = "https://github.com/stablyai/orca/releases/download/v${finalAttrs.version}/orca-ide_${finalAttrs.version}_amd64.deb";
           hash = "sha256-zgiqS7BZcu46zIn2yXzmFAyEAUoUsMfnD+bs4bQLKKc=";
         };
-        nativeBuildInputs = [ dpkg ];
+        nativeBuildInputs = [
+          dpkg
+          python3
+        ];
       }
       ''
         dpkg --fsys-tarfile $src | tar --extract ./opt/Orca/resources/orcad-template
         mv opt/Orca/resources/orcad-template $out
+        # The materializer copies and verifies this common resource for every SSH target.
+        install -Dm755 ${./sandbox-launch.sh} $out/bin/orca-sandbox-launch
+        chmod u+w $out/orcad-template.json
+        python3 - "$out" <<'PYTHON'
+        import hashlib
+        import json
+        import sys
+        from pathlib import Path
+        root = Path(sys.argv[1])
+        path = root / "orcad-template.json"
+        manifest = json.loads(path.read_text())
+        name = "bin/orca-sandbox-launch"
+        manifest["commonSha256"][name] = hashlib.sha256((root / name).read_bytes()).hexdigest()
+        path.write_text(json.dumps(manifest, indent=2) + "\n")
+        PYTHON
       '';
 
   desktopItems = [

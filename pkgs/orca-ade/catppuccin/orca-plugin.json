@@ -1,0 +1,21 @@
+{
+  "manifestVersion": 2,
+  "execution": "data",
+  "id": "catppuccin-mocha",
+  "publisher": "local",
+  "name": "Catppuccin Mocha",
+  "version": "1.0.0",
+  "description": "Declarative Mocha application and editor colors.",
+  "engines": {
+    "orca": ">=1.4.268"
+  },
+  "contributes": {
+    "themes": [
+      {
+        "id": "mocha",
+        "title": "Catppuccin Mocha",
+        "path": "mocha.json"
+      }
+    ]
+  }
+}

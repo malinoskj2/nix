@@ -5,38 +5,14 @@
   ...
 }:
 let
-  # Resolve on the execution host, including Darwin hosts reached over SSH.
-  sandboxAgentCommand =
-    agent:
-    "/bin/sh -c ${
-      lib.escapeShellArg (
-        lib.replaceStrings [ "\n" ] [ " " ] ''
-          case "$(uname -s)" in
-            Darwin)
-              remaining=$PATH;
-              while :; do
-                directory=''${remaining%%:*};
-                for candidate in "''${directory:-.}"/sandbox-*; do
-                  if [ -f "$candidate" ] && [ -x "$candidate" ]; then
-                    exec "$candidate" "$@";
-                  fi;
-                done;
-                case $remaining in
-                  *:*) remaining=''${remaining#*:} ;;
-                  *) break ;;
-                esac;
-              done;
-              echo 'Orca: no executable sandbox-* command found in PATH' >&2;
-              exit 127 ;;
-            Linux) exec agent-sandbox-exec "$@" ;;
-            *) echo 'Orca: unsupported sandbox host OS' >&2; exit 1 ;;
-          esac
-        ''
-      )
-    } orca-sandbox ${agent}";
+  # Both Orca's native parser and terminal shells expand this on the execution host.
+  sandboxAgentCommand = agent: "~/.orca/nix/bin/orca-sandbox-launch orca-sandbox ${agent}";
   orca-ade = pkgs.orca-ade.override {
     globalSettings = {
       theme = "dark";
+      pluginAppThemeDark = "plugin:local.catppuccin-mocha/mocha";
+      editorThemeDark = "plugin:local.catppuccin-mocha/mocha";
+      keepComputerAwakeWhileAgentsRun = true;
       appFontFamily = "Geist";
       editorFontFamily = "FiraCode Nerd Font Mono";
       terminalFontFamily = "FiraCode Nerd Font Mono";
@@ -82,6 +58,17 @@ let
     discordPresenceSettings.detailLevel = "generic";
     inherit (config.orca) agentResumeWrapper codexAccountHomes usageInsightsSettings;
   };
+  orcaSetup = pkgs.writeText "orca-declarative-setup.json" (
+    builtins.toJSON {
+      cli = "${orca-ade}/bin/orca-ide";
+      plugins = lib.genAttrs [
+        "chron0.discord-presence"
+        "etherll.usage-insights"
+        "local.catppuccin-mocha"
+      ] (key: "${orca-ade}/share/orca-ade/plugins/${key}");
+      baseRefs = config.orca.localBaseRefs;
+    }
+  );
   orcaSkills = [
     "orca-computer-use"
     "orca-cli"
@@ -117,7 +104,15 @@ in
   options.orca.usageInsightsSettings = lib.mkOption {
     type = lib.types.attrsOf (lib.types.listOf lib.types.str);
     default = { };
-    description = "Default lines for the bundled Usage Insights plugin's multiline settings, by setting key.";
+    description = "Default lines for the Nix-installed Usage Insights plugin's multiline settings, by setting key.";
+  };
+
+  options.orca.localBaseRefs = lib.mkOption {
+    type = lib.types.attrsOf lib.types.str;
+    default = {
+      "${config.home.homeDirectory}/nix" = "main";
+    };
+    description = "Initial native worktree base refs, scoped to existing local Orca repositories by exact path; existing persisted choices are preserved.";
   };
 
   options.orca.codexAccountHomes = lib.mkOption {
@@ -142,7 +137,40 @@ in
       wl-clipboard
     ];
 
-    home.file = skillsIn ".claude/skills" // skillsIn ".gemini/config/skills";
+    home.file =
+      skillsIn ".claude/skills"
+      // skillsIn ".gemini/config/skills"
+      // {
+        ".orca/nix/bin/orca-sandbox-launch" = {
+          source = ../../../pkgs/orca-ade/sandbox-launch.sh;
+          executable = true;
+        };
+      };
+
+    # Runtime CLI calls belong after login, not in builds or HM activation. Retry when Orca
+    # becomes available; source paths make installs idempotent and pin them to this generation.
+    systemd.user.services.orca-declarative-setup = {
+      Unit.Description = "Install declared Orca plugins and seed scoped repository bases";
+      Service = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.python3}/bin/python3 ${../orca/reconcile.py} ${orcaSetup} %S/orca-nix/initialized-repos.json";
+        Environment = "PATH=${
+          lib.makeBinPath [
+            pkgs.coreutils
+            pkgs.git
+          ]
+        }";
+        TimeoutStartSec = 600;
+      };
+    };
+    systemd.user.timers.orca-declarative-setup = {
+      Unit.Description = "Retry declarative Orca setup when its runtime is available";
+      Timer = {
+        OnStartupSec = "30s";
+        OnUnitInactiveSec = "1min";
+      };
+      Install.WantedBy = [ "timers.target" ];
+    };
 
     home.activation.orcaSkills = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
       for skill in ${lib.escapeShellArgs orcaSkills}; do

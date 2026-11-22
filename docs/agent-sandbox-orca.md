@@ -152,10 +152,13 @@ nothing in its CLI or config requests, so it already gets the API's default.
 ## Chat interface
 
 Codex and Claude can use Orca's **Chat** interface with the same sandbox launch
-commands as the CLI interface. The Nix-built Orca accepts the exact declarative
-command as a program and argument vector, including its quoted shell script.
-Edited commands still use Orca's normal literal-command validation. Rebuild and
-restart Orca to pick up `structured-sandbox-launch.patch`.
+commands as the CLI interface. The declarative Command is
+`~/.orca/nix/bin/orca-sandbox-launch orca-sandbox <agent>`, using Orca's native
+literal executable and argv validation. Home Manager installs the portable
+wrapper locally; the packaged orcad template installs it at that same
+home-relative path on POSIX SSH hosts. The wrapper strips the provenance marker
+and keeps the existing Darwin/Linux launcher selection and argument forwarding.
+Automatic resume routing is unchanged.
 
 Chat's Codex app-server and Claude stream-json protocols use pipes, without a
 TTY. Sandbox setup writes diagnostics to stderr and reserves stdout for the

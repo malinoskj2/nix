@@ -1,0 +1,35 @@
+diff --git a/src/main/plugins/bootstrap/plugin-bundled-bootstrap.ts b/src/main/plugins/bootstrap/plugin-bundled-bootstrap.ts
+--- a/src/main/plugins/bootstrap/plugin-bundled-bootstrap.ts
++++ b/src/main/plugins/bootstrap/plugin-bundled-bootstrap.ts
+@@ -194,6 +194,11 @@
+   // Why: a release that drops a bundled plugin must not leave it installed but unremovable.
+   const shipped = new Set(index.plugins.map((entry) => entry.pluginKey))
+   for (const [pluginKey, locked] of Object.entries(lock.plugins)) {
++    // Legacy Nix bundles must survive until the native CLI can migrate them. Retirement
++    // deletes storage and revokes settings/disable state before a runtime is available.
++    if (pluginKey === 'chron0.discord-presence' || pluginKey === 'etherll.usage-insights') {
++      continue
++    }
+     if (locked.source.kind !== 'bundled' || shipped.has(pluginKey)) {
+       continue
+     }
+diff --git a/src/main/plugins/discovery/plugin-list-projection.ts b/src/main/plugins/discovery/plugin-list-projection.ts
+--- a/src/main/plugins/discovery/plugin-list-projection.ts
++++ b/src/main/plugins/discovery/plugin-list-projection.ts
+@@ -13,6 +13,7 @@
+ import type { PluginService } from '../plugin-service'
+ import { listPluginVmRecipeCommands } from '../../../shared/plugins/artifacts/plugin-vm-recipe-artifact'
+ import {
++  hasOfficialPluginPublisher,
+   isOfficialMarketplaceGitSource,
+   isOfficialOrganizationGitSource,
+   pluginSourceLabel,
+@@ -157,7 +158,7 @@
+           : {}
+       const bundled = lockEntry?.source.kind === 'bundled'
+       const official =
+-        bundled ||
++        (bundled && hasOfficialPluginPublisher(plugin.pluginKey)) ||
+         (lockEntry?.source.kind === 'marketplace' &&
+           isOfficialMarketplaceGitSource(lockEntry.source.marketplace.url) &&
+           isOfficialOrganizationGitSource(lockEntry.source.plugin.url))

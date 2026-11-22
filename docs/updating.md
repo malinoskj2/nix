@@ -224,15 +224,18 @@ Treat a bump as a hardware change and test it on the device.
   runtime tests before packaging. Tests the patches add on their own go in
   `nix-` files, so upstream can move or rewrite its own test files freely. Build the configured Home Manager package
   as well as the default package to check declarative settings and plugins.
-  Rebase
-  [`catppuccin.patch`](../pkgs/orca-ade/catppuccin.patch), which maps Orca's
-  dark application tokens and every Monaco editor surface to Catppuccin Mocha.
-  Upstream may add new dark-mode variables or Monaco call sites, so search for
-  the `.dark` token block, the shared `.dark,
-  .native-chat-appearance[data-native-chat-scheme='dark']` status and diff
-  block, and `vs-dark` when rebasing it. Editors pick their theme in
-  `useMonacoTheme`, and the Markdown TextMate tokens redefine each theme with
-  Shiki's rules, so the patch adds Shiki's `catppuccin-mocha` rules there. Rebase
+  Maintain
+  the data-only [`catppuccin/`](../pkgs/orca-ade/catppuccin) theme plugin. Its
+  public app tokens and TextMate `tokenColors` cover the app, editor and Markdown;
+  validate with `orca plugin validate pkgs/orca-ade/catppuccin --json` against
+  the pinned release. Native `pluginAppThemeDark` and `editorThemeDark` select it,
+  while the terminal keeps its built-in Catppuccin Mocha palette. Protected trust
+  and approval colors remain in the narrowly scoped
+  [`catppuccin-security.patch`](../pkgs/orca-ade/catppuccin-security.patch).
+  Public themes cannot override private status/title colors, Monaco's individual
+  widget/find colors, or force a sidebar surface over a saved Match terminal or
+  Tinted preference; these now follow upstream behavior. Nix syntax's custom
+  grammar patch was removed without a replacement. Rebase
   [`glass-titlebar.patch`](../pkgs/orca-ade/glass-titlebar.patch) when Orca
   changes its top-bar layout. It relies on the `windowMaterial = "translucent"`
   setting in [`features/desktop.nix`](../users/jesse/features/desktop.nix) for
@@ -256,15 +259,14 @@ Treat a bump as a hardware change and test it on the device.
   [`pending-below-main.patch`](../pkgs/orca-ade/pending-below-main.patch),
   which puts a workspace being created below its project's main worktree
   instead of above it,
-  [`local-default-base.patch`](../pkgs/orca-ade/local-default-base.patch),
-  which starts a new worktree from the local default branch (`main`) instead
-  of the detected `origin/main` when neither the caller nor `orca repo
-  set-base-ref` chose a base and that local branch exists, in
-  `resolveWorktreeCreateBase`, which every create path shares, and
-  [`bundled-plugins.patch`](../pkgs/orca-ade/bundled-plugins.patch), which lets
-  Orca's launch-plugin index carry a third-party plugin without marking it
-  official, and [`approved-plugins.patch`](../pkgs/orca-ade/approved-plugins.patch),
-  which treats the plugins in `approvedPlugins` as consented. Rebase
+  and [`approved-plugins.patch`](../pkgs/orca-ade/approved-plugins.patch), which
+  treats the plugins in `approvedPlugins` as consented. Native per-repository
+  `orca repo set-base-ref` replaces the automatic local-default fallback patch:
+  `orca.localBaseRefs` seeds `main` only for an existing local `/home/jesse/nix`
+  repo with no persisted choice and an existing local branch. Custom choices,
+  remote repos and other paths are untouched; a state marker preserves later
+  resets to inherited defaults. New repos and stale refs use upstream fallback
+  behavior rather than automatically preferring their local default. Rebase
   [`agent-resume-wrapper.patch`](../pkgs/orca-ade/agent-resume-wrapper.patch),
   which runs the Claude, Codex, Muse and Antigravity resumes Orca starts when
   it reopens through `agentResumeWrapper` as `<wrapper> <agent> <args>`, for
@@ -273,29 +275,62 @@ Treat a bump as a hardware change and test it on the device.
   [`agent-sandbox.nix`](../users/jesse/agent-sandbox.nix)), which resumes in a
   sandbox the sessions a sandbox started; other hosts leave it unset. Upstream
   may add another automatic resume path besides the pane cold restore. The
-  build adds
-  jondmarien/orca-discord-presence to that index from
-  one pinned commit; to move it, change `rev` and refresh its hash. The
-  `postPatch` merges `discordPresenceSettings` into the plugin's compiled
-  defaults, lets its URL and token settings fall back to them (upstream reads
-  those only from saved settings), turns off its panel rewrite and changes its
-  generic details line to "Working in Orca ADE", all with
-  `--replace-fail` against `dist/main.js`. It also adds
-  Etherll/orca-usage-insights pinned to one release commit, a full-access plugin that
-  reads local Claude, Codex and OpenCode transcripts. Orca never updates a
-  bundled plugin from its catalog. To move it, set `rev` to the new release tag's commit,
-  refresh its hash and review the new release's source before bundling it: check
-  what it fetches, spawns and writes. `usageInsightsSettings` becomes the
+  build stages jondmarien/orca-discord-presence and Etherll/orca-usage-insights
+  outside the official launch bundles, under `share/orca-ade/plugins`. They keep
+  their pinned commits and declared `chron0.discord-presence` /
+  `etherll.usage-insights` identities. In 1.4.268 local-folder installs preserve
+  declared publishers; Git installs derive the publisher from the owner, which
+  would change Discord's identity. Keep checking this compatibility on upgrades.
+  The Home Manager `orca-declarative-setup` timer installs these folders through
+  the native CLI after a runtime becomes available, including exact returned
+  consent fingerprints for only these pinned plugins. It skips an already
+  installed source, disabled plugins and development overrides. Disabled installs
+  migrate after re-enabling; no data/settings or disable choices are removed.
+  [`legacy-plugin-migration.patch`](../pkgs/orca-ade/legacy-plugin-migration.patch)
+  temporarily exempts only the two former Nix bundle IDs from upstream retirement:
+  otherwise startup deletes their storage and disable/settings state before the
+  CLI can run. It also keeps these legacy entries marked third-party until they
+  migrate. It changes no official bundle installation or retirement policy, and
+  allows no new third-party bundles. Keep it until every existing profile has
+  migrated; disabled profiles deliberately retain their old source until enabled.
+  A generation change migrates to its new immutable store folder. Each plugin has
+  an inert `nix-installation.json` naming that folder: native same-byte installs
+  otherwise retain their previous provenance, causing a legacy bundle to remain
+  bundled or a timer to repeatedly reinstall a changed source path. Native updates
+  from a local folder keep that pinned source rather than following a catalog.
+  Builds and activation do not contact Orca or start its UI. Inspect failures with
+  `journalctl --user -u orca-declarative-setup` and retry with
+  `systemctl --user start orca-declarative-setup` when the runtime is running.
+  To move a plugin, change `rev`, refresh its hash and review the new source's
+  fetches, spawns and writes. Existing `discordPresenceSettings` merging, URL/token
+  fallbacks and the generic "Working in Orca ADE" detail remain unchanged.
+  `usageInsightsSettings` becomes the
   manifest's setting defaults, and an unknown key fails the build. `home` adds
   the sandbox's Codex home there, since sandboxed Claude already shares
   `~/.claude/projects`. The `postPatch` also edits upstream source in place: it drops
   the AppImage's glibc floor check and its downloaded Node runtime, skips the
   Docker build of the Wayland clipboard helper, which `buildPhase` compiles
   instead, builds the provider exec helper and the journal file lock with the
-  host compiler instead of Docker, turns on keeping the computer awake while agents run, and makes
+  host compiler instead of Docker, and makes
   directories it uploads over SSH writable after they're extracted on the
   remote. Each uses `--replace-fail`, so a moved line fails the build; find
-  where the new release does the same thing. `telemetryOptedIn` forces only
+  where the new release does the same thing. Keep-awake now uses
+  `globalSettings.keepComputerAwakeWhileAgentsRun` alongside other declarative
+  settings, without a source default substitution. Structured sandbox Command
+  overrides use `~/.orca/nix/bin/orca-sandbox-launch orca-sandbox <agent>`, accepted
+  by the native literal parser; automatic resume routing is unchanged. The portable
+  [`sandbox-launch.sh`](../pkgs/orca-ade/sandbox-launch.sh) strips the provenance
+  marker, then preserves Darwin's first executable `sandbox-*` in PATH and Linux's
+  `agent-sandbox-exec` selection, passing every remaining argument unchanged.
+  Home Manager installs the local executable; the narrowly scoped
+  [`sandbox-wrapper-deployment.patch`](../pkgs/orca-ade/sandbox-wrapper-deployment.patch)
+  includes it in verified template artifacts, preserves its mode, and installs it
+  into the remote user's same home-relative path before a POSIX orcad launch.
+  This avoids relying on remote login PATH or Nix store paths. The template adds
+  only that resource and its hash; its release runtime bytes remain unchanged.
+  Test Darwin/Linux dispatch and a simulated local deployment on upgrades;
+  actual SSH-host execution still needs an explicit runtime smoke test.
+  `telemetryOptedIn` forces only
   `telemetry.optedIn` when a profile loads, since that block also holds the
   install ID and cohorts. Nothing is sent either way: telemetry needs the
   PostHog key and build identity that only upstream's CI compiles in, and

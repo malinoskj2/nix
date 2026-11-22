@@ -1,0 +1,38 @@
+diff --git a/src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts b/src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts
+--- a/src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts
++++ b/src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts
+@@ -16,7 +16,7 @@
+ 
+ /** Files every install path must mark executable; SFTP and plain copies drop the mode. */
+ export function isOrcadExecutableArtifact(filename: string): boolean {
+-  return /(?:^|\/)(?:rg|spawn-helper|orca-provider-exec|journal-file-lock)$/.test(filename)
++  return /(?:^|\/)(?:rg|spawn-helper|orca-provider-exec|journal-file-lock|orca-sandbox-launch)$/.test(filename)
+ }
+ 
+ export function orcadBunRuntimeFilename(target: string): string {
+@@ -239,6 +239,7 @@
+ }
+ 
+ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
++  { filename: 'bin/orca-sandbox-launch' },
+   { filename: ORCAD_CLI_ENTRY_FILENAME },
+   { filename: ORCAD_CLI_PACKAGE_FILENAME },
+   { filename: ORCAD_LAUNCHER_FILENAME },
+diff --git a/src/main/managed-server/install/orcad-remote-launch.ts b/src/main/managed-server/install/orcad-remote-launch.ts
+--- a/src/main/managed-server/install/orcad-remote-launch.ts
++++ b/src/main/managed-server/install/orcad-remote-launch.ts
+@@ -117,6 +117,14 @@
+     // Tighten existing artifacts best-effort; umask cannot repair their modes.
+     `{ chmod 700 ${privateDirs.map(quotePosixShell).join(' ')} 2>/dev/null || :; } &&`,
+     `cd ${dir} &&`,
++    // Nix ships a portable native Command wrapper with this slot. Home-relative lookup
++    // works in both the native parser and terminal shells, even with a reset login PATH.
++    'if [ -f bin/orca-sandbox-launch ]; then',
++    'mkdir -p "$HOME/.orca/nix/bin" &&',
++    'cp bin/orca-sandbox-launch "$HOME/.orca/nix/bin/orca-sandbox-launch.new" &&',
++    'chmod 755 "$HOME/.orca/nix/bin/orca-sandbox-launch.new" &&',
++    'mv -f "$HOME/.orca/nix/bin/orca-sandbox-launch.new" "$HOME/.orca/nix/bin/orca-sandbox-launch";',
++    'fi &&',
+     `${selectOrcadSlotRuntimeCommand(host, spec.remoteInstallDir, spec.nodePath)} &&`,
+     // Truncate so relaunch cannot activate on the previous process’s readiness.
+     `: > ${readiness} &&`,
