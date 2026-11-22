@@ -28,7 +28,7 @@ class ForwardingTest(unittest.TestCase):
                 prompt_file = root / "prompt.txt"
                 prompt_file.write_text(prompt)
                 scripts = {
-                    "resource-run": "pass",
+                    "gpu-run": "pass",
                     "opencode": """import json, os, sys
 from pathlib import Path
 if '--version' in sys.argv:
@@ -57,7 +57,7 @@ http.server.HTTPServer(('127.0.0.1', int(sys.argv[sys.argv.index('--port') + 1])
                 env = os.environ | {
                     "MODEL_ROOT": str(root),
                     "PATH": str(root) + os.pathsep + os.environ["PATH"],
-                    "RESOURCE_JOB_ID": "test-double",
+                    "GPU_LEASE_ID": "test-double",
                     "CAPTURE": str(root / "capture"),
                     "SERVER_PID": str(root / "pid"),
                     "EXIT_CODE": str(exit_code),
@@ -68,8 +68,6 @@ http.server.HTTPServer(('127.0.0.1', int(sys.argv[sys.argv.index('--port') + 1])
                         str(RUNNER),
                         "--model",
                         model_name,
-                        "--project",
-                        "test",
                         "--prompt-file",
                         str(prompt_file),
                         "--allocated",

@@ -355,25 +355,6 @@ args=(
   --env SWAYSOCK="$runtime/sway.sock"
 )
 
-# Authority changes only at the explicit drained host cutover. Bind the directory
-# rather than the socket inode, so daemon reconnects survive socket replacement.
-if [[ -f /etc/resource-scheduler/mode ]]; then
-  # NixOS /etc entries point through /etc/static, which the container does not
-  # have. Resolve each file before mounting it at its canonical container path.
-  for scheduler_config in mode config.json; do
-    if [[ -f /etc/resource-scheduler/$scheduler_config ]]; then
-      args+=(--mount "type=bind,src=$(readlink -f "/etc/resource-scheduler/$scheduler_config"),dst=/etc/resource-scheduler/$scheduler_config,readonly")
-    fi
-  done
-  if [[ $(</etc/resource-scheduler/mode) == slurm ]]; then
-    if [[ -d /run/resource-scheduler ]]; then
-      args+=(--mount "type=bind,src=/run/resource-scheduler,dst=/run/resource-scheduler,readonly")
-    else
-      echo 'agent-sandbox: resource scheduler unavailable; heavy work must wait for host service recovery' >&2
-    fi
-  fi
-fi
-
 # Forward only the specific Orca fields agents and hook scripts use, not the
 # host environment. With a hook bridge socket, PATH switches to the Orca curl
 # shim inside the container so hook URLs reach the desktop through the relay.

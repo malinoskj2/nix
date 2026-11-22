@@ -8,7 +8,7 @@
 let
   shared = import ../agent-shared.nix {
     inherit lib;
-    queue = osConfig.services.resourceScheduler.queue.enable or false;
+    isHome = (osConfig.networking.hostName or null) == "home";
   };
   tomlFormat = pkgs.formats.toml { };
   claudeAgents = ../claude/agents;

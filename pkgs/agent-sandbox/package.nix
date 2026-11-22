@@ -57,7 +57,6 @@
   frame-interpolation,
   gpu-scheduler,
   host-switch,
-  resource-scheduler,
   gzip,
   htop-vim-navigation,
   hy3dgen,
@@ -348,7 +347,6 @@ let
       gnutar
       gpu-scheduler
       host-switch
-      resource-scheduler
       grim
       gzip
       htop-vim-navigation
@@ -467,8 +465,6 @@ let
     builtins.readFile ./CLAUDE.md
     + "\n"
     + builtins.readFile ../../users/jesse/claude/rules/gpu.md
-    + "\n"
-    + builtins.readFile ../../users/jesse/claude/rules/resources.md
     + "\n"
     + builtins.readFile ../../users/jesse/claude/rules/host-switch.md
   );

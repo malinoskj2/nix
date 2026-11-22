@@ -4,25 +4,11 @@
   runCommand,
   symlinkJoin,
   writeShellScriptBin,
-  unifiedScheduler ? null,
 }:
 let
   command =
     name: action:
     writeShellScriptBin name ''
-      if [ -f /etc/resource-scheduler/mode ] && [ "$(cat /etc/resource-scheduler/mode)" = slurm ]; then
-        ${
-          if unifiedScheduler == null then
-            ''
-              echo 'gpu-scheduler: Slurm authority selected but compatibility client is unavailable; rebuild this client' >&2
-              exit 1
-            ''
-          else
-            ''
-              exec ${unifiedScheduler}/bin/resource-scheduler compat ${action} "$@"
-            ''
-        }
-      fi
       export PATH="$PATH:/run/opengl-driver/bin:/usr/bin"
       exec ${lib.getExe python3} ${./gpu_scheduler.py} ${action} "$@"
     '';

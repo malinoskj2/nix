@@ -7,7 +7,7 @@
 }:
 let
   cfg = config.programs.claude-code;
-  queue = osConfig.services.resourceScheduler.queue.enable or false;
+  isHome = (osConfig.networking.hostName or null) == "home";
   settingsFile = "${cfg.configDir}/settings.json";
   settingsSource = config.home.file.${settingsFile}.source;
   merge-settings = pkgs.writeShellApplication {
@@ -66,11 +66,10 @@ in
       video-download = ./skills/video-download;
       youtube-search = ./skills/youtube-search;
     }
-    // lib.optionalAttrs queue {
+    // lib.optionalAttrs isHome {
       audio-transcribe = ./skills/audio-transcribe;
       qwen-prompt = ./skills/qwen-prompt;
       qwen-uncensored-prompt = ./skills/qwen-uncensored-prompt;
-      work-queue = ./skills/work-queue;
     };
     rules = {
       local-models = ./rules/local-models.md;
@@ -81,9 +80,8 @@ in
       tool-output = ./rules/tool-output.md;
       worktrees = ./rules/worktrees.md;
     }
-    // lib.optionalAttrs queue {
+    // lib.optionalAttrs isHome {
       gpu = ./rules/gpu.md;
-      resources = ./rules/resources.md;
       host-switch = ./rules/host-switch.md;
     };
 

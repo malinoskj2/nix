@@ -77,7 +77,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", choices=MODELS, required=True)
     parser.add_argument("--prompt-file", type=Path, required=True)
-    parser.add_argument("--project", required=True, help="Stable scheduler project key")
+    parser.add_argument("--project", default=None, help="Ignored legacy option")
     parser.add_argument("--timeout", type=int, default=1800, help="Execution limit in seconds")
     parser.add_argument("--allocated", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -86,7 +86,7 @@ def main():
     prompt = args.prompt_file.read_bytes().decode("utf-8")
     if not prompt.strip() or "\0" in prompt:
         parser.error("prompt must be nonempty UTF-8 and contain no NUL")
-    for command in ("opencode", "llama-server", "resource-run"):
+    for command in ("opencode", "llama-server", "gpu-run"):
         if not shutil.which(command):
             raise RuntimeError(f"Missing {command}; deploy the qwen-prompt Nix package first")
     root = Path(os.environ.get("MODEL_ROOT", str(Path.home() / ".local/share/models")))
@@ -100,28 +100,14 @@ def main():
     if not model.is_file() or model.stat().st_size != expected:
         raise RuntimeError(f"Missing or incomplete model: {model}")
     if not args.allocated:
-        if os.environ.get("RESOURCE_JOB_ID") or os.environ.get("GPU_LEASE_ID"):
-            raise RuntimeError("Already inside a reservation; invoke from outside it to avoid exceeding its budgets")
-        if Path("/etc/resource-scheduler/mode").read_text().strip() != "slurm":
-            raise RuntimeError("This runner requires the deployed Slurm resource scheduler")
-        # Fixed 16k context, one slot, full GPU offload. Budgets include weights,
-        # KV cache and workspace margin; they are declarations, not measurements.
+        if os.environ.get("GPU_LEASE_ID"):
+            raise RuntimeError("Already inside a GPU reservation; invoke from outside it to avoid exceeding its budget")
+        # Fixed 16k context, one slot, full GPU offload. Budget includes weights,
+        # KV cache and workspace margin.
         command = [
-            "resource-run",
-            "--cpu",
-            "4",
-            "--ram",
-            "24GiB",
+            "gpu-run",
             "--vram",
             "26GiB",
-            "--project",
-            args.project,
-            "--profile",
-            "qwen-prompt",
-            "--variant",
-            f"{alias}-q5-16k-v1",
-            "--category",
-            "inference",
             "--name",
             f"Qwen prompt ({args.model})",
             "--",
@@ -131,15 +117,13 @@ def main():
             args.model,
             "--prompt-file",
             str(args.prompt_file.resolve()),
-            "--project",
-            args.project,
             "--timeout",
             str(args.timeout),
             "--allocated",
         ]
         os.execvp(command[0], command)
-    if not os.environ.get("RESOURCE_JOB_ID"):
-        raise RuntimeError("--allocated requires a scheduler allocation")
+    if not os.environ.get("GPU_LEASE_ID"):
+        raise RuntimeError("--allocated requires a GPU reservation")
     version = subprocess.check_output(["opencode", "--version"], text=True).strip()
     major = opencode_major(version)
     # Validate the harness before starting the GPU process.

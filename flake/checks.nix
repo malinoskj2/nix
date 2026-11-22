@@ -35,7 +35,6 @@
           gpu-scheduler = self'.packages.gpu-scheduler.tests.scheduler;
           cargo-preferences = self'.packages.cargo-preferences;
           zsh-claude-command = self'.packages.zsh-claude-command.tests.widget;
-          resource-scheduler = self'.packages.resource-scheduler.tests.scheduler;
         }
         // lib.optionalAttrs (system == "x86_64-linux") {
           tohru-greeter-vm = pkgs.testers.runNixOSTest (
@@ -44,55 +43,6 @@
               greeter = self.nixosConfigurations.home.config.services.tohru-greeter;
             }
           );
-          resource-scheduler-vm = pkgs.testers.runNixOSTest (
-            import ../hosts/home/resource-scheduler-test.nix { inherit pkgs; }
-          );
-          resource-scheduler-config =
-            let
-              staged = self.nixosConfigurations.home.config;
-            in
-            pkgs.runCommand "resource-scheduler-config-tests"
-              {
-                nativeBuildInputs = [
-                  pkgs.python3
-                  staged.services.slurm.package
-                ];
-                POLICY = staged.environment.etc."resource-scheduler/config.json".source;
-                SLURM_CONFIG = staged.services.slurm.etcSlurm;
-                DAEMON = pkgs.writeText "resource-scheduler-service.json" (
-                  builtins.toJSON staged.systemd.services.resource-scheduler.serviceConfig
-                );
-                SLURM_UNITS = pkgs.writeText "resource-slurm-units.json" (
-                  builtins.toJSON (
-                    lib.genAttrs [ "slurmctld" "slurmd" ] (
-                      name:
-                      let
-                        unit = staged.systemd.services.${name};
-                      in
-                      {
-                        inherit (unit) after wants serviceConfig;
-                      }
-                    )
-                  )
-                );
-                GAME_SERVICE = pkgs.writeText "resource-scheduler-game-service.json" (
-                  builtins.toJSON staged.systemd.services.agent-sandbox-gaming.serviceConfig
-                );
-                COMPAT = self.nixosConfigurations.home.pkgs.gpu-scheduler;
-                SCHEDULER = staged.services.resourceScheduler.package;
-              }
-              ''
-                python ${../hosts/home/test_resource_scheduler_config.py}
-                # Parse with native Slurm without starting a controller. The
-                # isolated builder has no slurm account; only that identity is
-                # substituted. All scheduling/plugin syntax remains generated.
-                cp -rL "$SLURM_CONFIG" config
-                chmod -R u+w config
-                sed -i 's/^SlurmUser=slurm$/SlurmUser=root/' config/slurm.conf
-                SLURM_CONF="$PWD/config/slurm.conf" scontrol show hostnames home > nodes
-                test "$(cat nodes)" = home
-                touch "$out"
-              '';
           local-models-activation =
             let
               home = self.nixosConfigurations.home.config.home-manager.users.jesse;

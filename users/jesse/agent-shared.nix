@@ -1,18 +1,16 @@
-{ lib, queue }:
+{ lib, isHome }:
 let
-  queueSkills = [
+  homeSkills = [
     "audio-transcribe"
     "qwen-prompt"
     "qwen-uncensored-prompt"
-    "work-queue"
   ];
 in
 {
   context = lib.concatMapStringsSep "\n" builtins.readFile (
     [ ./claude/rules/worktrees.md ]
-    ++ lib.optionals queue [
+    ++ lib.optionals isHome [
       ./claude/rules/gpu.md
-      ./claude/rules/resources.md
       ./claude/rules/host-switch.md
     ]
     ++ [
@@ -25,13 +23,13 @@ in
   );
 
   skills =
-    if queue then
+    if isHome then
       ./claude/skills
     else
       builtins.path {
         name = "skills";
         path = ./claude/skills;
         filter =
-          path: _: !(dirOf path == toString ./claude/skills && lib.elem (baseNameOf path) queueSkills);
+          path: _: !(dirOf path == toString ./claude/skills && lib.elem (baseNameOf path) homeSkills);
       };
 }

@@ -91,12 +91,6 @@ until told.
 
 ### Working here
 
-The `home` host enables the shared resource scheduler through
-`services.resourceScheduler.enable`; keep existing GPU admission authoritative
-until the drained cutover is applied. Follow the installed shared resource guidance for
-heavy work after cutover, and read `docs/resource-scheduler-deployment.md` before
-changing scheduler deployment or migration configuration.
-
 Format and lint with `nix fmt` (treefmt: deadnix, statix and nixfmt for Nix,
 shellcheck and shfmt for shell, ruff for Python, StyLua for Lua and Luau).
 `nix flake check` also builds every host whose system matches (including its
@@ -108,7 +102,7 @@ another host, with `--target-host` (`docs/bootstrap.md`). No host needs
 
 Only when explicitly asked to switch `home` in the current conversation
 (`users/jesse/claude/rules/host-switch.md`), including from inside the agent sandbox, commit
-on `main`, build the host through the resource scheduler, then run
+on `main`, build the host, then run
 `host-switch` (or `nix run /home/jesse/nix#host-switch` in a sandbox that predates
 it). Root's `host-switch` service on `home` builds and activates exactly the head
 of `main`, never a working tree or another branch, and refuses anything else.

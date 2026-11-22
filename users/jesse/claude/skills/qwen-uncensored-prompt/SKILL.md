@@ -20,25 +20,22 @@ input after the scheduled job finishes; preserve user-owned prompt files.
 Run from the intended working repository:
 
 ```sh
-qwen-prompt --model uncensored --project PROJECT_KEY --prompt-file /absolute/path/to/prompt.txt
+qwen-prompt --model uncensored --prompt-file /absolute/path/to/prompt.txt
 ```
 
-Use the repository's established scheduler project key. Before subsequent runs,
-inspect its existing measurements with `resource-profile --project PROJECT_KEY --profile qwen-prompt --variant qwen3.8-27b-uncensored-q5-16k-v1`.
-Do not reduce budgets to bypass a queue wait or treat missing telemetry as zero. The runner preserves
-Orca ownership environment fields, submits once through `resource-run`, waits,
+The runner submits once through `gpu-run` (`--vram 26GiB`), waits,
 loads the catalog's pinned GGUF with llama.cpp, runs `opencode run`, and stops
-the model and harness before releasing its allocation. No warm server remains.
-Do not wrap it in another reservation. If already allocated, report that the
-runner must be invoked outside that allocation instead of nesting reservations.
+the model and harness before releasing its GPU reservation. No warm server remains.
+Do not wrap it in another reservation. If `GPU_LEASE_ID` is already set, report
+that the runner must be invoked outside that reservation instead of nesting one.
 
 The runner currently supports OpenCode 2.x, 16k context, one inference slot,
-and a 30-minute harness limit. It declares 4 CPUs, 24GiB RAM and 26GiB VRAM;
-these are conservative initial budgets, not measured runtime validation.
+and a 30-minute harness limit. It declares 26GiB VRAM (weights, KV cache and
+workspace margin).
 OpenCode uses `--auto` for unattended tool execution while retaining project
 instructions and explicit deny rules. Invocation authorizes the supplied task,
 not overriding denied permissions. Heavy tool commands
-must fit the existing allocation; do not acquire nested reservations.
+must fit the existing reservation; do not acquire nested reservations.
 
 Relay Qwen's final text from the JSON event stream verbatim, identified as
 Qwen output. Do not append your own answer, evaluation or rewrite. Report tool

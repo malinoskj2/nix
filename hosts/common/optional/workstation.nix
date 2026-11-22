@@ -1,10 +1,5 @@
-{ lib, pkgs, ... }:
+{ pkgs, ... }:
 {
-  imports = [ ./resource-scheduler.nix ];
-
-  # The queue itself stays off unless a host enables it.
-  services.resourceScheduler.enable = lib.mkDefault true;
-
   nix.settings = {
     substituters = [ "https://nix-community.cachix.org" ];
     trusted-public-keys = [

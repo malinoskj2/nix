@@ -1,7 +1,6 @@
 {
   config,
   inputs,
-  lib,
   pkgs,
   ...
 }:
@@ -52,22 +51,6 @@ in
     networkmanager.enable = true;
 
     firewall.enable = false;
-  };
-
-  services.resourceScheduler = {
-    queue.enable = true;
-    # Match the idle sandbox pool: 14 cores with two SMT threads each.
-    cpuCapacity = 28;
-    policyVersion = "7";
-    adaptiveRam = true;
-    # Just under the 31.6 GiB slurmd detects, so declarations stop capping admission
-    # long before real memory does, without slurmd draining the node.
-    memoryMiB = 30720;
-    largeGpuLane = true;
-    largeLaneProjectIds = [
-      "24291623818044406835024016436979284527"
-      "246305380162557260146525484389874795221"
-    ];
   };
 
   swapDevices = [
@@ -140,8 +123,6 @@ in
       RemainAfterExit = true;
       ExecStart = setSandboxCpus sandboxCpus.gaming;
       ExecStop = setSandboxCpus sandboxCpus.idle;
-      ExecStartPost = lib.mkIf config.services.resourceScheduler.enable "${pkgs.coreutils}/bin/touch /run/resource-scheduler-game-active";
-      ExecStopPost = lib.mkIf config.services.resourceScheduler.enable "${pkgs.coreutils}/bin/rm -f /run/resource-scheduler-game-active";
     };
   };
 

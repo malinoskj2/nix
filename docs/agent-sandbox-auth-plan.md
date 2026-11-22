@@ -21,7 +21,6 @@ This repository already follows host-side boundary isolation for several subsyst
 - `users/jesse/features/local-models.nix`: keeps `hf-token` strictly on the host via systemd `LoadCredential` (`local-models-sync.service`), never mounted in the sandbox.
 - `users/jesse/features/discord-context.nix`: runs a hardened host systemd user service (`LoadCredential`, `ProtectHome = "tmpfs"`, `NoNewPrivileges = true`) enforcing guild/channel policy on the host.
 - `pkgs/agent-sandbox/hook-proxy.py` & `agent-sandbox-exec.sh`: exposes a private host Unix socket into the container and inspects/rewrites HTTP traffic on the host.
-- `hosts/common/optional/resource-scheduler.nix`: keeps Munge/Slurm credentials on the host and exposes a read-only bind-mounted socket directory (`/run/resource-scheduler`) so container reconnects survive daemon restarts.
 
 The auth gateway extends this exact model to every remaining credentialed surface in `agent-sandbox`.
 

@@ -1,13 +1,11 @@
 {
   config,
   lib,
-  osConfig,
   pkgs,
   ...
 }:
 let
   ssh = "${config.xdg.dataHome}/agent-sandbox/ssh";
-  legacyGpu = !(osConfig.services.resourceScheduler.queue.enable or false);
 in
 {
   # Orca resumes agents when it reopens; this resumes the ones `sandbox` started in a sandbox again.
@@ -22,7 +20,7 @@ in
 
   # Host /proc can attribute NVIDIA's host PIDs across every sandbox namespace.
   # The existing shared scheduler mount exposes only this read-only telemetry API.
-  systemd.user.sockets.gpu-scheduler-telemetry = lib.mkIf legacyGpu {
+  systemd.user.sockets.gpu-scheduler-telemetry = {
     Unit.Description = "GPU reservation memory telemetry";
     Socket = {
       ListenStream = "%t/gpu-scheduler/telemetry.sock";
@@ -32,7 +30,7 @@ in
     };
     Install.WantedBy = [ "sockets.target" ];
   };
-  systemd.user.services.gpu-scheduler-telemetry = lib.mkIf legacyGpu {
+  systemd.user.services.gpu-scheduler-telemetry = {
     Unit.Description = "Attribute GPU memory to reservations across sandboxes";
     Service = {
       ExecStart = lib.getExe' pkgs.gpu-scheduler "gpu-scheduler-telemetry";
