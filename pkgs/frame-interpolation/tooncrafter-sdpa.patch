@@ -1,0 +1,57 @@
+diff --git a/lvdm/models/autoencoder_dualref.py b/lvdm/models/autoencoder_dualref.py
+index 8529799..a91487d 100644
+--- a/lvdm/models/autoencoder_dualref.py
++++ b/lvdm/models/autoencoder_dualref.py
+@@ -6,6 +6,7 @@ from typing import Any, Callable, Optional, Iterable, Union
+ import numpy as np
+ import torch
+ import torch.nn as nn
++import torch.nn.functional as F
+ from packaging import version
+ logpy = logging.getLogger(__name__)
+ 
+@@ -21,6 +22,13 @@ except:
+ from lvdm.modules.attention_svd import LinearAttention, MemoryEfficientCrossAttention
+ 
+ 
++def memory_efficient_attention(q, k, v, op=None):
++    if XFORMERS_IS_AVAILABLE:
++        return xformers.ops.memory_efficient_attention(q, k, v, attn_bias=None, op=op)
++    # SDPA takes 3-D input only through its math kernel, which needs the whole attention matrix.
++    return F.scaled_dot_product_attention(q[None], k[None], v[None])[0]
++
++
+ def nonlinearity(x):
+     # swish
+     return x * torch.sigmoid(x)
+@@ -187,9 +195,7 @@ class MemoryEfficientAttnBlock(nn.Module):
+             .contiguous(),
+             (q, k, v),
+         )
+-        out = xformers.ops.memory_efficient_attention(
+-            q, k, v, attn_bias=None, op=self.attention_op
+-        )
++        out = memory_efficient_attention(q, k, v, op=self.attention_op)
+ 
+         out = (
+             out.unsqueeze(0)
+@@ -303,7 +309,7 @@ class MemoryEfficientCrossAttentionWrapperFusion(MemoryEfficientCrossAttention):
+         )
+ 
+         # actually compute the attention, what we cannot get enough of
+-        if version.parse(xformers.__version__) >= version.parse("0.0.21"):
++        if XFORMERS_IS_AVAILABLE and version.parse(xformers.__version__) >= version.parse("0.0.21"):
+             # NOTE: workaround for
+             # https://github.com/facebookresearch/xformers/issues/845
+             max_bs = 32768
+@@ -323,9 +329,7 @@ class MemoryEfficientCrossAttentionWrapperFusion(MemoryEfficientCrossAttention):
+                 )
+             out = torch.cat(out, 0)
+         else:
+-            out = xformers.ops.memory_efficient_attention(
+-                q, k, v, attn_bias=None, op=self.attention_op
+-            )
++            out = memory_efficient_attention(q, k, v, op=self.attention_op)
+ 
+         # TODO: Use this directly in the attention operation, as a bias
+         if exists(mask):

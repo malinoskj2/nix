@@ -1,4 +1,5 @@
 {
+  applyPatches,
   cudaPackages,
   fetchFromGitHub,
   hy3dgen,
@@ -130,11 +131,18 @@ let
     rev = "8df805eb054cd423e188d509210731cffe9438af";
     hash = "sha256-olY4ij2xISM/hiXk2UHz/giEPpyKWRBQWSCqGnCIQR4=";
   };
-  tooncrafter = fetchFromGitHub {
-    owner = "Doubiiu";
-    repo = "ToonCrafter";
-    rev = "b0c47ff339c5e5ec45b84d0c6587850f242d41ef";
-    hash = "sha256-A14R4RuoLIMjSpV5/CoZfv/Zo4Lkp+GVljN9Il9mqTw=";
+  tooncrafter = applyPatches {
+    name = "tooncrafter-source";
+    src = fetchFromGitHub {
+      owner = "Doubiiu";
+      repo = "ToonCrafter";
+      rev = "b0c47ff339c5e5ec45b84d0c6587850f242d41ef";
+      hash = "sha256-A14R4RuoLIMjSpV5/CoZfv/Zo4Lkp+GVljN9Il9mqTw=";
+    };
+    patches = [
+      # open_clip 3 removed dual patchnorm and runs its attention blocks batch-first.
+      ./tooncrafter-open-clip-3.patch
+    ];
   };
 in
 stdenvNoCC.mkDerivation {

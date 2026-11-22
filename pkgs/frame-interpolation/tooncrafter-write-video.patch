@@ -1,0 +1,53 @@
+diff --git a/scripts/evaluation/inference.py b/scripts/evaluation/inference.py
+index 334a984..7e20375 100644
+--- a/scripts/evaluation/inference.py
++++ b/scripts/evaluation/inference.py
+@@ -10,6 +10,7 @@ import torchvision
+ import torchvision.transforms as transforms
+ from pytorch_lightning import seed_everything
+ from PIL import Image
++import av
+ sys.path.insert(1, os.path.join(sys.path[0], '..', '..'))
+ from lvdm.models.samplers.ddim import DDIMSampler
+ from lvdm.models.samplers.ddim_multiplecond import DDIMSampler as DDIMSampler_multicond
+@@ -106,6 +107,22 @@ def load_data_prompts(data_dir, video_size=(256,256), video_frames=16, interp=Fa
+     return filename_list, data_list, prompt_list
+ 
+ 
++def write_video(path, frames, fps):
++    # torchvision 0.26 dropped its video I/O. Each video also gets its frames as PNGs, free of the encoder's loss.
++    frames = frames.numpy()
++    frame_dir = os.path.splitext(path)[0]
++    os.makedirs(frame_dir, exist_ok=True)
++    for i, frame in enumerate(frames):
++        Image.fromarray(frame).save(os.path.join(frame_dir, f"{i:03d}.png"))
++    with av.open(path, "w") as container:
++        stream = container.add_stream("libx264", rate=fps, options={"crf": "10"})
++        stream.height, stream.width = frames.shape[1:3]
++        stream.pix_fmt = "yuv420p"
++        for frame in frames:
++            container.mux(stream.encode(av.VideoFrame.from_ndarray(frame, format="rgb24")))
++        container.mux(stream.encode())
++
++
+ def save_results(prompt, samples, filename, fakedir, fps=8, loop=False):
+     filename = filename.split('.')[0]+'.mp4'
+     prompt = prompt[0] if isinstance(prompt, list) else prompt
+@@ -129,7 +146,7 @@ def save_results(prompt, samples, filename, fakedir, fps=8, loop=False):
+         grid = (grid + 1.0) / 2.0
+         grid = (grid * 255).to(torch.uint8).permute(0, 2, 3, 1)
+         path = os.path.join(savedirs[idx], filename)
+-        torchvision.io.write_video(path, grid, fps=fps, video_codec='h264', options={'crf': '10'}) ## crf indicates the quality
++        write_video(path, grid, fps)
+ 
+ 
+ def save_results_seperate(prompt, samples, filename, fakedir, fps=10, loop=False):
+@@ -152,7 +169,7 @@ def save_results_seperate(prompt, samples, filename, fakedir, fps=10, loop=False
+             grid = (grid + 1.0) / 2.0
+             grid = (grid * 255).to(torch.uint8).permute(1, 2, 3, 0) #thwc
+             path = os.path.join(savedirs[idx].replace('samples', 'samples_separate'), f'{filename.split(".")[0]}_sample{i}.mp4')
+-            torchvision.io.write_video(path, grid, fps=fps, video_codec='h264', options={'crf': '10'})
++            write_video(path, grid, fps)
+ 
+ def get_latent_z(model, videos):
+     b, c, t, h, w = videos.shape
