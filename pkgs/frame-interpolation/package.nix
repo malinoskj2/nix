@@ -192,6 +192,10 @@ stdenvNoCC.mkDerivation {
     substituteInPlace $share/comfyui-frame-interpolation/vfi_utils.py \
       --replace-fail 'os.path.dirname(__file__), config["ckpts_path"], model_type' \
         'os.environ["FRAME_INTERP_CKPTS"], model_type'
+    # rife426.pth is a training checkpoint that still holds its distillation teacher and time calibration net.
+    substituteInPlace $share/comfyui-frame-interpolation/vfi_models/rife/__init__.py \
+      --replace-fail 'load_state_dict(torch.load(model_path, weights_only=False))' \
+        'load_state_dict({k: v for k, v in torch.load(model_path, weights_only=False).items() if not k.startswith(("teacher.", "caltime."))})'
 
     # The Lightning checkpoint holds more than tensors; it is the pinned official file.
     substituteInPlace $share/tooncrafter/scripts/evaluation/inference.py \
