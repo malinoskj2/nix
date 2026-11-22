@@ -142,6 +142,8 @@ let
     patches = [
       # open_clip 3 removed dual patchnorm and runs its attention blocks batch-first.
       ./tooncrafter-open-clip-3.patch
+      # The dual-ref VAE called xformers whether or not it was installed.
+      ./tooncrafter-sdpa.patch
     ];
   };
 in
