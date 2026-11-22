@@ -3899,7 +3899,7 @@
       ],
       "dependencies": [],
       "compatibility": "unverified",
-      "loader": "diffusers.WanImageToVideoPipeline.from_pretrained(path, torch_dtype=torch.bfloat16)(image=first, last_image=last, ...)"
+      "loader": "diffusers WanImageToVideoPipeline(image=first, last_image=last, ...) with prompt embeds from a freed bf16 UMT5 and the transformer streamed to the GPU as fp8 block Linears plus bf16 with layerwise casting; plain from_pretrained in bf16 does not fit 20 GB RAM or 32 GB VRAM"
     }
   },
   "runtimeSources": {
