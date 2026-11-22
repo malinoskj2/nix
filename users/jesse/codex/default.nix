@@ -65,10 +65,27 @@ let
     model = "gpt-6.1-sol";
     model_reasoning_effort = "medium";
   };
+  pstackSrc = pkgs.fetchFromGitHub {
+    owner = "michael-denyer";
+    repo = "pstack-claude";
+    rev = "d4a3f166b64e61ce0bbbb530238d3f6d13c772f2";
+    hash = "sha256-ayLofPUW/+JQ6FtJdTp6cp4ZN9S3FxjDzmO20HvW8VM=";
+  };
+  pstackModels = pkgs.writeText "codex-pstack-models.md" ''
+    session hook: off
+  '';
+  pstackSettings = {
+    marketplaces.pstack-claude = {
+      source_type = "local";
+      source = toString pstackSrc;
+    };
+    plugins."pstack@pstack-claude".enabled = true;
+  };
   settings = tomlFormat.generate "codex-settings.toml" config.programs.codex.settings;
   # The container provides isolation; Codex should not add another sandbox inside it.
   sandboxSettings = tomlFormat.generate "codex-sandbox-settings.toml" (
     modelSettings
+    // pstackSettings
     // {
       sandbox_mode = "danger-full-access";
       approval_policy = "never";
@@ -87,11 +104,14 @@ in
     enable = true;
     package = pkgs.unstable.codex;
     inherit (shared) skills;
-    settings = modelSettings // {
-      tui.alternate_screen = "never";
-      sandbox_mode = "danger-full-access";
-      approval_policy = "never";
-    };
+    settings =
+      modelSettings
+      // {
+        tui.alternate_screen = "never";
+        sandbox_mode = "danger-full-access";
+        approval_policy = "never";
+      }
+      // pstackSettings;
     context = shared.context + ''
 
       # Codex questions
@@ -102,15 +122,20 @@ in
 
   home.file = lib.mapAttrs' mkAgent agents // {
     ".codex/config.toml".enable = lib.mkForce false;
+    ".codex/pstack-models.md".source = pstackModels;
   };
 
   home.activation.codexSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
     run mkdir -p "$HOME/.codex"
     run ${mergeSettings} ${settings} "$HOME/.codex/config.toml"
+    run env CODEX_HOME="$HOME/.codex" ${lib.getExe config.programs.codex.package} plugin add pstack@pstack-claude --json
     # The agent sandbox seeds its config.toml from this one only once.
-    sandboxConfig="${config.xdg.dataHome}/agent-sandbox/home/.codex/config.toml"
+    sandboxCodexHome="${config.xdg.dataHome}/agent-sandbox/home/.codex"
+    sandboxConfig="$sandboxCodexHome/config.toml"
     if [ -s "$sandboxConfig" ]; then
       run ${mergeSettings} ${sandboxSettings} "$sandboxConfig"
+      run ${lib.getExe' pkgs.coreutils "install"} -m 0644 ${pstackModels} "$sandboxCodexHome/pstack-models.md"
+      run env CODEX_HOME="$sandboxCodexHome" ${lib.getExe config.programs.codex.package} plugin add pstack@pstack-claude --json
     fi
   '';
 }

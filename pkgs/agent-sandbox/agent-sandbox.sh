@@ -134,7 +134,7 @@ configure_codex() {
   seed_if_empty "$HOME/.codex/config.toml" "$sandbox_home/.codex/config.toml"
 
   local name
-  for name in AGENTS.md rules skills plugins; do
+  for name in AGENTS.md pstack-models.md rules skills plugins; do
     mount_readonly "$HOME/.codex/$name"
   done
 }
