@@ -30,6 +30,9 @@
   agentResumeWrapper ? null,
   # Additional local account homes whose transcripts may be discovered and resumed.
   codexAccountHomes ? [ ],
+  # Native Codex chats in these exact bots' registered homes run this host command.
+  # Project worktrees and terminal agents keep their normal launch policy.
+  hostCodexBotCommands ? { },
   # Forces "Share anonymous usage data" in existing profiles; null keeps the profile's choice.
   telemetryOptedIn ? null,
   desktopAssistantCommand ? "tohru",
@@ -119,6 +122,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./pending-below-main.patch
     ./desktop-bot-chat.patch
     ./desktop-voice-tasks.patch
+    ./host-bot-native-chat.patch
   ];
 
   postPatch = ''
@@ -137,6 +141,9 @@ stdenv.mkDerivation (finalAttrs: {
     EOF
     cat > src/shared/nix-codex-account-homes.ts <<'EOF'
     export const nixCodexAccountHomes: readonly string[] = ${builtins.toJSON codexAccountHomes}
+    EOF
+    cat > src/shared/nix-host-codex-bots.ts <<'EOF'
+    export const nixHostCodexBotCommands: Readonly<Record<string, string>> = ${builtins.toJSON hostCodexBotCommands}
     EOF
     # Keep the declarative overrides after the defaults without TS2783's duplicate-key error
     # for overrides also named explicitly in the defaults object.
@@ -314,6 +321,8 @@ stdenv.mkDerivation (finalAttrs: {
       src/shared/agent-launch/startup/tui-agent-launch-command-override.test.ts \
       src/main/managed-server/install/orcad-remote-launch-file-modes.test.ts \
       src/main/native-chat/nix-sandbox-launch-environment.test.ts \
+      src/main/native-chat/nix-bot-command-settings.test.ts \
+      src/main/runtime/agent-session/launch/nix-bot-host-launch.test.ts \
       src/main/codex-accounts/runtime-home/routing/runtime-home-sandbox-session-discovery.test.ts \
       src/main/runtime/agent-session/ownership/agent-session-reservation-admission.test.ts \
       src/main/runtime/agent-session/installation/nix-sandbox-launch-integration.test.ts \
