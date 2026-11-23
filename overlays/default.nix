@@ -32,6 +32,10 @@ in
 
   pins = final: _prev: {
     inherit (importNixpkgs inputs.nixpkgs-firefox final) firefox;
-    inherit (importNixpkgs inputs.nixpkgs-hyprland final) hyprland xdg-desktop-portal-hyprland;
+    inherit (importNixpkgs inputs.nixpkgs-hyprland final)
+      hyprland
+      hyprpicker
+      xdg-desktop-portal-hyprland
+      ;
   };
 }

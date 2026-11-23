@@ -44,7 +44,15 @@ the few packages that need something newer.
 
 ### Hyprland
 
-`nixpkgs-hyprland` pins the compositor and portal together. The `tohru` input's
+`nixpkgs-hyprland` pins the compositor, portal and screenshot freezer (`hyprpicker`)
+together. Hyprland 0.57 changed screencopy transforms; the release nixpkgs'
+hyprpicker 0.4.7 rotates frozen content incorrectly on portrait outputs. The
+coupled 0.4.8 uses ext-image-copy-capture instead. Grimblast's wrapped PATH must
+use that coupled picker, including for `--freeze` region selection. See
+[the upstream regression](https://github.com/hyprwm/Hyprland/discussions/16707)
+and [the capture-protocol migration](https://github.com/hyprwm/hyprpicker/commit/7bb69515f2c4).
+
+The `tohru` input's
 plugin (focus dips, title bars, chooser sheets and launcher recession) is built
 against the exact host Hyprland package, and its own `hyprland-nixpkgs` input
 follows `nixpkgs-hyprland`. The desktop assertion in
@@ -63,6 +71,10 @@ without damage artifacts, and live tearing in a game, including cursor/DRM
 restrictions. Rebase `pkgs/agent-sandbox/aquamarine-nested.patch` against the
 coupled Aquamarine, verify `NESTED-1` with the plugin loaded, update version
 assertions, and build `home` before activation.
+
+Also check Super+P's frozen selection on portrait and landscape outputs: the
+overlay must retain each output's orientation, and the saved/copy image must
+match the selected area. Include a selection spanning both outputs.
 
 ### Tohru
 

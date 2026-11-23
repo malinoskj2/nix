@@ -76,7 +76,7 @@ local packages by name. Linux-only packages set `meta.platforms`. `git-open-bran
 `git-open` command.
 
 `overlays/default.nix` holds `additions`, `unstable` and `pins`. `unstable` is
-`pkgs.unstable`, with claude-code given the release's `alsa-lib`. `pins` takes Firefox, Hyprland,
+`pkgs.unstable`, with claude-code given the release's `alsa-lib`. `pins` takes Firefox, Hyprland, hyprpicker and
 the Hyprland portal from exact nixpkgs revisions. The `tohru` input supplies the
 desktop shell and its compositor plugin, built against the host Hyprland package. The `apple-fonts` input's overlay adds `pkgs.sf-pro`,
 `sf-compact`, `sf-mono` and `ny`.
