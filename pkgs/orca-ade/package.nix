@@ -9,6 +9,9 @@
   copyDesktopItems,
   autoPatchelfHook,
   makeBinaryWrapper,
+  wrapGAppsHook3,
+  at-spi2-core,
+  gobject-introspection,
   glib,
   git,
   gsettings-desktop-schemas,
@@ -41,6 +44,37 @@ let
     ;
   electron = electron_43;
   pnpm = pnpm_11.override { nodejs-slim = nodejs_24; };
+  # Keep the desktop bridge independent of Python environments on the user's PATH.
+  computerUsePython = stdenv.mkDerivation {
+    pname = "orca-computer-python";
+    version = python3.version;
+    dontUnpack = true;
+    nativeBuildInputs = [
+      gobject-introspection
+      wrapGAppsHook3
+    ];
+    buildInputs = [
+      at-spi2-core
+      gtk3
+    ];
+    installPhase = ''
+      mkdir -p $out/bin
+      cat > $out/bin/orca-computer-python <<'SH'
+      #!${stdenv.shell}
+      exec ${python3.withPackages (ps: [ ps.pygobject3 ])}/bin/python3 "$@"
+      SH
+      chmod +x $out/bin/orca-computer-python
+    '';
+    doInstallCheck = true;
+    installCheckPhase = ''
+      $out/bin/orca-computer-python - <<'PYTHON'
+      import gi
+      for namespace, version in (("Atspi", "2.0"), ("Gdk", "3.0"), ("GdkPixbuf", "2.0"), ("GdkX11", "3.0")):
+          gi.require_version(namespace, version)
+      from gi.repository import Atspi, Gdk, GdkPixbuf, GdkX11, Gio, GLib
+      PYTHON
+    '';
+  };
   discord-presence = fetchFromGitHub {
     owner = "jondmarien";
     repo = "orca-discord-presence";
@@ -85,6 +119,9 @@ stdenv.mkDerivation (finalAttrs: {
   ];
 
   postPatch = ''
+    substituteInPlace src/main/computer/desktop-script/desktop-script-provider-bridge.ts \
+      --replace-fail "linuxPython = 'python3'" "linuxPython = '${computerUsePython}/bin/orca-computer-python'"
+
     # Apply declarative settings to new and existing profiles at startup,
     # without replacing Orca's mutable workspace/session state.
     cat > src/shared/nix-global-settings.ts <<'EOF'
@@ -333,6 +370,8 @@ stdenv.mkDerivation (finalAttrs: {
       ]
     } $out/libexec/orca-ade/resources/bin/orca-wayland-clipboard
   '';
+
+  passthru.computerUsePython = computerUsePython;
 
   # SSH and WSL hosts run orcad from this template. Its prebuilt addons cover every remote
   # target, which only upstream's release pipeline builds, and its manifest pins their hashes.

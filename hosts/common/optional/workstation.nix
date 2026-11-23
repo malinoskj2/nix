@@ -1,5 +1,8 @@
 { pkgs, ... }:
 {
+  # Orca computer use reads and controls applications through the accessibility bus.
+  services.gnome.at-spi2-core.enable = true;
+
   nix.settings = {
     substituters = [ "https://nix-community.cachix.org" ];
     trusted-public-keys = [
