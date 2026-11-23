@@ -464,13 +464,13 @@
      ...message(2, ''),
 --- a/src/main/bots/desktop-voice-continuations.ts
 +++ b/src/main/bots/desktop-voice-continuations.ts
-@@ -0,0 +1,133 @@
+@@ -0,0 +1,142 @@
 +import { execFile } from 'node:child_process'
 +import { promisify } from 'node:util'
 +import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 +import { orchestrationMailNotice } from '../../shared/agent-session/journal/agent-session-message-source'
 +import { agentJournalTurnOpener } from '../../shared/agent-session/journal/agent-session-journal-turn-opener'
-+import type { TurnEndedRows } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
++import type { StructuredAgentSessionTurnContext, TurnEndedRows } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 +import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 +import { readMessageSenderDispatch } from '../runtime/orchestration/db/messages/message-sender-dispatch'
 +import { requireStructuredHost } from './bot-chat-session'
@@ -555,6 +555,15 @@
 +
 +export function desktopVoiceOwnerTurn(chat: string): void { continuations.ownerTurn(chat) }
 +
++export function desktopVoiceAnswerContext(runtime: Pick<OrcaRuntimeService, 'getOrchestrationDb'>): NonNullable<StructuredAgentSessionTurnContext['answerEnded']> {
++  return (chat, turnId, readItems, _writeNote, ended) => {
++    if (ended?.outcome !== 'success') return
++    void readItems(null).then((rows) => deliverDesktopVoiceContinuation(runtime, chat, turnId, rows)).catch((error: unknown) =>
++      console.warn('[desktop-voice] could not deliver analyzed continuation', error)
++    )
++  }
++}
++
 +function workerOf(runtime: Pick<OrcaRuntimeService, 'getOrchestrationDb'>, message: string): string | null {
 +  const db = runtime.getOrchestrationDb()
 +  if (db.getMessageById(message)?.type !== 'worker_done') return null
@@ -587,7 +596,7 @@
 +  return text && text.length <= 16384 && !isQuietBotResult(text) ? { origin, completion: turn.itemId, text } : null
 +}
 +
-+export async function deliverDesktopVoiceContinuation(runtime: OrcaRuntimeService, chat: string, turnId: string, rows: TurnEndedRows): Promise<void> {
++export async function deliverDesktopVoiceContinuation(runtime: Pick<OrcaRuntimeService, 'getOrchestrationDb'>, chat: string, turnId: string, rows: TurnEndedRows): Promise<void> {
 +  trace('turn_completed', { chat, turn: turnId })
 +  const summary = desktopVoiceSummary(continuations, chat, turnId, rows, (id) => workerOf(runtime, id))
 +  if (!summary) return
@@ -691,16 +700,15 @@
  import type { BotChatJournal } from './bot-turn-rows'
  import type { BotRecentChatsSection } from './bot-recent-chats'
  import { BOT_FIRST_RUN_RULES } from './bot-preamble'
-@@ -56,7 +57,7 @@
-   work: Pick<BotWorkRecord, 'turnNote' | 'handedOver' | 'turnEnded'>
+@@ -57,6 +58,7 @@
    lookAround: Pick<BotLookAroundStore, 'botOfLook' | 'botOfTidyUp' | 'lookTurnIsQuiet'>
    /** A turn ended: one that worked on another bot's request and left it unanswered tells that bot. */
--  requestTurnEnded?: (sessionId: string, ended?: TurnEndedVerdict) => void
-+  requestTurnEnded?: (sessionId: string, ended?: TurnEndedVerdict, continuation?: { turnId: string; readItems: Parameters<NonNullable<StructuredAgentSessionTurnContext['turnEnded']>>[2] }) => void
+   requestTurnEnded?: (sessionId: string, ended?: TurnEndedVerdict) => void
++  answerEnded?: StructuredAgentSessionTurnContext['answerEnded']
    /** The bots the host holds when this is installed; none when it has no store yet. */
    botsAtInstall?: readonly Bot[]
    /** What the bot's other chats did lately, as a turn of this chat may hear of it. */
-@@ -291,12 +292,13 @@
+@@ -291,9 +293,11 @@
          ])
        },
        handedOver: (sessionId, message) => {
@@ -708,67 +716,23 @@
          deps.work.handedOver(sessionId, message)
          turnContext.handedOver?.(sessionId, message)
        },
++      answerEnded: deps.answerEnded,
        turnEnded: (sessionId, turnId, readItems, writeNote, ended) => {
          deps.work.turnEnded(sessionId)
--        deps.requestTurnEnded?.(sessionId, ended)
-+        deps.requestTurnEnded?.(sessionId, ended, { turnId, readItems })
-         turnContext.turnEnded?.(sessionId, turnId, readItems, writeNote)
-       }
-     },
---- a/src/main/bots/bot-turn-ended.ts
-+++ b/src/main/bots/bot-turn-ended.ts
-@@ -19,14 +19,24 @@
- import { requireStructuredHost } from './bot-chat-session'
- import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
- import type { StructuredAgentSessionRequestFailure } from '../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
-+import { deliverDesktopVoiceContinuation } from './desktop-voice-continuations'
-+import type { StructuredAgentSessionTurnContext } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
-+
-+type Continuation = { turnId: string; readItems: Parameters<NonNullable<StructuredAgentSessionTurnContext['turnEnded']>>[2] }
-
- /** A bot session's turn ended: settle the request it answered, and raise its group room. */
- export function botTurnEnded(
-   runtime: OrcaRuntimeService,
-   sessionId: string,
--  ended?: TurnEndedVerdict
-+  ended?: TurnEndedVerdict,
-+  continuation?: Continuation
- ): void {
-   markBotGroupRoomUnread(runtime, sessionId)
-+  if (ended?.outcome === 'success' && continuation) {
-+    void continuation.readItems(null).then((rows) => deliverDesktopVoiceContinuation(runtime, sessionId, continuation.turnId, rows)).catch((error: unknown) =>
-+      console.warn('[desktop-voice] could not deliver analyzed continuation', error)
-+    )
-+  }
-   void noteBotGroupMemberReply(runtime, sessionId).catch((error: unknown) =>
-     console.warn('[bot-groups] could not note a reply for the sidebar', error)
-   )
-@@ -37,7 +47,7 @@
-
- /** Bot session work the runtime base needs but only the whole runtime can do. */
- export type BotSessionHooks = {
--  turnEnded: (sessionId: string, ended?: TurnEndedVerdict) => void
-+  turnEnded: (sessionId: string, ended?: TurnEndedVerdict, continuation?: Continuation) => void
-   /** A chat's request failed; only a bot's tells its senders why. */
-   requestFailed: (failure: StructuredAgentSessionRequestFailure) => void
-   groupRoomOf: (sessionId: string) => BotGroupRoomOfSession | null
-@@ -68,7 +78,7 @@
-       (await (await requireStructuredHost(runtime)).journalReads(sessionId)).endedTurnCount()
-   })
-   return {
--    turnEnded: (sessionId, ended) => botTurnEnded(runtime, sessionId, ended),
-+    turnEnded: (sessionId, ended, continuation) => botTurnEnded(runtime, sessionId, ended, continuation),
-     requestFailed: (failure) =>
-       void settleBotRequestFailure(runtime, failure).catch((error: unknown) =>
-         console.warn('[bots] could not settle a failed bot request', error)
+         deps.requestTurnEnded?.(sessionId, ended)
 --- a/src/main/runtime/orca-runtime-bots.ts
 +++ b/src/main/runtime/orca-runtime-bots.ts
-@@ -275,7 +275,7 @@
-         chats: botChatJournal(),
+@@ -1,4 +1,5 @@
+ import type { BotSessionHooks } from '../bots/bot-turn-ended'
++import { desktopVoiceAnswerContext } from '../bots/desktop-voice-continuations'
+ import { join } from 'node:path'
+ import type { Worktree } from '../../shared/worktree/types'
+ import type { Bot } from '../../shared/bot-types'
+@@ -276,6 +277,7 @@
          work: this.botWork,
          lookAround: this.lookAround,
--        requestTurnEnded: (sessionId, ended) => this.botSessions.turnEnded(sessionId, ended),
-+        requestTurnEnded: (sessionId, ended, continuation) => this.botSessions.turnEnded(sessionId, ended, continuation),
+         requestTurnEnded: (sessionId, ended) => this.botSessions.turnEnded(sessionId, ended),
++        answerEnded: desktopVoiceAnswerContext(this),
          recentChats: (botId, sessionId, message) =>
            this.botSessions.recentChats(botId, sessionId, message),
          unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),
@@ -919,11 +883,22 @@
          continue
 --- a/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 +++ b/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
-@@ -130,6 +130,7 @@
+@@ -125,11 +125,15 @@
+       onState: delivery.reconcile
+     })
+   }
+-  const turnEnded = deps.turnContext?.turnEnded
+-  if (turnEnded) {
++  for (const [id, turnEnded, completionScope] of [
++    ['host-turn-context', deps.turnContext?.turnEnded, undefined],
++    ['host-answer-context', deps.turnContext?.answerEnded, 'turn']
++  ] as const) {
++    if (!turnEnded) continue
      const installed = host
      installed.subscribeTurnCompletions({
-       id: 'host-turn-context',
-+      completionScope: 'turn',
+-      id: 'host-turn-context',
++      id,
++      completionScope,
        emit: (event) => {
          if (event.type === 'completion') {
            const { sessionId, turnId, outcome } = event.completion
@@ -979,3 +954,14 @@
 +    expect(work).toHaveLength(1)
 +  })
 +})
+--- a/src/main/native-chat/agent-session-wire/structured-agent-session-turn-context.ts
++++ b/src/main/native-chat/agent-session-wire/structured-agent-session-turn-context.ts
+@@ -47,6 +47,8 @@
+   mentions?: (sessionId: string, message: AgentJournalMessageItem) => Promise<string | null>
+   /** A person's message started a turn, whether or not it carries the plan (attachments don't). */
+   handedOver?: (sessionId: string, message: AgentJournalMessageItem) => void
++  /** The agent's own answer completed, independently of other ongoing work in the conversation. */
++  answerEnded?: StructuredAgentSessionTurnContext['turnEnded']
+   /** A turn in this conversation ended, whoever started it; `readItems` reads its journal. */
+   turnEnded?: (
+     sessionId: string,
