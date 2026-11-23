@@ -32,6 +32,7 @@
   codexAccountHomes ? [ ],
   # Forces "Share anonymous usage data" in existing profiles; null keeps the profile's choice.
   telemetryOptedIn ? null,
+  desktopAssistantCommand ? "tohru",
 }:
 
 let
@@ -300,6 +301,8 @@ stdenv.mkDerivation (finalAttrs: {
       src/main/native-chat/nix-native-migration.test.ts \
       src/main/runtime/rpc/methods/nix-desktop-bot.test.ts \
       src/main/bots/bot-chat-session.test.ts \
+      src/main/bots/desktop-voice-continuations.test.ts \
+      src/main/bots/bot-structured-session-wiring.test.ts \
       src/main/native-chat/agent-session-wire/publication/history/agent-read-journal-page.test.ts \
       src/main/native-chat/agent-session-wire/host/structured-agent-session-conversation-reads.test.ts \
       src/shared/agent-launch/startup/tui-agent-launch-command-override.test.ts \
@@ -355,6 +358,7 @@ stdenv.mkDerivation (finalAttrs: {
     cp -r nix-plugins $out/share/orca-ade/plugins
 
     wrapProgram $out/libexec/orca-ade/orca-ide \
+      --set ORCA_DESKTOP_ASSISTANT_COMMAND ${lib.escapeShellArg desktopAssistantCommand} \
       --prefix XDG_DATA_DIRS : ${glib.getSchemaDataDirPath gsettings-desktop-schemas}:${glib.getSchemaDataDirPath gtk3} \
       --set CHROME_DEVEL_SANDBOX ${electron}/libexec/electron/chrome-sandbox
     ln -s $out/libexec/orca-ade/resources/bin/orca-ide $out/bin/orca-ide

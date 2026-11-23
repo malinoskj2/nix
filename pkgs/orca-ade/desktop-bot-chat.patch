@@ -462,3 +462,333 @@
  function clear(f: ReturnType<typeof fixture>) {
    f.seedItem({
      ...message(2, ''),
+--- a/src/main/bots/desktop-voice-continuations.ts
++++ b/src/main/bots/desktop-voice-continuations.ts
+@@ -0,0 +1,117 @@
++import { execFile } from 'node:child_process'
++import { promisify } from 'node:util'
++import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
++import { orchestrationMailNotice } from '../../shared/agent-session/journal/agent-session-message-source'
++import { agentJournalTurnOpener } from '../../shared/agent-session/journal/agent-session-journal-turn-opener'
++import type { TurnEndedRows } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
++import type { OrcaRuntimeService } from '../runtime/orca-runtime'
++import { readMessageSenderDispatch } from '../runtime/orchestration/db/messages/message-sender-dispatch'
++import { requireStructuredHost } from './bot-chat-session'
++import { readAgentJournalTurnOutcome } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
++import { isQuietBotResult } from '../../shared/bot-quiet-result'
++
++type Origin = { chat: string; request: string }
++const MAX_LINKS = 512
++const MAX_AGE = 24 * 60 * 60 * 1000
++
++/** Voice belongs to a particular owner prompt, never merely to the bot or its latest chat. */
++export class DesktopVoiceContinuations {
++  private readonly dispatches = new Map<string, { origin: Origin; at: number; epoch: number }>()
++  private readonly owners = new Map<string, number>()
++  private readonly delivered = new Set<string>()
++
++  remember(dispatch: string, origin: Origin | null, now = Date.now()): void {
++    for (const [id, link] of this.dispatches) {
++      if (now - link.at > MAX_AGE) this.dispatches.delete(id)
++    }
++    if (origin) this.dispatches.set(dispatch, { origin, at: now, epoch: this.owners.get(origin.chat) ?? 0 })
++    else this.dispatches.delete(dispatch)
++    while (this.dispatches.size > MAX_LINKS) {
++      const first = this.dispatches.keys().next().value
++      if (first === undefined) break
++      this.dispatches.delete(first)
++    }
++  }
++
++  ownerTurn(chat: string): void {
++    this.owners.set(chat, (this.owners.get(chat) ?? 0) + 1)
++    while (this.owners.size > MAX_LINKS) {
++      const first = this.owners.keys().next().value
++      if (first === undefined) break
++      this.owners.delete(first)
++    }
++  }
++
++  origin(chat: string, prompt: AgentJournalRenderItem, worker: (message: string) => string | null): Origin | null {
++    const body = prompt.body
++    if (body.kind !== 'message' || body.role !== 'user' || body.origin || body.memorySource) return null
++    if (!body.from) {
++      const text = body.blocks.filter((block) => block.type === 'text').map((block) => block.text).join('\n')
++      return text.startsWith('[tohru-desktop:voice]\n') ? { chat, request: prompt.itemId } : null
++    }
++    const mail = orchestrationMailNotice(body.from)
++    if (!mail?.messages.length) return null
++    let found: Origin | null = null
++    for (const message of mail.messages) {
++      const dispatch = worker(message.messageId)
++      const link = dispatch ? this.dispatches.get(dispatch) : undefined
++      if (!link || Date.now() - link.at > MAX_AGE || link.origin.chat !== chat || link.epoch !== (this.owners.get(chat) ?? 0)) return null
++      if (found && found.request !== link.origin.request) return null
++      found = link.origin
++    }
++    return found
++  }
++
++  claim(completion: string): boolean {
++    if (this.delivered.has(completion)) return false
++    this.delivered.add(completion)
++    while (this.delivered.size > MAX_LINKS) {
++      const first = this.delivered.values().next().value
++      if (first === undefined) break
++      this.delivered.delete(first)
++    }
++    return true
++  }
++}
++
++// A restart deliberately drops speech eligibility; the durable result remains in Orca.
++const continuations = new DesktopVoiceContinuations()
++const run = promisify(execFile)
++
++export function desktopVoiceOwnerTurn(chat: string): void { continuations.ownerTurn(chat) }
++
++function workerOf(runtime: Pick<OrcaRuntimeService, 'getOrchestrationDb'>, message: string): string | null {
++  const db = runtime.getOrchestrationDb()
++  if (db.getMessageById(message)?.type !== 'worker_done') return null
++  return readMessageSenderDispatch(db, message)?.dispatchId ?? null
++}
++
++export async function rememberDesktopVoiceDispatch(runtime: OrcaRuntimeService, dispatchId: string, sender?: string): Promise<void> {
++  const dispatch = runtime.getOrchestrationDb().getDispatchContextById(dispatchId)
++  const chat = dispatch?.creator_orca_session_id
++  if (!chat || (sender !== undefined && sender !== chat)) return
++  const reads = await (await requireStructuredHost(runtime)).journalReads(chat)
++  const prompt = await reads.promptItem('last')
++  continuations.remember(dispatchId, prompt ? continuations.origin(chat, prompt, (id) => workerOf(runtime, id)) : null)
++}
++
++export function desktopVoiceSummary(links: DesktopVoiceContinuations, chat: string, turnId: string,
++  rows: TurnEndedRows, worker: (message: string) => string | null): { origin: Origin; completion: string; text: string } | null {
++  const turn = rows.items.findLast((item) => item.body.kind === 'turn' && item.body.turnId === turnId)
++  if (!turn || turn.body.kind !== 'turn' || !turn.body.userItemId || turn.body.state !== 'completed' || readAgentJournalTurnOutcome(turn.body) !== 'success') return null
++  const prompt = agentJournalTurnOpener(rows, turn.body.userItemId)
++  // Direct replies already return through the desktop request; only analyzed worker follow-ups use this path.
++  if (!prompt || prompt.body.kind !== 'message' || !prompt.body.from) return null
++  const origin = links.origin(chat, prompt, worker)
++  if (!origin) return null
++  const reply = rows.items.findLast((item) => item.turnScope?.kind === 'turn' && item.turnScope.turnItemId === turn.itemId && item.body.kind === 'message' && item.body.role === 'assistant')
++  if (!reply || reply.body.kind !== 'message') return null
++  const text = reply.body.blocks.filter((block) => block.type === 'text').map((block) => block.text).join('\n').trim()
++  return text && text.length <= 16384 && !isQuietBotResult(text) ? { origin, completion: turn.itemId, text } : null
++}
++
++export async function deliverDesktopVoiceContinuation(runtime: OrcaRuntimeService, chat: string, turnId: string, rows: TurnEndedRows): Promise<void> {
++  const summary = desktopVoiceSummary(continuations, chat, turnId, rows, (id) => workerOf(runtime, id))
++  if (!summary || !continuations.claim(summary.completion)) return
++  await run(process.env.ORCA_DESKTOP_ASSISTANT_COMMAND ?? 'tohru', ['assistant', 'voice-result', '--chat', summary.origin.chat, '--request', summary.origin.request, '--completion', summary.completion, '--', summary.text.replace(/[\r\n\t]+/g, ' ')], { timeout: 5000, maxBuffer: 4096 })
++}
+--- a/src/main/bots/desktop-voice-continuations.test.ts
++++ b/src/main/bots/desktop-voice-continuations.test.ts
+@@ -0,0 +1,71 @@
++import { describe, expect, it } from 'vitest'
++import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
++import { DesktopVoiceContinuations, desktopVoiceSummary } from './desktop-voice-continuations'
++import type { TurnEndedRows } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
++
++function prompt(text: string, request = 'request'): AgentJournalRenderItem {
++  return { itemId: request, sequence: 1, revision: 1, observedAt: 1, turnScope: { kind: 'thread' },
++    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] } }
++}
++function mail(...messages: string[]): AgentJournalRenderItem {
++  return { ...prompt('raw worker report'), body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'raw worker report' }],
++    from: { kind: 'agent', senders: [], orchestration: { message: 'mail-notice', mailbox: 'chat', dispatchId: null,
++      messages: messages.map((messageId) => ({ messageId, runId: 'run', from: 'dispatch:worker' })) } } } }
++}
++
++describe('voice continuation provenance', () => {
++  it('links worker completion and further delegation to the exact spoken request', () => {
++    const links = new DesktopVoiceContinuations()
++    const origin = links.origin('chat', prompt('[tohru-desktop:voice]\nAnalyze this'), () => null)
++    links.remember('worker', origin)
++    const inherited = links.origin('chat', mail('done'), () => 'worker')
++    expect(inherited).toEqual({ chat: 'chat', request: 'request' })
++    links.remember('next-worker', inherited)
++    expect(links.origin('chat', mail('next-done'), () => 'next-worker')).toEqual(origin)
++  })
++  it('does not link text, unrelated or cross-chat mail, or mixed origins', () => {
++    const links = new DesktopVoiceContinuations()
++    expect(links.origin('chat', prompt('[tohru-desktop]\nAnalyze this'), () => null)).toBeNull()
++    links.remember('a', { chat: 'chat', request: 'voice-a' })
++    links.remember('b', { chat: 'chat', request: 'voice-b' })
++    expect(links.origin('other-chat', mail('a'), () => 'a')).toBeNull()
++    expect(links.origin('chat', mail('unknown'), () => null)).toBeNull()
++    expect(links.origin('chat', mail('a', 'b'), (id) => id)).toBeNull()
++  })
++  it('retires old speech eligibility when another owner turn starts', () => {
++    const links = new DesktopVoiceContinuations()
++    links.remember('worker', { chat: 'chat', request: 'voice-a' })
++    links.ownerTurn('chat')
++    expect(links.origin('chat', mail('done'), () => 'worker')).toBeNull()
++    links.remember('worker', { chat: 'chat', request: 'new-spoken-request' })
++    expect(links.origin('chat', mail('done'), () => 'worker')).toEqual({ chat: 'chat', request: 'new-spoken-request' })
++  })
++  it('claims a completed summary once and bounds dispatch storage', () => {
++    const links = new DesktopVoiceContinuations()
++    expect(links.claim('final')).toBe(true)
++    expect(links.claim('final')).toBe(false)
++    for (let i = 0; i < 513; i++) links.remember(String(i), { chat: 'chat', request: String(i) })
++    expect(links.origin('chat', mail('old'), () => '0')).toBeNull()
++    expect(links.origin('chat', mail('new'), () => '512')).toEqual({ chat: 'chat', request: '512' })
++  })
++  it('returns only the successful coordinating turn final, never raw mail or commentary', () => {
++    const links = new DesktopVoiceContinuations()
++    links.remember('worker', { chat: 'chat', request: 'spoken-request' })
++    const response = (text: string, turnItemId = 'turn'): AgentJournalRenderItem => ({
++      ...prompt(text), itemId: text, turnScope: { kind: 'turn', turnItemId },
++      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
++    })
++    const turn: AgentJournalRenderItem = { ...prompt(''), itemId: 'turn',
++      body: { kind: 'turn', turnId: 'provider-turn', userItemId: 'request', state: 'completed', outcome: 'success' } }
++    const rows: TurnEndedRows = { items: [mail('done'), turn, response('Checking the worker report'), response('My analyzed answer'), response('Another turn', 'other')], openerIds: new Map() }
++    expect(desktopVoiceSummary(links, 'chat', 'provider-turn', rows, () => 'worker')).toEqual({
++      origin: { chat: 'chat', request: 'spoken-request' }, completion: 'turn', text: 'My analyzed answer'
++    })
++    expect(desktopVoiceSummary(links, 'other-chat', 'provider-turn', rows, () => 'worker')).toBeNull()
++    const failed: TurnEndedRows = { ...rows, items: [mail('done'), { ...turn, body: { kind: 'turn', turnId: 'provider-turn', userItemId: 'request', state: 'completed', outcome: 'failure' } }, response('Failed output')] }
++    expect(desktopVoiceSummary(links, 'chat', 'provider-turn', failed, () => 'worker')).toBeNull()
++    expect(desktopVoiceSummary(links, 'chat', 'provider-turn', { ...rows, items: [mail('done'), turn, response('NO_REPLY')] }, () => 'worker')).toBeNull()
++    const direct = { ...rows, items: [prompt('[tohru-desktop:voice]\nQuestion'), turn, response('Direct answer')] }
++    expect(desktopVoiceSummary(links, 'chat', 'provider-turn', direct, () => 'worker')).toBeNull()
++  })
++})
+--- a/src/main/bots/bot-structured-session-wiring.ts
++++ b/src/main/bots/bot-structured-session-wiring.ts
+@@ -5,6 +5,7 @@
+ import type { StructuredAgentSessionRuntimeDeps } from '../runtime/agent-session/installation/structured-agent-session-runtime-contract'
+ import { join } from 'node:path'
+ import { botHomeFolder, localBotHomeFilesystem } from './bot-home'
++import { desktopVoiceOwnerTurn } from './desktop-voice-continuations'
+ import { messageWords } from '../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
+ import {
+   botMentionContext,
+@@ -19,7 +20,7 @@
+ import { botToolsEpoch, type BotLaunchedTools } from './bot-tools-revision'
+ import { botOfHomeWorkspace } from '../../shared/bots/bot-homes'
+ import { createBotTurnContext } from './bot-turn-context'
+-import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
++import type { TurnEndedVerdict, StructuredAgentSessionTurnContext } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
+ import type { BotChatJournal } from './bot-turn-rows'
+ import type { BotRecentChatsSection } from './bot-recent-chats'
+ import { BOT_FIRST_RUN_RULES } from './bot-preamble'
+@@ -56,7 +57,7 @@
+   work: Pick<BotWorkRecord, 'turnNote' | 'handedOver' | 'turnEnded'>
+   lookAround: Pick<BotLookAroundStore, 'botOfLook' | 'botOfTidyUp' | 'lookTurnIsQuiet'>
+   /** A turn ended: one that worked on another bot's request and left it unanswered tells that bot. */
+-  requestTurnEnded?: (sessionId: string, ended?: TurnEndedVerdict) => void
++  requestTurnEnded?: (sessionId: string, ended?: TurnEndedVerdict, continuation?: { turnId: string; readItems: Parameters<NonNullable<StructuredAgentSessionTurnContext['turnEnded']>>[2] }) => void
+   /** The bots the host holds when this is installed; none when it has no store yet. */
+   botsAtInstall?: readonly Bot[]
+   /** What the bot's other chats did lately, as a turn of this chat may hear of it. */
+@@ -291,12 +292,13 @@
+         ])
+       },
+       handedOver: (sessionId, message) => {
++        if (!message.from && !message.origin && !message.memorySource) desktopVoiceOwnerTurn(sessionId)
+         deps.work.handedOver(sessionId, message)
+         turnContext.handedOver?.(sessionId, message)
+       },
+       turnEnded: (sessionId, turnId, readItems, writeNote, ended) => {
+         deps.work.turnEnded(sessionId)
+-        deps.requestTurnEnded?.(sessionId, ended)
++        deps.requestTurnEnded?.(sessionId, ended, { turnId, readItems })
+         turnContext.turnEnded?.(sessionId, turnId, readItems, writeNote)
+       }
+     },
+--- a/src/main/bots/bot-turn-ended.ts
++++ b/src/main/bots/bot-turn-ended.ts
+@@ -19,14 +19,24 @@
+ import { requireStructuredHost } from './bot-chat-session'
+ import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
+ import type { StructuredAgentSessionRequestFailure } from '../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
++import { deliverDesktopVoiceContinuation } from './desktop-voice-continuations'
++import type { StructuredAgentSessionTurnContext } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
++
++type Continuation = { turnId: string; readItems: Parameters<NonNullable<StructuredAgentSessionTurnContext['turnEnded']>>[2] }
+
+ /** A bot session's turn ended: settle the request it answered, and raise its group room. */
+ export function botTurnEnded(
+   runtime: OrcaRuntimeService,
+   sessionId: string,
+-  ended?: TurnEndedVerdict
++  ended?: TurnEndedVerdict,
++  continuation?: Continuation
+ ): void {
+   markBotGroupRoomUnread(runtime, sessionId)
++  if (ended?.outcome === 'success' && continuation) {
++    void continuation.readItems(null).then((rows) => deliverDesktopVoiceContinuation(runtime, sessionId, continuation.turnId, rows)).catch((error: unknown) =>
++      console.warn('[desktop-voice] could not deliver analyzed continuation', error)
++    )
++  }
+   void noteBotGroupMemberReply(runtime, sessionId).catch((error: unknown) =>
+     console.warn('[bot-groups] could not note a reply for the sidebar', error)
+   )
+@@ -37,7 +47,7 @@
+
+ /** Bot session work the runtime base needs but only the whole runtime can do. */
+ export type BotSessionHooks = {
+-  turnEnded: (sessionId: string, ended?: TurnEndedVerdict) => void
++  turnEnded: (sessionId: string, ended?: TurnEndedVerdict, continuation?: Continuation) => void
+   /** A chat's request failed; only a bot's tells its senders why. */
+   requestFailed: (failure: StructuredAgentSessionRequestFailure) => void
+   groupRoomOf: (sessionId: string) => BotGroupRoomOfSession | null
+@@ -68,7 +78,7 @@
+       (await (await requireStructuredHost(runtime)).journalReads(sessionId)).endedTurnCount()
+   })
+   return {
+-    turnEnded: (sessionId, ended) => botTurnEnded(runtime, sessionId, ended),
++    turnEnded: (sessionId, ended, continuation) => botTurnEnded(runtime, sessionId, ended, continuation),
+     requestFailed: (failure) =>
+       void settleBotRequestFailure(runtime, failure).catch((error: unknown) =>
+         console.warn('[bots] could not settle a failed bot request', error)
+--- a/src/main/runtime/orca-runtime-bots.ts
++++ b/src/main/runtime/orca-runtime-bots.ts
+@@ -275,7 +275,7 @@
+         chats: botChatJournal(),
+         work: this.botWork,
+         lookAround: this.lookAround,
+-        requestTurnEnded: (sessionId, ended) => this.botSessions.turnEnded(sessionId, ended),
++        requestTurnEnded: (sessionId, ended, continuation) => this.botSessions.turnEnded(sessionId, ended, continuation),
+         recentChats: (botId, sessionId, message) =>
+           this.botSessions.recentChats(botId, sessionId, message),
+         unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),
+--- a/src/main/runtime/rpc/methods/orchestration/worker/start/local-worker-start.ts
++++ b/src/main/runtime/rpc/methods/orchestration/worker/start/local-worker-start.ts
+@@ -1,4 +1,5 @@
+ import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
++import { rememberDesktopVoiceDispatch } from '../../../../../../bots/desktop-voice-continuations'
+ import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
+ import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-model-preflight'
+ import { resolveWorkerConfiguredAgentParams } from './launch/worker-configured-agent-preflight'
+@@ -144,6 +145,7 @@
+     agent,
+     launchReceipt: launch.receipt
+   })
++  await rememberDesktopVoiceDispatch(runtime, started.dispatch.id).catch((error: unknown) => console.warn('[desktop-voice] could not correlate worker origin', error))
+   releaseRetriedWorkerTerminal(runtime, db, params)
+   const effects: WorkerEffect[] = []
+   const task = started.task
+--- a/src/main/runtime/rpc/methods/orchestration/messaging/send-methods.ts
++++ b/src/main/runtime/rpc/methods/orchestration/messaging/send-methods.ts
+@@ -1,4 +1,5 @@
+ import { defineOrchestrationMethod } from '../access/orchestration-method-access'
++import { rememberDesktopVoiceDispatch } from '../../../../../bots/desktop-voice-continuations'
+ import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+ import { isGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
+ import {
+@@ -274,6 +275,11 @@
+           withSendWarnings: (sent) =>
+             finished?.receipt(withSendWarnings(sent)) ?? withSendWarnings(sent)
+         })
++        if (addressedDispatchId && sender.orcaSessionId) {
++          await rememberDesktopVoiceDispatch(runtime, addressedDispatchId, sender.orcaSessionId).catch((error: unknown) =>
++            console.warn('[desktop-voice] could not correlate worker continuation', error)
++          )
++        }
+         followThroughWorkerReport(
+           runtime,
+           db,

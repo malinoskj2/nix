@@ -8,6 +8,11 @@ let
   # Both Orca's native parser and terminal shells expand this on the execution host.
   sandboxAgentCommand = agent: "~/.orca/nix/bin/orca-sandbox-launch orca-sandbox ${agent}";
   orca-ade = pkgs.orca-ade.override {
+    desktopAssistantCommand =
+      if config.programs ? tohru && config.programs.tohru.enable then
+        "${config.programs.tohru.package}/bin/tohru"
+      else
+        "tohru";
     globalSettings = {
       theme = "dark";
       pluginAppThemeDark = "plugin:local.catppuccin-mocha/mocha";
