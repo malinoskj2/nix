@@ -118,6 +118,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./structured-sandbox-indicators.patch
     ./pending-below-main.patch
     ./desktop-bot-chat.patch
+    ./desktop-voice-tasks.patch
   ];
 
   postPatch = ''
@@ -302,6 +303,8 @@ stdenv.mkDerivation (finalAttrs: {
       src/main/runtime/rpc/methods/nix-desktop-bot.test.ts \
       src/main/bots/bot-chat-session.test.ts \
       src/main/bots/desktop-voice-continuations.test.ts \
+      src/main/bots/desktop-voice-task-queue.test.ts \
+      src/main/runtime/rpc/orchestration/callers/orchestration-session-voice-caller.test.ts \
       src/main/native-chat/agent-session-wire/structured-agent-session-turn-scope.test.ts \
       src/main/native-chat/agent-session-wire/structured-agent-session-quiet-turn.test.ts \
       src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-failure.test.ts \
