@@ -30,9 +30,9 @@
   agentResumeWrapper ? null,
   # Additional local account homes whose transcripts may be discovered and resumed.
   codexAccountHomes ? [ ],
-  # Native Codex chats in these exact bots' registered homes run this host command.
-  # Project worktrees and terminal agents keep their normal launch policy.
-  hostCodexBotCommands ? { },
+  # Native Codex and Claude chats in these exact bots' registered homes run these host commands,
+  # keyed by bot ID then agent. Project worktrees and terminal agents keep their normal launch policy.
+  hostBotCommands ? { },
   # Forces "Share anonymous usage data" in existing profiles; null keeps the profile's choice.
   telemetryOptedIn ? null,
   desktopAssistantCommand ? "tohru",
@@ -146,8 +146,8 @@ stdenv.mkDerivation (finalAttrs: {
     cat > src/shared/nix-codex-account-homes.ts <<'EOF'
     export const nixCodexAccountHomes: readonly string[] = ${builtins.toJSON codexAccountHomes}
     EOF
-    cat > src/shared/nix-host-codex-bots.ts <<'EOF'
-    export const nixHostCodexBotCommands: Readonly<Record<string, string>> = ${builtins.toJSON hostCodexBotCommands}
+    cat > src/shared/nix-host-bots.ts <<'EOF'
+    export const nixHostBotCommands: Readonly<Record<string, Readonly<Partial<Record<string, string>>>>> = ${builtins.toJSON hostBotCommands}
     EOF
     # Keep the declarative overrides after the defaults without TS2783's duplicate-key error
     # for overrides also named explicitly in the defaults object.

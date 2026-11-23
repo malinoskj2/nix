@@ -1,5 +1,49 @@
+diff --git a/src/main/claude/structured/launch/claude-structured-child-env.ts b/src/main/claude/structured/launch/claude-structured-child-env.ts
+index 515493f5..64218360 100644
+--- a/src/main/claude/structured/launch/claude-structured-child-env.ts
++++ b/src/main/claude/structured/launch/claude-structured-child-env.ts
+@@ -13,6 +13,7 @@ import { withCliRuntimeOnPath } from '../../../../shared/shell/command-resolutio
+ import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/environment'
+ import { resolveClaudeCommand } from '../../../codex-cli/command'
+ import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
++import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+ import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
+ import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
+ 
+@@ -29,7 +30,9 @@ function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Recor
+ export type ClaudeEnvDeps = {
+   signal?: AbortSignal
+   operation?: StructuredAgentResolutionOperation
++  location?: AgentSessionRecord['location']
+   resolveCommand?: (options?: {
++    location?: AgentSessionRecord['location']
+     pathEnv?: string | null
+     homePath?: string
+   }) => StructuredAgentCommand
+@@ -82,7 +85,8 @@ async function readClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<ClaudeChi
+   const effectiveEnv = overlayEnvironmentVariables(inheritedEnv, overlay, process.platform)
+   const options = {
+     pathEnv: effectiveEnv.PATH ?? effectiveEnv.Path ?? null,
+-    homePath: effectiveEnv.HOME ?? effectiveEnv.USERPROFILE
++    homePath: effectiveEnv.HOME ?? effectiveEnv.USERPROFILE,
++    ...(deps.location ? { location: deps.location } : {})
+   }
+   const invocation = deps.resolveCommand
+     ? deps.resolveCommand(options)
+diff --git a/src/main/claude/structured/launch/claude-structured-launch-resolution.ts b/src/main/claude/structured/launch/claude-structured-launch-resolution.ts
+index 7a929109..a244c42a 100644
+--- a/src/main/claude/structured/launch/claude-structured-launch-resolution.ts
++++ b/src/main/claude/structured/launch/claude-structured-launch-resolution.ts
+@@ -179,6 +179,7 @@ export function claudeStructuredLaunchPart(
+     const cwd = await basis.launchDirectory()
+     const envDeps: ClaudeEnvDeps & Pick<ClaudeStructuredLaunchPartDeps, 'resolveAuthPolicy'> = {
+       ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
++      location: record.location,
+       resolveEnv: () => basis.launchEnv(),
+       resolveInheritedEnv: basis.baseEnvironment,
+       refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
 diff --git a/src/main/codex/structured/launch/codex-structured-launch-resolution.ts b/src/main/codex/structured/launch/codex-structured-launch-resolution.ts
-index 41fdf3c..530a1b5 100644
+index 41fdf3c4..530a1b55 100644
 --- a/src/main/codex/structured/launch/codex-structured-launch-resolution.ts
 +++ b/src/main/codex/structured/launch/codex-structured-launch-resolution.ts
 @@ -54,6 +54,7 @@ export type CodexStructuredLaunchPartDeps = {
@@ -35,7 +79,7 @@ index 41fdf3c..530a1b5 100644
        resolveWorkingDirectory: basis.launchDirectory,
        resolveEnvironment: basis.environment
 diff --git a/src/main/native-chat/agent-session-wire/acquisition/structured-agent-session-launch-env.ts b/src/main/native-chat/agent-session-wire/acquisition/structured-agent-session-launch-env.ts
-index 81b284c..7079a53 100644
+index 81b284c2..7079a53d 100644
 --- a/src/main/native-chat/agent-session-wire/acquisition/structured-agent-session-launch-env.ts
 +++ b/src/main/native-chat/agent-session-wire/acquisition/structured-agent-session-launch-env.ts
 @@ -3,7 +3,8 @@ import type { AgentSessionAttachParams } from './structured-agent-session-attach
@@ -58,7 +102,7 @@ index 81b284c..7079a53 100644
          ? { [params.accountHome.variable]: params.accountHome.path }
          : {})
 diff --git a/src/main/native-chat/agent-session-wire/host/structured-agent-session-host-types.ts b/src/main/native-chat/agent-session-wire/host/structured-agent-session-host-types.ts
-index e40cf70..5d23543 100644
+index e40cf70d..5d23543d 100644
 --- a/src/main/native-chat/agent-session-wire/host/structured-agent-session-host-types.ts
 +++ b/src/main/native-chat/agent-session-wire/host/structured-agent-session-host-types.ts
 @@ -187,7 +187,8 @@ export type StructuredAgentSessionHostDeps = {
@@ -72,7 +116,7 @@ index e40cf70..5d23543 100644
    /** Execution-host path for a new floating session. */
    resolveWorkspacePath?: (workspaceId: string) => Promise<string>
 diff --git a/src/main/native-chat/agent-session-wire/recovery/structured-agent-session-recovery-read.ts b/src/main/native-chat/agent-session-wire/recovery/structured-agent-session-recovery-read.ts
-index 38db8dc..66b86f3 100644
+index 38db8dcc..66b86f32 100644
 --- a/src/main/native-chat/agent-session-wire/recovery/structured-agent-session-recovery-read.ts
 +++ b/src/main/native-chat/agent-session-wire/recovery/structured-agent-session-recovery-read.ts
 @@ -59,7 +59,7 @@ export async function readStructuredSessionRecovery(
@@ -86,16 +130,16 @@ index 38db8dc..66b86f3 100644
          ? withoutInheritedClaudeConfigDir(process.env)
 diff --git a/src/main/native-chat/nix-bot-command-settings.test.ts b/src/main/native-chat/nix-bot-command-settings.test.ts
 new file mode 100644
-index 0000000..244f32e
+index 00000000..b846dd91
 --- /dev/null
 +++ b/src/main/native-chat/nix-bot-command-settings.test.ts
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,60 @@
 +import { expect, it, vi } from 'vitest'
 +import { nixBotCommandSettings } from './nix-bot-command-settings'
 +import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 +
-+vi.mock('../../shared/nix-host-codex-bots', () => ({
-+  nixHostCodexBotCommands: { tohru: '/host/codex' }
++vi.mock('../../shared/nix-host-bots', () => ({
++  nixHostBotCommands: { tohru: { codex: '/host/codex', claude: '/host/claude' } }
 +}))
 +
 +const bots = [{ id: 'tohru', hostId: 'local', folderWorkspaceId: 'tohru-home' }] as const
@@ -111,7 +155,11 @@ index 0000000..244f32e
 +  expect(nixBotCommandSettings('codex', location, bots, settings, 'linux')).toEqual({
 +    agentCmdOverrides: { codex: '/host/codex', claude: '/sandbox claude' }
 +  })
++  expect(nixBotCommandSettings('claude', location, bots, settings, 'linux')).toEqual({
++    agentCmdOverrides: { codex: '/sandbox codex', claude: '/host/claude' }
++  })
 +  expect(settings.agentCmdOverrides.codex).toBe('/sandbox codex')
++  expect(settings.agentCmdOverrides.claude).toBe('/sandbox claude')
 +})
 +
 +it.each([
@@ -124,11 +172,12 @@ index 0000000..244f32e
 +  'keeps the default outside the exact local folder: %j',
 +  (target) => {
 +    expect(nixBotCommandSettings('codex', target, bots, settings, 'linux')).toBe(settings)
++    expect(nixBotCommandSettings('claude', target, bots, settings, 'linux')).toBe(settings)
 +  }
 +)
 +
 +it('keeps defaults for other providers, platforms, missing bots and catalog requests', () => {
-+  expect(nixBotCommandSettings('claude', location, bots, settings, 'linux')).toBe(settings)
++  expect(nixBotCommandSettings('antigravity', location, bots, settings, 'linux')).toBe(settings)
 +  expect(nixBotCommandSettings('codex', location, bots, settings, 'darwin')).toBe(settings)
 +  expect(nixBotCommandSettings('codex', location, [], settings, 'linux')).toBe(settings)
 +  expect(nixBotCommandSettings('codex', undefined, bots, settings, 'linux')).toBe(settings)
@@ -147,7 +196,7 @@ index 0000000..244f32e
 +})
 diff --git a/src/main/native-chat/nix-bot-command-settings.ts b/src/main/native-chat/nix-bot-command-settings.ts
 new file mode 100644
-index 0000000..9fd5b26
+index 00000000..b978fb73
 --- /dev/null
 +++ b/src/main/native-chat/nix-bot-command-settings.ts
 @@ -0,0 +1,33 @@
@@ -156,7 +205,7 @@ index 0000000..9fd5b26
 +import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 +import { isNativeLocalLocation } from '../../shared/execution-host/execution-host'
 +import type { GlobalSettings } from '../../shared/settings/global-settings-types'
-+import { nixHostCodexBotCommands } from '../../shared/nix-host-codex-bots'
++import { nixHostBotCommands } from '../../shared/nix-host-bots'
 +
 +/** Only registered bot homes select a host command; project launches never inherit it. */
 +export function nixBotCommandSettings<T extends Partial<Pick<GlobalSettings, 'agentCmdOverrides'>>>(
@@ -168,7 +217,7 @@ index 0000000..9fd5b26
 +): T {
 +  if (
 +    platform !== 'linux' ||
-+    agent !== 'codex' ||
++    (agent !== 'codex' && agent !== 'claude') ||
 +    !location ||
 +    location.workspaceKind !== 'folder' ||
 +    !isNativeLocalLocation(location)
@@ -177,15 +226,15 @@ index 0000000..9fd5b26
 +  }
 +  const bot = botOfHomeWorkspace(bots, location.workspaceId)
 +  const command =
-+    bot?.hostId === 'local' && Object.hasOwn(nixHostCodexBotCommands, bot.id)
-+      ? nixHostCodexBotCommands[bot.id]
++    bot?.hostId === 'local' && Object.hasOwn(nixHostBotCommands, bot.id)
++      ? nixHostBotCommands[bot.id]?.[agent]
 +      : undefined
 +  return command
-+    ? { ...settings, agentCmdOverrides: { ...settings.agentCmdOverrides, codex: command } }
++    ? { ...settings, agentCmdOverrides: { ...settings.agentCmdOverrides, [agent]: command } }
 +    : settings
 +}
 diff --git a/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts b/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
-index 0846afa..80114a8 100644
+index 0846afaa..b83cea7d 100644
 --- a/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
 +++ b/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
 @@ -1,3 +1,5 @@
@@ -211,9 +260,21 @@ index 0846afa..80114a8 100644
      return overlayEnvironmentVariables(
        structuredAgentLaunchEnv(agent, settings, this.accounts.hostLaunchEnvFor(agent)),
        nixSandboxLaunchEnvironment(agent, settings),
-@@ -52,16 +61,25 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
+@@ -50,18 +59,36 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
+       resolveWorkspacePath: async (workspaceId) =>
+         (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
        resolveClaudeCommand: (options) =>
-         resolveStructuredAgentCommand('claude', this.requireStore().getSettings(), options),
+-        resolveStructuredAgentCommand('claude', this.requireStore().getSettings(), options),
++        resolveStructuredAgentCommand(
++          'claude',
++          nixBotCommandSettings(
++            'claude',
++            options?.location,
++            this.requireStore().getBots?.() ?? [],
++            this.requireStore().getSettings()
++          ),
++          options
++        ),
        resolveCodexCommand: (options) =>
 -        resolveStructuredAgentCommand('codex', this.requireStore().getSettings(), options),
 +        resolveStructuredAgentCommand(
@@ -241,10 +302,10 @@ index 0846afa..80114a8 100644
        resolveAgentCommandSettings: () => this.requireStore().getSettings(),
        resolveCodexAccountKind: (home) =>
 diff --git a/src/main/runtime/agent-session/installation/structured-agent-session-runtime-contract.ts b/src/main/runtime/agent-session/installation/structured-agent-session-runtime-contract.ts
-index b705e18..0b3b093 100644
+index b705e18b..c252f411 100644
 --- a/src/main/runtime/agent-session/installation/structured-agent-session-runtime-contract.ts
 +++ b/src/main/runtime/agent-session/installation/structured-agent-session-runtime-contract.ts
-@@ -30,6 +30,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
+@@ -30,10 +30,12 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
    claimKeyId: string
    resolveWorkspacePath: (workspaceId: string) => Promise<string>
    resolveCodexCommand?: (options?: {
@@ -252,7 +313,12 @@ index b705e18..0b3b093 100644
      pathEnv?: string | null
      homePath?: string
    }) => StructuredAgentCommand
-@@ -60,7 +61,10 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
+   resolveClaudeCommand?: (options?: {
++    location?: AgentSessionRecord['location']
+     pathEnv?: string | null
+     homePath?: string
+   }) => StructuredAgentCommand
+@@ -60,7 +62,10 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
    /** What a chat saved before its agent had modes ran with; fills that chat's mode once. */
    resolveAgentFullAccess?: (agent: string) => boolean
    /** The user's per-agent environment overlay from settings, laid over every agent's base env. */
@@ -266,10 +332,10 @@ index b705e18..0b3b093 100644
    /** See `StructuredAgentLaunchSources.resolveInstructions`. */
 diff --git a/src/main/runtime/agent-session/launch/nix-bot-host-launch.test.ts b/src/main/runtime/agent-session/launch/nix-bot-host-launch.test.ts
 new file mode 100644
-index 0000000..a75585c
+index 00000000..a1b2b925
 --- /dev/null
 +++ b/src/main/runtime/agent-session/launch/nix-bot-host-launch.test.ts
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,123 @@
 +import { expect, it, vi } from 'vitest'
 +import { nixBotCommandSettings } from '../../../native-chat/nix-bot-command-settings'
 +import { nixSandboxLaunchEnvironment } from '../../../native-chat/nix-sandbox-launch-environment'
@@ -278,6 +344,7 @@ index 0000000..a75585c
 +import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 +import { identityFor } from '../../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 +import { pinnedAgentSessionLaunchEnv } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-launch-env'
++import { resolveClaudeChildEnvSources } from '../../../claude/structured/launch/claude-structured-child-env'
 +import {
 +  createCodexStructuredLaunchResolver,
 +  TEST_SPAWN_TOKEN
@@ -291,8 +358,8 @@ index 0000000..a75585c
 +    bots: [{ id: 'tohru', hostId: 'local', folderWorkspaceId: 'home' }] as const
 +  }
 +})
-+vi.mock('../../../../shared/nix-host-codex-bots', () => ({
-+  nixHostCodexBotCommands: { tohru: process.execPath }
++vi.mock('../../../../shared/nix-host-bots', () => ({
++  nixHostBotCommands: { tohru: { codex: process.execPath, claude: process.execPath } }
 +}))
 +vi.mock('../../../../shared/nix-global-settings', () => ({ nixGlobalSettings: settings }))
 +
@@ -365,8 +432,35 @@ index 0000000..a75585c
 +    expect(settings.agentCmdOverrides.codex).toBe(sandbox)
 +  }
 +)
++
++it('gives the Claude command resolver the session location', async () => {
++  const location: AgentSessionRecord['location'] = {
++    executionHostId: 'local',
++    wslDistro: null,
++    workspaceId: 'folder:home',
++    workspaceKind: 'folder'
++  }
++  const resolveCommand = vi.fn(
++    (options?: { location?: AgentSessionRecord['location'] }) =>
++      resolveStructuredAgentCommand(
++        'claude',
++        nixBotCommandSettings('claude', options?.location, bots, {
++          agentCmdOverrides: { claude: `${process.execPath} orca-sandbox claude` }
++        }),
++        options
++      )
++  )
++  const sources = await resolveClaudeChildEnvSources({
++    location,
++    resolveCommand,
++    resolveInheritedEnv: async () => ({ PATH: '/bin' })
++  })
++  expect(resolveCommand.mock.calls[0]?.[0]?.location).toEqual(location)
++  expect(sources.command).toBe(process.execPath)
++  expect(sources.prefixArgs).toEqual([])
++})
 diff --git a/src/main/runtime/agent-session/launch/structured-agent-launch-composition.test-support.ts b/src/main/runtime/agent-session/launch/structured-agent-launch-composition.test-support.ts
-index 7975c1a..284066f 100644
+index 7975c1a6..284066f7 100644
 --- a/src/main/runtime/agent-session/launch/structured-agent-launch-composition.test-support.ts
 +++ b/src/main/runtime/agent-session/launch/structured-agent-launch-composition.test-support.ts
 @@ -45,7 +45,7 @@ export type LaunchTestSources = {
@@ -379,7 +473,7 @@ index 7975c1a..284066f 100644
    prepareVisuals?: PrepareNativeChatVisuals
    resolveInstructions?: StructuredAgentLaunchSources['resolveInstructions']
 diff --git a/src/main/runtime/agent-session/launch/structured-agent-launch-composition.ts b/src/main/runtime/agent-session/launch/structured-agent-launch-composition.ts
-index 1c65044..f6c9f84 100644
+index 1c650448..f6c9f84a 100644
 --- a/src/main/runtime/agent-session/launch/structured-agent-launch-composition.ts
 +++ b/src/main/runtime/agent-session/launch/structured-agent-launch-composition.ts
 @@ -34,7 +34,10 @@ export type StructuredAgentLaunchSources = {

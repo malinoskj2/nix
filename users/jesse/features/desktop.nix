@@ -8,8 +8,11 @@ let
   # Both Orca's native parser and terminal shells expand this on the execution host.
   sandboxAgentCommand = agent: "~/.orca/nix/bin/orca-sandbox-launch orca-sandbox ${agent}";
   orca-ade = pkgs.orca-ade.override {
-    hostCodexBotCommands = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-      "3001d2e5-f2ec-4efc-965d-7be4b9e99e02" = lib.getExe config.programs.codex.package;
+    hostBotCommands = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+      "3001d2e5-f2ec-4efc-965d-7be4b9e99e02" = {
+        codex = lib.getExe config.programs.codex.package;
+        claude = lib.getExe config.programs.claude-code.finalPackage;
+      };
     };
     desktopAssistantCommand =
       if config.programs ? tohru && config.programs.tohru.enable then
