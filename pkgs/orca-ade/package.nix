@@ -124,6 +124,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./desktop-voice-tasks.patch
     ./host-bot-native-chat.patch
     ./desktop-voice-owner-admission.patch
+    ./desktop-voice-background-protocol.patch
   ];
 
   postPatch = ''

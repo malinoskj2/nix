@@ -382,17 +382,17 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1795425631,
-        "narHash": "sha256-7vHRk7q0M9r3DANr0731C+zjEqGx+DIzGonK3tPcmYY=",
+        "lastModified": 1795426994,
+        "narHash": "sha256-vvYnHmWUJ8PAJKZERnY4fA9K8Ql9cRfMUExtx9Qv6g4=",
         "ref": "main",
-        "rev": "b81a9aac2651c0cc5a9f775d9b379239c12dd1f5",
-        "revCount": 665,
+        "rev": "86a51d8491969b72017d177d55c56926b6790247",
+        "revCount": 666,
         "type": "git",
         "url": "file:///home/jesse/projects/tohru"
       },
       "original": {
         "ref": "main",
-        "rev": "b81a9aac2651c0cc5a9f775d9b379239c12dd1f5",
+        "rev": "86a51d8491969b72017d177d55c56926b6790247",
         "type": "git",
         "url": "file:///home/jesse/projects/tohru"
       }
