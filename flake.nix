@@ -66,12 +66,11 @@
       repo = "nixpkgs";
       ref = "nixos-unstable";
     };
-    # Task-scoped local source: owner explicitly prohibits publishing these commits.
     tohru = {
-      type = "git";
-      url = "file:///home/jesse/projects/tohru";
-      ref = "main";
-      rev = "3c4c979dfd063bca2a9d4ec0fe59a6d331701484";
+      type = "github";
+      owner = "malinoskj2";
+      repo = "tohru";
+      rev = "11c1c6a86de8fd634b46ce16a5326d397186c8e2";
       # Its plugin must build against the same Hyprland as the desktop.
       inputs.hyprland-nixpkgs.follows = "nixpkgs-hyprland";
     };

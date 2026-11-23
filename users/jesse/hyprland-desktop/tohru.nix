@@ -8,7 +8,7 @@
 let
   inherit (pkgs.stdenv.hostPlatform) system;
   # Tohru is only built and tested for x86_64-linux; other hosts run Hyprland without a shell.
-  upstreamPackage = inputs.tohru.packages.${system}.tohru-native-voice or null;
+  upstreamPackage = inputs.tohru.packages.${system}.default or null;
   package = upstreamPackage;
 in
 {
