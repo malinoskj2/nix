@@ -70,7 +70,7 @@
       type = "github";
       owner = "malinoskj2";
       repo = "tohru";
-      rev = "f1431f7275845a023b76f9596ad608c39ccaee57";
+      rev = "11c1c6a86de8fd634b46ce16a5326d397186c8e2";
       # Its plugin must build against the same Hyprland as the desktop.
       inputs.hyprland-nixpkgs.follows = "nixpkgs-hyprland";
     };

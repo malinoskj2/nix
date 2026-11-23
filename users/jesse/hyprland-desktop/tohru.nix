@@ -29,7 +29,7 @@ in
         orcaBot = {
           enable = true;
           bot = "Tohru";
-          voiceChat = "home";
+          voiceChat = "foreground";
         };
         voice = {
           enable = true;
