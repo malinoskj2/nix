@@ -71,7 +71,7 @@
       type = "git";
       url = "file:///home/jesse/projects/tohru";
       ref = "main";
-      rev = "a283ae706e4d329b4ae819dbd148eb7f7e4bfe06";
+      rev = "503c3a2ab764223b967e2080fdfd720d663b96dc";
       # Its plugin must build against the same Hyprland as the desktop.
       inputs.hyprland-nixpkgs.follows = "nixpkgs-hyprland";
     };

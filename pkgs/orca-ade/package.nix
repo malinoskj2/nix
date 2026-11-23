@@ -126,6 +126,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./desktop-voice-owner-admission.patch
     ./desktop-voice-background-protocol.patch
     ./desktop-voice-current-interest.patch
+    ./desktop-voice-completion-observability.patch
   ];
 
   postPatch = ''
