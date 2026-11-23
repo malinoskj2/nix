@@ -8,7 +8,15 @@
 let
   inherit (pkgs.stdenv.hostPlatform) system;
   # Tohru is only built and tested for x86_64-linux; other hosts run Hyprland without a shell.
-  package = inputs.tohru.packages.${system}.default or null;
+  upstreamPackage = inputs.tohru.packages.${system}.default or null;
+  # Carry Tohru commits 73b4ed3 and 3951bfb until the upstream input includes direct bot chat delivery.
+  package =
+    if upstreamPackage == null then
+      null
+    else
+      upstreamPackage.overrideAttrs (old: {
+        patches = (old.patches or [ ]) ++ [ ./tohru-orca-chat.patch ];
+      });
 in
 {
   imports = [ inputs.tohru.homeManagerModules.default ];

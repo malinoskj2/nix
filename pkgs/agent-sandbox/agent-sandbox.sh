@@ -38,6 +38,7 @@ shared=(
   "$HOME/nix"
   "$HOME/Downloads"
   "$HOME/orca/workspaces"
+  "$HOME/.orca/bots"
   "$HOME/.cache/img2char3d"
   "$steam_common"
   "$HOME/.local/share/unreal-engine"

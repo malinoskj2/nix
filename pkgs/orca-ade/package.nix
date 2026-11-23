@@ -116,6 +116,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./terminal-container-indicators.patch
     ./structured-sandbox-indicators.patch
     ./pending-below-main.patch
+    ./desktop-bot-chat.patch
   ];
 
   postPatch = ''
@@ -297,6 +298,10 @@ stdenv.mkDerivation (finalAttrs: {
     pnpm run build:packages
     pnpm exec vitest run --config config/vitest.config.ts \
       src/main/native-chat/nix-native-migration.test.ts \
+      src/main/runtime/rpc/methods/nix-desktop-bot.test.ts \
+      src/main/bots/bot-chat-session.test.ts \
+      src/main/native-chat/agent-session-wire/publication/history/agent-read-journal-page.test.ts \
+      src/main/native-chat/agent-session-wire/host/structured-agent-session-conversation-reads.test.ts \
       src/shared/agent-launch/startup/tui-agent-launch-command-override.test.ts \
       src/main/managed-server/install/orcad-remote-launch-file-modes.test.ts \
       src/main/native-chat/nix-sandbox-launch-environment.test.ts \

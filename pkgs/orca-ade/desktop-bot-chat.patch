@@ -1,0 +1,464 @@
+--- a/src/cli/bots/bot.ts
++++ b/src/cli/bots/bot.ts
+@@ -13,6 +13,7 @@
+ import { callerChat } from '../automations/automation-caller-chat'
+ import { formatBotChats, type BotChatsResult } from './bot-chats-format'
+ import { orcaCloudNeedsSignIn } from '../../shared/bots/host-orca-sign-in'
++import { readMessageText } from '../slack/slack-action-args'
+
+ export function formatBot(bot: Bot): string {
+   return `${bot.name} (${bot.agent}${bot.paused ? ', paused' : ''})  id: ${bot.id}`
+@@ -74,6 +75,19 @@
+ }
+
+ export const BOT_HANDLERS: Record<string, CommandHandler> = {
++  'bot send': async ({ flags, client, json, cwd }) => {
++    const selector = getOptionalStringFlag(flags, 'bot')
++    if (!selector) throw new RuntimeClientError('invalid_argument', 'Missing --bot')
++    const bot = await findBot(client, selector)
++    const text = await readMessageText(flags, cwd, true)
++    const result = await callBots<{ sessionId: string; clientMessageId: string }>(client, 'bots.chat.send', {
++      botId: bot.id,
++      text,
++      chat: getOptionalStringFlag(flags, 'chat'),
++      operationId: getOptionalStringFlag(flags, 'request-id')
++    })
++    printResult(result, json, (value) => `Sent to ${value.sessionId}`)
++  },
+   'bot new-chat': async ({ flags, client, json }) => {
+     const selector = getOptionalStringFlag(flags, 'bot')
+     const botId = selector ? (await findBot(client, selector)).id : undefined
+--- a/src/cli/bots/bot-handler-groups.ts
++++ b/src/cli/bots/bot-handler-groups.ts
+@@ -3,7 +3,7 @@
+ export const BOT_HANDLER_GROUPS: HandlerGroup[] = [
+   {
+     name: 'bot',
+-    keys: ['bot list', 'bot chats', 'bot new-chat', 'bot memory forget'],
++    keys: ['bot list', 'bot chats', 'bot send', 'bot new-chat', 'bot memory forget'],
+     load: async () => (await import('./bot.js')).BOT_HANDLERS
+   },
+   {
+--- a/src/cli/specs/bot.ts
++++ b/src/cli/specs/bot.ts
+@@ -7,6 +7,13 @@
+
+ export const BOT_COMMAND_SPECS: CommandSpec[] = [
+   {
++    path: ['bot', 'send'],
++    summary: 'Send your own message directly into a bot chat',
++    usage: 'orca bot send --bot <name> --text-file <path> [--chat <id|new>] --request-id <id> [--json]',
++    allowedFlags: [...GLOBAL_FLAGS, 'bot', 'text', 'text-file', 'chat', 'request-id'],
++    notes: ['Owner only. Continues the Home Chat by default; replies stay in the shared chat history. Reuse --request-id only when retrying the same send.']
++  },
++  {
+     path: ['bot', 'create'],
+     summary:
+       'Propose a new bot to your owner as a card in your chat; it is created only when they accept',
+--- a/src/main/bots/bot-chat-session.ts
++++ b/src/main/bots/bot-chat-session.ts
+@@ -160,7 +160,8 @@
+     sessionId: string,
+     text: string,
+     from?: BotChatSender,
+-    run?: BotRunFields
++    run?: BotRunFields,
++    operationId?: string
+   ): Promise<Delivered> => {
+     const sender =
+       from === 'bot-created' || from === 'card-answer'
+@@ -179,7 +180,7 @@
+       turn: {
+         body,
+         ...(from ? {} : { personsMessage: true }),
+-        operationId: mintAgentSessionOperationId(Date.now()),
++        operationId: operationId ?? mintAgentSessionOperationId(Date.now()),
+         expectedRuntimeFence: host.deps.store.requireWritableRecord(sessionId).lease.runtimeFence,
+         delivery: 'queue'
+       }
+@@ -216,10 +217,11 @@
+     botId: string,
+     text: string,
+     from?: BotChatSender,
+-    run?: BotRunFields
++    run?: BotRunFields,
++    operationId?: string
+   ): Promise<Delivered> =>
+     deliverUnderLock(botId, async (host, bot, admitting) =>
+-      deliver(host, admitting, botId, await open(host, bot), text, from, run)
++      deliver(host, admitting, botId, await open(host, bot), text, from, run, operationId)
+     )
+
+   /** As `sendToChat`, into another of the bot's chats the caller already checked takes mail. */
+@@ -228,10 +230,11 @@
+     sessionId: string,
+     text: string,
+     run?: BotRunFields,
+-    from?: BotChatSender
++    from?: BotChatSender,
++    operationId?: string
+   ): Promise<Delivered> =>
+     deliverUnderLock(botId, async (host, _bot, admitting) =>
+-      deliver(host, admitting, botId, sessionId, text, from, run)
++      deliver(host, admitting, botId, sessionId, text, from, run, operationId)
+     )
+
+   return { ensure, reset, withChat, sendToChat: send, sendToSession }
+--- a/src/main/bots/bot-chat-session.test.ts
++++ b/src/main/bots/bot-chat-session.test.ts
+@@ -120,6 +120,20 @@
+   }
+ }
+
++it('keeps a desktop retry on the same operation and sends it as a person', async () => {
++  const { chats, host } = setup()
++  const operationId = '1795400000000-0123456789abcdef0123456789abcdef'
++  await chats.sendToChat('bot-1', 'Hello', undefined, undefined, operationId)
++  await chats.sendToChat('bot-1', 'Hello', undefined, undefined, operationId)
++  const requests = host.send.mock.calls
++  expect(requests).toHaveLength(2)
++  for (const [, request] of requests) {
++    expect(request).toMatchObject({ envelope: { clientOperationId: operationId } })
++    expect(request).toMatchObject({ personsMessage: true, body: { role: 'user' } })
++    expect(request.body).not.toHaveProperty('from')
++  }
++})
++
+ describe('bot Chat', () => {
+   it('creates the Chat once, names it, and keeps it on the bot', async () => {
+     const { chats, host, createChat, bot } = setup()
+--- a/src/main/runtime/rpc/methods/bots.ts
++++ b/src/main/runtime/rpc/methods/bots.ts
+@@ -3,6 +3,7 @@
+   BotAvatarRead,
+   BotAvatarUpload,
+   BotChatReset,
++  BotChatSend,
+   BotDelete,
+   BotRoster,
+   BotSessionStart,
+@@ -40,6 +41,10 @@
+ import { listedBotsFacts } from './bots-list-facts'
+ import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
+ import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
++import { chatThatTookIt } from '../../../bots/bot-automation-sessions'
++import { botChatTakingMail } from './bots-chats'
++import { OWNER_ACTS_FOR } from '../../../../shared/bots/bot-acts-for'
++import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+
+ async function updateBot(params: BotUpdateParams, context: RpcContext) {
+   if (params.updates.slackMirror !== undefined) {
+@@ -111,6 +116,44 @@
+ // Off, nothing creates a bot or opens its Chat; listing, editing and deleting stay.
+ export const BOT_METHODS = [
+   defineMethod({
++    name: 'bots.chat.send',
++    permission: 'workspace',
++    params: BotChatSend,
++    handler: async ({ botId, text, chat, operationId }, context) => {
++      // The desktop assistant uses the local owner-token socket without an
++      // agent session. Agent-originated requests keep using orchestration mail.
++      if (context.orchestrationCaller) throw new InvalidArgumentError('Agent messages use orchestration mail')
++      if (context.caller?.kind !== 'local-cli') {
++        ownerOnly(context, 'Only the owner can send direct bot messages.')
++      }
++      const { runtime } = context
++      runtime.bots.assertEnabled()
++      const bot = runtime.bots.list().find((entry) => entry.id === botId)
++      if (!bot || bot.paused) throw new InvalidArgumentError('Bot is missing or paused')
++      const chats = runtimeBotChats(runtime)
++      const receipt = (sent: ReturnType<typeof chatThatTookIt>) => ({
++        ...sent, promptItemId: agentJournalSubmissionKey(sent.clientMessageId)
++      })
++      if (!chat) {
++        return receipt(chatThatTookIt(await chats.sendToChat(bot.id, text, undefined, undefined, operationId)))
++      }
++      let sessionId = chat
++      if (chat === 'new') {
++        // A retried request addresses the same new chat and the same admission ledger.
++        const hex = operationId.slice(14)
++        sessionId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20)}`
++        if (!(await botChatTakingMail(runtime, bot, sessionId))) {
++          await startBotSession(runtime, bot, { sessionId, actsFor: { actsFor: [...OWNER_ACTS_FOR] } })
++        }
++      } else {
++        const target = await botChatTakingMail(runtime, bot, chat)
++        if (!target) throw new InvalidArgumentError('Chat is closed or does not belong to this bot')
++        sessionId = target.sessionId
++      }
++      return receipt(chatThatTookIt(await chats.sendToSession(bot.id, sessionId, text, undefined, undefined, operationId)))
++    }
++  }),
++  defineMethod({
+     name: 'bots.list',
+     permission: 'workspace',
+     params: null,
+--- a/src/main/runtime/rpc/methods/nix-desktop-bot.test.ts
++++ b/src/main/runtime/rpc/methods/nix-desktop-bot.test.ts
+@@ -0,0 +1,35 @@
++import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
++import { expect, it, vi } from 'vitest'
++import { BOT_METHODS } from './bots'
++import { RpcDispatcher } from '../dispatcher'
++import { LOCAL_CLI_RPC_CALLER } from '../callers/rpc-caller-identity'
++import { makeTestBot } from '../../../bots/bot.test-fixture'
++import type { OrcaRuntimeService } from '../../orca-runtime'
++
++const { send } = vi.hoisted(() => ({
++  send: vi.fn(async () => ({
++    sessionId: 'shared-home', fingerprint: 'body',
++    outcome: { kind: 'sent', clientMessageId: 'prompt-id' }
++  }))
++}))
++vi.mock('../../../bots/bot-chat-session', async (original) => ({
++  ...(await original<object>()),
++  runtimeBotChats: () => ({ sendToChat: send })
++}))
++
++it('delivers unscoped desktop text as an owner turn in the shared Home Chat without a reply mailbox', async () => {
++  const bot = makeTestBot({ id: 'tohru', name: 'Tohru' })
++  // This path reads only the bot roster; no orchestration database or mailbox exists.
++  const runtime = {
++    getRuntimeId: () => 'runtime',
++    bots: { assertEnabled: () => {}, list: () => [bot] }
++  } as unknown as OrcaRuntimeService
++  const dispatcher = new RpcDispatcher({ runtime, methods: BOT_METHODS })
++  const operationId = '1795400000000-0123456789abcdef0123456789abcdef'
++  const result = await dispatcher.dispatch({
++    id: 'request', authToken: 'owner', method: 'bots.chat.send',
++    params: { botId: bot.id, text: '[tohru-desktop:voice]\nHello', operationId }
++  }, { caller: LOCAL_CLI_RPC_CALLER })
++  expect(result).toMatchObject({ ok: true, result: { sessionId: 'shared-home', clientMessageId: 'prompt-id' } })
++  expect(send).toHaveBeenCalledWith(bot.id, '[tohru-desktop:voice]\nHello', undefined, undefined, operationId)
++})
+--- a/src/shared/rpc-contract/bots-params.ts
++++ b/src/shared/rpc-contract/bots-params.ts
+@@ -234,6 +234,13 @@
+ /** The bot's Chat: open it (created on first use), or reset it to a new conversation. */
+ export const BotChat = z.object({ botId: requiredString('Missing bot id') })
+
++export const BotChatSend = z.object({
++  botId: z.string().min(1),
++  text: z.string().trim().min(1).max(1000000),
++  chat: z.union([z.literal('new'), z.uuid()]).optional(),
++  operationId: z.string().regex(/^\d{13}-[a-f0-9]{32}$/)
++})
++
+ /** New Home Chat. `orca bot new-chat` from a bot's own chat names it by that chat instead. */
+ export const BotChatReset = z.object({
+   botId: OptionalString,
+--- a/src/shared/rpc-contract/rpc-params-catalog.generated.ts
++++ b/src/shared/rpc-contract/rpc-params-catalog.generated.ts
+@@ -1,6 +1,7 @@
+ // GENERATED by config/scripts/generate-rpc-params-catalog.mjs. Do not edit;
+ // run `pnpm run generate:rpc-params-catalog`.
+ import type { z } from 'zod'
++import { BotChatSend } from './bots-params'
+ import { AntigravityChatAuthConfigSchema } from '../agent-accounts/antigravity/antigravity-chat-auth-config'
+ import { HostAccountLaunchEnvParams } from '../agent-launch/startup/host-account-launch-env'
+ import {
+@@ -1191,6 +1192,7 @@
+   'bots.avatar.upload': BotAvatarUpload,
+   'bots.chat.open': BotChat,
+   'bots.chat.reset': BotChatReset,
++  'bots.chat.send': BotChatSend,
+   'bots.chatTree': BotChatTreeRead,
+   'bots.chats': BotChats,
+   'bots.chats.own': BotChatsOwn,
+--- a/src/shared/agent-conversations/agent-conversation-contracts.ts
++++ b/src/shared/agent-conversations/agent-conversation-contracts.ts
+@@ -39,7 +39,7 @@
+ export type AgentReadTool = { name: string; state?: string }
+
+ /** Every entry may say `shortened`: its text was cut to fit one reply; the app keeps it whole. */
+-export type AgentReadEntry = AgentReadEntryBody & { shortened?: true }
++export type AgentReadEntry = AgentReadEntryBody & { shortened?: true; itemId?: string }
+
+ type AgentReadEntryBody =
+   /** `tools`: the tool calls a transcript message made, folded into its one entry. */
+--- a/src/main/native-chat/agent-session-wire/publication/history/agent-read-journal-page.ts
++++ b/src/main/native-chat/agent-session-wire/publication/history/agent-read-journal-page.ts
+@@ -25,7 +25,7 @@
+  *  divider; sparse non-entry rows spend the window too, so they cannot cause an unbounded walk. */
+ export async function readAgentJournalPage(
+   journal: SqlAgentSessionJournal,
+-  request: { sessionId: string; limit: number },
++  request: { sessionId: string; limit: number; includeIds?: boolean },
+   waiting: (itemId: string) => boolean
+ ): Promise<AgentReadJournalPage> {
+   const frame = await readAgentSessionHistoryFrame(
+@@ -38,7 +38,7 @@
+     { scope: 'own-agent', acceptedUnopened: true }
+   )
+   const { page } = frame.result
+-  const shown = pageEntries(page.items, page.hasOlder, request.limit, waiting)
++  const shown = pageEntries(page.items, page.hasOlder, request.limit, waiting, request.includeIds === true)
+   const state = journalTurnState(
+     page.latestTurn,
+     frame.acceptedUnopened === true,
+@@ -58,7 +58,8 @@
+   items: readonly AgentJournalRenderItem[],
+   hasOlder: boolean,
+   limit: number,
+-  waiting: (itemId: string) => boolean
++  waiting: (itemId: string) => boolean,
++  includeIds: boolean
+ ): ShownEntries {
+   const page = new PageBudget(limit)
+   const newestFirst: AgentReadEntry[] = []
+@@ -70,7 +71,7 @@
+     ...(newest ? { newest } : {})
+   })
+   for (const item of items.toReversed()) {
+-    const entry = entryOf(item, waiting)
++    const entry = entryOf(item, waiting, includeIds)
+     if (entry) {
+       if (!page.admit(entry)) {
+         return shown(true)
+@@ -117,7 +118,8 @@
+  *  too-large marker, said by Orca rather than the agent. */
+ function entryOf(
+   item: AgentJournalRenderItem,
+-  waiting: (itemId: string) => boolean
++  waiting: (itemId: string) => boolean,
++  includeIds: boolean
+ ): AgentReadEntry | null {
+   const entry: AgentReadEntry | null =
+     item.body.kind === 'status' && item.body.presentation === 'history-item-too-large'
+@@ -126,7 +128,7 @@
+   if (!entry) {
+     return null
+   }
+-  const shown: AgentReadEntry = item.shortened ? { ...entry, shortened: true } : entry
++  const shown: AgentReadEntry = { ...entry, ...(includeIds ? { itemId: item.itemId } : {}), ...(item.shortened ? { shortened: true } : {}) }
+   if (entryBytes(shown) <= HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
+     return shown
+   }
+--- a/src/shared/rpc-contract/agent-conversation-params.ts
++++ b/src/shared/rpc-contract/agent-conversation-params.ts
+@@ -15,5 +15,6 @@
+
+ export const AgentReadParams = z.object({
+   id: requiredString('Missing agent ID'),
++  includeIds: z.boolean().optional(),
+   limit: z.number().int().positive().max(AGENT_READ_MAX_LIMIT).optional()
+ })
+--- a/src/cli/agents/agent-conversations.ts
++++ b/src/cli/agents/agent-conversations.ts
+@@ -72,6 +72,7 @@
+     }
+     const result = await callAgentMethod<AgentReadResult>(client, 'agent.read', {
+       id: getRequiredStringFlag(flags, 'id'),
++      ...(flags.has('ids') ? { includeIds: true } : {}),
+       ...(limit !== undefined ? { limit } : {})
+     })
+     printResult(result, json, formatAgentRead)
+--- a/src/cli/specs/agent-conversations.ts
++++ b/src/cli/specs/agent-conversations.ts
+@@ -32,12 +32,13 @@
+   {
+     path: ['agent', 'read'],
+     summary: 'Read what an agent said, by its Orca session ID',
+-    usage: 'orca agent read <id> [--limit <n>] [--json]',
+-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'limit'],
++    usage: 'orca agent read <id> [--limit <n>] [--ids] [--json]',
++    allowedFlags: [...GLOBAL_FLAGS, 'id', 'limit', 'ids'],
+     positionalArgs: ['id'],
+     notes: [
+       "Reads the conversation, not a terminal screen: a chat's history, or a terminal agent's own transcript. The agent need not be running, and reading never starts it.",
+       '--limit is the number of newest entries (default 20, at most 100).',
++      '--ids includes stable journal item IDs for chat entries in JSON output.',
+       'The output can start with a state for the latest turn this history records: `working` means it shows an unfinished turn, so its reply may not be there yet. A terminal agent that exited mid-turn may keep reading `working`; check `orca agent show`. No state means unknown, never done. `orca agent list` and `show` report the last state known to Orca, which may differ.',
+       'A terminal agent can be read while Orca knows where its transcript is: while it is open, or asleep in a workspace. On Windows, a sleeping agent that ran in WSL can be read once its tab is reopened.'
+     ],
+--- a/src/main/runtime/agent-conversations/agent-conversation-read.ts
++++ b/src/main/runtime/agent-conversations/agent-conversation-read.ts
+@@ -29,7 +29,7 @@
+ import type { ResolvedAgentConversation } from './agent-conversation-address'
+ import { AgentConversationRefusal } from './agent-conversation-refusal'
+
+-type ReadRequest = { limit?: number }
++type ReadRequest = { limit?: number; includeIds?: boolean }
+
+ /** One page of what an agent said, by its conversation, never by a pane: a chat's own history,
+  *  or a terminal agent's transcript. Reading needs no running agent and never starts one.
+@@ -45,14 +45,15 @@
+ ): Promise<AgentReadResult> {
+   const limit = request.limit ?? AGENT_READ_DEFAULT_LIMIT
+   return resolved.kind === 'chat'
+-    ? readChat(ctx, resolved, limit)
++    ? readChat(ctx, resolved, limit, request.includeIds)
+     : readTerminalTranscript(ctx, resolved.orcaSessionId, limit)
+ }
+
+ async function readChat(
+   ctx: RpcContext,
+   resolved: Extract<ResolvedAgentConversation, { kind: 'chat' }>,
+-  limit: number
++  limit: number,
++  includeIds?: boolean
+ ): Promise<AgentReadResult> {
+   const { record, store, orcaSessionId } = resolved
+   requireStructuredAgentAudience(ctx, record.provider)
+@@ -72,7 +73,7 @@
+   }
+   const sessionId = running.sessionId
+   const host = await requireInstalledStructuredHost(ctx, sessionId)
+-  const page = await host.reads.agentReadPage(sessionId, limit)
++  const page = await host.reads.agentReadPage(sessionId, limit, includeIds)
+   return {
+     orcaSessionId,
+     kind: 'chat',
+--- a/src/main/native-chat/agent-session-wire/host/structured-agent-session-conversation-reads.ts
++++ b/src/main/native-chat/agent-session-wire/host/structured-agent-session-conversation-reads.ts
+@@ -81,7 +81,7 @@
+     automationRun: async (sessionId: string, messageId: string, inputIds: readonly string[]) =>
+       (await journalOf(sessionId)).reads.automationRun(messageId, inputIds),
+     /** Opened at rest; pending prompts wait only while the conversation can answer them. */
+-    agentReadPage: async (sessionId: string, limit: number): Promise<AgentReadJournalPage> => {
++    agentReadPage: async (sessionId: string, limit: number, includeIds = false): Promise<AgentReadJournalPage> => {
+       const journal = await journalOf(sessionId)
+       const { deps, sessions } = context()
+       const work = await hostStructuredAgentSessionCurrentWork(
+@@ -91,7 +91,7 @@
+       const actionable = work ? new Set(work.actionablePromptIds()) : null
+       const page = await readAgentJournalPage(
+         journal,
+-        { sessionId, limit },
++        { sessionId, limit, includeIds },
+         (itemId) => actionable?.has(itemId) ?? true
+       )
+       const record = deps.store.getRecord(sessionId)
+--- a/src/main/native-chat/agent-session-wire/publication/history/agent-read-journal-page.test.ts
++++ b/src/main/native-chat/agent-session-wire/publication/history/agent-read-journal-page.test.ts
+@@ -47,11 +47,11 @@
+     },
+     head: (sequence: number) =>
+       f.db.prepare('UPDATE journal_chat_state SET last_sequence=?').run(sequence),
+-    read: (limit = 20, waiting = () => true) =>
++    read: (limit = 20, waiting = () => true, includeIds = false) =>
+       readAgentJournalPage(
+         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the adapter uses only these real SQLite-backed reads.
+         journal as SqlAgentSessionJournal,
+-        { sessionId: 'chat', limit },
++        { sessionId: 'chat', limit, includeIds },
+         waiting
+       )
+   }
+@@ -69,6 +69,16 @@
+   }
+ }
+
++it('returns stable IDs on repeated opt-in reads while preserving the default entry shape', async () => {
++  const f = fixture()
++  f.seedItem(message(1, 'same text'))
++  f.head(1)
++  expect((await f.read()).entries[0]).not.toHaveProperty('itemId')
++  const first = await f.read(20, () => true, true)
++  expect(first.entries[0]).toMatchObject({ itemId: 'orca:1', text: 'same text' })
++  expect(await f.read(20, () => true, true)).toEqual(first)
++})
++
+ function clear(f: ReturnType<typeof fixture>) {
+   f.seedItem({
+     ...message(2, ''),
