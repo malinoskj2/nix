@@ -321,6 +321,7 @@ stdenv.mkDerivation (finalAttrs: {
       src/shared/agent-launch/startup/tui-agent-launch-command-override.test.ts \
       src/main/managed-server/install/orcad-remote-launch-file-modes.test.ts \
       src/main/native-chat/nix-sandbox-launch-environment.test.ts \
+      src/cli/orchestration/identity/orchestration-compatibility-envelope.test.ts \
       src/main/native-chat/nix-bot-command-settings.test.ts \
       src/main/runtime/agent-session/launch/nix-bot-host-launch.test.ts \
       src/main/codex-accounts/runtime-home/routing/runtime-home-sandbox-session-discovery.test.ts \
