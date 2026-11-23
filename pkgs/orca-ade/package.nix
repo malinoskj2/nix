@@ -123,6 +123,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./desktop-bot-chat.patch
     ./desktop-voice-tasks.patch
     ./host-bot-native-chat.patch
+    ./desktop-voice-owner-admission.patch
   ];
 
   postPatch = ''
@@ -311,6 +312,11 @@ stdenv.mkDerivation (finalAttrs: {
       src/main/bots/bot-chat-session.test.ts \
       src/main/bots/desktop-voice-continuations.test.ts \
       src/main/bots/desktop-voice-task-queue.test.ts \
+      src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-worker-start.test.ts \
+      src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-worker-start-unknown.test.ts \
+      src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-worker-reuse.test.ts \
+      src/main/runtime/rpc/methods/orchestration/worker/start/placement/worker-terminal-custody-at-creation.test.ts \
+      src/cli/arguments/args.test.ts \
       src/main/runtime/rpc/orchestration/callers/orchestration-session-voice-caller.test.ts \
       src/main/native-chat/agent-session-wire/structured-agent-session-turn-scope.test.ts \
       src/main/native-chat/agent-session-wire/structured-agent-session-quiet-turn.test.ts \

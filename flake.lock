@@ -382,18 +382,19 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1795420181,
-        "narHash": "sha256-oeTgdfAZi8wd0PsW/fDk7tcUWAoWuvnlPYs8d/DAVBk=",
-        "owner": "malinoskj2",
-        "repo": "tohru",
-        "rev": "11c1c6a86de8fd634b46ce16a5326d397186c8e2",
-        "type": "github"
+        "lastModified": 1795425631,
+        "narHash": "sha256-7vHRk7q0M9r3DANr0731C+zjEqGx+DIzGonK3tPcmYY=",
+        "ref": "main",
+        "rev": "b81a9aac2651c0cc5a9f775d9b379239c12dd1f5",
+        "revCount": 665,
+        "type": "git",
+        "url": "file:///home/jesse/projects/tohru"
       },
       "original": {
-        "owner": "malinoskj2",
-        "repo": "tohru",
-        "rev": "11c1c6a86de8fd634b46ce16a5326d397186c8e2",
-        "type": "github"
+        "ref": "main",
+        "rev": "b81a9aac2651c0cc5a9f775d9b379239c12dd1f5",
+        "type": "git",
+        "url": "file:///home/jesse/projects/tohru"
       }
     },
     "treefmt-nix": {
