@@ -25,6 +25,11 @@ in
         models = "${config.services.local-models.root}/by-name";
       in
       {
+        orcaBot = {
+          enable = true;
+          bot = "Tohru";
+          voiceChat = "home";
+        };
         voice = {
           enable = true;
           vadModel = "${models}/silero-vad/silero-vad-v6.2.3.onnx";
