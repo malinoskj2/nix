@@ -104,7 +104,7 @@ Claude rules and Codex context share the same discovery/readiness policy.
 | --- | --- |
 | img2video | `IMG2VIDEO_MODELS=$MODEL_ROOT/by-name/img2video`; Qwen directory and exact LTX/LoRA filenames are assembled there. Existing Python environments remain required. |
 | Site SAM 2.1 scripts | `SAM=$MODEL_ROOT/by-name/sam2.1`; Transformers offline local directory. No automatic replacement by SAM 3. |
-| H3 | Run `scripts/run-h3.py --models "$MODEL_ROOT/by-name/h3"`; flat selected NVFP4/AWQ/VAE/upscaler layout. Runner and ComfyUI environment remain in its project. |
+| H3 | Run `scripts/run-h3.py --models "$MODEL_ROOT/by-name/h3"`; flat selected Ref2VA NVFP4/AWQ/VAE/upscaler layout. The separate `h3-fl2va` alias supplies the pinned FL2VA NVFP4 checkpoint with shared encoder/VAEs for native ComfyUI first/last-frame conditioning. NVFP4 requires Blackwell; runners and the ComfyUI environment remain in their projects. |
 | Speech research | `WhisperModel("$MODEL_ROOT/by-name/whisper-tiny.en", local_files_only=True)` using an expanded environment path. |
 | Voice service | Add `-f ~/.config/local-models/voice-compose.yaml` to local voice Compose commands. It mounts both `/models` and the complete root at its same absolute path so snapshot/view links resolve. Existing remote `deploy.sh` exports its own model store; production deployment remains unchanged. |
 | ComfyUI | Pass `--extra-model-paths-config ~/.config/local-models/comfyui.yaml`; shared H3 and LTX adapter paths are declared. Runtime/plugins are separate. |
