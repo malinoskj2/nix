@@ -125,6 +125,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./host-bot-native-chat.patch
     ./desktop-voice-owner-admission.patch
     ./desktop-voice-background-protocol.patch
+    ./desktop-voice-current-interest.patch
   ];
 
   postPatch = ''
@@ -318,6 +319,7 @@ stdenv.mkDerivation (finalAttrs: {
       src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-worker-reuse.test.ts \
       src/main/runtime/rpc/methods/orchestration/worker/start/placement/worker-terminal-custody-at-creation.test.ts \
       src/cli/arguments/args.test.ts \
+      src/cli/orchestration/agent-view.test.ts \
       src/main/runtime/rpc/orchestration/callers/orchestration-session-voice-caller.test.ts \
       src/main/native-chat/agent-session-wire/structured-agent-session-turn-scope.test.ts \
       src/main/native-chat/agent-session-wire/structured-agent-session-quiet-turn.test.ts \
