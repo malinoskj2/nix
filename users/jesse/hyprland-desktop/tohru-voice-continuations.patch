@@ -35,19 +35,19 @@ index 9ec0be2..81d6f0a 100755
 @@ -1661,7 +1661,8 @@ def orca_chat(args, prompt, bot_name, voice_chat, offline):
          emit({"event": "error", "message": "Orca accepted the message, but the bot chat ID could not be resolved"})
          return 1
- 
+
 -    emit({"event": "start", "conversation": chat_id, "provider": f"orca:{actual_bot}", "slot": 0, "title": subject})
 +    emit({"event": "start", "conversation": chat_id, "provider": f"orca:{actual_bot}", "slot": 0, "title": subject,
 +          "voice_request": str((receipt or {}).get("promptItemId") or "") if args.voice else ""})
- 
+
      stopped = False
- 
+
 diff --git a/bin/tohru-voice b/bin/tohru-voice
 index 58577dc..44c9f89 100755
 --- a/bin/tohru-voice
 +++ b/bin/tohru-voice
 @@ -101,8 +101,8 @@ UNFINISHED_TAIL = {
- 
+
  def emit(event, **fields):
      fields["event"] = event
 -    if event in ("turn", "barge", "draft", "draft_cancel", "error", "paused"):
@@ -63,12 +63,12 @@ index 58577dc..44c9f89 100755
          return
 -    log(json.dumps(dict(stage=stage, session=SESSION, mono_ns=time.monotonic_ns(), **fields), separators=(",", ":")))
 +    log(json.dumps(dict(stage=stage, session=SESSION, mono_ns=time.monotonic_ns(), wall_ms=int(time.time() * 1000), **fields), separators=(",", ":")))
- 
- 
+
+
  class SpeechStream:
 @@ -1309,7 +1309,7 @@ class Voice:
              self.spotter.drop()
- 
+
      def conversation(self, on):
 -        emit("conversation", on=on)
 +        emit("conversation", on=on, turn_id=getattr(self, "turn_id", None))
@@ -102,7 +102,7 @@ index 58577dc..44c9f89 100755
 @@ -1445,9 +1452,31 @@ class Voice:
              return
          self.hear(window, probability >= SPEECH_CONTINUE)
- 
+
 +    def suppression(self, reason, probability, rms):
 +        now = time.monotonic()
 +        seen = getattr(self, "suppression_seen", {})
@@ -169,7 +169,7 @@ index 58577dc..44c9f89 100755
              if is_backchannel(transcript):
                  self.resume_barge()
 @@ -1662,6 +1695,7 @@ class Voice:
- 
+
      def deliver(self, transcript, active_draft=""):
          if not transcript.strip():
 +            if not self.in_conversation(): self.wake_decision(False, "empty_final")
@@ -194,11 +194,11 @@ index 58577dc..44c9f89 100755
                  emit("draft_cancel")
 -            emit("wake")
 +            emit("wake", turn_id=getattr(self, "turn_id", None))
- 
+
      def listen_for_barge(self, window, probability, rms):
          playback = self.speaker.echo_level()
 @@ -1737,7 +1773,16 @@ class Voice:
- 
+
      def command(self, message):
          cmd = message.get("cmd")
 -        if cmd == "semantic":
@@ -221,11 +221,11 @@ index 1f39269..cc699ed 100644
 +++ b/docs/ai-assistant.md
 @@ -1,5 +1,7 @@
  # AI assistant: agreed design
- 
+
 +See [voice diagnostics and background results](voice-diagnostics.md) for log inspection and correlated spoken follow-ups.
 +
  Status: implemented. Mockups (not in Git): `.tmp/ai-widget-ideas/` in this worktree, with `index.md` describing all ten directions and the services they need. Code: `bin/tohru-assistant` (chats, history, memory, export), `bin/tohru-voice` (voice), `shell/assistant/` (popup, bar entry, overlay, controllers) and [the assistant README](../shell/assistant/README.md).
- 
+
  ## Chat popup: direction 01, Pocket
 diff --git a/docs/voice-diagnostics.md b/docs/voice-diagnostics.md
 new file mode 100644
@@ -322,7 +322,7 @@ index ca2f89a..04b9cc8 100644
      local wanted = false
      local args = {}
 @@ -20,3 +21,4 @@
- 
+
 +    local send
      local function show_dragon(on)
          hide_serial = hide_serial + 1
@@ -341,16 +341,16 @@ index ca2f89a..04b9cc8 100644
 +        end)
          puppet.visible(on)
      end
- 
+
 @@ -39,11 +50,12 @@ return function(assistant, puppet, flight, service_executable)
          end)
      end
- 
+
 -    local function send(message)
 +    send = function(message)
          if id then write(id, json.encode(message) .. "\n") end
      end
- 
+
      local function quiet()
 +        voice_return.interrupt()
          barged, cancelling, queued, interrupted_spoken = false, false, nil, nil
@@ -358,7 +358,7 @@ index ca2f89a..04b9cc8 100644
          streaming_speech = false
 @@ -59,12 +71,14 @@ return function(assistant, puppet, flight, service_executable)
      end
- 
+
      local function ask_turn(prompt, opts)
 +        voice_return.interrupt()
          turn_generation = turn_generation + 1
@@ -390,7 +390,7 @@ index ca2f89a..04b9cc8 100644
 @@ -255,9 +271,10 @@ return function(assistant, puppet, flight, service_executable)
          end, {stdin = "open", stderr = "inherit"})
      end
- 
+
 -    local function answer_event(kind, conv, answer, voice, turn)
 +    local function answer_event(kind, conv, answer, voice, turn, request)
          if not id then return end
@@ -410,7 +410,7 @@ index ca2f89a..04b9cc8 100644
 @@ -311,8 +329,26 @@ return function(assistant, puppet, flight, service_executable)
          end)
      end
- 
+
 -    on("assistant_hush", function() turn_generation = turn_generation + 1; send({cmd = "hush"}) end)
 +    on("assistant_voice_result", function()
 +        local status = assistant.status and assistant.status() or {}
@@ -435,3 +435,16 @@ index ca2f89a..04b9cc8 100644
          if not fact.ai_dragon_open then return end
          show_dragon(false)
          if spoken then assistant.show(spoken) end
+--- a/bin/tohru-voice
++++ b/bin/tohru-voice
+@@ -167,7 +167,9 @@
+                 match = re.search(r"[.!?…](?:[\"')]*)(?:\s+|$)", self.pending)
+                 # A terminal punctuation at the chunk boundary may be a decimal,
+                 # URL or abbreviation: require following whitespace until final.
+-                if match and (self.closed or match.end() < len(self.pending) or self.pending[-1:].isspace()):
++                if match and not (self.closed or match.end() < len(self.pending) or self.pending[-1:].isspace()):
++                    match = None
++                if match:
+                     end = match.end()
+                     prefix = self.pending[:end]
+                     if prefix.count("```") % 2 or prefix.count("~~~") % 2 or prefix.count("`") % 2 or prefix.count("[") != prefix.count("]") or prefix.count("(") != prefix.count(")"):
