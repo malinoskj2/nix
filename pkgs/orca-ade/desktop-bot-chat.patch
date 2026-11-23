@@ -464,7 +464,7 @@
      ...message(2, ''),
 --- a/src/main/bots/desktop-voice-continuations.ts
 +++ b/src/main/bots/desktop-voice-continuations.ts
-@@ -0,0 +1,117 @@
+@@ -0,0 +1,133 @@
 +import { execFile } from 'node:child_process'
 +import { promisify } from 'node:util'
 +import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
@@ -480,6 +480,9 @@
 +type Origin = { chat: string; request: string }
 +const MAX_LINKS = 512
 +const MAX_AGE = 24 * 60 * 60 * 1000
++function trace(stage: string, fields: Record<string, string | boolean | null>): void {
++  console.info('[desktop-voice]', JSON.stringify({ stage, wall_ms: Date.now(), ...fields }))
++}
 +
 +/** Voice belongs to a particular owner prompt, never merely to the bot or its latest chat. */
 +export class DesktopVoiceContinuations {
@@ -522,7 +525,12 @@
 +    for (const message of mail.messages) {
 +      const dispatch = worker(message.messageId)
 +      const link = dispatch ? this.dispatches.get(dispatch) : undefined
-+      if (!link || Date.now() - link.at > MAX_AGE || link.origin.chat !== chat || link.epoch !== (this.owners.get(chat) ?? 0)) return null
++      const reason = !link ? 'dispatch_missing' : Date.now() - link.at > MAX_AGE ? 'expired'
++        : link.origin.chat !== chat ? 'other_chat' : link.epoch !== (this.owners.get(chat) ?? 0) ? 'superseded' : null
++      if (reason || !link) {
++        trace('origin_dropped', { chat, dispatch, reason })
++        return null
++      }
 +      if (found && found.request !== link.origin.request) return null
 +      found = link.origin
 +    }
@@ -559,7 +567,9 @@
 +  if (!chat || (sender !== undefined && sender !== chat)) return
 +  const reads = await (await requireStructuredHost(runtime)).journalReads(chat)
 +  const prompt = await reads.promptItem('last')
-+  continuations.remember(dispatchId, prompt ? continuations.origin(chat, prompt, (id) => workerOf(runtime, id)) : null)
++  const origin = prompt ? continuations.origin(chat, prompt, (id) => workerOf(runtime, id)) : null
++  continuations.remember(dispatchId, origin)
++  trace('dispatch_origin', { chat, dispatch: dispatchId, prompt: prompt?.itemId ?? null, request: origin?.request ?? null })
 +}
 +
 +export function desktopVoiceSummary(links: DesktopVoiceContinuations, chat: string, turnId: string,
@@ -578,9 +588,15 @@
 +}
 +
 +export async function deliverDesktopVoiceContinuation(runtime: OrcaRuntimeService, chat: string, turnId: string, rows: TurnEndedRows): Promise<void> {
++  trace('turn_completed', { chat, turn: turnId })
 +  const summary = desktopVoiceSummary(continuations, chat, turnId, rows, (id) => workerOf(runtime, id))
-+  if (!summary || !continuations.claim(summary.completion)) return
++  if (!summary) return
++  if (!continuations.claim(summary.completion)) {
++    trace('completion_duplicate', { chat, completion: summary.completion })
++    return
++  }
 +  await run(process.env.ORCA_DESKTOP_ASSISTANT_COMMAND ?? 'tohru', ['assistant', 'voice-result', '--chat', summary.origin.chat, '--request', summary.origin.request, '--completion', summary.completion, '--', summary.text.replace(/[\r\n\t]+/g, ' ')], { timeout: 5000, maxBuffer: 4096 })
++  trace('desktop_sent', { chat, request: summary.origin.request, completion: summary.completion })
 +}
 --- a/src/main/bots/desktop-voice-continuations.test.ts
 +++ b/src/main/bots/desktop-voice-continuations.test.ts
@@ -792,3 +808,174 @@
          followThroughWorkerReport(
            runtime,
            db,
+--- a/src/main/native-chat/agent-session-wire/observations/structured-agent-session-turn-completion-feed.ts
++++ b/src/main/native-chat/agent-session-wire/observations/structured-agent-session-turn-completion-feed.ts
+@@ -29,6 +29,8 @@
+ export type StructuredAgentSessionTurnCompletionSubscriber = {
+   id: string
+   emit: (event: AgentSessionTurnCompletionEvent) => void
++  /** Turn contexts react to the agent's own answer, even while other delegated work continues. */
++  completionScope?: 'turn'
+   /** Older clients misread prompt arms, so delivery requires opt-in. */
+   includePrompts?: boolean
+   /** In-process reconciliation on restore and prompt removal. */
+@@ -72,6 +74,7 @@
+ export class StructuredAgentSessionTurnCompletionFeed {
+   private readonly subscribers = new Map<string, StructuredAgentSessionTurnCompletionSubscriber>()
+   private readonly baselines = new Map<string, SessionBaseline>()
++  private readonly turnBaselines = new Map<string, SessionBaseline>()
+
+   constructor(private readonly deps: StructuredAgentSessionTurnCompletionFeedDeps) {}
+
+@@ -96,6 +99,7 @@
+   /** A closed session: its reattachment baselines silently instead of announcing old work. */
+   forget(sessionId: string): void {
+     this.baselines.delete(sessionId)
++    this.turnBaselines.delete(sessionId)
+     for (const subscriber of this.subscribers.values()) {
+       try {
+         subscriber.onClosed?.(sessionId)
+@@ -139,16 +143,21 @@
+     session: CompletionFeedSession,
+     cursor: CompletionFeedCursor,
+     state: StructuredAgentSessionStatusState,
+-    options?: { historical?: boolean }
++    options?: { historical?: boolean },
++    completionScope: 'work' | 'turn' = 'work'
+   ): void {
++    if (completionScope === 'work') {
++      this.observeState(sessionId, session, cursor, state, options, 'turn')
++    }
++    const baselines = completionScope === 'turn' ? this.turnBaselines : this.baselines
+     const request = state.latestRequest
+     const prompts = new Set(state.pendingPromptIds)
+-    const baseline = this.baselines.get(sessionId)
++    const baseline = baselines.get(sessionId)
+     if (!baseline || options?.historical || [...baseline.prompts].some((id) => !prompts.has(id))) {
+-      this.publishState(session, sessionId, state.pendingPromptIds)
++      if (completionScope === 'work') this.publishState(session, sessionId, state.pendingPromptIds)
+     }
+     if (!baseline || options?.historical) {
+-      this.baselines.set(sessionId, { ...cursor, settled: settledMark(request), prompts })
++      baselines.set(sessionId, { ...cursor, settled: settledMark(request), prompts })
+       return
+     }
+     if (baseline.epoch !== cursor.epoch || cursor.sequence < baseline.sequence) {
+@@ -162,11 +171,11 @@
+     baseline.sequence = cursor.sequence
+     const raised = state.pendingPromptIds.find((id) => !baseline.prompts.has(id))
+     baseline.prompts = prompts
+-    const completion = this.settledCompletion(sessionId, session, state, baseline)
++    const completion = this.settledCompletion(sessionId, session, state, baseline, completionScope)
+     if (completion) {
+       completion.journalCursor = cursor
+       const restatesPrompt = completion.awaitingUser === true && completion.outcome === 'success'
+-      this.broadcast({ type: 'completion', completion }, restatesPrompt ? 'legacy' : 'all')
++      this.broadcast({ type: 'completion', completion }, restatesPrompt ? 'legacy' : 'all', completionScope)
+       if (!restatesPrompt) {
+         return
+       }
+@@ -185,7 +194,8 @@
+           raisedAt: this.deps.now()
+         }
+       },
+-      'prompt-aware'
++      'prompt-aware',
++      completionScope
+     )
+   }
+
+@@ -207,7 +217,8 @@
+     sessionId: string,
+     session: CompletionFeedSession,
+     state: StructuredAgentSessionStatusState,
+-    baseline: SessionBaseline
++    baseline: SessionBaseline,
++    completionScope: 'work' | 'turn'
+   ): AgentSessionTurnCompletion | null {
+     const request = state.latestRequest
+     if (request?.turnState === 'running') {
+@@ -221,7 +232,7 @@
+       state.owesWork ||
+       !request ||
+       (baseline.settled?.kind === request.kind && baseline.settled.id === request.id) ||
+-      this.heldByLiveWork(sessionId, state, request)
++      (completionScope === 'work' && this.heldByLiveWork(sessionId, state, request))
+     ) {
+       return null
+     }
+@@ -274,9 +285,11 @@
+
+   private broadcast(
+     event: AgentSessionAttentionEdge,
+-    audience: 'all' | 'legacy' | 'prompt-aware'
++    audience: 'all' | 'legacy' | 'prompt-aware',
++    completionScope: 'work' | 'turn'
+   ): void {
+     for (const subscriber of this.subscribers.values()) {
++      if ((subscriber.completionScope ?? 'work') !== completionScope) continue
+       const promptAware = subscriber.includePrompts === true
+       if ((audience === 'legacy' && promptAware) || (audience === 'prompt-aware' && !promptAware)) {
+         continue
+--- a/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
++++ b/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
+@@ -130,6 +130,7 @@
+     const installed = host
+     installed.subscribeTurnCompletions({
+       id: 'host-turn-context',
++      completionScope: 'turn',
+       emit: (event) => {
+         if (event.type === 'completion') {
+           const { sessionId, turnId, outcome } = event.completion
+--- a/src/main/native-chat/agent-session-wire/structured-agent-session-turn-scope.test.ts
++++ b/src/main/native-chat/agent-session-wire/structured-agent-session-turn-scope.test.ts
+@@ -0,0 +1,49 @@
++import { describe, expect, it } from 'vitest'
++import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
++import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
++import type { AgentChildWorkLivenessCandidate } from '../../../shared/agent-status/child-work/agent-status-child-work-liveness'
++import { StructuredAgentSessionTurnCompletionFeed } from './observations/structured-agent-session-turn-completion-feed'
++import { readHostStatusState } from './structured-agent-session-host-status.test-fixture'
++
++describe('own turn completion beside aggregate work completion', () => {
++  it('delivers an analyzed answer once while another worker runs, without announcing all work done', async () => {
++    let sequence = 1
++    let state: 'running' | 'completed' = 'running'
++    let children: AgentChildWorkLivenessCandidate[] = [{ kind: 'agent', state: 'working' }]
++    const rows = (): AgentJournalRenderItem[] => [
++      { itemId: 'mail', revision: 0, sequence: 1, observedAt: 1,
++        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'worker result' }] } },
++      { itemId: 'turn-row', revision: sequence, sequence: 2, observedAt: 2,
++        body: { kind: 'turn', turnId: 'turn', userItemId: 'mail', state,
++          ...(state === 'completed' ? { outcome: 'success' as const } : {}) } },
++      { itemId: 'final', revision: 0, sequence: 3, observedAt: 3,
++        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'My analyzed answer' }] },
++        turnScope: { kind: 'turn', turnItemId: 'turn-row' } }
++    ]
++    const feed = new StructuredAgentSessionTurnCompletionFeed({
++      sessions: new Map([['chat', { journal: { cursor: () => ({ epoch: 'epoch', sequence }) },
++        params: { location: { executionHostId: 'local', wslDistro: null, workspaceId: 'workspace', workspaceKind: 'folder' } } }]]),
++      now: () => 100,
++      readChildWork: () => children,
++      readStatusState: async () => readHostStatusState(rows())
++    })
++    const turns: AgentSessionTurnCompletionEvent[] = [], work: AgentSessionTurnCompletionEvent[] = []
++    feed.subscribe({ id: 'bot-turn-context', completionScope: 'turn', emit: (event) => turns.push(event) })
++    feed.subscribe({ id: 'notifications', emit: (event) => work.push(event) })
++    await feed.observe('chat')
++    state = 'completed'; sequence++
++    await feed.observe('chat')
++    expect(turns).toMatchObject([{ type: 'completion', completion: { turnId: 'turn', outcome: 'success' } }])
++    expect(work).toEqual([])
++    await feed.observe('chat')
++    expect(turns).toHaveLength(1)
++    children = []; sequence++
++    await feed.observe('chat')
++    expect(work).toMatchObject([{ type: 'completion', completion: { turnId: 'turn', outcome: 'success' } }])
++    expect(turns).toHaveLength(1)
++    feed.forget('chat')
++    await feed.observe('chat')
++    expect(turns).toHaveLength(1)
++    expect(work).toHaveLength(1)
++  })
++})

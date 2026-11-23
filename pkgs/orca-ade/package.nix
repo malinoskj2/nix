@@ -302,6 +302,9 @@ stdenv.mkDerivation (finalAttrs: {
       src/main/runtime/rpc/methods/nix-desktop-bot.test.ts \
       src/main/bots/bot-chat-session.test.ts \
       src/main/bots/desktop-voice-continuations.test.ts \
+      src/main/native-chat/agent-session-wire/structured-agent-session-turn-scope.test.ts \
+      src/main/native-chat/agent-session-wire/structured-agent-session-quiet-turn.test.ts \
+      src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-failure.test.ts \
       src/main/bots/bot-structured-session-wiring.test.ts \
       src/main/native-chat/agent-session-wire/publication/history/agent-read-journal-page.test.ts \
       src/main/native-chat/agent-session-wire/host/structured-agent-session-conversation-reads.test.ts \
