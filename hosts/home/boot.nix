@@ -21,5 +21,7 @@
     ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x1b21", ATTR{device}=="0x2425|0x2426", ATTR{power/control}="on"
   '';
 
+  hardware.cpu.amd.ryzen-smu.enable = true;
+
   environment.systemPackages = [ pkgs.sbctl ];
 }
