@@ -23,5 +23,8 @@
 
   hardware.cpu.amd.ryzen-smu.enable = true;
 
-  environment.systemPackages = [ pkgs.sbctl ];
+  environment.systemPackages = [
+    pkgs.sbctl
+    pkgs.ryzen-monitor-ng
+  ];
 }
