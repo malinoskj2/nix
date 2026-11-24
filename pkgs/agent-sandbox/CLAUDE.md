@@ -79,7 +79,7 @@ Blender (Cycles with CUDA and OptiX) and a Python with torch (CUDA) and hy3dgen 
 
 Steam and Proton can run here: the container allows the unprivileged user namespaces their bubblewrap needs. Start the client with `swaymsg exec -- sandbox-steam`, and launch a game with `swaymsg exec -- sandbox-steam -applaunch <appid>`. `sandbox-steam` starts Steam in offline mode whenever a saved login allows it, so the game doesn't take the account's one game session from the human playing on the host; it says which mode it used, and a client that is already running keeps its mode until `steam -shutdown`. Use `sandbox-steam --online` only when a game can't run offline, and tell the human first, since an online launch ends a game they're playing on the host. The human signs in to Steam themselves: if it opens at the sign-in screen or account picker, stop and ask them to sign in with "Remember me" checked, giving them the full `$AGENT_SANDBOX_VNC_URL` link, then wait until they confirm. That client stays online, so before launching a game, quit it with `steam -shutdown` and start it again with `swaymsg exec -- sandbox-steam`, which then starts offline. Never type or ask for their Steam credentials. Every sandbox shares the home that keeps the login, so one sign-in covers later sandboxes, and offline mode works once that sign-in is saved. When no sandbox Steam is running, the launcher copies the host's app manifests into the sandbox home's `~/.local/share/Steam`, whose `steamapps/common` holds the host's installed games, so they show as installed. The copied manifests are set to update only on launch, so the client never updates shared games or Proton builds in the background. Don't verify or update a shared game, and don't launch one that needs an update, since the host's Steam uses the same files.
 
-All sandboxes share a 20G memory limit; past it the kernel kills the largest process. Run one cargo build or test at a time, including across subagents and separate target dirs. Each one already uses every core, and several at once fill the limit with linkers.
+All sandboxes share a 60G memory limit; past it the kernel kills the largest process. Run one cargo build or test at a time, including across subagents and separate target dirs. Each one already uses every core, and several at once fill the limit with linkers.
 
 Read live shared memory stats from `/run/agent-sandbox-cgroup`, a read-only mount of the host's sandbox slice. `memory.max` and `memory.current` give the RAM limit and aggregate usage in bytes across all sandboxes; `memory.swap.max` and `memory.swap.current` give the separate swap limit and usage. `memory.max - memory.current` estimates headroom before the shared limit, but reclaimable cache can be freed and other agents can consume it concurrently. `free` and `/proc/meminfo` report host memory, while `/sys/fs/cgroup` shows only this container and hides the parent limit. Check `memory.stat` for cache and shmem usage, and `memory.events` and `memory.pressure` for reclaim/OOM activity and stalls.
 
@@ -120,8 +120,8 @@ Issue Unreal tool calls serially; the editor executes them on the game thread.
 Run one editor per sandbox. MCP stays on container loopback and is not published
 to the host. Host harnesses use their own loopback and need a local editor.
 
-The shared 20G sandbox limit is below Epic's recommended 32G. Avoid simultaneous
-editors and heavy builds; a full source-engine build needs a separately sized
+Epic recommends 32G for one editor, over half the 60G limit all sandboxes share.
+Avoid simultaneous editors and heavy builds; a full source-engine build needs a separately sized
 environment. Preserve the installed engine and reusable shader cache when cleaning
 up a task, and report their size. See `docs/unreal-sandbox.md` in the Nix repo.
 

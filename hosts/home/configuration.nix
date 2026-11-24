@@ -56,19 +56,14 @@ in
   swapDevices = [
     {
       device = "/swapfile";
-      size = 16 * 1024;
+      size = 32 * 1024;
     }
   ];
-
-  zramSwap.enable = true;
-  # Zram takes swap before the swapfile, so swapping out is cheap, but past 100 the kernel would
-  # prefer it to dropping cache and spill idle apps onto the swapfile once zram fills.
-  boot.kernel.sysctl."vm.swappiness" = 100;
 
   nix.settings = {
     # Run one build at a time so parallel builds don't multiply the core budget.
     max-jobs = 1;
-    cores = 16;
+    cores = 8;
   };
 
   security.sudo.extraRules = [
@@ -90,8 +85,8 @@ in
   ];
 
   systemd.services.nix-daemon.serviceConfig = {
-    MemoryHigh = "20G";
-    MemoryMax = "24G";
+    MemoryHigh = "14G";
+    MemoryMax = "16G";
   };
 
   # agent-sandbox runs its containers under this slice.
@@ -105,16 +100,16 @@ in
       # No MemoryHigh: once swap is full it can't reclaim anon memory and throttles
       # every sandbox indefinitely instead of killing anything. MemoryMax reclaims
       # too, then OOM-kills the largest process.
-      MemoryMax = "20G";
+      MemoryMax = "60G";
 
-      # Idle agents and display stacks compress well in zram, which beats OOM-killing a build.
-      MemorySwapMax = "8G";
+      # Swapping out idle agents and display stacks beats OOM-killing a build.
+      MemorySwapMax = "16G";
     };
   };
 
   # The desktop isn't capped, so this only decides who gets reclaimed first
   # when the sandboxes and nix-daemon together outgrow RAM.
-  systemd.slices.user.sliceConfig.MemoryLow = "6G";
+  systemd.slices.user.sliceConfig.MemoryLow = "16G";
 
   systemd.services.agent-sandbox-gaming = {
     description = "Keep agent sandboxes off the V-Cache CCD while a game runs";
