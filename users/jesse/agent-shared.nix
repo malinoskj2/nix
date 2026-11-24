@@ -17,6 +17,7 @@ in
       ./claude/rules/documentation.md
       ./claude/rules/local-models.md
       ./claude/rules/media.md
+      ./claude/rules/nix-run.md
       ./claude/rules/sandbox-display.md
       ./claude/rules/sandbox-previews.md
       ./claude/rules/tool-output.md

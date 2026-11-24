@@ -75,6 +75,7 @@ in
       documentation = ./rules/documentation.md;
       local-models = ./rules/local-models.md;
       media = ./rules/media.md;
+      nix-run = ./rules/nix-run.md;
       rust = ./rules/rust.md;
       sandbox-display = ./rules/sandbox-display.md;
       sandbox-previews = ./rules/sandbox-previews.md;
