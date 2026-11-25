@@ -12,8 +12,8 @@ import time
 
 GIB = 1024**3
 POLL_SECONDS = 30
-ALERT_GIB = 28
-REARM_GIB = 26
+ALERT_AVAILABLE = 0.10
+REARM_AVAILABLE = 0.15
 ALERT_EXPIRE_MS = 10_000
 NEVER_EXPIRE = 0
 CONTEXT_SECONDS = 30
@@ -38,18 +38,19 @@ class MemoryAlert:
         self.active = False
 
     def check(self, fields, notify):
-        used = fields["MemTotal"] - fields["MemAvailable"]
-        if used <= REARM_GIB * GIB:
+        total = fields["MemTotal"]
+        available = fields["MemAvailable"]
+        if available >= REARM_AVAILABLE * total:
             self.active = False
-        if used > ALERT_GIB * GIB and not self.active:
+        if available < ALERT_AVAILABLE * total and not self.active:
             swap = fields["SwapTotal"] - fields["SwapFree"]
             body = (
-                f"RAM: {used / GIB:.1f} / "
-                f"{fields['MemTotal'] / GIB:.1f} GiB used.\n"
-                f"Swap: {swap / GIB:.1f} GiB used.\n"
-                f"Another RAM alert is enabled after usage falls to {REARM_GIB} GiB."
+                f"RAM: {available / GIB:.1f} GiB available, "
+                f"{(total - available) / GIB:.1f} / {total / GIB:.1f} GiB used.\n"
+                f"Swap: {swap / GIB:.1f} / {fields['SwapTotal'] / GIB:.1f} GiB used.\n"
+                f"Another alert is enabled once {REARM_AVAILABLE:.0%} of RAM is available."
             )
-            self.active = notify(f"Memory usage above {ALERT_GIB} GiB", body, ALERT_EXPIRE_MS)
+            self.active = notify(f"Low memory: under {ALERT_AVAILABLE:.0%} of RAM available", body, ALERT_EXPIRE_MS)
 
 
 def oomd_alert(message):

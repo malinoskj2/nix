@@ -10,7 +10,7 @@ in
   # journal, which jesse's systemd-journal membership lets this user service read.
   home-manager.users.jesse.systemd.user.services.memory-notifications = {
     Unit = {
-      Description = "Desktop alerts for high RAM usage and OOM kills";
+      Description = "Desktop alerts for low available RAM and OOM kills";
       After = [ "graphical-session.target" ];
       PartOf = [ "graphical-session.target" ];
     };

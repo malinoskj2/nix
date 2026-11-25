@@ -11,12 +11,12 @@ monitor = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(monitor)
 
 
-def memory(used):
+def memory(used, total=100):
     return {
-        "MemTotal": 32 * monitor.GIB,
-        "MemAvailable": (32 - used) * monitor.GIB,
-        "SwapTotal": 16 * monitor.GIB,
-        "SwapFree": 15 * monitor.GIB,
+        "MemTotal": total * monitor.GIB,
+        "MemAvailable": (total - used) * monitor.GIB,
+        "SwapTotal": 32 * monitor.GIB,
+        "SwapFree": 31 * monitor.GIB,
     }
 
 
@@ -44,18 +44,26 @@ class MemoryTests(unittest.TestCase):
     def test_threshold_hysteresis_and_rearm(self):
         alert = monitor.MemoryAlert()
         notify = Mock(return_value=True)
-        for used in [28, 28.1, 29, 27, 28.5]:
+        for used in [90, 90.1, 91, 86, 89.5]:
             alert.check(memory(used), notify)
         self.assertEqual(notify.call_count, 1)
-        alert.check(memory(26), notify)
-        alert.check(memory(29), notify)
+        alert.check(memory(85), notify)
+        alert.check(memory(91), notify)
         self.assertEqual(notify.call_count, 2)
+
+    def test_threshold_scales_with_total_memory(self):
+        notify = Mock(return_value=True)
+        monitor.MemoryAlert().check(memory(36, total=94), notify)
+        monitor.MemoryAlert().check(memory(80, total=94), notify)
+        notify.assert_not_called()
+        monitor.MemoryAlert().check(memory(29, total=32), notify)
+        notify.assert_called_once()
 
     def test_failed_delivery_is_retried(self):
         alert = monitor.MemoryAlert()
         notify = Mock(side_effect=[False, True])
-        alert.check(memory(29), notify)
-        alert.check(memory(29), notify)
+        alert.check(memory(91), notify)
+        alert.check(memory(91), notify)
         self.assertEqual(notify.call_count, 2)
 
     def test_available_memory_instead_of_free_memory(self):
