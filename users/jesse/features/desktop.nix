@@ -146,6 +146,7 @@ in
       pwvucontrol
       vulkan-tools
       wl-clipboard
+      worktree-closeout
     ];
 
     home.file =

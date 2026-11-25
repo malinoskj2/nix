@@ -147,6 +147,7 @@
           "wallpaper-play"
           "wallpaper-randomize"
           "wifi-connect"
+          "worktree-closeout"
           "zsh-claude-command"
         ];
       in

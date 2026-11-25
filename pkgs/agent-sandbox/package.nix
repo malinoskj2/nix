@@ -139,6 +139,7 @@
   wireplumber,
   wl-clipboard,
   wlrctl,
+  worktree-closeout,
   writeShellApplication,
   writeShellScriptBin,
   writeText,
@@ -426,6 +427,7 @@ let
       wireplumber
       wl-clipboard
       wlrctl
+      worktree-closeout
       wtype
       xwayland
       xz
