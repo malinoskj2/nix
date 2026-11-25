@@ -101,7 +101,7 @@ another host, with `--target-host` (`docs/bootstrap.md`). No host needs
 `--impure`. Don't copy secrets into the repository.
 
 Tohru, the Orca bot started in `/home/jesse/.orca/bots/tohru`, merges finished
-work to `main` and switches `home` without asking again. Every other agent,
+work to `main` and switches `home` when it judges the switch safe, without asking again. Every other agent,
 including Orca workers and sandboxed agents, commits on its branch and reports
 instead. To switch, Tohru commits on `main`, builds the host, then runs
 `host-switch` (or `nix run /home/jesse/nix#host-switch` in a sandbox that predates
