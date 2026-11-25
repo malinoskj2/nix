@@ -39,10 +39,15 @@ exec 1>&2
 
 dbus-daemon --config-file="$DBUS_SESSION_BUS_CONFIG" --address="$DBUS_SESSION_BUS_ADDRESS" --fork --nopidfile
 
-# A null sink, since games under Proton crash in XAudio2 without any audio device.
-pulseaudio -n --daemonize=no --exit-idle-time=-1 \
-  --load=module-native-protocol-unix --load="module-null-sink sink_name=null" --load=module-always-sink \
-  >"$log_dir/pulseaudio.log" 2>&1 &
+# Proton games crash in XAudio2 without an audio device, and voice tests need the virtual
+# microphone and speaker that pipewire.conf declares.
+pipewire >"$log_dir/pipewire.log" 2>&1 &
+for _ in {1..50}; do
+  [[ -S $XDG_RUNTIME_DIR/pipewire-0 ]] && break
+  sleep 0.1
+done
+wireplumber --profile sandbox >"$log_dir/wireplumber.log" 2>&1 &
+pipewire-pulse >"$log_dir/pipewire-pulse.log" 2>&1 &
 
 # Answer each preview port's host URL here too, so one link works in the sandbox and on the host.
 for preview_port in ${AGENT_PREVIEW_PORTS:-}; do

@@ -19,7 +19,7 @@ The rest of the home directory belongs to the sandbox, not the host. Apart from 
 
 The displays below aren't running unless the sandbox was launched with `--display`. Before anything that needs one (`swaymsg`, `grim`, a window, the Playwright MCP's browser, Steam), run `sandbox-display up`, or `sandbox-display up --hyprland` for the nested Hyprland too; the `sandbox-wayland-display` skill covers it. It does nothing when they're already up, and `sandbox-display status` reports them. The Unreal editor wrapper starts the sway display itself.
 
-A headless sway Wayland session serves `$WAYLAND_DISPLAY` with a single 1280x800 output, `HEADLESS-1`. Xwayland is enabled for X11-only apps. The human can watch and drive it over VNC, or in a browser at `$AGENT_SANDBOX_VNC_URL`, a link that opens on the host. `$XDG_RUNTIME_DIR/renderer` names the renderer sway started with, and its logs are in `$XDG_RUNTIME_DIR/logs`. A PulseAudio server with only a null sink gives apps an audio device; nothing is audible.
+A headless sway Wayland session serves `$WAYLAND_DISPLAY` with a single 1280x800 output, `HEADLESS-1`. Xwayland is enabled for X11-only apps. The human can watch and drive it over VNC, or in a browser at `$AGENT_SANDBOX_VNC_URL`, a link that opens on the host. `$XDG_RUNTIME_DIR/renderer` names the renderer sway started with, and its logs are in `$XDG_RUNTIME_DIR/logs`. Audio is virtual; see [Audio](#audio).
 
 Work on this sandbox display unless the human explicitly asks you to use the host display.
 
@@ -54,6 +54,15 @@ A second headless sway, kept off `$WAYLAND_DISPLAY` and `$SWAYSOCK`, hosts a per
 The human's desktop Wayland socket is mounted at `$XDG_RUNTIME_DIR/host-wayland-1` when the sandbox started while the desktop was up. `WAYLAND_DISPLAY=host-wayland-1 <command>` puts windows on the human's actual screen, and `WAYLAND_DISPLAY=host-wayland-1 grim "$repo_root/.tmp/host.png"` screenshots it. Windows and input land in the human's live session next to their own apps, so use it only when explicitly asked. If it stops accepting connections, the desktop compositor restarted since the sandbox started; say so instead of retrying.
 
 Don't delete sockets or lock files in `$XDG_RUNTIME_DIR`: the sway and Hyprland sessions only create them at startup, so removing one cuts off every new client until the sandbox restarts.
+
+## Audio
+
+PipeWire, with WirePlumber and its Pulse server, runs in every sandbox with only virtual devices: nothing reaches the host's speakers or microphones, and the live desktop voice is untouched. Its logs are `pipewire.log`, `wireplumber.log` and `pipewire-pulse.log` in `$XDG_RUNTIME_DIR/logs`.
+
+- `sandbox-speaker` is the default sink. Record what apps play with `pw-record --target sandbox-speaker -P '{ stream.capture.sink=true }' out.wav` or `parec -d sandbox-speaker.monitor --file-format=wav out.wav`.
+- `sandbox-mic` is the default source, a mono microphone that hears whatever plays into the `sandbox-mic-feed` sink and silence otherwise. Feed it a recording with `pw-play --target sandbox-mic-feed speech.wav` or `paplay -d sandbox-mic-feed speech.wav`.
+
+For an end-to-end voice test, start the recorder on the speaker, then the app, which captures from the default source and plays to the default sink, then feed the microphone and stop the recorder with `kill -INT`. Pulse clients such as Tohru's voice (`parec`, `pacat`, `pactl`) and native PipeWire clients see the same devices. Loading a voice model still needs a `gpu-run` reservation.
 
 ## Preview sites
 

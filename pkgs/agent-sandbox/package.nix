@@ -98,6 +98,7 @@
   p7zip,
   pandoc,
   pciutils,
+  pipewire,
   pkg-config,
   playwright-browsers,
   playwright-mcp,
@@ -135,6 +136,7 @@
   wget,
   which,
   whois,
+  wireplumber,
   wl-clipboard,
   wlrctl,
   writeShellApplication,
@@ -388,6 +390,7 @@ let
       pkg-config
       playwright-test
       procps
+      pipewire
       pulseaudio
       (python3.withPackages (ps: [
         hy3dgen
@@ -420,6 +423,7 @@ let
       wget
       which
       whois
+      wireplumber
       wl-clipboard
       wlrctl
       wtype
@@ -476,7 +480,8 @@ let
     name = "agent-sandbox";
     includeStorePaths = false;
     extraCommands = ''
-      mkdir -p bin usr/bin lib64 etc/nix etc/claude-code etc/sway etc/fonts etc/ssl/certs tmp
+      mkdir -p bin usr/bin lib64 etc/nix etc/claude-code etc/sway etc/fonts etc/ssl/certs tmp \
+        etc/pipewire/pipewire.conf.d etc/wireplumber/wireplumber.conf.d
       ln -s ${bashInteractive}/bin/bash bin/sh
       ln -s ${bashInteractive}/bin/bash bin/bash
       ln -s ${coreutils}/bin/env usr/bin/env
@@ -491,6 +496,8 @@ let
       ln -s ${caBundle} etc/ssl/certs/ca-certificates.crt
       ln -s ${./sway.conf} etc/sway/config
       ln -s ${./nested-sway.conf} etc/sway/nested
+      ln -s ${./pipewire.conf} etc/pipewire/pipewire.conf.d/50-agent-sandbox.conf
+      ln -s ${./wireplumber.conf} etc/wireplumber/wireplumber.conf.d/50-agent-sandbox.conf
       ln -s ${instructions} etc/claude-code/CLAUDE.md
       ln -s ${claudeManagedSettings} etc/claude-code/managed-settings.json
       echo 'hosts: files dns' > etc/nsswitch.conf
