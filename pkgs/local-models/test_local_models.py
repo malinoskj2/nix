@@ -52,9 +52,9 @@ class Synchronization(unittest.TestCase):
         self.catalog = {"entries": {"base": entry([file_spec()])}}
         self.calls = []
 
-    def downloader(self, file):
+    def downloader(self, file, store=None):
         self.calls.append(file["path"])
-        target = Sync(self.root, self.catalog).destination(file)
+        target = Sync(self.root, self.catalog).destination(file, store)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(b"model")
         return target
@@ -69,10 +69,10 @@ class Synchronization(unittest.TestCase):
         self.assertTrue(self.sync())
         self.assertEqual(self.calls, ["model.bin"])
         with patch("socket.socket", side_effect=AssertionError("Network forbidden")):
-            self.assertTrue(self.sync(downloader=lambda _: self.fail("Download attempted")))
+            self.assertTrue(self.sync(downloader=lambda *_: self.fail("Download attempted")))
             renamed = copy.deepcopy(self.catalog)
             renamed["entries"]["friendly-name"] = renamed["entries"].pop("base")
-            self.assertTrue(self.sync(renamed, lambda _: self.fail("Download attempted")))
+            self.assertTrue(self.sync(renamed, lambda *_: self.fail("Download attempted")))
         self.assertEqual((self.root / "by-name/friendly-name/model.bin").read_bytes(), b"model")
         self.assertFalse(self.report()["friendly-name"]["consumerReady"])
 
@@ -108,22 +108,22 @@ class Synchronization(unittest.TestCase):
         source.parent.mkdir()
         source.write_bytes(b"model")
         self.catalog["entries"]["base"]["files"][0]["imports"] = [str(source)]
-        self.assertTrue(self.sync(downloader=lambda _: self.fail("Download attempted")))
+        self.assertTrue(self.sync(downloader=lambda *_: self.fail("Download attempted")))
         imported = (self.root / "by-name/base/model.bin").resolve()
         self.assertNotEqual(source.stat().st_ino, imported.stat().st_ino)
         source.write_bytes(b"other")
         self.assertEqual(imported.read_bytes(), b"model")
-        self.assertTrue(self.sync(downloader=lambda _: self.fail("Download attempted")))
+        self.assertTrue(self.sync(downloader=lambda *_: self.fail("Download attempted")))
 
     def test_shared_blob_is_reused_across_revisions_without_copy(self):
         spec = self.catalog["entries"]["base"]["files"][0]
         blob = self.root / "huggingface/models--fixture--model/blobs" / spec["sha256"]
         blob.parent.mkdir(parents=True)
         blob.write_bytes(b"model")
-        self.assertTrue(self.sync(downloader=lambda _: self.fail("Network attempted")))
+        self.assertTrue(self.sync(downloader=lambda *_: self.fail("Network attempted")))
         self.assertEqual((self.root / "by-name/base/model.bin").resolve(), blob)
         spec["revision"] = "b" * 40
-        self.assertTrue(self.sync(downloader=lambda _: self.fail("Network attempted")))
+        self.assertTrue(self.sync(downloader=lambda *_: self.fail("Network attempted")))
         self.assertEqual((self.root / "by-name/base/model.bin").resolve(), blob)
         self.assertFalse((self.root / "files").exists())
 
@@ -138,10 +138,10 @@ class Synchronization(unittest.TestCase):
     def test_public_progress_survives_gated_failure_and_no_secret_logged(self):
         self.catalog["entries"]["gated"] = entry([file_spec("gated")], gated=True)
 
-        def download(file):
+        def download(file, store):
             if file["path"] == "gated":
                 raise PermissionError("secret-token-must-not-be-logged")
-            return self.downloader(file)
+            return self.downloader(file, store)
 
         with patch("sys.stderr") as stderr:
             self.assertFalse(self.sync(downloader=download))
@@ -236,10 +236,10 @@ class Synchronization(unittest.TestCase):
             loader="PEFT",
         )
 
-        def download(file):
+        def download(file, store):
             if file["path"] == "adapter_config.json":
                 raise FileNotFoundError("configuration absent")
-            return self.downloader(file)
+            return self.downloader(file, store)
 
         self.assertFalse(self.sync(downloader=download))
         self.assertFalse((self.root / "by-name/adapter").exists())
@@ -263,7 +263,7 @@ class Synchronization(unittest.TestCase):
     def test_interrupted_transfer_is_retried_without_losing_partial(self):
         partial = self.root / "download.incomplete"
 
-        def interrupted(_):
+        def interrupted(*_):
             partial.write_bytes(b"mo")
             raise ConnectionError("interrupted")
 
@@ -282,12 +282,12 @@ class Synchronization(unittest.TestCase):
 
         request()
 
-        def during_download(file):
+        def during_download(file, store):
             updated = copy.deepcopy(self.catalog)
             updated["entries"]["new"] = entry([file_spec("new.bin")])
             catalog.write_text(json.dumps(updated))
             request()
-            return self.downloader(file)
+            return self.downloader(file, store)
 
         with (
             patch.object(sys, "argv", ["local-models", "sync", "--root", str(self.root)]),
@@ -325,6 +325,79 @@ class Synchronization(unittest.TestCase):
         process.join(5)
         output, _ = second.communicate(timeout=5)
         self.assertEqual(output.strip(), b"acquired")
+
+
+class Stores(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        self.root = self.base / "external"
+        self.install = self.base / "install"
+        self.catalog = {
+            "stores": {"external": str(self.root), "install": str(self.install)},
+            "defaultStore": "external",
+            "entries": {
+                "old": entry([file_spec("old.bin")]),
+                "voice": entry([file_spec("voice.bin")], store="install"),
+            },
+        }
+
+    def downloader(self, file, store):
+        target = Sync(self.root, self.catalog).destination(file, store)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"model")
+        return target
+
+    def test_entries_sync_into_their_store_behind_one_root(self):
+        self.assertTrue(Sync(self.root, self.catalog, self.downloader).reconcile())
+        report = json.loads((self.root / "readiness.json").read_text())["entries"]
+        self.assertEqual(report["old"]["store"], "external")
+        self.assertEqual(report["voice"]["store"], "install")
+        self.assertTrue(
+            (self.root / "by-name/old/old.bin").resolve().is_relative_to(self.root / "huggingface"),
+        )
+        voice = (self.root / "by-name/voice/voice.bin").resolve()
+        self.assertTrue(voice.is_relative_to(self.install / "huggingface"))
+        self.assertEqual((self.root / "by-name/voice/voice.bin").read_bytes(), b"model")
+        self.assertFalse((self.install / "by-name").exists())
+        self.assertFalse(
+            (self.root / "huggingface/models--fixture--model/snapshots/" / ("a" * 40) / "voice.bin").exists()
+        )
+        with patch("socket.socket", side_effect=AssertionError("Network forbidden")):
+            self.assertTrue(Sync(self.root, self.catalog, lambda *_: self.fail("Download attempted")).reconcile())
+
+    def test_moving_an_entry_copies_into_the_new_store(self):
+        self.catalog["entries"]["voice"].pop("store")
+        self.assertTrue(Sync(self.root, self.catalog, self.downloader).reconcile())
+        self.catalog["entries"]["voice"]["store"] = "install"
+        self.assertTrue(Sync(self.root, self.catalog, lambda *_: self.fail("Download attempted")).reconcile())
+        voice = (self.root / "by-name/voice/voice.bin").resolve()
+        self.assertTrue(voice.is_relative_to(self.install))
+        self.assertTrue(
+            (self.root / "huggingface/models--fixture--model/snapshots/" / ("a" * 40) / "voice.bin").is_file()
+        )
+
+    def test_unavailable_store_reports_missing_without_touching_others(self):
+        blocker = self.base / "absent"
+        blocker.write_text("")
+        self.catalog["stores"]["install"] = str(blocker / "store")
+        self.assertFalse(Sync(self.root, self.catalog, self.downloader).reconcile())
+        report = json.loads((self.root / "readiness.json").read_text())["entries"]
+        self.assertEqual(report["old"]["status"], "ready")
+        self.assertEqual(report["voice"]["status"], "missing")
+        self.assertIn("unavailable", report["voice"]["reason"])
+
+    def test_unknown_or_invalid_stores_rejected(self):
+        bad = copy.deepcopy(self.catalog)
+        bad["entries"]["voice"]["store"] = "nowhere"
+        self.assertRaises(ValueError, validate, bad)
+        bad = copy.deepcopy(self.catalog)
+        bad["defaultStore"] = "nowhere"
+        self.assertRaises(ValueError, validate, bad)
+        bad = copy.deepcopy(self.catalog)
+        bad["stores"]["install"] = "relative/path"
+        self.assertRaises(ValueError, validate, bad)
 
 
 class HubIntegration(unittest.TestCase):
@@ -396,7 +469,7 @@ class HubIntegration(unittest.TestCase):
                         [
                             sys.executable,
                             "-c",
-                            "import json,sys; from pathlib import Path; from local_models import Sync; root=Path(sys.argv[1]); catalog=json.loads((root/'catalog.json').read_text()); Sync(root,catalog).obtain(catalog['entries']['fixture']['files'][0])",
+                            "import json,sys; from pathlib import Path; from local_models import Sync; root=Path(sys.argv[1]); catalog=json.loads((root/'catalog.json').read_text()); s=Sync(root,catalog); s.obtain(catalog['entries']['fixture']['files'][0], s.store({}))",
                             str(root),
                         ],
                         cwd=Path(__file__).parent,

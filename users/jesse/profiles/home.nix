@@ -1,3 +1,4 @@
+{ config, ... }:
 {
   imports = [
     ../global
@@ -35,7 +36,14 @@
 
   wallpaper.launcher.enable = true;
 
-  services.local-models.root = "/mnt/ext-ssd/models";
+  services.local-models = {
+    root = "/mnt/ext-ssd/models";
+    stores = {
+      external = "/mnt/ext-ssd/models";
+      install = "${config.xdg.dataHome}/model-stores/install";
+    };
+    defaultStore = "external";
+  };
 
   services.discord-context.excludedGuilds = [
     "902708289098375209" # ogchat

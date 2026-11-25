@@ -7,6 +7,7 @@ defaults to `~/.local/share/models`; `home` puts it on the external USB SSD at
 `/mnt/ext-ssd/models` (`hosts/home/external-ssd.nix`). Activation links the
 catalog and this README into the root, and skips synchronization while the
 drive is absent.
+
 This change does not deploy itself, download the bulk catalog during a build,
 install model runtimes, or claim that available files have passed inference tests.
 
@@ -17,6 +18,30 @@ local-models status
 systemctl --user start local-models-sync.service
 journalctl --user -u local-models-sync.service -f
 ```
+
+## Stores
+
+Weights can live in several stores, each a directory holding its own
+`huggingface/` cache and `files/` blobs. `services.local-models.stores` names
+them and `defaultStore` picks the one for entries without a `store` field; Nix
+writes both into the deployed catalog. `home` has two:
+
+| Store | Path | Holds |
+| --- | --- | --- |
+| `external` (default) | `/mnt/ext-ssd/models`, the root itself | every entry without `store` |
+| `install` | `~/.local/share/model-stores/install` on the NVMe system drive | entries with `"store": "install"` |
+
+Consumers still see one root: `catalog.json`, `readiness.json`, `views/` and
+`by-name/` stay in `services.local-models.root`, and each view's absolute links
+point into its entry's store. Sync downloads, imports and repairs each entry in
+its own store, and readiness verifies that store's files and records it as the
+entry's `store`. Moving an entry to another store copies its verified files
+there, offline, and leaves the old copy in place. An entry whose store can't be
+created or written reports `missing` without affecting other stores.
+Activation creates every store directory. `HF_HUB_CACHE` points only at the
+root's cache, so reach entries in other stores through `by-name`.
+The root stays on the external drive, so while it is unplugged the aliases
+for `install` entries are unreachable too, though their weights remain.
 
 `catalog.json` is the deployed source of truth. `readiness.json` reports each
 entry as ready, missing, blocked, unresolved, or historical-disabled.
@@ -92,10 +117,11 @@ Rotate by replacing the host file and starting a new sync invocation.
 
 ## Consumer integration
 
-New agent sandboxes get the complete root read-only at the same absolute path,
+New agent sandboxes get the complete root and every other store
+(`~/.config/local-models/stores`) read-only at the same absolute paths,
 with `MODEL_ROOT`, `HF_HUB_CACHE`, `IMG2VIDEO_MODELS` and `SAM` explicitly set.
 Recreate existing containers after deployment. Compilation and runtime caches
-must stay elsewhere. Snapshot links resolve inside the mounted root; packaged
+must stay elsewhere. View and snapshot links resolve inside the mounted root and stores; packaged
 Real-ESRGAN links resolve through the existing `/nix/store` mount. The HF token
 source and systemd credentials are outside sandbox mounts. Host and sandbox
 Claude rules and Codex context share the same discovery/readiness policy.
@@ -106,7 +132,7 @@ Claude rules and Codex context share the same discovery/readiness policy.
 | Site SAM 2.1 scripts | `SAM=$MODEL_ROOT/by-name/sam2.1`; Transformers offline local directory. No automatic replacement by SAM 3. |
 | H3 | Run `scripts/run-h3.py --models "$MODEL_ROOT/by-name/h3"`; flat selected Ref2VA NVFP4/AWQ/VAE/upscaler layout. The separate `h3-fl2va` alias supplies the pinned FL2VA NVFP4 checkpoint with shared encoder/VAEs for native ComfyUI first/last-frame conditioning. NVFP4 requires Blackwell; runners and the ComfyUI environment remain in their projects. |
 | Speech research | `WhisperModel("$MODEL_ROOT/by-name/whisper-tiny.en", local_files_only=True)` using an expanded environment path. |
-| Voice service | Add `-f ~/.config/local-models/voice-compose.yaml` to local voice Compose commands. It mounts both `/models` and the complete root at its same absolute path so snapshot/view links resolve. Existing remote `deploy.sh` exports its own model store; production deployment remains unchanged. |
+| Voice service | Add `-f ~/.config/local-models/voice-compose.yaml` to local voice Compose commands. It mounts `/models`, the complete root and every other store at their same absolute paths so snapshot/view links resolve. Existing remote `deploy.sh` exports its own model store; production deployment remains unchanged. |
 | ComfyUI | Pass `--extra-model-paths-config ~/.config/local-models/comfyui.yaml`; shared H3 and LTX adapter paths are declared. Runtime/plugins are separate. |
 | Qwen3.8 coding/chat | `by-name/qwen3.8-27b/Qwen3.8-27B-Q5_K_M.gguf`; llama.cpp from the locked nixpkgs is the candidate runtime. Validate embedded chat template, tool calls and peak VRAM under a GPU reservation before choosing context size. No serving daemon added. |
 | Qwen3.8 uncensored | `by-name/qwen3.8-27b-uncensored/Qwen3.8-27B-Uncensored-Q5_K_M.gguf`; the same alias includes `mmproj-Qwen3.8-27B-Uncensored-f16.gguf` for vision. Gated Hub access is required; llama.cpp loading, tools and peak VRAM remain unverified. |

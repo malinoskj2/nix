@@ -137,8 +137,9 @@ Agents here run without permission prompts, but Claude Code still asks before an
 ## Local model storage
 
 New sandboxes mount the host's model root (`$MODEL_ROOT`, on `home`
-`/mnt/ext-ssd/models`) read-only at the
-same path. `MODEL_ROOT`, `HF_HUB_CACHE`, `IMG2VIDEO_MODELS` and `SAM` are passed
+`/mnt/ext-ssd/models`) and every other weight store it links into (on `home`
+`/home/jesse/.local/share/model-stores/install`) read-only at the
+same paths. `MODEL_ROOT`, `HF_HUB_CACHE`, `IMG2VIDEO_MODELS` and `SAM` are passed
 explicitly; runtime/compilation caches remain writable outside this mount.
 Read `$MODEL_ROOT/catalog.json`, `readiness.json` and `README.md` before use.
 Host synchronization is asynchronous; catalog membership is not installation.

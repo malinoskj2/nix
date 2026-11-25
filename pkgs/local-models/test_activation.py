@@ -25,14 +25,20 @@ with tempfile.TemporaryDirectory() as directory:
     spy = home / "systemctl"
     spy.write_text("#!" + os.environ["TEST_BASH"] + '\nprintf "%s\\n" "$*" >> "$SPY_LOG"\n')
     spy.chmod(0o755)
-    script = activation.replace(os.environ["MODEL_ROOT"], str(root)).replace(os.environ["SYSTEMCTL"], str(spy))
+    store = home / "install-store"
+    script = (
+        activation.replace(os.environ["INSTALL_STORE"], str(store))
+        .replace(os.environ["MODEL_ROOT"], str(root))
+        .replace(os.environ["SYSTEMCTL"], str(spy))
+    )
     script = 'set -eu\nrun() { if [ -z "${DRY_RUN_CMD:-}" ]; then "$@"; fi; }\n' + script
     environment = {**os.environ, "HOME": str(home), "SPY_LOG": str(log)}
     subprocess.run([os.environ["TEST_BASH"], "-c", script], env={**environment, "DRY_RUN_CMD": "echo"}, check=True)
-    assert not root.exists() and not log.exists(), "Dry run must not enqueue anything"
+    assert not root.exists() and not store.exists() and not log.exists(), "Dry run must not enqueue anything"
     for _ in range(2):
         subprocess.run([os.environ["TEST_BASH"], "-c", script], env=environment, check=True)
         assert (root / ".state/pending").is_file()
+        assert store.is_dir(), "Activation must create every store"
         assert not (root / "readiness.json").exists(), "Activation must not run downloads inline"
     requests = log.read_text().splitlines()
     assert len(requests) == 4, "Unchanged switches must also enqueue a sync"

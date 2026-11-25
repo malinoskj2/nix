@@ -6,7 +6,9 @@
 }:
 let
   cfg = config.services.local-models;
-  inherit (cfg) root;
+  inherit (cfg) root stores;
+  storePaths = lib.unique (lib.attrValues stores);
+  extraStores = lib.filter (path: path != root) storePaths;
   executable = lib.getExe pkgs.local-models;
   source = builtins.fromJSON (builtins.readFile ../../../pkgs/local-models/catalog.json);
   packaged = model: {
@@ -30,6 +32,8 @@ let
     builtins.toJSON (
       source
       // {
+        inherit stores;
+        inherit (cfg) defaultStore;
         importCaches = [
           "${config.home.homeDirectory}/.cache/huggingface/hub"
           "${config.xdg.dataHome}/agent-sandbox/home/.cache/huggingface/hub"
@@ -56,7 +60,17 @@ in
     root = lib.mkOption {
       type = lib.types.str;
       default = "${config.xdg.dataHome}/models";
-      description = "Directory holding the catalog and weights. Activation skips it while it can't be created.";
+      description = "Directory holding the catalog, readiness, views and by-name aliases. Activation skips it while it can't be created.";
+    };
+    stores = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default.main = root;
+      description = "Weight stores by name, each an absolute directory holding `huggingface/` and `files/`. A catalog entry's `store` picks one; views under the root link into it.";
+    };
+    defaultStore = lib.mkOption {
+      type = lib.types.str;
+      default = "main";
+      description = "Store for catalog entries without a `store` field.";
     };
   };
   config = {
@@ -70,22 +84,32 @@ in
       IMG2VIDEO_MODELS = "${root}/by-name/img2video";
       SAM = "${root}/by-name/sam2.1";
     };
+    assertions = [
+      {
+        assertion = stores ? ${cfg.defaultStore};
+        message = "services.local-models.defaultStore must name one of services.local-models.stores";
+      }
+      {
+        assertion = lib.all (lib.hasPrefix "/") storePaths;
+        message = "services.local-models.stores must be absolute paths";
+      }
+    ];
     xdg.configFile."local-models/root".text = root;
-    home.file.".config/local-models/voice-compose.yaml".text = ''
-      services:
-        voice:
-          volumes:
-            - type: bind
-              source: ${root}
-              target: ${root}
-              read_only: true
-              bind: { create_host_path: false }
-            - type: bind
-              source: ${root}/by-name/voices
-              target: /models
-              read_only: true
-              bind: { create_host_path: false }
-    '';
+    xdg.configFile."local-models/stores".text = lib.concatMapStrings (path: "${path}\n") extraStores;
+    home.file.".config/local-models/voice-compose.yaml".text =
+      let
+        bind = source: target: {
+          type = "bind";
+          inherit source target;
+          read_only = true;
+          bind.create_host_path = false;
+        };
+      in
+      builtins.toJSON {
+        services.voice.volumes = map (path: bind path path) ([ root ] ++ extraStores) ++ [
+          (bind "${root}/by-name/voices" "/models")
+        ];
+      };
     home.file.".config/local-models/comfyui.yaml".text = ''
       shared_models:
         base_path: ${root}/by-name
@@ -140,6 +164,9 @@ in
       if ! run mkdir -p ${root}/.state 2>/dev/null; then
         echo "Model root ${root} is unavailable; skipping model synchronization"
       else
+        for store in ${lib.escapeShellArgs extraStores}; do
+          run mkdir -p "$store" 2>/dev/null || echo "Model store $store is unavailable; its entries stay missing"
+        done
         run ln -sfn ${catalog} ${root}/catalog.json
         run ln -sfn ${../../../docs/local-models.md} ${root}/README.md
         run ${executable} request --root ${root}

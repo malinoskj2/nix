@@ -31,6 +31,10 @@ model_root=$HOME/.local/share/models
 if [[ -s $HOME/.config/local-models/root ]]; then
   model_root=$(<"$HOME/.config/local-models/root")
 fi
+model_stores=()
+if [[ -s $HOME/.config/local-models/stores ]]; then
+  mapfile -t model_stores <"$HOME/.config/local-models/stores"
+fi
 steam_common=$HOME/.local/share/Steam/steamapps/common
 shared=(
   "$HOME/projects"
@@ -272,6 +276,9 @@ done
 mkdir -p "$screenshots" "$media"
 mkdir -p "$model_root" 2>/dev/null || true
 mount_readonly "$model_root"
+for store in "${model_stores[@]}"; do
+  if [[ -n $store ]]; then mount_readonly "$store"; fi
+done
 mkdir -p "$orca_relay_dir"
 chmod 700 "$orca_relay_dir"
 mkdir -p "$gpu_lease_dir"

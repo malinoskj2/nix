@@ -56,6 +56,13 @@ def relative(value):
 
 def validate(catalog):
     entries = catalog["entries"]
+    stores = catalog.get("stores")
+    if stores is not None:
+        for name, path in stores.items():
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name) or not Path(path).is_absolute():
+                raise ValueError(f"Invalid store: {name}")
+        if catalog.get("defaultStore") not in stores:
+            raise ValueError("defaultStore must name a declared store")
     visiting, done, order = set(), set(), []
 
     def visit(alias):
@@ -69,6 +76,8 @@ def validate(catalog):
             raise ValueError(f"Invalid alias: {alias}")
         visiting.add(alias)
         entry = entries[alias]
+        if "store" in entry and entry["store"] not in (stores or {}):
+            raise ValueError(f"Unknown store for {alias}: {entry['store']}")
         if entry["kind"] == "adapter" and not entry.get("unresolved"):
             if entry.get("base") not in entry.get("dependencies", []):
                 raise ValueError(f"Adapter needs an explicit base dependency: {alias}")
@@ -121,7 +130,8 @@ class Sync:
         self.root, self.catalog = Path(root), catalog
         self.downloader = downloader or self.download
         self.order = validate(catalog)
-        self.cache = self.root / "huggingface"
+        self.stores = {name: Path(path) for name, path in catalog.get("stores", {"root": str(self.root)}).items()}
+        self.default_store = catalog.get("defaultStore", "root")
         self.state = self.root / ".state"
         self.state.mkdir(parents=True, exist_ok=True)
         self.stamps_path = self.state / "verified.json"
@@ -144,13 +154,18 @@ class Sync:
             self.token = False
             os.environ.pop("HF_TOKEN_PATH", None)
 
-    def destination(self, file):
+    def store(self, entry):
+        return self.stores[entry.get("store", self.default_store)]
+
+    def destination(self, file, store=None):
+        store = store or self.store({})
         if file.get("storePath"):
             return Path(file["storePath"])
         if file.get("url"):
-            return self.root / "files" / file["sha256"] / file["path"]
+            return store / "files" / file["sha256"] / file["path"]
         return (
-            self.cache
+            store
+            / "huggingface"
             / ("models--" + file["repository"].replace("/", "--"))
             / "snapshots"
             / file["revision"]
@@ -196,28 +211,31 @@ class Sync:
         self.stamps[str(path)] = signature
         return True
 
-    def import_file(self, file, destination):
+    def import_file(self, file, destination, store):
+        digest = file.get("sha256") or file["gitSha1"]
+        others = [store] + [s for s in self.stores.values() if s != store]
         candidates = [Path(p) for p in file.get("imports", [])]
-        candidates.append(self.root / "files" / (file.get("sha256") or file["gitSha1"]) / "imported")
+        candidates += [s / "files" / digest / "imported" for s in others]
+        candidates += [self.destination(file, s) for s in others[1:]]
         if file.get("repository"):
             # Reuse another complete revision's content-addressed blob, offline.
-            repo = self.cache / ("models--" + file["repository"].replace("/", "--"))
-            candidates += [repo / "blobs" / (file.get("sha256") or file["gitSha1"])]
+            repo = "models--" + file["repository"].replace("/", "--")
+            candidates += [s / "huggingface" / repo / "blobs" / digest for s in others]
             for cache in self.catalog.get("importCaches", []):
-                candidates.append(Path(cache) / repo.name / "snapshots" / file["revision"] / file["path"])
+                candidates.append(Path(cache) / repo / "snapshots" / file["revision"] / file["path"])
         for source in candidates:
             if not self.valid(source, file):
                 continue
-            if any(source.resolve().is_relative_to(managed.resolve()) for managed in [self.cache, self.root / "files"]):
-                # Already managed immutable content: repair a snapshot link without a copy.
+            if any(source.resolve().is_relative_to((store / d).resolve()) for d in ["huggingface", "files"]):
+                # Already managed immutable content in this store: repair a snapshot link without a copy.
                 link(source.resolve(), destination)
                 return True
             # Reflink if possible, otherwise copy. Never hardlink mutable project weights.
-            # This leaves original consumers intact and imports no external symlinks.
-            blob = self.root / "files" / (file.get("sha256") or file["gitSha1"]) / "imported"
+            # This leaves original consumers and other stores intact and imports no external symlinks.
+            blob = store / "files" / digest / "imported"
             blob.parent.mkdir(parents=True, exist_ok=True)
             if not self.valid(blob, file):
-                if shutil.disk_usage(self.root).free < file["size"] + 2 * 1024**3:
+                if shutil.disk_usage(store).free < file["size"] + 2 * 1024**3:
                     raise OSError("Insufficient space to safely import project weights")
                 temporary = blob.with_suffix(".importing")
                 subprocess.run(["cp", "--reflink=auto", "--", str(source.resolve()), str(temporary)], check=True)
@@ -229,9 +247,9 @@ class Sync:
             return True
         return False
 
-    def download(self, file):
+    def download(self, file, store):
         if file.get("url"):
-            destination = self.destination(file)
+            destination = self.destination(file, store)
             destination.parent.mkdir(parents=True, exist_ok=True)
             partial = destination.with_suffix(destination.suffix + ".part")
             subprocess.run(
@@ -263,28 +281,28 @@ class Sync:
                 repo_id=file["repository"],
                 revision=file["revision"],
                 filename=file["path"],
-                cache_dir=str(self.cache),
+                cache_dir=str(store / "huggingface"),
                 token=self.token,
             )
         )
 
-    def obtain(self, file):
-        destination = self.destination(file)
+    def obtain(self, file, store):
+        destination = self.destination(file, store)
         if self.valid(destination, file):
             return destination
         if file.get("storePath"):
             raise FileNotFoundError("Packaged asset missing")
-        if self.import_file(file, destination):
+        if self.import_file(file, destination, store):
             return destination
-        if shutil.disk_usage(self.root).free < file["size"] + 2 * 1024**3:
+        if shutil.disk_usage(store).free < file["size"] + 2 * 1024**3:
             raise OSError("Insufficient free disk space including download headroom")
         # Preserve a damaged cache blob for inspection; let Hub fetch only this file.
         if destination.exists():
             blob = destination.resolve()
-            if blob.is_relative_to(self.root):
+            if blob.is_relative_to(store):
                 blob.rename(blob.with_name(blob.name + f".damaged-{time.time_ns()}"))
             destination.unlink(missing_ok=True)
-        downloaded = self.downloader(file)
+        downloaded = self.downloader(file, store)
         if not self.valid(downloaded, file):
             raise ValueError("Downloaded file failed size/hash verification")
         if downloaded != destination:
@@ -305,8 +323,10 @@ class Sync:
             enable_dependencies(alias)
         for alias in self.order:
             entry = self.catalog["entries"][alias]
+            store = self.store(entry)
             item = {
                 "path": str(self.root / "by-name" / alias),
+                "store": entry.get("store", self.default_store),
                 "kind": entry["kind"],
                 "compatibility": entry.get("compatibility", "unverified"),
                 "files": [],
@@ -319,9 +339,13 @@ class Sync:
             if entry.get("unresolved"):
                 item.update(status="unresolved", reason=entry["unresolved"])
                 continue
+            if any(not f.get("storePath") for f in entry["files"]) and not available(store):
+                item.update(status="missing", reason=f"Store {item['store']} at {store} is unavailable")
+                print(f"{alias}: store {item['store']} unavailable", file=sys.stderr, flush=True)
+                continue
             for file in entry["files"]:
                 try:
-                    destination = self.obtain(file)
+                    destination = self.obtain(file, store)
                     item["files"].append({"target": file["target"], "path": str(destination), "status": "ready"})
                 except Exception as error:
                     # Never log exception bodies/URLs: Hub errors may contain request details.
@@ -357,7 +381,7 @@ class Sync:
                 view = self.root / "views" / alias / identity
                 view.mkdir(parents=True, exist_ok=True)
                 for file in entry["files"]:
-                    link(self.destination(file), view / file["target"])
+                    link(self.destination(file, store), view / file["target"])
                 if entry.get("referencePreparation"):
                     try:
                         prepare_reference(view, entry["referencePreparation"])
@@ -393,6 +417,14 @@ class Sync:
             },
         )
         return complete
+
+
+def available(store):
+    try:
+        store.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return False
+    return os.access(store, os.W_OK)
 
 
 def prepare_reference(view, spec):
