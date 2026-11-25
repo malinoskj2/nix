@@ -176,6 +176,16 @@ Treat a bump as a hardware change and test it on the device.
   up. Orca reads agy's hook payloads and transcripts, so check that an agy
   session in a sandbox shows working and done in Orca's sidebar and resumes
   in a sandbox after Orca restarts.
+- **Betterleaks.** [`pkgs/betterleaks-push-gate/`](../pkgs/betterleaks-push-gate)
+  takes `betterleaks` from `pkgs.unstable`, since the release's build is far
+  behind and new rules matter. The global pre-push scan
+  ([git-push-gate.md](git-push-gate.md)) is a config-based hook, which needs
+  Git 2.54 or newer; an older git ignores it silently. After a git, gh or
+  Betterleaks update, check the hook still refuses a commit with a fake token
+  and allows a clean push to a local bare remote, that `git push --no-verify`
+  is refused, and that `gh`'s refused commands in `gh.sh` still match how
+  `gh` pushes (`git/client.go`'s `Push` runs `git` from `PATH`) and which
+  commands write through the API.
 - **htop.** [`pkgs/htop-vim-navigation/`](../pkgs/htop-vim-navigation) asserts
   the htop versions its patch was checked against. If a nixpkgs update trips
   it, re-check the patch next to it and add the new version.

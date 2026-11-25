@@ -11,7 +11,7 @@
   ];
 
   home.packages = with pkgs; [
-    gh
+    betterleaks-push-gate.gh
     gnumake
     nil
     nixfmt

@@ -15,6 +15,7 @@ in
     ]
     ++ [
       ./claude/rules/documentation.md
+      ./claude/rules/git-push.md
       ./claude/rules/local-models.md
       ./claude/rules/media.md
       ./claude/rules/nix-run.md

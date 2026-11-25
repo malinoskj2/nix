@@ -1,7 +1,13 @@
-{ config, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 {
   programs.git = {
     enable = true;
+    package = pkgs.betterleaks-push-gate.git;
     signing = {
       format = "openpgp";
       key = "6E46C98F55BE7FF3";
@@ -22,6 +28,11 @@
       core.editor = "vim";
       credential.helper = "cache --timeout 43200";
       diff.renames = "copies";
+      # A config hook runs before the repository's own pre-push hook, wherever core.hooksPath points.
+      hook.betterleaks-push-gate = {
+        event = "pre-push";
+        command = lib.getExe pkgs.betterleaks-push-gate;
+      };
       init.defaultBranch = "main";
       safe.directory = "${config.home.homeDirectory}/nix";
       submodule.recurse = true;

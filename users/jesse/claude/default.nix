@@ -73,6 +73,7 @@ in
     };
     rules = {
       documentation = ./rules/documentation.md;
+      git-push = ./rules/git-push.md;
       local-models = ./rules/local-models.md;
       media = ./rules/media.md;
       nix-run = ./rules/nix-run.md;

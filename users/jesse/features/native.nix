@@ -6,7 +6,7 @@ in
   home.packages = with pkgs; [
     clang
     ghidra
-    gitleaks
+    betterleaks-push-gate.betterleaks
     last30days
     lldb
     media-transcribe

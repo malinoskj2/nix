@@ -6,6 +6,7 @@
   binutils,
   bat,
   bc,
+  betterleaks-push-gate,
   blender,
   btop,
   buildEnv,
@@ -38,12 +39,10 @@
   foot,
   gawk,
   gcc,
-  gh,
   ghidra,
   git,
   git-commitu,
   git-open-branch,
-  gitleaks,
   glib,
   glibc,
   glibcLocales,
@@ -304,6 +303,9 @@ let
       (lib.hiPrio binutils)
       bat
       bc
+      betterleaks-push-gate.betterleaks
+      betterleaks-push-gate.gh
+      betterleaks-push-gate.git
       blender'
       btop
       cargo
@@ -332,12 +334,9 @@ let
       frame-interpolation
       gawk
       (lib.hiPrio gcc)
-      gh
       ghidra
-      git
       git-commitu
       git-open-branch
-      gitleaks
       glib
       glibc.bin
       gnugrep
