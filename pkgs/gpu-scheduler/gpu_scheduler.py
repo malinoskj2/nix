@@ -10,10 +10,13 @@ import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import signal
 import socket
 import subprocess
 import sys
+import tempfile
+import threading
 import time
 import uuid
 
@@ -226,6 +229,175 @@ def memory_size(value):
     return amount
 
 
+class OrcaWorker:
+    """An Orca worker's own mailbox: a held waiter makes its idle turn a deliberate wait, mail wakes it."""
+
+    # A filtered waiter leaves every other message to Orca's normal delivery; workers never receive this type.
+    HOLD_TYPE = "merge_ready"
+
+    def __init__(self, cli, sender, dispatch):
+        self.cli, self.sender, self.dispatch = cli, sender, dispatch
+        self.stopped = threading.Event()
+        self.waiter = None
+
+    @classmethod
+    def detect(cls, dispatch=None, sender=None):
+        cli = os.environ.get("ORCA_CLI_COMMAND") or shutil.which("orca") or shutil.which("orca-ide")
+        session = os.environ.get("ORCA_AGENT_SESSION_ID")
+        sender = sender or (f"orca_session_id:{session}" if session else os.environ.get("ORCA_TERMINAL_HANDLE"))
+        if not cli or not sender:
+            return None
+        if not dispatch:
+            try:
+                out = subprocess.run(
+                    [cli, "orchestration", "check", "--peek", "--json", "--full"],
+                    capture_output=True, text=True, timeout=30, check=True,
+                )
+                dispatch = json.loads(out.stdout)["result"].get("dispatchId")
+            except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError, AttributeError):
+                return None
+        return cls(cli, sender, dispatch) if dispatch else None
+
+    def hold(self):
+        def loop():
+            while not self.stopped.is_set():
+                started = time.monotonic()
+                self.waiter = subprocess.Popen(
+                    [self.cli, "orchestration", "check", "--peek", "--wait", "--types", self.HOLD_TYPE,
+                     "--timeout-ms", "300000", "--json"],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+                self.waiter.wait()
+                if time.monotonic() - started < 5:
+                    self.stopped.wait(5)
+
+        threading.Thread(target=loop, daemon=True).start()
+
+    def release(self):
+        self.stopped.set()
+        if self.waiter and self.waiter.poll() is None:
+            self.waiter.terminate()
+
+    def wake(self, subject, body):
+        try:
+            subprocess.run(
+                [self.cli, "orchestration", "send", "--from", self.sender, "--to", f"dispatch:{self.dispatch}",
+                 "--type", "status", "--subject", subject, "--body", body],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60,
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            print(f"gpu-run: could not wake the Orca worker: {error}", file=sys.stderr, flush=True)
+
+
+def log_tail(path, limit=1500):
+    try:
+        with open(path, "rb") as f:
+            f.seek(max(0, os.fstat(f.fileno()).st_size - limit))
+            return f.read().decode(errors="replace")
+    except OSError:
+        return ""
+
+
+def own_job(scheduler, pid):
+    with scheduler.locked():
+        return next((job for job in scheduler.jobs() if job["pid"] == pid), None)
+
+
+def launch_background(args, label):
+    worker = OrcaWorker.detect(args.orca_dispatch)
+    if not worker:
+        raise RuntimeError(
+            "--background needs an Orca worker mailbox to wake; outside Orca, run gpu-run itself as a background command"
+        )
+    log = Path(args.log or Path(tempfile.gettempdir()) / f"gpu-run-{uuid.uuid4().hex[:8]}.log").resolve()
+    options, command = split_argv(args, drop_flags={"--background"}, drop_valued={"--orca-dispatch", "--log"})
+    ready, report = os.pipe()
+    with open(log, "ab") as output:
+        coordinator = subprocess.Popen(
+            [sys.executable, os.path.abspath(__file__), *options,
+             "--daemon-ready-fd", str(report), "--orca-dispatch", worker.dispatch, "--orca-from", worker.sender,
+             "--log", str(log), *command],
+            stdin=subprocess.DEVNULL, stdout=output, stderr=output, pass_fds=(report,), start_new_session=True,
+        )
+    os.close(report)
+    with os.fdopen(ready) as reader:
+        lease = reader.read().strip()
+    if not lease:
+        raise RuntimeError(f"background reservation failed to queue; see {log}\n{log_tail(log)}")
+    print(
+        f"gpu-run: queued {label} as lease {lease[:8]} (cancel with: kill {coordinator.pid}); log {log}\n"
+        f"gpu-run: Orca will message dispatch {worker.dispatch} when it finishes; you may end your turn",
+        flush=True,
+    )
+    return 0
+
+
+def split_argv(args, drop_flags=(), drop_valued=()):
+    """This invocation's options and command, without the given options."""
+    tail = len(args.command)
+    options, skip = [], False
+    for token in sys.argv[1:len(sys.argv) - tail]:
+        if skip:
+            skip = False
+        elif token in drop_valued:
+            skip = True
+        elif token not in drop_flags and not any(token.startswith(f"{name}=") for name in drop_valued):
+            options.append(token)
+    return options, sys.argv[len(sys.argv) - tail:]
+
+
+def run_background(scheduler, args, label):
+    """Holds the worker's wait outside the lease's supervisor, whose subreaper would adopt the waiter."""
+    worker = OrcaWorker.detect(args.orca_dispatch, args.orca_from)
+    if not worker:
+        raise RuntimeError("Orca worker mailbox unavailable")
+    options, command = split_argv(
+        args,
+        drop_flags={"--wake-on-grant"},
+        drop_valued={"--daemon-ready-fd", "--orca-dispatch", "--orca-from", "--log"},
+    )
+    started = time.monotonic()
+    outcome = "stopped before finishing"
+    job = None
+    worker.hold()
+    child = subprocess.Popen([sys.executable, os.path.abspath(__file__), *options, *command], stdin=subprocess.DEVNULL)
+
+    def forward(signum, _frame):
+        child.send_signal(signum)
+
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, forward)
+    try:
+        deadline = time.monotonic() + 30
+        while job is None and child.poll() is None and time.monotonic() < deadline:
+            job = own_job(scheduler, child.pid)
+            time.sleep(0.1)
+        # Let the waiter register before the agent's turn can end.
+        time.sleep(1.5)
+        with os.fdopen(args.daemon_ready_fd, "w") as ready:
+            ready.write(job["id"] if job else "")
+        granted = False
+        while child.poll() is None:
+            current = own_job(scheduler, child.pid)
+            if not granted and current and current["state"] == "running":
+                granted = True
+                print(f"gpu-run: lease {current['id'][:8]} granted", flush=True)
+                if args.wake_on_grant:
+                    worker.wake(f"gpu-run granted: {label}", f"The reservation started and the command is running. Log: {args.log}")
+            time.sleep(1)
+        code = child.returncode if child.returncode >= 0 else 128 - child.returncode
+        outcome = f"exit {code}"
+        return code
+    finally:
+        worker.release()
+        if job:
+            minutes = (time.monotonic() - started) / 60
+            worker.wake(
+                f"gpu-run finished: {label} ({outcome})",
+                f"{minutes:.1f} min including the queue. Log: {args.log}\nLast output:\n{log_tail(args.log)}",
+            )
+
+
 def run(scheduler, args):
     if os.environ.get("GPU_LEASE_ID"):
         raise RuntimeError("Already inside a GPU reservation; run the workload directly instead of nesting gpu-run")
@@ -236,6 +408,10 @@ def run(scheduler, args):
         raise ValueError("Supply a foreground command after --")
     mode = "exclusive" if args.exclusive else "shared"
     label = args.name or shlex.join(command)[:160]
+    if args.background:
+        return launch_background(args, label)
+    if args.daemon_ready_fd is not None:
+        return run_background(scheduler, args, label)
     job, fd = scheduler.enqueue(mode, args.vram, label, args.action == "game")
     last_reason = None
     started = time.monotonic()
@@ -362,6 +538,15 @@ def main():
         action.set_defaults(vram=None)
         action.add_argument("--name", help="Human-readable workload name")
         action.add_argument("--timeout", type=float, help="Maximum queue wait in seconds")
+        action.add_argument(
+            "--background", action="store_true",
+            help="Return at once; an Orca worker's idle turn counts as waiting and Orca mails it the result",
+        )
+        action.add_argument("--wake-on-grant", action="store_true", help="With --background, also mail when granted")
+        action.add_argument("--log", help="With --background, where the command's output goes")
+        action.add_argument("--orca-dispatch", help="With --background, the worker's Dispatch ID (default: detected)")
+        action.add_argument("--orca-from", help=argparse.SUPPRESS)
+        action.add_argument("--daemon-ready-fd", type=int, help=argparse.SUPPRESS)
         action.add_argument("command", nargs=argparse.REMAINDER)
     actions.add_parser("status").add_argument("--json", action="store_true")
     actions.add_parser("serve-telemetry")

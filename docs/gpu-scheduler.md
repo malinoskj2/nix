@@ -23,6 +23,32 @@ shared request fails rather than waiting forever. `--timeout 60` limits time in
 the queue; otherwise a request waits until admitted or interrupted. Commands
 inside an existing reservation run directly; nested reservations are rejected.
 
+## Waiting in the background
+
+An Orca worker whose request queues behind other reservations shouldn't hold a
+foreground tool call open, and a worker that just ends its turn is reported to
+its coordinator as stopped. `gpu-run --background` covers both:
+
+```sh
+gpu-run --background --vram 12GiB --name "upscale pass" -- python upscale.py
+gpu-run --background --wake-on-grant --exclusive --name "video" -- python generate.py
+```
+
+It finds the worker's Dispatch from Orca (`--orca-dispatch` overrides it),
+starts a detached coordinator and returns once the request is queued, printing
+the lease, the log path (`--log` sets it) and the PID that cancels it. The
+coordinator runs an ordinary foreground `gpu-run` as its child, so admission,
+supervision, timeouts and the nesting rule are unchanged. While that child is
+queued or running, the coordinator holds an
+`orca orchestration check --peek --wait` on the worker's mailbox, filtered to a
+type workers never receive: Orca counts a held waiter as a deliberate rest, and
+the filter leaves every other message to normal delivery. When the child exits
+it releases the waiter and sends a `status` message to the worker's own
+`dispatch:` mailbox with the exit status, duration and the log's tail, which
+wakes Claude and Codex workers alike. `--wake-on-grant` also sends one when the
+reservation starts. Outside an Orca worker `--background` refuses; run
+`gpu-run` as the harness's own background command instead.
+
 For a demanding Steam game, set its Properties → General → Launch Options to:
 
 ```text

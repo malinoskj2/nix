@@ -289,6 +289,55 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(process.returncode, 0)
         self.assertEqual(self.jobs(), [])
 
+    def fake_orca(self):
+        calls = self.root / "orca-calls"
+        orca = self.root / "orca"
+        orca.write_text(
+            f"#!{sys.executable}\nimport json, sys, time\n"
+            f"open({str(calls)!r}, 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
+            "if '--wait' in sys.argv:\n    time.sleep(30)\n"
+            "elif '--full' in sys.argv:\n    print(json.dumps({'ok': True, 'result': {'dispatchId': 'ctx_test'}}))\n"
+        )
+        orca.chmod(0o755)
+        self.env["ORCA_CLI_COMMAND"] = str(orca)
+        self.env["ORCA_AGENT_SESSION_ID"] = "session"
+        return calls
+
+    def orca_calls(self, calls):
+        return [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
+
+    def test_background_holds_worker_wait_and_mails_result(self):
+        calls = self.fake_orca()
+        release = self.root / "release"
+        self.addCleanup(release.touch)
+        code = f"import time\nfrom pathlib import Path\nprint('rendered')\nwhile not Path({str(release)!r}).exists():\n    time.sleep(0.05)"
+        process = self.start("render", "--exclusive", "--background", "--log", str(self.root / "log"), code=code)
+        out, err = process.communicate(timeout=10)
+        self.assertEqual(process.returncode, 0, err)
+        self.assertIn("ctx_test", out)
+        self.assertEqual(self.jobs()[0]["state"], "running")
+        waits = [c for c in self.orca_calls(calls) if "--wait" in c]
+        self.assertTrue(waits and waits[0][waits[0].index("--types") + 1] == "merge_ready")
+        release.touch()
+        deadline = time.monotonic() + 10
+        while not any("send" in c for c in self.orca_calls(calls)) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        send = next(c for c in self.orca_calls(calls) if "send" in c)
+        self.assertEqual(send[send.index("--to") + 1], "dispatch:ctx_test")
+        self.assertEqual(send[send.index("--from") + 1], "orca_session_id:session")
+        self.assertIn("exit 0", send[send.index("--subject") + 1])
+        self.assertIn("rendered", send[send.index("--body") + 1])
+        self.wait_for(lambda jobs: jobs == [])
+
+    def test_background_without_orca_worker_refuses(self):
+        self.env.pop("ORCA_AGENT_SESSION_ID", None)
+        self.env.pop("ORCA_TERMINAL_HANDLE", None)
+        process = self.start("render", "--exclusive", "--background")
+        _, err = process.communicate(timeout=10)
+        self.assertNotEqual(process.returncode, 0)
+        self.assertIn("Orca worker", err)
+        self.assertEqual(self.jobs(), [])
+
     def test_sandbox_without_shared_mount_fails_closed(self):
         with patch.dict(os.environ, {"AGENT_SANDBOX_INSTANCE": ""}):
             with self.assertRaisesRegex(RuntimeError, "not mounted"):
