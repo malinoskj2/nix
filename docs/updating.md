@@ -158,6 +158,9 @@ Treat a bump as a hardware change and test it on the device.
   NVIDIA's production branch passes the pinned version, move back to the
   `production` entry. 615 hitches the desktop when the memory clock changes;
   check a new driver against [nvidia-memory-clock.md](nvidia-memory-clock.md).
+  The `cuda` dev shell in [`flake/devshell.nix`](../flake/devshell.nix) takes the
+  `cudaPackages` matching the CUDA version `nvidia-smi` reports for the driver;
+  move it with the driver, then compile and run a small kernel in it.
 - **claude-code.** The `unstable` overlay in
   [`overlays/default.nix`](../overlays/default.nix) builds `nixpkgs-unstable`'s
   claude-code with the release's `alsa-lib`: the wrapper puts it on
