@@ -95,14 +95,15 @@ Format and lint with `nix fmt` (treefmt: deadnix, statix and nixfmt for Nix,
 shellcheck and shfmt for shell, ruff for Python, StyLua for Lua and Luau).
 `nix flake check` also builds every host whose system matches (including its
 installed packages), the devshell, and the Unreal sandbox test on x86_64.
-Prefer evaluating or building the affected host before applying it, and don't
-run a `switch` unless explicitly asked. Hosts are applied with `nh os switch`, and `media` only from
+Prefer evaluating or building the affected host before applying it. Only
+Tohru switches hosts (`users/jesse/claude/rules/host-switch.md`). Hosts are applied with `nh os switch`, and `media` only from
 another host, with `--target-host` (`docs/bootstrap.md`). No host needs
 `--impure`. Don't copy secrets into the repository.
 
-Only when explicitly asked to switch `home` in the current conversation
-(`users/jesse/claude/rules/host-switch.md`), including from inside the agent sandbox, commit
-on `main`, build the host, then run
+Tohru, the Orca bot started in `/home/jesse/.orca/bots/tohru`, merges finished
+work to `main` and switches `home` without asking again. Every other agent,
+including Orca workers and sandboxed agents, commits on its branch and reports
+instead. To switch, Tohru commits on `main`, builds the host, then runs
 `host-switch` (or `nix run /home/jesse/nix#host-switch` in a sandbox that predates
 it). Root's `host-switch` service on `home` builds and activates exactly the head
 of `main`, never a working tree or another branch, and refuses anything else.
@@ -126,8 +127,8 @@ restating rules here. On top of it, for agents:
 
 - Build the affected host (`nix flake check`, or
   `nix build .#nixosConfigurations.<host>.config.system.build.toplevel`) before
-  proposing an apply. Never run `nh os switch`, `nixos-rebuild switch`,
-  `home-manager switch` or `host-switch` unless explicitly asked.
+  proposing an apply. Only Tohru runs `nh os switch`, `nixos-rebuild switch`,
+  `home-manager switch` or `host-switch`.
 - `git add` new files before evaluating; flakes only see tracked files.
 - Never bump `system.stateVersion` or `home.stateVersion`, and never hand-edit
   `hardware-configuration.nix`.
