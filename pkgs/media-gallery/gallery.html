@@ -225,9 +225,11 @@ body.fit .thumb img, body.fit .thumb video { object-fit: contain; }
 .vtitle span .index { color: var(--accent); }
 .ibtn {
   flex: none; width: 2.75rem; height: 2.75rem; border-radius: 50%; display: grid; place-items: center;
-  border: 1px solid rgb(251 249 244 / 0.2); background: rgb(251 249 244 / 0.06); color: var(--paper-bright);
-  font: 400 1.1rem/1 var(--sans); text-decoration: none;
+  border: 1.5px solid rgb(251 249 244 / 0.85); background: #000; color: var(--paper-bright);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.55);
+  font: 500 1.2rem/1 var(--sans); text-decoration: none;
 }
+@media (hover: hover) { .ibtn:hover { background: var(--paper-bright); color: #000; } }
 .nav { position: absolute; top: 50%; z-index: 3; transform: translateY(-50%); display: none; }
 .nav.prev { left: max(0.8rem, env(safe-area-inset-left)); }
 .nav.next { right: max(0.8rem, env(safe-area-inset-right)); }
