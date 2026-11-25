@@ -18,6 +18,16 @@ in
   services.udev.extraRules = ''
     SUBSYSTEM=="msr", KERNEL=="msr[0-9]*", GROUP="corecycler", MODE="0640"
   '';
+  # The tuner pins each stress run with AllowedCPUs= on a user scope, which needs the user
+  # manager to own the cpuset controller.
+  # A systemd.services drop-in would also set PATH for the user manager.
+  systemd.packages = [
+    (pkgs.writeTextDir "lib/systemd/system/user@.service.d/corecycler-cpuset.conf" ''
+      [Service]
+      Delegate=cpu cpuset io memory pids
+    '')
+  ];
+
   systemd.services.corecycler-smu-permissions = {
     description = "Give the corecycler group access to ryzen_smu";
     after = [ "systemd-modules-load.service" ];
