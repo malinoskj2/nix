@@ -34,6 +34,7 @@
   services.xserver.videoDrivers = [ "nvidia" ];
 
   environment.sessionVariables = {
+    CUDA_CACHE_MAXSIZE = "4294967296";
     GBM_BACKEND = "nvidia-drm";
     LIBVA_DRIVER_NAME = "nvidia";
     __GLX_VENDOR_LIBRARY_NAME = "nvidia";

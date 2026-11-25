@@ -10,6 +10,11 @@ let
   # Tohru is only built and tested for x86_64-linux; other hosts run Hyprland without a shell.
   upstreamPackage = inputs.tohru.packages.${system}.default or null;
   package = upstreamPackage;
+  voiceCudaCache = "${config.xdg.cacheHome}/tohru/cuda-cache";
+  voicePython = pkgs.writeShellScript "tohru-voice-python" ''
+    export CUDA_CACHE_PATH=${lib.escapeShellArg voiceCudaCache}
+    exec ${pkgs.qwen3-tts-python}/bin/python3 "$@"
+  '';
 in
 {
   imports = [ inputs.tohru.homeManagerModules.default ];
@@ -43,7 +48,7 @@ in
           modelRoot = config.services.local-models.root;
           high = {
             enable = true;
-            python = "${pkgs.qwen3-tts-python}/bin/python3";
+            python = "${voicePython}";
             ttsModel = "voice-tomoko";
             ttsSpeaker = "kuroki_tomoko";
           };
@@ -53,5 +58,8 @@ in
 
   home.packages = [ pkgs.grimblast ];
   home.sessionVariables.XDG_SCREENSHOTS_DIR = "${config.home.homeDirectory}/Pictures/Screenshots";
-  systemd.user.tmpfiles.rules = [ "d %h/Pictures/Screenshots - - - -" ];
+  systemd.user.tmpfiles.rules = [
+    "d %h/Pictures/Screenshots - - - -"
+    "d ${voiceCudaCache} - - - -"
+  ];
 }

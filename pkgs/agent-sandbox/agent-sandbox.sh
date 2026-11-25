@@ -352,6 +352,7 @@ args=(
   --env HF_HUB_CACHE="$model_root/huggingface"
   --env IMG2VIDEO_MODELS="$model_root/by-name/img2video"
   --env SAM="$model_root/by-name/sam2.1"
+  --env CUDA_CACHE_MAXSIZE=4294967296
   --env USER="$user"
   --env TERM
   --env COLORTERM
