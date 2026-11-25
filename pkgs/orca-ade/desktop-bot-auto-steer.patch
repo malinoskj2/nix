@@ -1,0 +1,268 @@
+diff --git a/src/cli/bots/bot.ts b/src/cli/bots/bot.ts
+index 96acc7f..c5f7eaa 100644
+--- a/src/cli/bots/bot.ts
++++ b/src/cli/bots/bot.ts
+@@ -108,6 +108,7 @@ export const BOT_HANDLERS: Record<string, CommandHandler> = {
+       client,
+       'bots.chat.send',
+       {
++        delivery: getOptionalStringFlag(flags, 'delivery'),
+         botId: bot.id,
+         text,
+         chat: getOptionalStringFlag(flags, 'chat'),
+diff --git a/src/cli/specs/bot.ts b/src/cli/specs/bot.ts
+index fad6cbf..3b386dd 100644
+--- a/src/cli/specs/bot.ts
++++ b/src/cli/specs/bot.ts
+@@ -27,10 +27,10 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
+     path: ['bot', 'send'],
+     summary: 'Send your own message directly into a bot chat',
+     usage:
+-      'orca bot send --bot <name> --text-file <path> [--chat <id|new>] --request-id <id> [--json]',
+-    allowedFlags: [...GLOBAL_FLAGS, 'bot', 'text', 'text-file', 'chat', 'request-id'],
++      'orca bot send --bot <name> --text-file <path> [--chat <id|new>] [--delivery queue|now] --request-id <id> [--json]',
++    allowedFlags: [...GLOBAL_FLAGS, 'bot', 'text', 'text-file', 'chat', 'delivery', 'request-id'],
+     notes: [
+-      'Owner only. Continues the Home Chat by default; replies stay in the shared chat history. Reuse --request-id only when retrying the same send.'
++      'Owner only. Continues the Home Chat by default; replies stay in the shared chat history. Reuse --request-id only when retrying the same send. --delivery now selects native steering, as the composer Steer action does, preserving approval and provider safety gates.'
+     ]
+   },
+   {
+diff --git a/src/main/bots/bot-chat-session.ts b/src/main/bots/bot-chat-session.ts
+index cde67b1..d4a75fc 100644
+--- a/src/main/bots/bot-chat-session.ts
++++ b/src/main/bots/bot-chat-session.ts
+@@ -20,6 +20,7 @@ import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire
+ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+ import {
+   sendAgentTurn,
++  type AgentTurnDelivery,
+   type StructuredAgentTurnHost,
+   type StructuredSessionTurnOutcome
+ } from '../runtime/orchestration/turn-delivery/send-agent-turn'
+@@ -161,7 +162,8 @@ export function botChatSessions(deps: BotChatDependencies) {
+     text: string,
+     from?: BotChatSender,
+     run?: BotRunFields,
+-    operationId?: string
++    operationId?: string,
++    delivery: AgentTurnDelivery = 'queue'
+   ): Promise<Delivered> => {
+     const sender =
+       from === 'bot-created' || from === 'card-answer'
+@@ -182,7 +184,7 @@ export function botChatSessions(deps: BotChatDependencies) {
+         ...(from ? {} : { personsMessage: true }),
+         operationId: operationId ?? mintAgentSessionOperationId(Date.now()),
+         expectedRuntimeFence: host.deps.store.requireWritableRecord(sessionId).lease.runtimeFence,
+-        delivery: 'queue'
++        delivery
+       }
+     })
+     return { sessionId, outcome, fingerprint: agentSessionSendBodyFingerprint(sessionId, body) }
+@@ -218,10 +220,11 @@ export function botChatSessions(deps: BotChatDependencies) {
+     text: string,
+     from?: BotChatSender,
+     run?: BotRunFields,
+-    operationId?: string
++    operationId?: string,
++    delivery: AgentTurnDelivery = 'queue'
+   ): Promise<Delivered> =>
+     deliverUnderLock(botId, async (host, bot, admitting) =>
+-      deliver(host, admitting, botId, await open(host, bot), text, from, run, operationId)
++      deliver(host, admitting, botId, await open(host, bot), text, from, run, operationId, delivery)
+     )
+ 
+   /** As `sendToChat`, into another of the bot's chats the caller already checked takes mail. */
+@@ -231,10 +234,11 @@ export function botChatSessions(deps: BotChatDependencies) {
+     text: string,
+     run?: BotRunFields,
+     from?: BotChatSender,
+-    operationId?: string
++    operationId?: string,
++    delivery: AgentTurnDelivery = 'queue'
+   ): Promise<Delivered> =>
+     deliverUnderLock(botId, async (host, _bot, admitting) =>
+-      deliver(host, admitting, botId, sessionId, text, from, run, operationId)
++      deliver(host, admitting, botId, sessionId, text, from, run, operationId, delivery)
+     )
+ 
+   return { ensure, reset, withChat, sendToChat: send, sendToSession }
+diff --git a/src/main/bots/desktop-bot-auto-steer.test.ts b/src/main/bots/desktop-bot-auto-steer.test.ts
+new file mode 100644
+index 0000000..a3b0a2a
+--- /dev/null
++++ b/src/main/bots/desktop-bot-auto-steer.test.ts
+@@ -0,0 +1,96 @@
++import { afterEach, expect, it } from 'vitest'
++import { botChatSessions } from './bot-chat-session'
++import { makeTestBot } from './bot.test-fixture'
++import { currentDesktopOwnerOrigin } from './desktop-voice-continuations'
++import {
++  createQueuedMessageTestRig,
++  type QueuedMessageTestRig
++} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
++import { openRigTurnFor } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-rig-turn.test-fixture'
++import {
++  HOST_TEST_SESSION as SESSION,
++  HOST_TEST_THREAD as THREAD,
++  hostTestOperationId
++} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
++import { eventually } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
++import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
++import { readAgentJournalPage } from '../native-chat/agent-session-wire/publication/history/agent-read-journal-page'
++
++let rig: QueuedMessageTestRig | undefined
++afterEach(async () => {
++  await rig?.dispose()
++  rig = undefined
++})
++it('steers a desktop voice owner message into running Home and preserves its canonical request alias', async () => {
++  rig = await createQueuedMessageTestRig({ restartable: true })
++  const current = rig
++  const opener = await current.workingSend()
++  await current.settleAccepted(opener, 'opening')
++  await openRigTurnFor(current, opener)
++  const bot = makeTestBot({ id: 'tohru', chatSessionId: SESSION })
++  const chats = botChatSessions({
++    bots: { list: () => [bot], setChatSession: async () => bot },
++    host: async () => current.host,
++    createChat: async () => {
++      throw new Error('must not create a chat')
++    },
++    showTab: async () => {},
++    closeChat: async () => {
++      throw new Error('must not close Home')
++    }
++  })
++  const earlier = current.send('an older unsteered draft', 'queue-if-active')
++  await earlier.result
++  const operation = hostTestOperationId()
++  const delivered = await chats.sendToSession(
++    bot.id,
++    SESSION,
++    '[tohru-desktop:voice]\nHow is it going?',
++    undefined,
++    undefined,
++    operation,
++    'now'
++  )
++  if (delivered.outcome.kind === 'refused') throw new Error(delivered.outcome.refusal.message)
++  expect(delivered.outcome.clientMessageId).toBe(operation)
++  await eventually(async () =>
++    expect((await current.handoff(operation))?.handedOverAt).toBeDefined()
++  )
++  expect(await current.handoff(earlier.id)).toBeUndefined()
++  const handoff = await current.handoff(operation)
++  if (!handoff) throw new Error('Expected native handover')
++  await current.settleAccepted(handoff.clientMessageId, 'steered-owner')
++  const { journal } = await current.host.conversation(SESSION)
++  const request = agentJournalSubmissionKey(operation)
++  expect(await currentDesktopOwnerOrigin(journal.reads, SESSION)).toEqual({
++    chat: SESSION,
++    request
++  })
++  const turn = (await current.host.currentWorkAtRest(SESSION))?.activeTurn()
++  if (!turn) throw new Error('Home turn must still be running')
++  await journal.appendItem(
++    { provider: 'codex', threadId: THREAD, turnId: 'steered-answer', ordinal: 0 },
++    {
++      kind: 'message',
++      role: 'assistant',
++      blocks: [{ type: 'text', text: 'The worker is still building.' }]
++    },
++    {
++      fence: current.store.requireWritableRecord(SESSION).lease.runtimeFence,
++      turnScope: { kind: 'turn', turnItemId: turn.item.itemId }
++    }
++  )
++  await openRigTurnFor(current, opener, 'completed', 'success')
++  const page = await readAgentJournalPage(
++    journal,
++    { sessionId: SESSION, limit: 100, includeIds: true },
++    () => false
++  )
++  expect(
++    page.entries.find(
++      (entry) => entry.kind === 'message' && entry.text === 'The worker is still building.'
++    )
++  ).toMatchObject({
++    interaction: { kind: 'answer', requestId: request, completionId: expect.any(String) }
++  })
++})
+diff --git a/src/main/runtime/agent-session/launch/nix-bot-host-launch.test.ts b/src/main/runtime/agent-session/launch/nix-bot-host-launch.test.ts
+index a1b2b92..1b25923 100644
+--- a/src/main/runtime/agent-session/launch/nix-bot-host-launch.test.ts
++++ b/src/main/runtime/agent-session/launch/nix-bot-host-launch.test.ts
+@@ -103,7 +103,7 @@ it('gives the Claude command resolver the session location', async () => {
+     workspaceKind: 'folder'
+   }
+   const resolveCommand = vi.fn(
+-    (options?: { location?: AgentSessionRecord['location'] }) =>
++    (options?: { location?: AgentSessionRecord['location']; pathEnv?: string | null; homePath?: string }) =>
+       resolveStructuredAgentCommand(
+         'claude',
+         nixBotCommandSettings('claude', options?.location, bots, {
+diff --git a/src/main/runtime/rpc/methods/bots-desktop-chat.ts b/src/main/runtime/rpc/methods/bots-desktop-chat.ts
+index be92b67..fd3119c 100644
+--- a/src/main/runtime/rpc/methods/bots-desktop-chat.ts
++++ b/src/main/runtime/rpc/methods/bots-desktop-chat.ts
+@@ -11,7 +11,7 @@ export const BOT_DESKTOP_CHAT_METHOD = defineMethod({
+   name: 'bots.chat.send',
+   permission: 'workspace',
+   params: BotChatSend,
+-  handler: async ({ botId, text, chat, operationId }, context) => {
++  handler: async ({ botId, text, chat, operationId, delivery }, context) => {
+     // The desktop assistant uses the local owner-token socket without an
+     // agent session. Agent-originated requests keep using orchestration mail.
+     if (context.orchestrationCaller) {
+@@ -33,7 +33,9 @@ export const BOT_DESKTOP_CHAT_METHOD = defineMethod({
+     })
+     if (!chat) {
+       return receipt(
+-        chatThatTookIt(await chats.sendToChat(bot.id, text, undefined, undefined, operationId))
++        chatThatTookIt(
++          await chats.sendToChat(bot.id, text, undefined, undefined, operationId, delivery)
++        )
+       )
+     }
+     let sessionId = chat
+@@ -56,7 +58,15 @@ export const BOT_DESKTOP_CHAT_METHOD = defineMethod({
+     }
+     return receipt(
+       chatThatTookIt(
+-        await chats.sendToSession(bot.id, sessionId, text, undefined, undefined, operationId)
++        await chats.sendToSession(
++          bot.id,
++          sessionId,
++          text,
++          undefined,
++          undefined,
++          operationId,
++          delivery
++        )
+       )
+     )
+   }
+diff --git a/src/main/runtime/rpc/methods/nix-desktop-bot.test.ts b/src/main/runtime/rpc/methods/nix-desktop-bot.test.ts
+index ab92aa5..4472000 100644
+--- a/src/main/runtime/rpc/methods/nix-desktop-bot.test.ts
++++ b/src/main/runtime/rpc/methods/nix-desktop-bot.test.ts
+@@ -31,5 +31,5 @@ it('delivers unscoped desktop text as an owner turn in the shared Home Chat with
+     params: { botId: bot.id, text: '[tohru-desktop:voice]\nHello', operationId }
+   }, { caller: LOCAL_CLI_RPC_CALLER })
+   expect(result).toMatchObject({ ok: true, result: { sessionId: 'shared-home', clientMessageId: 'prompt-id' } })
+-  expect(send).toHaveBeenCalledWith(bot.id, '[tohru-desktop:voice]\nHello', undefined, undefined, operationId)
++  expect(send).toHaveBeenCalledWith(bot.id, '[tohru-desktop:voice]\nHello', undefined, undefined, operationId, 'queue')
+ })
+diff --git a/src/shared/rpc-contract/bots-params.ts b/src/shared/rpc-contract/bots-params.ts
+index 013ab49..a95a194 100644
+--- a/src/shared/rpc-contract/bots-params.ts
++++ b/src/shared/rpc-contract/bots-params.ts
+@@ -235,6 +235,7 @@ export const BotChatsSeen = z.object({ sessionIds: z.array(z.string().min(1)).ma
+ export const BotChat = z.object({ botId: requiredString('Missing bot id') })
+ 
+ export const BotChatSend = z.object({
++  delivery: z.enum(['queue', 'now']).default('queue'),
+   botId: z.string().min(1),
+   text: z.string().trim().min(1).max(1000000),
+   chat: z.union([z.literal('new'), z.uuid()]).optional(),
