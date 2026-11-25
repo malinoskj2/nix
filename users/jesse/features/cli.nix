@@ -1,5 +1,7 @@
 { pkgs, ... }:
 {
+  imports = [ ../media-gallery.nix ];
+
   programs.tealdeer = {
     enable = true;
     settings.updates.auto_update = true;
@@ -10,7 +12,6 @@
     git-commitu
     git-open-branch
     markdown-to-pdf
-    media-gallery
     pubip
 
     bc

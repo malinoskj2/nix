@@ -5,11 +5,11 @@ description: Present images and videos to the human in a live, mobile-friendly g
 
 # Media gallery
 
-`media-gallery` keeps a gallery in `<repo>/.tmp/gallery/` and serves it as a live page. The page polls every few seconds, so items you add, re-render or re-mark appear without a reload, highlighted. The human looks on their phone or desktop and replies in chat, referring to items by `#id`.
+`media-gallery` keeps a gallery in `<repo>/.tmp/gallery/` and publishes it on the host's gallery hub, a long-running user service that serves every gallery, so links keep working after your session or sandbox ends. Each gallery has a stable link, `http://<host LAN address>:8070/g/<repo>-<hash>/`, and the hub's front page lists them all. The page polls every few seconds, so items you add, re-render or re-mark appear without a reload, highlighted. The human looks on their phone or desktop and replies in chat, referring to items by `#id`.
 
 ## Workflow
 
-1. Save the media under the repo's `.tmp/` as usual.
+1. Save the media under the repo's `.tmp/` as usual. In the sandbox, keep it in a shared directory (a repository under `~/projects`, `~/orca/workspaces` or `~/nix`), since the hub on the host reads the files from the same paths.
 2. For a new task, start a fresh gallery: `media-gallery init --title "<the task>"`. Skip this for follow-up batches in the same task.
 3. Publish each batch you show the human with one `batch` command and a JSON spec on stdin. Every item is checked before anything changes, so a missing file or unknown key fails the whole batch.
 
@@ -36,7 +36,7 @@ description: Present images and videos to the human in a live, mobile-friendly g
    - A batch marks every earlier review and new item done, so the top of the page only holds the current batch. Earlier batches stay below as collapsed groups. Set `"keep": true` only when earlier questions are still open, such as when the human hasn't answered the previous batch yet.
    - Re-rendering to an earlier path keeps that item's `#id` and moves it into the new batch; its old batch links to it.
    - Paths are relative to the working directory. The command prints each item's `#id`.
-4. `media-gallery serve` starts the server in the background (or finds the running one) and prints the URL. Give the human that exact URL and say what you want from them, e.g. "#1 and #2 need a pick". Then end your turn.
+4. `media-gallery serve` publishes the gallery on the hub and prints its URL. Don't start any other server for it. Give the human that exact URL and say what you want from them, e.g. "#1 and #2 need a pick". Then end your turn. Later batches in the same gallery keep the same link.
 5. When the human replies, map their `#id`s with `media-gallery list`.
 6. For a small fix within the current batch, such as one re-render, `media-gallery add <file> --review` (with `--caption`, `--note`, `--ask`, `--section`) adds to or refreshes it in the current batch without retiring anything. `media-gallery mark <ids> --done` settles items within a batch.
 
@@ -45,13 +45,13 @@ description: Present images and videos to the human in a live, mobile-friendly g
 - `media-gallery list`: every item with its id, status, batch and section.
 - `media-gallery edit <id> --caption/--note/--ask/--section`, `media-gallery remove <ids>`.
 - `media-gallery section <name> --note <text>`.
-- `media-gallery url`, `media-gallery stop`.
+- `media-gallery url` prints the link again; `media-gallery stop` unpublishes the gallery (its files stay).
 - `--dir <path>` before the command uses another gallery directory, for a separate gallery in the same repo.
 
 ## Notes
 
 - The server only serves files listed in the gallery, and the page is reachable from the LAN without a login, so don't add anything private.
-- In the agent sandbox, `serve` uses a free preview port and prints its `$AGENT_PREVIEW_URL_*` link. On a host, it prints the host's LAN address.
+- If the hub isn't running, `serve` warns and falls back to a server of its own on a preview port (`$AGENT_PREVIEW_URL_*` in the sandbox), whose link dies with your session. Tell the human the link is temporary and that `systemctl --user start media-gallery` on the host restores the hub. `serve --local` forces that fallback.
 - Browsers can't play every format. Prefer H.264 `.mp4` (`-pix_fmt yuv420p`) or `.webm` for video, and PNG, JPEG or WebP for images.
 - Every item has a download button in the grid and the viewer.
 - Use the gallery instead of listing file paths. Still mention the files' absolute paths once if the human may want them on disk.

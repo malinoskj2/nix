@@ -13,6 +13,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import media_gallery as mg  # noqa: E402
 
+REGISTRY = tempfile.TemporaryDirectory()
+mg.REGISTRY = Path(REGISTRY.name)
+
 
 def run(*argv):
     out = io.StringIO()
@@ -194,6 +197,62 @@ class ServerTest(unittest.TestCase):
             with self.assertRaises(urllib.error.HTTPError) as e:
                 self.get(path)
             self.assertEqual(e.exception.code, 404)
+
+
+class HubTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.repo = root / "project"
+        self.dir = self.repo / ".tmp" / "gallery"
+        self.png = self.repo / ".tmp" / "a.png"
+        self.png.parent.mkdir(parents=True)
+        self.png.write_bytes(bytes(range(256)) * 4)
+        run("--dir", str(self.dir), "add", str(self.png), "--review")
+        self.gallery = mg.Gallery(self.dir)
+        self.server = mg.Server(("127.0.0.1", 0), mg.make_handler())
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.gallery.unregister()
+        self.tmp.cleanup()
+
+    def get(self, path):
+        return urllib.request.urlopen(self.base + path)
+
+    def test_slug_is_stable_and_named_after_the_repo(self):
+        self.assertRegex(self.gallery.slug, r"^project-[0-9a-f]{6}$")
+        self.assertEqual(self.gallery.slug, mg.Gallery(self.dir).slug)
+
+    def test_serves_registered_gallery(self):
+        prefix = f"/g/{self.gallery.slug}/"
+        self.assertIn(b"<title>", self.get(prefix).read())
+        self.assertEqual(json.load(self.get(prefix + "api/gallery"))["items"][0]["name"], "a.png")
+        self.assertEqual(self.get(prefix + "media/1").read(), self.png.read_bytes())
+        self.assertIn(self.gallery.slug.encode(), self.get("/").read())
+
+    def test_unregistered_is_gone(self):
+        self.gallery.unregister()
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            self.get(f"/g/{self.gallery.slug}/api/gallery")
+        self.assertEqual(e.exception.code, 404)
+
+    def test_rejects_forged_entries(self):
+        entry = mg.REGISTRY / "galleries" / "other-000000.json"
+        entry.write_text(json.dumps({"dir": str(self.dir)}))
+        try:
+            with self.assertRaises(urllib.error.HTTPError):
+                self.get("/g/other-000000/api/gallery")
+        finally:
+            entry.unlink()
+
+    def test_discover_registers_existing_galleries(self):
+        self.gallery.unregister()
+        mg.discover([self.tmp.name])
+        self.assertIsNotNone(mg.registered(self.gallery.slug))
 
 
 if __name__ == "__main__":

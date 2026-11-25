@@ -2,6 +2,7 @@ import argparse
 import contextlib
 import fcntl
 import hashlib
+import html
 import http.server
 import json
 import mimetypes
@@ -38,6 +39,8 @@ FALLBACK_PORTS = range(8080, 8100)
 THUMB_WIDTH = 640
 # Keeps a page full of video thumbnails from starting dozens of ffmpeg processes at once.
 THUMB_SLOTS = threading.BoundedSemaphore(3)
+REGISTRY = Path(os.environ.get("MEDIA_GALLERY_REGISTRY") or Path.home() / ".local" / "state" / "media-gallery")
+SLUG = re.compile(r"[A-Za-z0-9._-]+")
 
 
 class GalleryError(Exception):
@@ -156,6 +159,30 @@ class Gallery:
         self.server_file = self.root / "server.json"
         self.thumbs = self.root / ".thumbs"
 
+    @property
+    def slug(self):
+        named = (
+            self.root.parent.parent if self.root.name == "gallery" and self.root.parent.name == ".tmp" else self.root
+        )
+        name = re.sub(r"[^A-Za-z0-9._-]+", "-", named.name).strip("-.") or "gallery"
+        return f"{name}-{hashlib.sha1(str(self.root).encode()).hexdigest()[:6]}"
+
+    def register(self):
+        entry = REGISTRY / "galleries" / f"{self.slug}.json"
+        content = json.dumps({"dir": str(self.root)}) + "\n"
+        try:
+            if entry.read_text() == content:
+                return
+        except OSError:
+            pass
+        entry.parent.mkdir(parents=True, exist_ok=True)
+        tmp = entry.with_name(f".{entry.name}.{os.getpid()}.tmp")
+        tmp.write_text(content)
+        os.replace(tmp, entry)
+
+    def unregister(self):
+        (REGISTRY / "galleries" / f"{self.slug}.json").unlink(missing_ok=True)
+
     def read(self):
         try:
             with self.manifest.open() as f:
@@ -182,6 +209,8 @@ class Gallery:
             tmp = self.manifest.with_name("gallery.json.tmp")
             tmp.write_text(json.dumps(data, indent=2) + "\n")
             os.replace(tmp, self.manifest)
+        with contextlib.suppress(OSError):
+            self.register()
 
     def item(self, data, item_id):
         return next((i for i in data["items"] if i["id"] == str(item_id)), None)
@@ -246,7 +275,51 @@ class Gallery:
         return None
 
 
-def make_handler(gallery):
+def registered(slug):
+    if not SLUG.fullmatch(slug):
+        return None
+    try:
+        root = Path(json.loads((REGISTRY / "galleries" / f"{slug}.json").read_text())["dir"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    gallery = Gallery(root)
+    return gallery if gallery.slug == slug and gallery.manifest.is_file() else None
+
+
+def registered_galleries():
+    found = []
+    for entry in sorted((REGISTRY / "galleries").glob("*.json")):
+        gallery = registered(entry.stem)
+        if gallery:
+            try:
+                data = json.loads(gallery.manifest.read_text())
+            except (OSError, ValueError):
+                continue
+            found.append((gallery, data))
+    found.sort(key=lambda pair: pair[1].get("updated", 0), reverse=True)
+    return found
+
+
+def hub_index():
+    rows = []
+    for gallery, data in registered_galleries():
+        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(data.get("updated", 0)))
+        review = sum(1 for item in data.get("items", []) if item.get("status") == "review")
+        rows.append(
+            f'<li><a href="g/{html.escape(gallery.slug)}/">{html.escape(data.get("title") or gallery.slug)}</a>'
+            f"<span>{len(data.get('items', []))} items{f', {review} to review' if review else ''} · {when}</span>"
+            f"<small>{html.escape(str(gallery.root))}</small></li>"
+        )
+    body = "".join(rows) or "<li>No galleries yet.</li>"
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Galleries</title>
+<style>:root{{color-scheme:light dark}}body{{font:16px system-ui,sans-serif;max-width:48rem;margin:0 auto;padding:1.5rem 1rem}}
+ul{{list-style:none;padding:0}}li{{padding:.75rem 0;border-bottom:1px solid #8884}}a{{font-weight:600;font-size:1.1rem}}
+span,small{{display:block;opacity:.7}}small{{font-family:ui-monospace,monospace;font-size:.75rem;overflow-wrap:anywhere}}</style>
+</head><body><h1>Galleries</h1><ul>{body}</ul></body></html>""".encode()
+
+
+def make_handler(gallery=None):
     class Handler(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
         server_version = "media-gallery"
@@ -265,43 +338,61 @@ def make_handler(gallery):
             url = urllib.parse.urlsplit(self.path)
             parts = [p for p in url.path.split("/") if p]
             try:
-                if not parts or parts == ["index.html"]:
-                    self.send_bytes(TEMPLATE.read_bytes(), "text/html; charset=utf-8", body, cache="no-cache")
-                elif parts == ["api", "gallery"]:
-                    payload = json.dumps(gallery.view()).encode()
-                    etag = '"' + hashlib.sha1(payload).hexdigest() + '"'
-                    if self.headers.get("If-None-Match") == etag:
-                        self.send_response(304)
-                        self.send_header("ETag", etag)
+                if gallery is not None:
+                    self.gallery_route(gallery, parts, url, body)
+                elif not parts:
+                    self.send_bytes(hub_index(), "text/html; charset=utf-8", body, cache="no-cache")
+                elif parts[0] == "g" and len(parts) >= 2 and (found := registered(parts[1])):
+                    if len(parts) == 2 and not url.path.endswith("/"):
+                        self.send_response(301)
+                        self.send_header("Location", f"/g/{parts[1]}/")
                         self.send_header("Content-Length", "0")
                         self.end_headers()
                     else:
-                        self.send_bytes(payload, "application/json", body, cache="no-cache", etag=etag)
-                elif len(parts) == 2 and parts[0] in ("media", "thumb"):
-                    item = gallery.item(gallery.read(), parts[1])
-                    if not item or not Path(item["path"]).is_file():
-                        self.send_json(404, {"error": "not found"}, body)
-                    elif parts[0] == "media":
-                        query = urllib.parse.parse_qs(url.query)
-                        self.send_file(Path(item["path"]), body, attachment="dl" in query)
-                    else:
-                        thumb = gallery.thumbnail(item)
-                        if thumb:
-                            self.send_file(thumb, body, ctype="image/jpeg")
-                        else:
-                            self.send_json(404, {"error": "no thumbnail"}, body)
-                elif len(parts) == 2 and parts[0] == "fonts" and re.fullmatch(r"[a-z0-9-]+\.woff2", parts[1]):
-                    font = FONTS / parts[1]
-                    if font.is_file():
-                        self.send_file(font, body, ctype="font/woff2")
-                    else:
-                        self.send_json(404, {"error": "not found"}, body)
+                        self.gallery_route(found, parts[2:], url, body)
                 elif parts == ["favicon.ico"]:
                     self.send_bytes(b"", "image/x-icon", body)
                 else:
                     self.send_json(404, {"error": "not found"}, body)
             except (BrokenPipeError, ConnectionResetError):
                 pass
+
+        def gallery_route(self, gallery, parts, url, body):
+            if not parts or parts == ["index.html"]:
+                self.send_bytes(TEMPLATE.read_bytes(), "text/html; charset=utf-8", body, cache="no-cache")
+            elif parts == ["api", "gallery"]:
+                payload = json.dumps(gallery.view()).encode()
+                etag = '"' + hashlib.sha1(payload).hexdigest() + '"'
+                if self.headers.get("If-None-Match") == etag:
+                    self.send_response(304)
+                    self.send_header("ETag", etag)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                else:
+                    self.send_bytes(payload, "application/json", body, cache="no-cache", etag=etag)
+            elif len(parts) == 2 and parts[0] in ("media", "thumb"):
+                item = gallery.item(gallery.read(), parts[1])
+                if not item or not Path(item["path"]).is_file():
+                    self.send_json(404, {"error": "not found"}, body)
+                elif parts[0] == "media":
+                    query = urllib.parse.parse_qs(url.query)
+                    self.send_file(Path(item["path"]), body, attachment="dl" in query)
+                else:
+                    thumb = gallery.thumbnail(item)
+                    if thumb:
+                        self.send_file(thumb, body, ctype="image/jpeg")
+                    else:
+                        self.send_json(404, {"error": "no thumbnail"}, body)
+            elif len(parts) == 2 and parts[0] == "fonts" and re.fullmatch(r"[a-z0-9-]+\.woff2", parts[1]):
+                font = FONTS / parts[1]
+                if font.is_file():
+                    self.send_file(font, body, ctype="font/woff2")
+                else:
+                    self.send_json(404, {"error": "not found"}, body)
+            elif parts == ["favicon.ico"]:
+                self.send_bytes(b"", "image/x-icon", body)
+            else:
+                self.send_json(404, {"error": "not found"}, body)
 
         def send_json(self, status, obj, body=True):
             self.send_bytes(json.dumps(obj).encode(), "application/json", body, status=status, cache="no-cache")
@@ -398,6 +489,25 @@ def running_server(gallery):
             return info
     except (OSError, ValueError, KeyError):
         return None
+
+
+def hub():
+    """The host's gallery hub, when it answers."""
+    try:
+        info = json.loads((REGISTRY / "hub.json").read_text())
+        target = urllib.parse.urlsplit(info["url"])
+        with socket.create_connection((target.hostname, target.port or 80), timeout=1):
+            return info
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def gallery_url(gallery, hub_info=None):
+    info = hub_info or hub()
+    if info:
+        return f"{info['url'].rstrip('/')}/g/{gallery.slug}/"
+    local = running_server(gallery)
+    return local["url"] if local else None
 
 
 def describe(item):
@@ -587,21 +697,32 @@ def cmd_list(gallery, args):
 
 
 def hint_url(gallery):
-    info = running_server(gallery)
-    print(f"gallery: {info['url']}" if info else "gallery not served; run: media-gallery serve")
+    url = gallery_url(gallery)
+    print(f"gallery: {url}" if url else "gallery not served; run: media-gallery serve")
 
 
 def cmd_serve(gallery, args):
+    if not gallery.manifest.exists():
+        with gallery.edit():
+            pass
+    gallery.register()
+    hub_info = None if args.local else hub()
+    if hub_info:
+        print(gallery_url(gallery, hub_info))
+        return
     info = running_server(gallery)
     if info:
         print(info["url"])
         return
+    if not args.local:
+        print(
+            "media-gallery: the gallery hub isn't running, so this link only lasts while this session's "
+            "server does (start it on the host: systemctl --user start media-gallery)",
+            file=sys.stderr,
+        )
     port = args.port or next((p for p in candidate_ports() if port_free(p)), None)
     if not port:
         raise GalleryError("no free preview port")
-    if not gallery.manifest.exists():
-        with gallery.edit():
-            pass
     log = (gallery.root / "server.log").open("ab")
     proc = subprocess.Popen(
         [sys.executable, os.path.abspath(__file__), "--dir", str(gallery.root), "_run", "--port", str(port)],
@@ -633,13 +754,52 @@ def cmd_stop(gallery, args):
         os.kill(info["pid"], signal.SIGTERM)
         print(f"stopped {info['url']}")
     gallery.server_file.unlink(missing_ok=True)
+    gallery.unregister()
+    print(f"unpublished {gallery.slug}")
 
 
 def cmd_url(gallery, args):
-    info = running_server(gallery)
-    if not info:
+    url = gallery_url(gallery)
+    if not url:
         raise GalleryError("not served; run: media-gallery serve")
-    print(info["url"])
+    print(url)
+
+
+def discover(roots):
+    for root in roots:
+        for pattern in (".tmp/gallery/gallery.json", "*/.tmp/gallery/gallery.json", "*/*/.tmp/gallery/gallery.json"):
+            for manifest in Path(root).expanduser().glob(pattern):
+                with contextlib.suppress(OSError):
+                    Gallery(manifest.parent).register()
+
+
+def publish_hub(url, port):
+    try:
+        if json.loads((REGISTRY / "hub.json").read_text()).get("url") == url:
+            return
+    except (OSError, ValueError, AttributeError):
+        pass
+    REGISTRY.mkdir(parents=True, exist_ok=True)
+    tmp = REGISTRY / ".hub.json.tmp"
+    tmp.write_text(json.dumps({"url": url, "port": port}) + "\n")
+    os.replace(tmp, REGISTRY / "hub.json")
+    print(f"media-gallery hub on {url}", flush=True)
+
+
+def cmd_hub(gallery, args):
+    discover(args.discover)
+    server = Server((args.bind, args.port), make_handler())
+    port = server.server_address[1]
+
+    # The LAN address can arrive or change after the service starts.
+    def keep_published():
+        while True:
+            publish_hub(args.url or f"http://{lan_address()}:{port}", port)
+            time.sleep(30)
+
+    threading.Thread(target=keep_published, daemon=True).start()
+    signal.signal(signal.SIGTERM, lambda *_: threading.Thread(target=server.shutdown).start())
+    server.serve_forever()
 
 
 def cmd_run(gallery, args):
@@ -711,15 +871,23 @@ def parser():
     s = sub.add_parser("list", help="print every item")
     s.set_defaults(func=cmd_list)
 
-    s = sub.add_parser("serve", help="serve in the background and print the URL")
-    s.add_argument("--port", type=int)
+    s = sub.add_parser("serve", help="publish on the host's gallery hub (or a local server) and print the URL")
+    s.add_argument("--local", action="store_true", help="run a server for this session instead of the hub")
+    s.add_argument("--port", type=int, help="port for a local server")
     s.set_defaults(func=cmd_serve)
 
-    s = sub.add_parser("url", help="print the running gallery's URL")
+    s = sub.add_parser("url", help="print the gallery's URL")
     s.set_defaults(func=cmd_url)
 
-    s = sub.add_parser("stop", help="stop the background server")
+    s = sub.add_parser("stop", help="unpublish the gallery and stop any local server")
     s.set_defaults(func=cmd_stop)
+
+    s = sub.add_parser("hub", help="serve every registered gallery (the long-running host service)")
+    s.add_argument("--port", type=int, default=8070)
+    s.add_argument("--bind", default="0.0.0.0")
+    s.add_argument("--url", help="public base URL (default: http://<LAN address>:<port>)")
+    s.add_argument("--discover", nargs="*", default=[], help="register galleries found under these roots")
+    s.set_defaults(func=cmd_hub)
 
     s = sub.add_parser("_run")
     s.add_argument("--port", type=int, required=True)
@@ -731,7 +899,7 @@ def main(argv=None):
     args = parser().parse_args(argv)
     if args.command == "mark" and not args.ids and not args.all:
         parser().error("mark needs item ids or --all")
-    gallery = Gallery(args.dir or default_dir())
+    gallery = None if args.command == "hub" else Gallery(args.dir or default_dir())
     try:
         args.func(gallery, args)
     except GalleryError as e:

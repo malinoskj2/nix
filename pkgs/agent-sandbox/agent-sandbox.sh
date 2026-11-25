@@ -54,6 +54,7 @@ asset_archive=/mnt/media3/agent
 orca_relay_dir=$runtime/agent-sandbox-orca
 codex_socket_dir=$runtime/agent-sandbox-codex
 gpu_lease_dir=$runtime/gpu-scheduler
+gallery_registry=$HOME/.local/state/media-gallery
 # On disk: tmpfs is charged to the slice as shmem, which no OOM kill frees.
 tmp_root=$data/tmp
 container_tmp=$tmp_root/$$
@@ -283,6 +284,7 @@ mkdir -p "$orca_relay_dir"
 chmod 700 "$orca_relay_dir"
 mkdir -p "$gpu_lease_dir"
 chmod 700 "$gpu_lease_dir"
+mkdir -p "$gallery_registry"
 mkdir -p "$codex_socket_dir"
 chmod 700 "$codex_socket_dir"
 # A launcher killed before its cleanup leaves its directory behind.
@@ -340,6 +342,7 @@ args=(
   --volume "$container_tmp:/tmp"
   --tmpfs "$runtime:mode=0700,uid=$uid,gid=$gid"
   --mount "type=bind,src=$gpu_lease_dir,dst=$gpu_lease_dir"
+  --mount "type=bind,src=$gallery_registry,dst=$gallery_registry"
   --volume /nix/store:/nix/store:ro
   --volume /nix/var/nix/daemon-socket:/nix/var/nix/daemon-socket
   --volume "$data/passwd:/etc/passwd:ro"
