@@ -391,6 +391,15 @@ Treat a bump as a hardware change and test it on the device.
     moves a provider's skill folder (`skill-install-providers.ts`) or changes
     how it classifies a copy (`bundled-skill-classification.ts`,
     `bundled-skill-plan.ts`), follow it.
+- **CoreCycler.** [`pkgs/corecycler/`](../pkgs/corecycler) builds one
+  Daaboulex/linux-corecycler commit with the mprime, y-cruncher, stress-ng and
+  stressapptest backends. nixpkgs fetches mprime from download.mersenne.ca,
+  which serves an HTML page, so the package refetches the same archive from
+  mersenne.org with nixpkgs' hash; drop the override once nixpkgs' URL works.
+  To move CoreCycler, change `rev` and refresh its hash, and compare
+  upstream's `flake.nix` for new runtime tools. Its NixOS module isn't used,
+  because `home` already loads `ryzen_smu`; `hosts/home/corecycler.nix` carries
+  its device-access rules. Run `corecycler doctor` after an update.
 - **Eisvogel.** [`pkgs/markdown-to-pdf/`](../pkgs/markdown-to-pdf) typesets
   with the Eisvogel LaTeX template at `v3.4.0`. Eisvogel 3.5.0 moved from the
   `sourcesanspro` TeX Live package to `sourcesans`, which nixpkgs doesn't

@@ -107,6 +107,7 @@
         ];
         exportedPackages = [
           "cargo-preferences"
+          "corecycler"
           "agent-sandbox"
           "ai-usage"
           "antigravity-cli"
