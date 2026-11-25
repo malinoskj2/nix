@@ -38,6 +38,16 @@ in
           turnModel = "${models}/voice-turn/smart-turn-v3.2-cpu.onnx";
         };
         tts.model = "${models}/voice-kokoro";
+        voiceProfiles = lib.mkIf (package != null) {
+          # The user units may not see MODEL_ROOT from the session variables.
+          modelRoot = config.services.local-models.root;
+          high = {
+            enable = true;
+            python = "${pkgs.qwen3-tts-python}/bin/python3";
+            ttsModel = "voice-tomoko";
+            ttsSpeaker = "kuroki_tomoko";
+          };
+        };
       };
   };
 

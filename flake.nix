@@ -70,7 +70,7 @@
       type = "github";
       owner = "malinoskj2";
       repo = "tohru";
-      rev = "99abbfa1bcaa0dd6b6dd3c4bc61d9fb9c570d9d0";
+      rev = "950c2705fcb8d4c146501dc8e1c142e34aa511a3";
       # Its plugin must build against the same Hyprland as the desktop.
       inputs.hyprland-nixpkgs.follows = "nixpkgs-hyprland";
     };
@@ -139,6 +139,7 @@
           "pubip"
           "pyghidra-mcp"
           "qwen-prompt"
+          "qwen3-tts-python"
           "switch-and-reset-sandboxes"
           "tiktok-search"
           "wallpaper-autopause"

@@ -427,6 +427,15 @@ Treat a bump as a hardware change and test it on the device.
   `postPatch` that lets diffusers load its local pipeline still applies. Either
   way, build `hy3dgen`: its import checks load xatlas and the compiled
   extensions.
+- **qwen3-tts-python.** [`pkgs/qwen3-tts-python/`](../pkgs/qwen3-tts-python)
+  is Tohru's high-VRAM voice interpreter: hy3dgen's CUDA `torch-bin` scope with
+  faster-qwen3-tts 0.5.4 and qwen-tts-hf as wheels. They need transformers
+  5.15.1 or newer, whose import check wants safetensors 0.8, so both come from
+  wheels until the release has them; `sox` is packaged from its sdist because
+  the 25 Hz tokenizer imports it at load. To move faster-qwen3-tts, take its
+  wheel and `requires_dist` from PyPI and adjust the overrides. Then load
+  `voice-tomoko` under `gpu-run` with `generate_custom_voice_streaming` and
+  speaker `kuroki_tomoko`, as Tohru's worker does.
 - **pyghidra-mcp.** [`pkgs/pyghidra-mcp/`](../pkgs/pyghidra-mcp) is the Ghidra
   MCP server for Claude Code and Codex on the host and in the agent sandbox,
   run over stdio by its `ghidra-mcp` launcher. It is disabled by default in
