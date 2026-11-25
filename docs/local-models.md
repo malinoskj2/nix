@@ -48,6 +48,9 @@ entry as ready, missing, blocked, unresolved, or historical-disabled.
 `compatibility` and `consumerReady` describe a separate runtime validation state;
 `consumer-evidenced` records an existing loader, not validation after migration.
 An unresolved or missing dependency prevents its pipeline/adapter becoming ready.
+Sync logs every entry that is not ready with its reason. It exits 1 only when
+an entry is missing or blocked; entries the catalog marks unresolved, and those
+waiting on them, are reported but don't fail it.
 The historical TikTok group is disabled by default; enable
 `services.local-models.historical = true` after reviewing its catalog.
 Heretical Qwen remains excluded; its old safetensors consumers need migration.

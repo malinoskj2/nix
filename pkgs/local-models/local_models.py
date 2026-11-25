@@ -407,6 +407,15 @@ class Sync:
                 },
             )
         complete = all(v["status"] in ["ready", "historical-disabled"] for v in report.values())
+        failed = []
+        for alias, item in report.items():
+            if item["status"] in ["ready", "historical-disabled"]:
+                continue
+            if item["status"] != "unresolved":
+                failed.append(alias)
+            print(f"{alias}: {item['status']}: {item.get('reason', '')}", file=sys.stderr, flush=True)
+        if failed:
+            print(f"Sync failed for {len(failed)} entries: {', '.join(failed)}", file=sys.stderr, flush=True)
         atomic_json(
             self.root / "readiness.json",
             {
@@ -416,7 +425,7 @@ class Sync:
                 "complete": complete,
             },
         )
-        return complete
+        return not failed
 
 
 def available(store):

@@ -1,5 +1,6 @@
 import copy
 import hashlib
+import io
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
 import json
@@ -175,7 +176,7 @@ class Synchronization(unittest.TestCase):
         self.assertTrue(self.sync())
         self.assertFalse(self.report()["adapter"]["consumerReady"])
         self.catalog["entries"]["base"]["unresolved"] = "Unknown architecture"
-        self.assertFalse(self.sync())
+        self.assertTrue(self.sync())
         self.assertEqual(self.report()["adapter"]["status"], "unresolved")
 
     def test_missing_base_cycles_and_bad_paths_rejected_before_download(self):
@@ -222,7 +223,7 @@ class Synchronization(unittest.TestCase):
         updated = copy.deepcopy(self.catalog)
         updated["entries"]["base"]["files"][0]["revision"] = "b" * 40
         updated["entries"]["other"]["unresolved"] = "New source not verified"
-        self.assertFalse(self.sync(updated))
+        self.assertTrue(self.sync(updated))
         self.assertNotEqual((self.root / "by-name/base").resolve(), old_base)
         self.assertEqual((self.root / "by-name/pipeline/base").resolve(), old_base)
         self.assertEqual(self.report()["pipeline"]["status"], "unresolved")
@@ -248,10 +249,28 @@ class Synchronization(unittest.TestCase):
     def test_disabled_and_unresolved_remain_distinct(self):
         self.catalog["entries"]["base"]["enabled"] = False
         self.catalog["entries"]["unknown"] = entry(unresolved="No provenance")
-        self.assertFalse(self.sync())
+        self.assertTrue(self.sync())
         self.assertEqual(self.calls, [])
         self.assertEqual(self.report()["base"]["status"], "historical-disabled")
         self.assertEqual(self.report()["unknown"]["status"], "unresolved")
+
+    def test_declared_unresolved_entries_report_but_do_not_fail_sync(self):
+        self.catalog["entries"]["dino"] = entry(unresolved="Checksum not verified")
+        self.catalog["entries"]["pipeline"] = entry(kind="pipeline", dependencies=["base", "dino"])
+        with patch("sys.stderr", new_callable=io.StringIO) as stderr:
+            self.assertTrue(self.sync())
+        self.assertIn("dino: unresolved: Checksum not verified", stderr.getvalue())
+        self.assertIn("pipeline: unresolved: Required dependency is not ready", stderr.getvalue())
+        self.assertFalse(json.loads((self.root / "readiness.json").read_text())["complete"])
+
+    def test_failed_sync_names_the_failing_entries(self):
+        def download(file, store):
+            raise FileNotFoundError("absent")
+
+        with patch("sys.stderr", new_callable=io.StringIO) as stderr:
+            self.assertFalse(self.sync(downloader=download))
+        self.assertIn("base: missing: Required files missing", stderr.getvalue())
+        self.assertIn("Sync failed for 1 entries: base", stderr.getvalue())
 
     def test_git_blob_hash_verification(self):
         f = file_spec()
