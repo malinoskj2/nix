@@ -8,8 +8,10 @@ branch:, id:...) or a path. Its HEAD must be merged into <ref>, by default its
 parent worktree's branch or else the main checkout's branch, and it must have no
 tracked changes. Its .tmp/ and untracked files are copied, never overwriting,
 into the main checkout's .tmp/<worktree-name>/ (untracked files under
-untracked/), then the worktree is removed with orca worktree rm, forced only
-when untracked files would block it.
+untracked/), except build outputs (directories with a valid CACHEDIR.TAG such
+as Cargo targets, virtualenvs, node_modules, bytecode-only __pycache__), which
+are deleted. Then the worktree is
+removed with orca worktree rm, forced only when untracked files would block it.
 USAGE
 }
 
@@ -95,41 +97,87 @@ dirty=$(git -C "$path" status --porcelain --untracked-files=no)
 mapfile -d '' untracked < <(git -C "$path" ls-files -z --others --exclude-standard)
 dest=$main/.tmp/$name
 
-# Copy without overwriting, then require every source file to match what is there.
-preserve() {
-  local src=$1 target=$2 rel file
-  mkdir -p "$target"
-  cp -a --reflink=auto --update=none -- "$src" "$target/"
+# Build outputs are deleted with the worktree, never copied: directories with a
+# valid CACHEDIR.TAG (Cargo targets), virtualenvs (pyvenv.cfg beside bin/python),
+# node_modules beside a package.json, and __pycache__ holding only bytecode.
+build_output() {
+  local dir=$1
+  case ${dir##*/} in
+    node_modules) [[ -f ${dir%/*}/package.json ]] ;;
+    __pycache__) [[ -z $(find "$dir" -type f ! -name '*.pyc' -print -quit) ]] ;;
+    *)
+      if [[ -f $dir/CACHEDIR.TAG ]]; then
+        [[ $(head -c 43 -- "$dir/CACHEDIR.TAG") == 'Signature: 8a477f597d28d172789f06886806bc55' ]]
+      else
+        [[ -f $dir/pyvenv.cfg && -x $dir/bin/python ]] && grep -q '^home *=' -- "$dir/pyvenv.cfg"
+      fi
+      ;;
+  esac
+}
+build_dirs=()
+while IFS= read -r dir; do
+  build_output "$dir" || continue
+  [[ -n $(git -C "$path" ls-files -- "${dir#"$path"/}" | head -n 1) ]] || build_dirs+=("$dir")
+done < <(
+  find "$path" -name .git -prune -o \( -name node_modules -o -name __pycache__ \) -type d -prune -print -o \
+    -type f \( -name CACHEDIR.TAG -o -name pyvenv.cfg \) -printf '%h\n' | sort -u
+)
+in_build_dir() {
+  local dir
+  for dir in "${build_dirs[@]}"; do
+    [[ $1 == "$dir"/* ]] && return 0
+  done
+  return 1
+}
+
+sources=() targets=()
+for file in "${untracked[@]}"; do
+  if ! in_build_dir "$path/$file"; then
+    sources+=("$path/$file")
+    targets+=("$dest/untracked/$file")
+  fi
+done
+if [[ -d $path/.tmp ]]; then
   while IFS= read -r -d '' file; do
-    rel=${file#"$src"}
-    if [[ -L $file ]]; then
-      [[ -L $target/${src##*/}$rel && $(readlink -- "$file") == $(readlink -- "$target/${src##*/}$rel") ]]
-    else
-      cmp -s -- "$file" "$target/${src##*/}$rel"
-    fi || die "$target/${src##*/}$rel already exists and differs; nothing was removed"
-  done < <(find "$src" \( -type f -o -type l \) -print0)
+    if ! in_build_dir "$file"; then
+      sources+=("$file")
+      targets+=("$dest/${file#"$path"/.tmp/}")
+    fi
+  done < <(find "$path/.tmp" \( -type f -o -type l \) -print0)
+fi
+
+# Copy without overwriting, then require the copy to match what is there.
+preserve() {
+  local src=$1 target=$2
+  mkdir -p "$(dirname -- "$target")"
+  cp -a --reflink=auto --update=none -- "$src" "$target"
+  if [[ -L $src ]]; then
+    [[ -L $target && $(readlink -- "$src") == $(readlink -- "$target") ]]
+  else
+    cmp -s -- "$src" "$target"
+  fi || die "$target already exists and differs; nothing was removed"
 }
 
 if [[ -n $dry_run ]]; then
   echo "worktree: $path ($id)"
   echo "merged into: $into"
-  [[ -d $path/.tmp ]] && echo "would copy: $path/.tmp/ -> $dest/"
-  for file in "${untracked[@]}"; do
-    echo "would copy: $path/$file -> $dest/untracked/$file"
+  for i in "${!sources[@]}"; do
+    echo "would copy: ${sources[i]} -> ${targets[i]}"
+  done
+  for dir in "${build_dirs[@]}"; do
+    echo "would delete build output: $dir ($(du -sh -- "$dir" | cut -f1))"
   done
   exit 0
 fi
 
-shopt -s dotglob nullglob
-reports=("$path"/.tmp/*)
-for entry in "${reports[@]}"; do
-  preserve "$entry" "$dest"
+for i in "${!sources[@]}"; do
+  preserve "${sources[i]}" "${targets[i]}"
 done
-((${#reports[@]})) && echo "copied $path/.tmp/ to $dest/"
-for file in "${untracked[@]}"; do
-  dir=$(dirname -- "$file")
-  preserve "$path/$file" "$dest/untracked/$dir"
-  echo "copied $file to $dest/untracked/$file"
+((${#sources[@]} == 0)) || echo "copied ${#sources[@]} file(s) to $dest/"
+for dir in "${build_dirs[@]}"; do
+  [[ -d $dir ]] || continue
+  size=$(du -sh -- "$dir" | cut -f1)
+  rm -rf -- "$dir" && echo "deleted build output $dir ($size)"
 done
 
 rm_args=(worktree rm --worktree "id:$id" --json)

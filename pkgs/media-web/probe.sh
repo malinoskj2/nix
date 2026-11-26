@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 probe_url() {
   local url=$1 timeout=$2 resp meta body extra=()
   [[ -n ${3:-} ]] && extra=(--resolve "$3")

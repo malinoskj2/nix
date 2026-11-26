@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 usage() {
   cat <<'USAGE'
 Usage: media-web [options]

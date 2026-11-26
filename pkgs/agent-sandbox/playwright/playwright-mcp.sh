@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 if browser-gpu-probe; then
   set -- --config "$SANDBOX_PLAYWRIGHT_MCP_GPU_CONFIG" "$@"
 else

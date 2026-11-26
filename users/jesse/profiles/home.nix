@@ -17,6 +17,7 @@
     ../datagrip
     ../git.nix
     ../hyprland-desktop
+    ../target-sweep.nix
   ];
 
   # The side monitor stands portrait on the left, so the main monitor starts at its rotated width.
