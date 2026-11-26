@@ -49,29 +49,41 @@ The topology was checked against sysfs L3 cache sizes and SMT siblings:
 | --- | --- | --- |
 | Desktop and host services | `0-31` | Both CCDs |
 | Registered GameMode games | `0-7,16-23` | CCD0, 96 MiB L3 / V-Cache |
-| Agent sandbox containers, no game running | `2-15,18-31` | All but two CCD0 cores |
-| Agent sandbox containers, game running | `8-15,24-31` | CCD1, 32 MiB L3 |
+| Agent sandboxes and Nix builds, no game running | `2-15,18-31` | All but two CCD0 cores |
+| Agent sandboxes and Nix builds, game running | `8-15,24-31` | CCD1, 32 MiB L3 |
 
 `hosts/home/gaming.nix` sets GameMode's explicit `pin_cores` list and disables
 core parking. This sets thread affinity for registered games, rather than a
 cgroup boundary; games that do not register with GameMode are unaffected.
 The desktop still shares each CCD with its restricted workload, and CPUs
-`0,1,16,17` are never available to sandboxes, so the desktop always has idle
-cores under a full sandbox load.
+`0,1,16,17` are never available to sandboxes or Nix builds, so the desktop
+always has idle cores under a full build load.
 
-`hosts/home/configuration.nix` limits the entire `agent-sandbox.slice` with
-`AllowedCPUs`. GameMode's custom start and end hooks start and stop
+`hosts/home/configuration.nix` limits `agent.slice` with `AllowedCPUs`. It is
+the parent of `agent-sandbox.slice`, which holds the sandbox containers, and
+`agent-nix.slice`, which holds nix-daemon and every build it runs. GameMode's custom start and end hooks start and stop
 `agent-sandbox-gaming.service`, which narrows the slice to CCD1 with a runtime
 `systemctl set-property` and widens it again when the last game exits; a polkit
 rule lets jesse start and stop only that unit. Containers set no Docker cpuset,
 so a change to the slice reaches running sandboxes. Nix builds requested from
-containers use the host Nix daemon, so they retain access to all cores.
+the host or from containers run in the host daemon, so they follow the same
+set. CoreCycler's stress scopes live under `user@1000.service`, outside
+`agent.slice`, so their per-core pinning is unaffected.
 
 After activation, check the slice's `EffectiveCPUs` with and without a game
 running, and each container's `cpuset.cpus.effective`. Containers started
 before this change keep their own `8-15,24-31` Docker cpuset until they are
 recreated. Check actual game thread affinity with the diagnostic after GameMode
 reloads its configuration. Building alone does not apply any of these limits.
+
+nix-daemon runs with `KillMode=process` and isn't stopped on a switch, so
+build processes already running when `Slice=agent-nix.slice` first takes
+effect stay in `system.slice` with all CPUs until they finish. Switch while no
+builds run, then start a fresh build (for example
+`nix build --rebuild 'nixpkgs#hello'`) and check one of its build processes:
+`/proc/<pid>/cgroup` should name `/agent.slice/agent-nix.slice/nix-daemon.service`,
+and that cgroup's `cpuset.cpus.effective` should be `2-15,18-31`, or
+`8-15,24-31` while a game runs.
 
 Under the earlier CCD1-only layout, live checks on 1 October 2026 confirmed all three running
 sandboxes had Docker and effective cgroup CPU sets of `8-15,24-31`. The physical

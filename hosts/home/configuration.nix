@@ -13,7 +13,7 @@ let
   };
   setSandboxCpus =
     cpus:
-    "${config.systemd.package}/bin/systemctl set-property --runtime agent-sandbox.slice AllowedCPUs=${cpus}";
+    "${config.systemd.package}/bin/systemctl set-property --runtime agent.slice AllowedCPUs=${cpus}";
   gamingUnit = "agent-sandbox-gaming.service";
 in
 {
@@ -62,8 +62,8 @@ in
   ];
 
   nix.settings = {
-    # Run one build at a time so parallel builds don't multiply the core budget.
-    max-jobs = 1;
+    # Peak build memory scales with max-jobs × cores, which nix-daemon's limits bound.
+    max-jobs = 4;
     cores = 8;
   };
 
@@ -86,8 +86,21 @@ in
   ];
 
   systemd.services.nix-daemon.serviceConfig = {
-    MemoryHigh = "14G";
-    MemoryMax = "16G";
+    # Shares the sandboxes' CPUs, so host rebuilds also leave the desktop's cores free.
+    Slice = "agent-nix.slice";
+    MemoryHigh = "20G";
+    MemoryMax = "24G";
+    # Throttled builds would otherwise spill into the swap the sandboxes and desktop rely on.
+    MemorySwapMax = "8G";
+  };
+
+  # Parent of agent-sandbox.slice and agent-nix.slice; GameMode's hook narrows it.
+  systemd.slices.agent.sliceConfig = {
+    AllowedCPUs = sandboxCpus.idle;
+    # Sandboxes and builds together leave about 20G of the 94G for the desktop, Orca,
+    # Tohru's voice, system services and the kernel; the children's caps fit inside.
+    # Swap is counted separately, through the children's MemorySwapMax.
+    MemoryMax = "74G";
   };
 
   # agent-sandbox runs its containers under this slice.
@@ -96,12 +109,11 @@ in
     # before the first container starts.
     wantedBy = [ "multi-user.target" ];
     sliceConfig = {
-      AllowedCPUs = sandboxCpus.idle;
-
       # No MemoryHigh: once swap is full it can't reclaim anon memory and throttles
       # every sandbox indefinitely instead of killing anything. MemoryMax reclaims
-      # too, then OOM-kills the largest process.
-      MemoryMax = "60G";
+      # too, then OOM-kills the largest process. agent.slice's 74G bounds it together
+      # with nix-daemon.
+      MemoryMax = "64G";
 
       # Swapping out idle agents and display stacks beats OOM-killing a build.
       MemorySwapMax = "16G";
@@ -109,11 +121,11 @@ in
   };
 
   # The desktop isn't capped, so this only decides who gets reclaimed first
-  # when the sandboxes and nix-daemon together outgrow RAM.
+  # under global pressure, which agent.slice's cap keeps the agents from causing.
   systemd.slices.user.sliceConfig.MemoryLow = "16G";
 
   systemd.services.agent-sandbox-gaming = {
-    description = "Keep agent sandboxes off the V-Cache CCD while a game runs";
+    description = "Keep agent sandboxes and Nix builds off the V-Cache CCD while a game runs";
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
