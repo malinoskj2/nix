@@ -56,7 +56,8 @@ if 'strata' in argv[0]:
     assert argv[argv.index('--engine') + 1] == 'strata' and '--offline' in argv, argv
     assert args[args.index('--native') + 1].endswith(os.environ['EXPECT_MODEL']), args
     assert args[args.index('--max-context') + 1] == os.environ['EXPECT_CONTEXT'], args
-    assert args[args.index('--kv') + 1] == 'fp16' and config['arch'] == 'qwen35moe', config
+    assert args[args.index('--kv') + 1] == 'int8' and config['arch'] == 'qwen4exp', config
+    assert '--resident-experts' in args and '--ple-gguf' in args, args
     assert Path(config['exe']).is_absolute(), config
     assert Path(config['tokenizer'], 'vocab.json').is_file(), config
 else:
@@ -105,16 +106,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
 http.server.HTTPServer(('127.0.0.1', int(argv[argv.index('--port') + 1])), Handler).serve_forever()
 """
 
-STRATA_TOKENIZER = """import os, sys
+STRATA_PACK = """import os, sys
 from pathlib import Path
 argv = sys.argv
-assert argv[argv.index('--gguf') + 1].endswith('.gguf')
-with Path(os.environ['TOKENIZER_LOG']).open('a') as f:
+assert argv[argv.index('--gguf') + 1].endswith('-00001-of-00002.gguf') and '--experts-bin' in argv, argv
+with Path(os.environ['PACK_LOG']).open('a') as f:
     f.write('built\\n')
-out = Path(argv[argv.index('--out') + 1]) / 'tokenizer'
-out.mkdir(parents=True)
-for name in ('vocab.json', 'merges.txt', 'tokenizer.json', 'token_type.json'):
-    (out / name).write_text('{}')
+out = Path(argv[argv.index('--out') + 1])
+(out / 'tokenizer').mkdir(parents=True)
+for name in ('vocab.json', 'tokenizer.json'):
+    (out / 'tokenizer' / name).write_text('{}')
+(out / 'experts.bin').write_bytes(b'experts')
+(out / 'native_experts.txt').write_text('0\\n')
 """
 
 OPENCODE = """import json, os, sys, time, urllib.error, urllib.request
@@ -122,7 +125,7 @@ from pathlib import Path
 if '--version' in sys.argv:
     print('opencode v2.3.0')
     sys.exit()
-assert sys.argv[1:] == ['--standalone', 'project-dir', '--prompt', '-h', '--uncensored', '--strata'], sys.argv
+assert sys.argv[1:] == ['--standalone', 'project-dir', '--prompt', '-h', '--uncensored', '--moe'], sys.argv
 config = json.loads(os.environ['OPENCODE_CONFIG_CONTENT'])
 assert config['model'] == 'local-qwen/qwen'
 assert config['providers']['local-qwen']['models']['qwen']['limit']['context'] == int(os.environ['EXPECT_CONTEXT'])
@@ -190,7 +193,7 @@ class LauncherTest(unittest.TestCase):
             "gpu-run": GPU_RUN,
             "llama-server": LLAMA_SERVER,
             "strata-server": LLAMA_SERVER,
-            "strata-tokenizer": STRATA_TOKENIZER,
+            "strata-pack": STRATA_PACK,
             "strata": "",
             "opencode": OPENCODE,
         }
@@ -206,7 +209,7 @@ class LauncherTest(unittest.TestCase):
             "SERVER_PIDS": str(self.root / "servers"),
             "READY": str(self.root / "ready"),
             "XDG_CACHE_HOME": str(self.root / "cache"),
-            "TOKENIZER_LOG": str(self.root / "tokenizer.log"),
+            "PACK_LOG": str(self.root / "pack.log"),
             "EXPECT_VRAM": "26GiB",
             "EXPECT_CONTEXT": "65536",
             "EXPECT_MODEL": MODELS["uncensored"][1],
@@ -218,7 +221,7 @@ class LauncherTest(unittest.TestCase):
     def launch(self, scenario, mode="dense", **env):
         own = ["--uncensored", "--idle-minutes", "0.02", *(f"--{flag}" for flag in mode.split() if flag != "dense")]
         return subprocess.Popen(
-            [sys.executable, str(LAUNCHER), *own, "project-dir", "--prompt", "-h", "--uncensored", "--strata"],
+            [sys.executable, str(LAUNCHER), *own, "project-dir", "--prompt", "-h", "--uncensored", "--moe"],
             env=self.env | {"SCENARIO": scenario} | env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -257,7 +260,7 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual(events.count("acquire"), 2)
         self.assertEqual(len((self.root / "servers").read_text().split()), 2)
 
-    def test_strata_serves_the_moe_model_at_full_context_and_caches_its_tokenizer(self):
+    def test_moe_serves_flash_next_through_strata_on_the_whole_gpu_and_caches_its_pack(self):
         self.env |= {
             "EXPECT_VRAM": "exclusive",
             "EXPECT_CONTEXT": "262144",
@@ -266,39 +269,30 @@ class LauncherTest(unittest.TestCase):
         for _ in range(2):
             for name in ("gpu.log", "servers"):
                 (self.root / name).unlink(missing_ok=True)
-            process = self.launch("cycle", "strata", EXIT_CODE="0", GPU_QUEUE="0.5")
+            process = self.launch("cycle", "moe", EXIT_CODE="0", GPU_QUEUE="0.5")
             _, stderr = process.communicate(timeout=60)
             self.assertEqual(process.returncode, 0, stderr)
             self.assertIn(MOE_MODELS["uncensored"][0], stderr)
             self.assertEqual(self.assert_released().count("acquire"), 2)
-        self.assertEqual((self.root / "tokenizer.log").read_text().split(), ["built"])
+        self.assertEqual((self.root / "pack.log").read_text().split(), ["built"])
 
-    def test_moe_serves_qwen36_on_llama_cpp_at_256k_under_a_shared_booking(self):
-        self.env |= {"EXPECT_VRAM": "28000MiB", "EXPECT_CONTEXT": "262144", "EXPECT_MODEL": MOE_MODELS["uncensored"][1]}
-        process = self.launch("cycle", "moe", EXIT_CODE="0", GPU_QUEUE="0.5")
-        _, stderr = process.communicate(timeout=60)
-        self.assertEqual(process.returncode, 0, stderr)
-        self.assertIn(MOE_MODELS["uncensored"][0], stderr)
-        self.assertEqual(self.assert_released().count("acquire"), 2)
-        self.assertFalse((self.root / "tokenizer.log").exists())
-
-    def test_moe_and_strata_are_exclusive(self):
-        process = self.launch("cycle", "moe strata")
+    def test_strata_flag_is_refused(self):
+        process = self.launch("cycle", "strata")
         _, stderr = process.communicate(timeout=30)
         self.assertEqual(process.returncode, 2)
-        self.assertIn("not allowed with argument", stderr)
+        self.assertIn("--moe", stderr)
         self.assertFalse((self.root / "gpu.log").exists())
 
-    def test_strata_model_not_ready_starts_nothing(self):
+    def test_moe_model_not_ready_starts_nothing(self):
         (self.root / "readiness.json").write_text(
             json.dumps({"entries": {MOE_MODELS["uncensored"][0]: {"status": "missing"}}})
         )
-        process = self.launch("cycle", "strata")
+        process = self.launch("cycle", "moe")
         _, stderr = process.communicate(timeout=30)
         self.assertEqual(process.returncode, 1)
         self.assertIn("not ready; no download or fallback attempted", stderr)
         self.assertFalse((self.root / "gpu.log").exists())
-        self.assertFalse((self.root / "tokenizer.log").exists())
+        self.assertFalse((self.root / "pack.log").exists())
 
     def test_termination_stops_server_and_opencode(self):
         for sig in (signal.SIGTERM, signal.SIGHUP):

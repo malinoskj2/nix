@@ -103,7 +103,7 @@ holds a reservation only while it is in use.
 
 ## Interactive Qwen in OpenCode
 
-`qwen-opencode [--uncensored] [--moe | --strata] [--idle-minutes N] [opencode args...]` opens the
+`qwen-opencode [--uncensored] [--moe] [--idle-minutes N] [opencode args...]` opens the
 OpenCode TUI (`opencode --standalone`) on the same pinned Qwen GGUFs as the
 `qwen-prompt` skills, with the same readiness checks: a model that isn't ready
 fails before anything starts, with no download or fallback. Arguments after its
@@ -132,26 +132,26 @@ smaller. 26 GiB leaves about 2 GiB of margin and still fits the 28.5 GiB
 the scheduler allows a shared request.
 
 `--moe` (on `qwen-opencode` and `qwen-prompt`, with or without `--uncensored`)
-swaps the dense 27B for Qwen3.6-35B-A3B on the same llama.cpp, all on the GPU.
-Its 10 attention layers with 2 KV heads of 256 make the f16 cache 20 KiB per
-token, so `qwen-opencode --moe` serves a 256k context under
-`gpu-run --vram 28000MiB`. With a 234k-token prompt, the regular file peaked
-at 27,129 MiB above the desktop baseline and the abliterated file at
-26,351 MiB. `28GiB` would exceed the 28,511 MiB a shared request may take.
-`qwen-prompt --moe` keeps 16k and the 26 GiB booking.
+swaps the dense 27B for Qwen3.8-Flash-Next, a 512-expert mixture-of-experts
+model, served through [Strata](https://github.com/Niko1221/Strata) instead of
+llama.cpp. It uses the GSQ-RCO IQ3_XXS files (`qwen3.8-flash-next`, or SC117's
+abliteration `qwen3.8-flash-next-uncensored` with `--uncensored`).
+`qwen-opencode --moe` serves 256k and `qwen-prompt --moe` 16k, with an int8
+KV cache kept in VRAM.
 
-`--strata` serves the same Qwen3.6-35B-A3B files (`qwen3.6-35b-a3b`, or
-`qwen3.6-35b-a3b-uncensored` with `--uncensored`) through
-[Strata](https://github.com/Niko1221/Strata) instead of llama.cpp; Strata only
-runs mixture-of-experts models. `qwen-opencode --strata` uses a 256k context
-with an f16 KV cache; `qwen-prompt --strata` keeps 16k. Strata sizes its expert cache and
-buffers to whatever VRAM is free (29.3 to 30.3 GiB at every context measured,
-`--expert-vram` included), above what a shared request may take, so it books
-the GPU with `--exclusive`. At 256k the experts that don't fit beside the cache
-are computed on the CPU, and the engine pins all 18.75 GiB of routed experts in
-system RAM. Compared with llama.cpp on the same file, Strata decodes short
-prompts faster through its MTP drafts but is several times slower on long
-prompts.
+The 42.9 GB of routed experts don't fit the card, and pinning all of them in
+system RAM, Strata's default, would take most of the sandboxes' shared memory.
+So it runs Strata's resident low-RAM mode (`--resident-experts`): the GPU's
+expert cache holds the most-used experts, and RAM holds only the rest, about
+22 to 24 GiB at 64k to 256k. The 28.8 GB n-gram table stays on disk and is
+read a few rows per token. Strata fits its buffers and cache to the whole free
+card, above what a shared request may take, so `--moe` books the GPU with
+`--exclusive`; the idle unload frees both the VRAM and the pinned RAM.
+
+The first `--moe` launch for a model builds Strata's pack in
+`~/.cache/qwen-prompt/strata/<shard>/`, before booking the GPU: the tensor
+index, the tokenizer and a 43 GB `experts.bin` the resident mode copies from.
+A build runs once at a time and only publishes a complete pack.
 
 In Orca's agent picker, OpenCode on `home` runs
 `orca-sandbox-launch orca-sandbox opencode`, which `agent-sandbox-exec` turns

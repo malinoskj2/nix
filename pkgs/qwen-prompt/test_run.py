@@ -11,9 +11,27 @@ import unittest.mock
 from pathlib import Path
 
 import qwen_local
-from qwen_local import MOE_MODELS, healthy, strata_command, strata_tokenizer
+from qwen_local import MOE_MODELS, healthy, resolve_model, strata_command, strata_pack
 
 RUNNER = Path(__file__).with_name("run.py")
+PACKER = """import os, sys
+from pathlib import Path
+assert '--experts-bin' in sys.argv, sys.argv
+out = Path(sys.argv[sys.argv.index('--out') + 1])
+(out / 'tokenizer').mkdir(parents=True)
+mode = os.environ.get('PACK_MODE', 'good')
+if 'PACK_LOG' in os.environ:
+    with open(os.environ['PACK_LOG'], 'a') as log:
+        log.write(mode + '\\n')
+(out / 'tokenizer' / 'vocab.json').write_text('{"a": 0')
+if mode == 'crash':
+    sys.exit(1)
+(out / 'tokenizer' / 'vocab.json').write_text('{"a": 0}')
+(out / 'tokenizer' / 'tokenizer.json').write_text('{}')
+(out / 'experts.bin').write_bytes(b'experts')
+if mode == 'good':
+    (out / 'native_experts.txt').write_text('0 IQ3_XXS Q2_0 0 1 0 0 0\\n')
+"""
 
 
 class ForwardingTest(unittest.TestCase):
@@ -23,8 +41,6 @@ class ForwardingTest(unittest.TestCase):
             ("uncensored", "qwen3.8-27b-uncensored", "Qwen3.8-27B-Uncensored-Q5_K_M.gguf", 7, "dense"),
             ("regular", *MOE_MODELS["regular"], 0, "moe"),
             ("uncensored", *MOE_MODELS["uncensored"], 5, "moe"),
-            ("regular", *MOE_MODELS["regular"], 0, "strata"),
-            ("uncensored", *MOE_MODELS["uncensored"], 3, "strata"),
         ):
             with self.subTest(exit_code=exit_code, mode=mode), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
@@ -64,13 +80,8 @@ http.server.HTTPServer(('127.0.0.1', int(sys.argv[sys.argv.index('--port') + 1])
 """,
                 }
                 scripts["strata-server"] = scripts["llama-server"]
-                scripts["strata-tokenizer"] = """import sys
-from pathlib import Path
-out = Path(sys.argv[sys.argv.index('--out') + 1]) / 'tokenizer'
-out.mkdir(parents=True)
-for name in ('vocab.json', 'merges.txt', 'tokenizer.json', 'token_type.json'):
-    (out / name).write_text('{}')
-"""
+                scripts["strata-pack"] = PACKER
+                scripts["strata"] = ""
                 for name, code in scripts.items():
                     path = root / name
                     path.write_text(f"#!{sys.executable}\n" + code)
@@ -104,9 +115,21 @@ for name in ('vocab.json', 'merges.txt', 'tokenizer.json', 'token_type.json'):
                 self.assertEqual(result.returncode, exit_code, result.stderr)
                 self.assertEqual(json.loads((root / "capture").read_text()), prompt)
                 argv, config = json.loads((root / "argv").read_text())
-                if mode == "strata":
-                    self.assertEqual(config["args"][config["args"].index("--native") + 1], str(model_dir / filename))
-                    self.assertEqual(config["args"][config["args"].index("--max-context") + 1], "16384")
+                if mode == "moe":
+                    args = config["args"]
+                    self.assertEqual(args[args.index("--native") + 1], str(model_dir / filename))
+                    self.assertEqual(
+                        args[args.index("--ple-gguf") + 1],
+                        str(model_dir / filename.replace("-00001-of-", "-00002-of-")),
+                    )
+                    self.assertEqual(args[args.index("--mtp") + 1], str(model_dir / "mtp" / "rt"))
+                    self.assertEqual(
+                        args[args.index("--pack") + 1], str(root / "cache" / "qwen-prompt" / "strata" / filename)
+                    )
+                    self.assertEqual(args[args.index("--max-context") + 1], "16384")
+                    self.assertEqual(args[args.index("--kv") + 1], "int8")
+                    self.assertIn("--resident-experts", args)
+                    self.assertEqual(config["arch"], "qwen4exp")
                 else:
                     self.assertEqual(argv[argv.index("--ctx-size") + 1], "16384")
                     self.assertEqual(argv[argv.index("--model") + 1], str(model_dir / filename))
@@ -115,11 +138,10 @@ for name in ('vocab.json', 'merges.txt', 'tokenizer.json', 'token_type.json'):
 
 
 class BookingTest(unittest.TestCase):
-    def test_dense_and_moe_book_26gib_and_strata_the_whole_gpu(self):
+    def test_dense_books_26gib_and_moe_the_whole_gpu(self):
         for mode, booking in (
             ("dense", ["--vram", "26GiB"]),
-            ("moe", ["--vram", "26GiB"]),
-            ("strata", ["--exclusive"]),
+            ("moe", ["--exclusive"]),
         ):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
@@ -138,13 +160,7 @@ class BookingTest(unittest.TestCase):
                     "opencode": "",
                     "llama-server": "",
                     "strata-server": "",
-                    "strata-tokenizer": """import sys
-from pathlib import Path
-out = Path(sys.argv[sys.argv.index('--out') + 1]) / 'tokenizer'
-out.mkdir(parents=True)
-for name in ('vocab.json', 'merges.txt', 'tokenizer.json', 'token_type.json'):
-    (out / name).write_text('{}')
-""",
+                    "strata-pack": PACKER,
                 }
                 for name, code in scripts.items():
                     (root / name).write_text(f"#!{sys.executable}\n" + code)
@@ -167,10 +183,8 @@ for name in ('vocab.json', 'merges.txt', 'tokenizer.json', 'token_type.json'):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 argv = json.loads((root / "capture").read_text())
                 self.assertEqual(argv[: len(booking)], booking)
-                self.assertEqual(
-                    [flag for flag in ("--moe", "--strata") if flag in argv], [] if mode == "dense" else [f"--{mode}"]
-                )
-                self.assertEqual((root / "cache" / "qwen-prompt" / "strata" / filename).is_dir(), mode == "strata")
+                self.assertEqual("--moe" in argv, mode == "moe")
+                self.assertEqual((root / "cache" / "qwen-prompt" / "strata" / filename).is_dir(), mode == "moe")
 
 
 class HealthTest(unittest.TestCase):
@@ -196,37 +210,44 @@ class HealthTest(unittest.TestCase):
                     server.server_close()
 
 
-class TokenizerCacheTest(unittest.TestCase):
-    EXTRACTOR = """import os, sys
-from pathlib import Path
-out = Path(sys.argv[sys.argv.index('--out') + 1]) / 'tokenizer'
-out.mkdir(parents=True)
-with open(os.environ['TOKENIZER_LOG'], 'a') as log:
-    log.write(os.environ['TOKENIZER_MODE'] + '\\n')
-(out / 'vocab.json').write_text('{"a": 0')
-if os.environ['TOKENIZER_MODE'] == 'crash':
-    sys.exit(1)
-(out / 'vocab.json').write_text('{"a": 0}')
-if os.environ['TOKENIZER_MODE'] == 'good':
-    for name in ('merges.txt', 'tokenizer.json', 'token_type.json'):
-        (out / name).write_text('{}')
-"""
+class ReadinessTest(unittest.TestCase):
+    def test_every_file_of_the_entry_must_be_complete(self):
+        alias, filename = MOE_MODELS["regular"]
+        second = filename.replace("-00001-of-", "-00002-of-")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model_dir = root / "by-name" / alias
+            model_dir.mkdir(parents=True)
+            (model_dir / filename).write_bytes(b"fake")
+            (model_dir / second).write_bytes(b"fa")
+            files = [{"target": filename, "size": 4}, {"target": second, "size": 4}]
+            (root / "catalog.json").write_text(json.dumps({"entries": {alias: {"files": files}}}))
+            (root / "readiness.json").write_text(json.dumps({"entries": {alias: {"status": "ready"}}}))
+            with unittest.mock.patch.dict(os.environ, {"MODEL_ROOT": str(root)}):
+                with self.assertRaisesRegex(RuntimeError, second):
+                    resolve_model("regular", "moe")
+                (model_dir / second).write_bytes(b"fake")
+                self.assertEqual(resolve_model("regular", "moe"), model_dir / filename)
 
+
+class PackCacheTest(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())
         self.addCleanup(subprocess.run, ["rm", "-rf", str(self.root)])
         bin = self.root / "bin"
         bin.mkdir()
-        (bin / "strata-tokenizer").write_text(f"#!{sys.executable}\n" + self.EXTRACTOR)
-        (bin / "strata-tokenizer").chmod(0o700)
-        self.model = self.root / "model.gguf"
+        (bin / "strata-pack").write_text(f"#!{sys.executable}\n" + PACKER)
+        (bin / "strata-pack").chmod(0o700)
+        (bin / "strata").write_text("")
+        (bin / "strata").chmod(0o700)
+        self.model = self.root / "model-00001-of-00002.gguf"
         self.model.write_text("")
         self.cache = self.root / "cache" / "qwen-prompt" / "strata"
-        self.log = self.root / "tokenizer.log"
+        self.log = self.root / "pack.log"
         env = {
             "PATH": f"{bin}:{os.environ['PATH']}",
             "XDG_CACHE_HOME": str(self.root / "cache"),
-            "TOKENIZER_LOG": str(self.log),
+            "PACK_LOG": str(self.log),
         }
         patcher = unittest.mock.patch.dict(os.environ, env)
         patcher.start()
@@ -235,88 +256,64 @@ if os.environ['TOKENIZER_MODE'] == 'good':
     def entries(self):
         return sorted(p.name for p in self.cache.iterdir() if p.suffix != ".lock")
 
-    def extract(self, mode):
-        with unittest.mock.patch.dict(os.environ, {"TOKENIZER_MODE": mode}):
-            return strata_tokenizer(self.model)
+    def build(self, mode):
+        with unittest.mock.patch.dict(os.environ, {"PACK_MODE": mode}):
+            return strata_pack(self.model)
 
-    def test_failed_extraction_publishes_nothing_and_the_next_run_rebuilds(self):
+    def test_failed_build_publishes_nothing_and_the_next_run_rebuilds(self):
         with self.assertRaises(subprocess.CalledProcessError):
-            self.extract("crash")
-        self.assertEqual(list(self.cache.iterdir()), [])
-        tokenizer = self.extract("good")
-        self.assertEqual(tokenizer, self.cache / "model.gguf" / "tokenizer")
-        self.assertEqual(self.entries(), ["model.gguf"])
-        self.extract("good")
+            self.build("crash")
+        self.assertEqual(self.entries(), [])
+        self.assertEqual([p for p in self.cache.iterdir() if p.name.startswith(".")], [])
+        pack = self.build("good")
+        self.assertEqual(pack, self.cache / self.model.name)
+        self.assertEqual(self.entries(), [self.model.name])
+        self.build("good")
         self.assertEqual(self.log.read_text().split(), ["crash", "good"])
 
-    def test_incomplete_extraction_that_exits_zero_is_refused(self):
-        with self.assertRaisesRegex(RuntimeError, "incomplete tokenizer"):
-            self.extract("partial")
-        self.assertEqual(list(self.cache.iterdir()), [])
+    def test_incomplete_build_that_exits_zero_is_refused(self):
+        with self.assertRaisesRegex(RuntimeError, "incomplete"):
+            self.build("partial")
+        self.assertEqual(self.entries(), [])
+        self.assertEqual([p for p in self.cache.iterdir() if p.name.startswith(".")], [])
 
-    def test_an_incomplete_existing_cache_is_rebuilt(self):
-        partial = self.cache / "model.gguf" / "tokenizer"
+    def test_an_incomplete_existing_pack_is_rebuilt(self):
+        partial = self.cache / self.model.name / "tokenizer"
         partial.mkdir(parents=True)
         (partial / "vocab.json").write_text('{"a": 0}')
-        tokenizer = self.extract("good")
-        self.assertTrue((tokenizer / "token_type.json").is_file())
-        self.assertEqual(self.entries(), ["model.gguf"])
+        pack = self.build("good")
+        self.assertTrue((pack / "native_experts.txt").is_file())
+        self.assertEqual(self.entries(), [self.model.name])
         self.assertEqual(self.log.read_text().split(), ["good"])
 
-    def test_concurrent_extractions_all_return_a_complete_cache(self):
+    def test_concurrent_builds_all_return_a_complete_pack(self):
         with (
-            unittest.mock.patch.dict(os.environ, {"TOKENIZER_MODE": "good"}),
+            unittest.mock.patch.dict(os.environ, {"PACK_MODE": "good"}),
             concurrent.futures.ThreadPoolExecutor(4) as pool,
         ):
-            results = list(pool.map(lambda _: strata_tokenizer(self.model), range(4)))
-        for tokenizer in results:
-            self.assertTrue((tokenizer / "tokenizer.json").is_file())
-        self.assertEqual(self.entries(), ["model.gguf"])
+            results = list(pool.map(lambda _: strata_pack(self.model), range(4)))
+        for pack in results:
+            self.assertTrue(qwen_local.pack_complete(pack))
+        self.assertEqual(self.entries(), [self.model.name])
 
-    def test_a_published_cache_is_never_replaced_by_a_competing_publisher(self):
-        # Pause the first publisher between its final completeness check and its
-        # rename, and give the second publisher that window to publish.
-        final = self.cache / "model.gguf" / "tokenizer"
-        checked, published = threading.Event(), threading.Event()
-        calls = {"first": 0}
-        real = qwen_local.tokenizer_complete
-
-        def complete(path):
-            result = real(path)
-            if threading.current_thread().name == "first" and path == final:
-                calls["first"] += 1
-                if calls["first"] == 2:
-                    checked.set()
-                    published.wait(2)
-            return result
-
-        returned = {}
-
-        def second():
-            returned["second"] = strata_tokenizer(self.model)
-            returned["inode"] = (final.parent).stat().st_ino
-            published.set()
-
+    def test_concurrent_builds_run_once(self):
         with (
-            unittest.mock.patch.dict(os.environ, {"TOKENIZER_MODE": "good"}),
-            unittest.mock.patch.object(qwen_local, "tokenizer_complete", complete),
+            unittest.mock.patch.dict(os.environ, {"PACK_MODE": "good"}),
+            concurrent.futures.ThreadPoolExecutor(4) as pool,
         ):
-            first = threading.Thread(
-                target=lambda: returned.setdefault("first", strata_tokenizer(self.model)), name="first"
-            )
-            first.start()
-            self.assertTrue(checked.wait(30))
-            other = threading.Thread(target=second)
-            other.start()
-            first.join(30)
-            other.join(30)
-        self.assertEqual(returned["first"], returned["second"])
-        self.assertEqual(final.parent.stat().st_ino, returned["inode"])
-        self.assertTrue(real(final))
-        self.assertEqual(self.entries(), ["model.gguf"])
+            list(pool.map(lambda _: strata_pack(self.model), range(4)))
+        self.assertEqual(self.log.read_text().split(), ["good"])
+
+    def test_a_killed_build_leaves_no_staging_behind_the_next_one(self):
+        leftover = self.cache / f".{self.model.name}.killed" / "pack"
+        leftover.mkdir(parents=True)
+        (leftover / "experts.bin").write_bytes(b"partial")
+        self.build("good")
+        self.assertEqual(self.entries(), [self.model.name])
+        self.assertEqual([p for p in self.cache.iterdir() if p.name.startswith(".")], [])
 
     def test_the_server_runs_offline(self):
-        self.extract("good")
+        self.build("good")
         command = strata_command(self.model, 1, "key", 4096, self.root)
         self.assertIn("--offline", command)
 

@@ -19,6 +19,13 @@ let
       builtins.filter (flag: !(lib.hasPrefix "-DCMAKE_CUDA_ARCHITECTURES" flag)) old.cmakeFlags
       ++ [ "-DCMAKE_CUDA_ARCHITECTURES=120" ];
   });
+  # Strata's preparation tool for Flash-Next's pack; it reads GGUFs with its own reader, so nothing is fetched.
+  strata-pack = writeShellApplication {
+    name = "strata-pack";
+    text = ''
+      exec ${strata.python.interpreter} ${strata}/share/strata/terminal/tools/iq_pack.py "$@"
+    '';
+  };
   command =
     name: script:
     writeShellApplication {
@@ -28,6 +35,7 @@ let
         unstable.opencode
         llama-cpp
         strata
+        strata-pack
       ];
       text = ''
         exec ${lib.getExe python3} ${source}/${script} "$@"

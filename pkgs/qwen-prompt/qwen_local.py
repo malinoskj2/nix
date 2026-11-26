@@ -1,4 +1,4 @@
-"""Model table, readiness, OpenCode configuration and llama.cpp handling shared by the Qwen launchers."""
+"""Model table, readiness, OpenCode configuration and llama.cpp and Strata handling shared by the Qwen launchers."""
 
 import ctypes
 import fcntl
@@ -20,15 +20,19 @@ MODELS = {
     "uncensored": ("qwen3.8-27b-uncensored", "Qwen3.8-27B-Uncensored-Q5_K_M.gguf"),
 }
 
-# --moe (llama.cpp) and --strata serve Qwen3.6-35B-A3B; Strata only runs mixture-of-experts files.
+# --moe serves Qwen3.8-Flash-Next through Strata. Its 512-expert layers only fit
+# in Strata's low-RAM resident mode: the GPU's expert cache is fixed at load, and
+# system RAM holds only the experts it doesn't (about 22-24 GiB of the 42.9 GB at
+# 64k-256k). Strata fits its buffers and cache to the whole free card (29.3-30.3
+# GiB measured), above the 28.5 GiB the scheduler grants a shared request.
 MOE_MODELS = {
-    "regular": ("qwen3.6-35b-a3b", "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf"),
-    "uncensored": ("qwen3.6-35b-a3b-uncensored", "Huihui-Qwen3.6-35B-A3B-abliterated-Q4_K.gguf"),
+    "regular": ("qwen3.8-flash-next", "Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf"),
+    "uncensored": (
+        "qwen3.8-flash-next-uncensored",
+        "Qwen3.8-Flash-Next-GSQ-RCO-abliterated-IQ3_XXS-00001-of-00002.gguf",
+    ),
 }
-# Strata sizes its buffers and expert cache to whatever VRAM is free (29.3-30.3 GiB
-# measured at every context, --expert-vram included), above the 28.5 GiB the
-# scheduler grants a shared request, so it books the whole GPU.
-STRATA_BOOKING = ("--exclusive",)
+MOE_BOOKING = ("--exclusive",)
 
 PR_SET_PDEATHSIG = 1
 
@@ -53,8 +57,8 @@ def require(*commands):
 
 
 def mode_of(args):
-    """dense (the default), moe or strata, from a launcher's --moe and --strata flags."""
-    return "strata" if args.strata else "moe" if args.moe else "dense"
+    """dense (the default) or moe, from a launcher's --moe flag."""
+    return "moe" if args.moe else "dense"
 
 
 def model_alias(name, mode="dense"):
@@ -62,7 +66,7 @@ def model_alias(name, mode="dense"):
 
 
 def server_binary(mode):
-    return "strata-server" if mode == "strata" else "llama-server"
+    return "strata-server" if mode == "moe" else "llama-server"
 
 
 def resolve_model(name, mode="dense"):
@@ -74,9 +78,10 @@ def resolve_model(name, mode="dense"):
     model = root / "by-name" / alias / filename
     if alias not in catalog["entries"] or readiness["entries"][alias]["status"] != "ready":
         raise RuntimeError(f"Local model {alias} is not ready; no download or fallback attempted")
-    expected = next(f["size"] for f in catalog["entries"][alias]["files"] if f["target"] == filename)
-    if not model.is_file() or model.stat().st_size != expected:
-        raise RuntimeError(f"Missing or incomplete model: {model}")
+    for file in catalog["entries"][alias]["files"]:
+        path = model.parent / file["target"]
+        if not path.is_file() or path.stat().st_size != file["size"]:
+            raise RuntimeError(f"Missing or incomplete model: {path}")
     return model
 
 
@@ -165,84 +170,101 @@ def llama_command(model, port, key, context=16384):
     ]
 
 
-# What strata_tokenizer.py always writes into <out>/tokenizer; chat_template.jinja only exists when the GGUF has one.
-TOKENIZER_FILES = ("vocab.json", "merges.txt", "tokenizer.json", "token_type.json")
-
-
-def tokenizer_complete(tokenizer):
+def pack_complete(pack):
+    """iq_pack.py writes native_experts.txt last; the resident mode also reads experts.bin."""
     try:
-        for name in TOKENIZER_FILES:
-            if (tokenizer / name).stat().st_size == 0:
-                return False
-        for name in TOKENIZER_FILES:
-            if name.endswith(".json"):
-                json.loads((tokenizer / name).read_text())
+        if (pack / "native_experts.txt").stat().st_size == 0 or (pack / "experts.bin").stat().st_size == 0:
+            return False
+        for name in ("vocab.json", "tokenizer.json"):
+            json.loads((pack / "tokenizer" / name).read_text())
     except (OSError, ValueError):
         return False
     return True
 
 
-def strata_tokenizer(model):
-    """Strata's server reads the vocabulary from a directory it derives from the GGUF; build it once per model file.
+def strata_pack(model):
+    """Strata's pack for a Flash-Next GGUF: its tensor index, tokenizer and experts.bin, built once per model file.
 
-    Extraction runs in a private directory that is renamed into place only once
-    complete, so an interrupted or concurrent run never leaves a cache that
-    looks finished. Replacing an incomplete cache and publishing happen under a
-    per-model lock, so no publisher removes a cache another one just published.
+    One build runs at a time per model, under a lock, in a private directory
+    that is renamed into place only once complete, so an interrupted run never
+    leaves a pack that looks finished. A build killed outright leaves its
+    staging directory behind; the next build removes it.
     """
     root = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "qwen-prompt" / "strata"
     final = root / model.name
-    tokenizer = final / "tokenizer"
-    if tokenizer_complete(tokenizer):
-        return tokenizer
+    if pack_complete(final):
+        return final
     root.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=f".{model.name}.", dir=root))
-    try:
-        subprocess.run(["strata-tokenizer", "--gguf", str(model), "--out", str(staging)], check=True, stdout=sys.stderr)
-        if not tokenizer_complete(staging / "tokenizer"):
-            raise RuntimeError(f"Strata's tokenizer extraction for {model.name} left an incomplete tokenizer")
-        with open(root / f"{model.name}.lock", "a") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
-            if tokenizer_complete(tokenizer):
-                return tokenizer
+    with open(root / f"{model.name}.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if pack_complete(final):
+            return final
+        for leftover in root.glob(f".{model.name}.*"):
+            shutil.rmtree(leftover, ignore_errors=True)
+        staging = Path(tempfile.mkdtemp(prefix=f".{model.name}.", dir=root))
+        try:
+            print(f"Preparing Strata's pack for {model.name} (once, about 43 GB) ...", file=sys.stderr, flush=True)
+            built = staging / "pack"
+            subprocess.run(
+                ["strata-pack", "--gguf", str(model), "--out", str(built), "--experts-bin"],
+                check=True,
+                stdout=sys.stderr,
+            )
+            if not pack_complete(built):
+                raise RuntimeError(f"Strata's pack for {model.name} is incomplete")
             if final.exists():
-                stale = Path(tempfile.mkdtemp(prefix=f".{model.name}.stale.", dir=root))
-                os.rename(final, stale / "old")
-                shutil.rmtree(stale, ignore_errors=True)
-            os.rename(staging, final)
-            staging = None
-        return tokenizer
-    finally:
-        if staging is not None:
+                os.rename(final, staging / "old")
+            os.rename(built, final)
+        finally:
             shutil.rmtree(staging, ignore_errors=True)
+    return final
+
+
+def strata_share():
+    return Path(shutil.which("strata") or "strata").resolve().parent.parent / "share" / "strata" / "terminal"
 
 
 def strata_command(model, port, key, context, directory):
-    """Strata's server with one slot, its MTP drafts and an f16 KV cache.
+    """Strata's server for Flash-Next: one slot, MTP drafts, an int8 KV cache in VRAM and the resident low-RAM mode.
 
-    At 256k the routed experts that don't fit beside the cache stay in pinned
-    system RAM (all 18.75 GiB are pinned once any are offloaded).
+    The n-gram table (shard 2) stays on disk and is read a few rows per token.
     """
+    pack = strata_pack(model)
+    share = strata_share()
     config = Path(directory) / "strata.json"
     config.write_text(
         json.dumps(
             {
-                "arch": "qwen35moe",
+                "arch": "qwen4exp",
                 "exe": shutil.which("strata") or "strata",
+                "cwd": str(share),
                 "model_name": "qwen",
-                "tokenizer": str(strata_tokenizer(model)),
+                "tokenizer": str(pack / "tokenizer"),
                 "log": str(Path(directory) / "strata-engine.log"),
                 "args": [
+                    "--pack",
+                    str(pack),
                     "--native",
                     str(model),
-                    "--max-context",
-                    str(context),
+                    "--ple-gguf",
+                    str(model.with_name(model.name.replace("-00001-of-", "-00002-of-"))),
+                    "--expert-profile",
+                    str(share / "data" / "expert-profile.bin"),
+                    "--expert-cache",
+                    "auto",
                     "--prefill",
                     "auto",
+                    "--spec",
+                    "4",
+                    "--spec-min-p",
+                    "0.5",
                     "--mtp",
-                    "2",
+                    str(model.parent / "mtp" / "rt"),
+                    "--max-context",
+                    str(context),
                     "--kv",
-                    "fp16",
+                    "int8",
+                    "--resident-experts",
                 ],
             }
         )
@@ -264,7 +286,7 @@ def strata_command(model, port, key, context, directory):
 
 
 def server_command(model, port, key, context, mode, directory):
-    if mode == "strata":
+    if mode == "moe":
         return strata_command(model, port, key, context, directory)
     return llama_command(model, port, key, context)
 

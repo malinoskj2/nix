@@ -1,4 +1,4 @@
-"""One scheduled, foreground OpenCode task with a private llama.cpp server."""
+"""One scheduled, foreground OpenCode task with a private llama.cpp or Strata server."""
 
 import argparse
 import os
@@ -12,7 +12,7 @@ from pathlib import Path
 
 from qwen_local import (
     MODELS,
-    STRATA_BOOKING,
+    MOE_BOOKING,
     checked_opencode_major,
     configuration,
     mode_of,
@@ -23,7 +23,7 @@ from qwen_local import (
     server_binary,
     server_command,
     stop,
-    strata_tokenizer,
+    strata_pack,
     wait_healthy,
 )
 
@@ -36,12 +36,10 @@ def main():
     parser.add_argument("--prompt-file", type=Path, required=True)
     parser.add_argument("--project", default=None, help="Ignored legacy option")
     parser.add_argument("--timeout", type=int, default=1800, help="Execution limit in seconds")
-    backends = parser.add_mutually_exclusive_group()
-    backends.add_argument(
-        "--moe", action="store_true", help="Run Qwen3.6-35B-A3B on llama.cpp instead of the dense 27B"
-    )
-    backends.add_argument(
-        "--strata", action="store_true", help="Run Qwen3.6-35B-A3B through Strata instead of the dense 27B"
+    parser.add_argument(
+        "--moe",
+        action="store_true",
+        help="Run Qwen3.8-Flash-Next through Strata instead of the dense 27B; books the whole GPU",
     )
     parser.add_argument("--allocated", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -55,14 +53,13 @@ def main():
     model = resolve_model(args.model, mode)
     if not args.allocated:
         refuse_nesting()
-        if mode == "strata":
-            strata_tokenizer(model)
-        # Fixed 16k context, one slot. 26 GiB covers full GPU offload's weights, KV
-        # cache and workspace margin for both the dense 27B and the MoE (23.5 GiB
-        # measured at 64k).
+        if mode == "moe":
+            strata_pack(model)
+        # Fixed 16k context, one slot. 26 GiB covers the dense 27B's full GPU
+        # offload: weights, KV cache and workspace margin.
         command = [
             "gpu-run",
-            *(STRATA_BOOKING if args.strata else ("--vram", "26GiB")),
+            *(MOE_BOOKING if mode == "moe" else ("--vram", "26GiB")),
             "--name",
             f"Qwen prompt ({args.model}{'' if mode == 'dense' else ', ' + mode})",
             "--",
