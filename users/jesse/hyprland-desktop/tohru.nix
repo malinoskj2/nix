@@ -37,7 +37,6 @@ in
           voiceChat = "quick";
           quickVoice = {
             transport = "api";
-            keyFile = "/home/jesse/projects/n33tc0de/.env";
           };
         };
         voice = {
