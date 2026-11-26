@@ -7,6 +7,7 @@
   host-switch,
   lib,
   rust-lints,
+  util-linux,
   writeShellApplication,
 }:
 
@@ -22,6 +23,7 @@ writeShellApplication {
     gnused
     host-switch
     rust-lints
+    util-linux
   ];
   text = builtins.readFile ./nix-land.sh;
   meta = {

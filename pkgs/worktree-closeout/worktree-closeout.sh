@@ -8,8 +8,9 @@ branch:, id:...) or a path. Its HEAD must be merged into <ref>, by default its
 parent worktree's branch or else the main checkout's branch, and it must have no
 tracked changes. Its .tmp/ and untracked files are copied, never overwriting,
 into the main checkout's .tmp/<worktree-name>/ (untracked files under
-untracked/), except build outputs (Cargo targets and other CACHEDIR.TAG caches,
-virtualenvs, node_modules, __pycache__), which are deleted. Then the worktree is
+untracked/), except build outputs (directories with a valid CACHEDIR.TAG such
+as Cargo targets, virtualenvs, node_modules, bytecode-only __pycache__), which
+are deleted. Then the worktree is
 removed with orca worktree rm, forced only when untracked files would block it.
 USAGE
 }
@@ -96,10 +97,26 @@ dirty=$(git -C "$path" status --porcelain --untracked-files=no)
 mapfile -d '' untracked < <(git -C "$path" ls-files -z --others --exclude-standard)
 dest=$main/.tmp/$name
 
-# Build outputs (Cargo targets and other CACHEDIR.TAG caches, virtualenvs,
-# node_modules, __pycache__) are deleted with the worktree, never copied.
+# Build outputs are deleted with the worktree, never copied: directories with a
+# valid CACHEDIR.TAG (Cargo targets), virtualenvs (pyvenv.cfg beside bin/python),
+# node_modules beside a package.json, and __pycache__ holding only bytecode.
+build_output() {
+  local dir=$1
+  case ${dir##*/} in
+    node_modules) [[ -f ${dir%/*}/package.json ]] ;;
+    __pycache__) [[ -z $(find "$dir" -type f ! -name '*.pyc' -print -quit) ]] ;;
+    *)
+      if [[ -f $dir/CACHEDIR.TAG ]]; then
+        [[ $(head -c 43 -- "$dir/CACHEDIR.TAG") == 'Signature: 8a477f597d28d172789f06886806bc55' ]]
+      else
+        [[ -f $dir/pyvenv.cfg && -x $dir/bin/python ]] && grep -q '^home *=' -- "$dir/pyvenv.cfg"
+      fi
+      ;;
+  esac
+}
 build_dirs=()
 while IFS= read -r dir; do
+  build_output "$dir" || continue
   [[ -n $(git -C "$path" ls-files -- "${dir#"$path"/}" | head -n 1) ]] || build_dirs+=("$dir")
 done < <(
   find "$path" -name .git -prune -o \( -name node_modules -o -name __pycache__ \) -type d -prune -print -o \

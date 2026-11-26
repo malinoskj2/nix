@@ -3,12 +3,13 @@ usage() {
   cat <<'USAGE'
 Usage: target-sweep [--dry-run] [--days <n>]
 
-Remove the Cargo target directories (those holding CACHEDIR.TAG) of linked
+Remove the Cargo target directories (those holding a valid CACHEDIR.TAG) of linked
 worktrees of every Orca git project that have been idle for <n> days (default
 14). A worktree is idle when Orca shows no activity, live terminal or unfinished
 agent in it for that long, its git index hasn't changed, and nothing in the
 target directory was built in that time. Main checkouts and bot homes are never
-touched, and nothing is removed when Orca can't be read. Prints what it frees
+touched, nor any worktree Orca doesn't list, and nothing is removed when Orca
+can't be read in full. Prints what it frees
 and records the summary in $XDG_STATE_HOME/target-sweep/last.
 USAGE
 }
@@ -45,13 +46,19 @@ if ! repos=$("$orca" repo list --json 2>/dev/null) || ! ps=$("$orca" worktree ps
   echo 'target-sweep: cannot read Orca; nothing removed' >&2
   exit 1
 fi
+if [[ $(jq -r '.result.truncated // false' <<<"$ps") != false ]]; then
+  echo 'target-sweep: orca worktree ps was truncated; nothing removed' >&2
+  exit 1
+fi
 
-# Prints why the worktree is active, or nothing when it is idle.
+# Prints why the worktree is active, or nothing when it is idle. A worktree
+# Orca doesn't list is treated as active: its activity can't be established.
 active_reason() {
   local wt=$1 index
   jq -r --arg p "$wt" --argjson cutoff "$cutoff" '
-    [.result.worktrees[] | select(.path == $p)][0] // empty
-    | if .isMainWorktree or .botHome then "main checkout or bot home"
+    [.result.worktrees[] | select(.path == $p)][0]
+    | if . == null then "not listed by Orca"
+      elif .isMainWorktree or .botHome then "main checkout or bot home"
       elif (.liveTerminalCount // 0) > 0 then "live terminal"
       elif any(.agents[]?; .state != "done") then "agent not done"
       elif ((.lastActivityAt // 0) / 1000) >= $cutoff then "Orca activity"
@@ -77,8 +84,10 @@ while IFS=$'\t' read -r repo; do
     [[ -z $reason ]] || continue
     while IFS= read -r -d '' tag; do
       target=${tag%/CACHEDIR.TAG}
+      [[ $(head -c 43 -- "$tag") == 'Signature: 8a477f597d28d172789f06886806bc55' ]] || continue
       [[ -z $(git -C "$wt" ls-files -- "${target#"$wt"/}" | head -n 1) ]] || continue
-      if [[ -n $(find "$target" -maxdepth 2 -newermt "@$cutoff" -print -quit) ]]; then
+      # Cargo rewrites existing files in place, which leaves their directories' mtimes alone.
+      if [[ -n $(find "$target" -newermt "@$cutoff" -print -quit) ]]; then
         continue
       fi
       size=$(du -sb -- "$target" | cut -f1)

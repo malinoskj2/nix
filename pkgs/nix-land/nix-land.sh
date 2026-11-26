@@ -83,6 +83,11 @@ mkdir -p "$log_dir" || fail preflight "cannot create $log_dir"
 log=$log_dir/$(date +%Y%m%dT%H%M%S)-${branch//\//_}.log
 : >"$log"
 
+# One landing at a time: the lock covers everything from reading main to the switch.
+lock=$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir)/nix-land.lock
+exec 9>"$lock" || fail preflight "cannot open $lock"
+flock -n 9 || fail preflight "another nix-land is running (lock $lock)"
+
 branch_sha=$(git -C "$repo" rev-parse --verify --quiet "refs/heads/$branch^{commit}") ||
   fail preflight "no local branch $branch"
 main_old=$(git -C "$repo" rev-parse --verify --quiet 'refs/heads/main^{commit}') ||
@@ -167,6 +172,8 @@ git push origin "$merged:refs/heads/main" >>"$log" 2>&1 ||
   fail push "git push was refused (Betterleaks or the remote); see the log"
 
 if [[ -n $main_wt ]]; then
+  [[ $(git -C "$repo" rev-parse refs/heads/main) == "$main_old" ]] ||
+    fail update-main "pushed $merged, but local main moved during the push"
   git -C "$main_wt" merge --ff-only --quiet "$merged" >>"$log" 2>&1 ||
     fail update-main "pushed $merged, but cannot fast-forward main in $main_wt"
 else
@@ -174,13 +181,26 @@ else
     fail update-main "pushed $merged, but local main moved during the landing"
 fi
 
+[[ $(git -C "$repo" rev-parse refs/heads/main) == "$merged" ]] ||
+  fail update-main "main is not $merged after the update; something else moved it"
+
 if [[ -z $switch ]]; then
   echo "LANDED $merged"
   exit 0
 fi
 
+# host-switch activates whatever main's head is when it starts, so make sure
+# that is still this landing and that it reports switching exactly that commit.
+[[ $(git -C "$repo" rev-parse refs/heads/main) == "$merged" ]] ||
+  fail switch "main moved past $merged before the switch; nothing was switched"
 say 'host-switch'
-host-switch >>"$log" 2>&1 || fail switch "host-switch failed for $merged: $(tail -n 1 "$log")"
+switch_out=$(host-switch 2>&1) || {
+  printf '%s\n' "$switch_out" >>"$log"
+  fail switch "host-switch failed for $merged: ${switch_out##*$'\n'}"
+}
+printf '%s\n' "$switch_out" >>"$log"
+grep -qxF "host-switch: switched to $merged" <<<"$switch_out" ||
+  fail switch "host-switch did not report switching $merged: ${switch_out##*$'\n'}"
 
 if [[ -n $refresh ]]; then
   # The switch has just installed the refresh that knows the new sandbox image.
