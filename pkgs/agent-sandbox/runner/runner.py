@@ -1138,10 +1138,11 @@ class Runner:
             self.args.docker_socket,
             "/run/docker.sock",
             # Compose builds with BuildKit only through buildx; without it, it falls back to the
-            # classic builder, which has no RUN --mount.
+            # classic builder, which has no RUN --mount. Nixpkgs' Compose has no system plugin
+            # directories, so the plugin goes in the user's.
             "--ro-bind",
             self.args.buildx,
-            "/usr/libexec/docker/cli-plugins/docker-buildx",
+            "/tmp/.docker/cli-plugins/docker-buildx",
             "--ro-bind",
             str(entry["dir"]),
             str(entry["dir"]),
