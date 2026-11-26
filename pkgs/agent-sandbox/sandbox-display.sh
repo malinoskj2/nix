@@ -10,11 +10,12 @@ usage() {
 }
 
 # Daemons leave the caller's session and output, so they outlive an agent's
-# shell command and don't hold its pipes open.
+# shell command and don't hold its pipes open. They also leave the lock behind,
+# or a later up would wait on it for the session's lifetime.
 spawn() {
   local log=$1
   shift
-  setsid "$@" </dev/null >"$log_dir/$log" 2>&1 &
+  setsid "$@" </dev/null >"$log_dir/$log" 2>&1 9>&- &
 }
 
 wait_for_server() {
