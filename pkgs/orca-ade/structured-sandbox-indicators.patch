@@ -92,7 +92,7 @@ index 00000000..32929217
 --- /dev/null
 +++ b/src/main/runtime/agent-session/installation/nix-sandbox-launch-integration.test.ts
 @@ -0,0 +1,28 @@
-+import { afterEach, describe, expect, it } from 'vitest'
++import { afterEach, describe, expect, it, vi } from 'vitest'
 +import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 +import {
 +  openStructuredCodexRpcHarness,
@@ -117,7 +117,7 @@ index 00000000..32929217
 +    const host = getStructuredAgentSessionHost()!
 +    expect(harness.codex.live().launch.env?.ORCA_SANDBOX_LAUNCH).toBe(marker)
 +    expect(host.deps.store.getRecord(SESSION)?.sandboxLaunch).toBe(marker === '1')
-+    expect(host.readStatusSummary(SESSION)?.sandboxLaunch).toBe(marker === '1')
++    await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.sandboxLaunch).toBe(marker === '1'))
 +  })
 +})
 diff --git a/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts b/src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
