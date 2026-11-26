@@ -83,6 +83,78 @@
       "compatibility": "unverified",
       "loader": "Strata 0.2.22 qwen35moe engine (tensor types pass its q36_types loader checks; MTP draft block inside the file) or llama.cpp GGUF"
     },
+    "qwen3.8-flash-next": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF",
+          "revision": "ed59f92082b1e93c0e96d60a8b11aab089b52f09",
+          "path": "IQ3_XXS/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf",
+          "target": "Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf",
+          "size": 47039860096,
+          "sha256": "219ea929900dfa9ef091f3aa473fdba6874b65fcb36526d7d851ac9e95856d15",
+          "imports": []
+        },
+        {
+          "repository": "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF",
+          "revision": "ed59f92082b1e93c0e96d60a8b11aab089b52f09",
+          "path": "IQ3_XXS/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf",
+          "target": "Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf",
+          "size": 28800138432,
+          "sha256": "316b46f3a2dbd68c900f43136ab9449f9dcc3725dfd8c794847c204bc161e113",
+          "imports": []
+        },
+        {
+          "repository": "SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF",
+          "revision": "90a3350cd800ec1fe0d1660a38414ad9e985782f",
+          "path": "mtp-q2_0.gguf",
+          "target": "mtp/mtp-q2_0.gguf",
+          "size": 889017216,
+          "sha256": "a22206a4d74eafbf31063a84610292535fb3b49af9a339963817fd04aed81e4d",
+          "imports": []
+        },
+        {
+          "repository": "SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF",
+          "revision": "90a3350cd800ec1fe0d1660a38414ad9e985782f",
+          "path": "strata/rt/dense.bin",
+          "target": "mtp/rt/dense.bin",
+          "size": 116099072,
+          "sha256": "c724dc0b0822ada5d2977bf5bde821605feabaa64ea2e0045b67ca656329070a",
+          "imports": []
+        },
+        {
+          "repository": "SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF",
+          "revision": "90a3350cd800ec1fe0d1660a38414ad9e985782f",
+          "path": "strata/rt/dense.txt",
+          "target": "mtp/rt/dense.txt",
+          "size": 1880,
+          "gitSha1": "0a6b354ada9f26d07c4d51684089bdc2fda06a1b",
+          "imports": []
+        },
+        {
+          "repository": "SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF",
+          "revision": "90a3350cd800ec1fe0d1660a38414ad9e985782f",
+          "path": "strata/rt/draft_vocab.bin",
+          "target": "mtp/rt/draft_vocab.bin",
+          "size": 425196,
+          "sha256": "b1e1d3a7a9e4bf862dcd5923ce661fb59bbd07907e594df5cf86a62ac235cb91",
+          "imports": []
+        },
+        {
+          "repository": "SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF",
+          "revision": "90a3350cd800ec1fe0d1660a38414ad9e985782f",
+          "path": "strata/rt/experts.bin",
+          "target": "mtp/rt/experts.bin",
+          "size": 707788800,
+          "sha256": "09398406be61f1f54c93861f449e48b8df0bfccbc9ec9b2b7636775a6ea9244f",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "Strata 0.2.22 qwen4exp engine: shard 1 through a pack from tools/iq_pack.py (--experts-bin for --resident-experts), shard 2 as --ple-gguf (the n-gram table, read from disk), mtp/rt as --mtp; the GSQ-RCO GGUF has no MTP head, so the draft pack comes from SC117 (Qwen MTP tensors, the same for its abliterated build)"
+    },
     "qwen-image": {
       "enabled": true,
       "kind": "checkpoint",
