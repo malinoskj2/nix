@@ -133,6 +133,7 @@
           "local-models"
           "markdown-to-pdf"
           "media-gallery"
+          "media-web"
           "media-transcribe"
           "mpvpaper-vk"
           "orca-ade"
