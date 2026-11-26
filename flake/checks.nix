@@ -93,6 +93,7 @@
           unreal-sandbox = self'.packages.agent-sandbox.unrealTests;
           agent-sandbox-exec = self'.packages.agent-sandbox.execTests;
           agent-sandbox-codex = self'.packages.agent-sandbox.codexTests;
+          agent-sandbox-runner = self'.packages.agent-sandbox.runnerTests;
           sandbox-display = self'.packages.agent-sandbox.displayTests;
         };
     };

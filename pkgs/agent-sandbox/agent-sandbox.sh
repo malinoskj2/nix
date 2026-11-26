@@ -242,6 +242,15 @@ cleanup() {
   if [[ -n ${cid:-} ]]; then
     docker rm --force "$cid" >/dev/null 2>&1 || true
   fi
+  # The runner removes the sandboxes and stacks this one started before it exits.
+  if [[ -n ${runner_pid:-} ]]; then
+    kill "$runner_pid" 2>/dev/null || true
+    wait "$runner_pid" 2>/dev/null || true
+  fi
+  if [[ -n ${runner_dir:-} ]]; then
+    rm -f -- "$runner_dir/runner.sock" "$runner_dir/runner.log"
+    rmdir -- "$runner_dir" 2>/dev/null || true
+  fi
   if [[ -n ${clipboard_watcher_pid:-} ]]; then
     kill "$clipboard_watcher_pid" 2>/dev/null || true
     wait "$clipboard_watcher_pid" 2>/dev/null || true
@@ -313,6 +322,32 @@ configure_antigravity
 configure_steam
 
 sandbox_instance=${AGENT_SANDBOX_NAME:-agent-sandbox-$(basename "$workdir")-$$}
+
+# Preview ports are published on every interface, and their URLs use the LAN
+# address, so the links also open on other devices.
+preview_address=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
+preview_address=${preview_address:-127.0.0.1}
+
+# The runner is this sandbox's only way to the host engine: disposable sibling sandboxes and
+# review Compose stacks, which it labels with this instance and removes when the sandbox goes.
+docker_socket=/run/docker.sock
+if [[ ${DOCKER_HOST:-} == unix://* ]]; then
+  docker_socket=${DOCKER_HOST#unix://}
+fi
+mkdir -p "$runtime/agent-sandbox-runner"
+chmod 700 "$runtime/agent-sandbox-runner"
+runner_dir=$(mktemp -d "$runtime/agent-sandbox-runner/XXXXXXXX")
+runner_roots=()
+for dir in "$HOME/projects" "$HOME/projects-archive" "$HOME/nix" "$HOME/orca/workspaces" "$HOME/.orca/bots"; do
+  runner_roots+=(--root "$dir")
+done
+"$AGENT_SANDBOX_RUNNER" --owner "$sandbox_instance" --socket "$runner_dir/runner.sock" \
+  --state-dir "$data/runner/$(sha256sum <<<"$sandbox_instance" | cut -c1-16)" \
+  --image "$image_ref" "${runner_roots[@]}" --passwd "$data/passwd" --group "$data/group" \
+  --ports-lock "$runtime/agent-sandbox-ports.lock" --gpu-lease-dir "$gpu_lease_dir" \
+  --preview-address "$preview_address" \
+  --docker-socket "$docker_socket" >"$runner_dir/runner.log" 2>&1 &
+runner_pid=$!
 args=(
   --rm
   --init
@@ -362,6 +397,9 @@ args=(
   --env TERM
   --env COLORTERM
   --env AGENT_SANDBOX_INSTANCE="$sandbox_instance"
+  --env AGENT_SANDBOX_IMAGE_TAG="${image_ref#agent-sandbox:}"
+  --env AGENT_SANDBOX_RUNNER_SOCKET=/run/agent-sandbox-runner/runner.sock
+  --volume "$runner_dir:/run/agent-sandbox-runner:ro"
   --env AGENT_SANDBOX_RENDERERS
   --env AGENT_SANDBOX_DISPLAY="$display"
   --env XDG_RUNTIME_DIR="$runtime"
@@ -439,6 +477,8 @@ if [[ -n $host_wayland ]]; then
 fi
 
 mount_readonly "$HOME/.config/git"
+# Home Manager writes the image tag it installs here, so a session can tell it runs a stale image.
+mount_readonly "$HOME/.config/agent-sandbox" /run/agent-sandbox-host
 mount_readonly "$HOME/.config/last30days/.env"
 # Orca's CLI reads its runtime metadata and connects to the desktop's Unix
 # socket from this directory. Keep Orca's mutable workspace state host-owned.
@@ -516,10 +556,6 @@ esac
 # picks the same ports loses the create and retries with freshly probed
 # ports instead of failing to bind.
 exec 9>"$runtime/agent-sandbox-ports.lock"
-# Preview ports are published on every interface, and their URLs use the LAN
-# address, so the links also open on other devices.
-preview_address=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
-preview_address=${preview_address:-127.0.0.1}
 cid=
 for _ in {1..5}; do
   flock 9

@@ -84,6 +84,10 @@ in
     Install.WantedBy = [ "timers.target" ];
   };
 
+  # Sandboxes mount this directory, so a running session sees the image a switch installed and
+  # sandbox-smoke can say its own is stale.
+  xdg.configFile."agent-sandbox/image-tag".text = pkgs.agent-sandbox.image.imageTag;
+
   # ~/.ssh/config stays hand-written; it pulls this in with `Include config.d/*`.
   home.file.".ssh/config.d/agent-sandbox".text = ''
     Host sandbox-*

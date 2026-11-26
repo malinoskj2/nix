@@ -97,7 +97,19 @@ Playwright works from plain Node scripts: `require("playwright")` resolves, and 
 - A project's own Playwright: `chromium.launch(require("sandbox-playwright").chromiumLaunchOptions({ headless: true }))`
 - `@playwright/test` config: spread `require("sandbox-playwright").use` into the Chromium project's `use`
 
-The Playwright MCP's browser gets the same options. Without a Vulkan GPU, both warn and fall back to SwiftShader. A browser needs no `gpu-run` reservation. Headed WebKit can't launch, since nixpkgs ships only WebKit's headless WPE MiniBrowser; run WebKit headless. Get a missing tool with `nix shell nixpkgs#<package>` or `nix run nixpkgs#<package>`. Outbound network is unrestricted, and `ssh` is installed for reaching remote hosts.
+The Playwright MCP's browser gets the same options. Without a Vulkan GPU, both warn and fall back to SwiftShader. A browser needs no `gpu-run` reservation. Headed WebKit can't launch, since nixpkgs ships only WebKit's headless WPE MiniBrowser; run WebKit headless. Outbound network is unrestricted, and `ssh` is installed for reaching remote hosts.
+
+There is no apt. Prebuilt Linux binaries (a downloaded release, an npm or pip package's bundled executable) run through nix-ld, whose library set covers glibc, libstdc++, zlib, OpenSSL, curl, libffi, SQLite, GLib, Mesa, Vulkan, X11 and Wayland. Get a one-off tool from nixpkgs rather than searching `/nix/store`, and always single-quote the flake reference, since zsh treats `#` as a glob:
+
+- One command: `nix run 'nixpkgs#<package>' -- <args>`, for example `nix run 'nixpkgs#dmidecode' -- --help`. It runs the package's main program.
+- Several tools together, or a binary named differently from its package: `nix shell 'nixpkgs#a' 'nixpkgs#b' -c <command>`, for example `nix shell 'nixpkgs#sqlite' 'nixpkgs#jq' -c sh -c 'sqlite3 -json db.sqlite "select 1" | jq .'`.
+- Find a package's name with `nix search nixpkgs <word>`. `nix-shell -p <package>` also works; `NIX_PATH` points at the flake's pinned nixpkgs.
+- Python packages from PyPI, especially wheels with C or C++ extensions (numpy, Pillow, OpenCV, torch): use `uv`, not the Nix Python's pip. `uv venv` and `uv run --with numpy script.py` use uv's own managed Python, which runs through nix-ld so the wheels find libstdc++; a venv made from the Nix `python3` cannot. Prefer nixpkgs for command-line tools and uv for importable Python libraries or a project's own `pyproject.toml`. For Node, use the project's lockfile or `npx`.
+- Version-specific toolchains (a project's Node, pnpm, Go or Rust) come from its own dev shell (`nix develop`) or lockfile, not the sandbox's.
+
+Also installed: `flock` and `setsid` (util-linux), Lua 5.4 as `lua` and `lua5.4`, PostgreSQL's `initdb`, `pg_ctl`, `postgres` and `psql`, `redis-server` and `redis-cli`, and `tomli_w` in the Nix `python3`. Run databases as your own user in a scratch directory, listening on a Unix socket there. `docker` and `docker compose` are installed only to render and check Compose files: the sandbox has no Docker engine, so stacks and fresh sandboxes go through `sandbox-runner` (see [Disposable sandboxes and Compose stacks](#disposable-sandboxes-and-compose-stacks)).
+
+`sandbox-smoke` checks a sandbox end to end: the tools above, `require('playwright')`, uv wheels, `nix run`, Chromium's WebGL renderer on ANGLE Vulkan, WebKit decoding a local video, and `sandbox-display` with a `grim` capture (those under `gpu-run`). `--full` adds the CPU torch wheel. It also says whether this sandbox's image is older than the one the host now installs; a session picks up a new image only when it restarts.
 
 nvcc and the CUDA toolkit aren't on `PATH`. For a CUDA build, such as a crate using candle or cudarc, enter the Nix repo's CUDA shell: `nix develop /home/jesse/nix#cuda`, or `nix develop /home/jesse/nix#cuda -c cargo build --features cuda`. It carries the CUDA release the host driver supports, sets `CUDA_PATH`, `CUDA_ROOT` and `CUDA_COMPUTE_CAP=120` for the RTX 5090, and puts the driver and toolkit libraries on `LD_LIBRARY_PATH`, so run the binaries it builds from inside it too. Running them on the GPU needs a `gpu-run` reservation.
 
@@ -108,6 +120,23 @@ All sandboxes share a 64G memory limit, and 74G together with the host's Nix bui
 Read live shared memory stats from `/run/agent-sandbox-cgroup`, a read-only mount of the host's sandbox slice. `/run/agent-cgroup` is the same for its parent, which also holds the host's Nix builds. `memory.max` and `memory.current` give the RAM limit and aggregate usage in bytes across all sandboxes; `memory.swap.max` and `memory.swap.current` give the separate swap limit and usage. `memory.max - memory.current` estimates headroom before the shared limit, but reclaimable cache can be freed and other agents can consume it concurrently. `free` and `/proc/meminfo` report host memory, while `/sys/fs/cgroup` shows only this container and hides the parent limit. Check `memory.stat` for cache and shmem usage, and `memory.events` and `memory.pressure` for reclaim/OOM activity and stalls.
 
 Cargo compiles through sccache, whose cache at `~/.cache/sccache` every sandbox shares, so a new worktree reuses the dependency crates another one already built. Don't delete it as scratch.
+
+## Disposable sandboxes and Compose stacks
+
+`sandbox-runner` asks a host-side runner, private to this sandbox, to start things on the host's Docker engine. Everything it starts belongs to this sandbox: another sandbox can't see or touch it, and it is removed when this sandbox exits or after 12 idle hours. Each sandbox may run 4 disposable sandboxes, 4 stacks and 4 candidate images at once.
+
+A disposable sandbox is a fresh sibling with one Git worktree shared read-write at the same path, its own empty home, the GPU, and its own VNC and preview ports. It has no logins and none of the other shared directories.
+
+- `sandbox-runner sandbox launch [--worktree DIR] [--display] [--no-gpu]` starts one from this sandbox's image and prints its ID, address, VNC and preview URLs.
+- To review a sandbox image change, build it and launch from the result: `sandbox-runner sandbox launch --build "$(nix build --no-link --print-out-paths .#agent-sandbox.image)"`. `sandbox-runner image load <path>` loads one without launching.
+- `sandbox-runner sandbox exec ID [--cwd DIR] [--env NAME=VALUE] [--timeout S] -- COMMAND...` runs a command there and exits with its status, for example `sandbox-runner sandbox exec ID -- sandbox-smoke`.
+- `sandbox-runner sandbox logs ID` and `sandbox-runner sandbox rm ID`; `sandbox-runner ls` lists what this sandbox owns.
+
+A stack runs a project's Compose file. The file is rendered here with `docker compose config`, so `.env`, profiles and variables work as usual, and the host checks the result against an allowlist before running it.
+
+- `sandbox-runner compose [-f FILE]... [--profile P] [--name NAME] up [--build] [--wait] [SERVICE...]`, then `ps`, `logs [SERVICE...]`, `exec SERVICE -- COMMAND...`, `build` and `down`. `down` also removes the stack's volumes, networks and built images.
+- `up` and `ps` print each service's address. This sandbox joins the stack's networks, so reach services at those addresses (`psql -h <postgres address>`); published ports bind only the host's loopback, which a sandbox can't reach.
+- Refused: privileged mode, added capabilities, devices and GPUs, host or other containers' namespaces, relaxed `security_opt`, external or custom-named volumes and networks, volume driver options, bind mounts or build contexts outside the worktree or through a symlink, secrets from the host environment, build SSH and host networking, `container_name` and sandbox images. Every container gets `no-new-privileges`, the sandboxes' memory slice, a pids limit and `restart: no`. The error names the key to drop.
 
 ## Unreal Engine
 

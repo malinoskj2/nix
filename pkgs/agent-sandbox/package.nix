@@ -4,10 +4,12 @@
   bacon,
   bashInteractive,
   binutils,
+  bzip2,
   bat,
   bc,
   betterleaks-push-gate,
   blender,
+  bubblewrap,
   btop,
   buildEnv,
   cacert,
@@ -28,6 +30,8 @@
   dejavu_fonts,
   diffutils,
   dig,
+  docker-client,
+  docker-compose,
   dockerTools,
   envsubst,
   eza,
@@ -71,8 +75,10 @@
   less,
   lib,
   liberation_ttf,
+  libffi,
   libva-utils,
   lldb,
+  lua5_4,
   lshw,
   makeFontsConf,
   makeWrapper,
@@ -96,8 +102,10 @@
   novnc,
   nssTools,
   openssh,
+  openssl,
   orca-ade,
   p7zip,
+  path,
   pandoc,
   pciutils,
   pipewire,
@@ -105,10 +113,12 @@
   playwright-browsers,
   playwright-mcp,
   playwright-test,
+  postgresql,
   procps,
   pulseaudio,
   pyghidra-mcp,
   python3,
+  redis,
   replaceVars,
   ripgrep,
   runCommand,
@@ -119,7 +129,9 @@
   sccache,
   socat,
   sops,
+  sqlite,
   source2viewer-cli,
+  stdenv,
   ssh-to-age,
   sway,
   swaybg,
@@ -134,6 +146,7 @@
   unrar,
   unzip,
   usbutils,
+  uv,
   util-linux,
   vim,
   vulkan-tools,
@@ -151,6 +164,7 @@
   wtype,
   xwayland,
   xz,
+  zlib,
   yt-dlp,
   zip,
   zoxide,
@@ -320,6 +334,54 @@ let
 
   hookProxy = pythonScript "agent-sandbox-hook-proxy" python3 ./hook-proxy.py;
   prepareOrcaHooks = pythonScript "agent-sandbox-prepare-orca-hooks" python3 ./prepare-orca-hooks.py;
+
+  runner = writeShellScriptBin "agent-sandbox-runner" ''
+    exec ${lib.getExe python3} ${./runner/runner.py} \
+      --docker ${lib.getExe docker-client} \
+      --compose ${lib.getExe docker-compose} \
+      --bwrap ${lib.getExe bubblewrap} "$@"
+  '';
+
+  runnerClient = writeShellScriptBin "sandbox-runner" ''
+    exec ${lib.getExe python3} ${./runner/client.py} "$@"
+  '';
+
+  sandboxSmoke = writeShellApplication {
+    name = "sandbox-smoke";
+    runtimeEnv.SANDBOX_SMOKE_BROWSERS = ./smoke/browsers.js;
+    text = builtins.readFile ./smoke/sandbox-smoke.sh;
+  };
+
+  # util-linux's kill, more and others collide with coreutils and procps.
+  utilLinuxTools = runCommand "util-linux-tools" { } ''
+    mkdir -p $out/bin
+    for tool in column findmnt flock getopt ionice logger lscpu lsblk nsenter script setsid taskset \
+      unshare uuidgen; do
+      ln -s ${util-linux.bin}/bin/$tool $out/bin/$tool
+    done
+  '';
+
+  # Tohru's Lua tests call the versioned name, as Debian installs it.
+  lua = symlinkJoin {
+    name = "lua-5.4-sandbox";
+    paths = [ lua5_4 ];
+    postBuild = "ln -s lua $out/bin/lua5.4";
+  };
+
+  # Prebuilt programs, uv's Python and the wheels it loads find their libraries through nix-ld:
+  # a general set, then the Unreal editor's.
+  nixLdLibraryPath =
+    lib.makeLibraryPath [
+      bzip2
+      curl
+      libffi
+      openssl
+      sqlite
+      stdenv.cc.cc
+      xz
+      zlib
+    ]
+    + ":${unreal.libraryPath}";
   sandboxSteam = pythonScript "sandbox-steam" (python3.withPackages (ps: [
     ps.vdf
   ])) ./sandbox-steam.py;
@@ -400,6 +462,8 @@ let
       dbus
       diffutils
       dig
+      docker-client
+      docker-compose
       envsubst
       eza
       fd
@@ -438,6 +502,7 @@ let
       less
       libva-utils
       lldb
+      lua
       lshw
       man-db
       markdown-to-pdf
@@ -464,6 +529,7 @@ let
       pandoc
       pciutils
       pkg-config
+      postgresql
       playwright
       procps
       pipewire
@@ -471,13 +537,17 @@ let
       (python3.withPackages (ps: [
         hy3dgen
         ps.pygobject3
+        ps.tomli-w
       ]))
+      redis
       ripgrep
+      runnerClient
       rust-analyzer
       rust-lints
       rustc
       rustfmt
       sandboxDisplay
+      sandboxSmoke
       sandboxSteam
       sccache
       socat
@@ -495,6 +565,8 @@ let
       unreal.tools
       unzip
       usbutils
+      utilLinuxTools
+      uv
       vim
       vulkan-tools
       wayvnc
@@ -568,6 +640,9 @@ let
       ln -s ${bashInteractive}/bin/bash bin/bash
       ln -s ${coreutils}/bin/env usr/bin/env
       ln -s ${orcaCli}/bin/orca-ide usr/bin/orca-ide
+      # The CLI only renders Compose files; stacks run through sandbox-runner on the host engine.
+      mkdir -p usr/libexec/docker/cli-plugins
+      ln -s ${docker-compose}/libexec/docker/cli-plugins/docker-compose usr/libexec/docker/cli-plugins/docker-compose
       # For prebuilt binaries uploaded over SSH.
       ln -s ${nix-ld}/libexec/nix-ld lib64/ld-linux-x86-64.so.2
       ln -s ${nixConf} etc/nix/nix.conf
@@ -618,7 +693,11 @@ let
         }}";
         NIX_REMOTE = "daemon";
         NIX_LD = "${glibc}/lib/ld-linux-x86-64.so.2";
-        NIX_LD_LIBRARY_PATH = unreal.libraryPath;
+        NIX_LD_LIBRARY_PATH = nixLdLibraryPath;
+        NIX_PATH = "nixpkgs=${path}";
+        # python-build-standalone runs through nix-ld, so its wheels load; a Nix Python's venv
+        # cannot find libstdc++.
+        UV_PYTHON_PREFERENCE = "only-managed";
         UNREAL_MCP_URL = unrealMcp.url;
         DISABLE_AUTOUPDATER = "1";
         DBUS_SESSION_BUS_CONFIG = "${dbus}/share/dbus-1/session.conf";
@@ -672,6 +751,7 @@ let
       AGENT_SANDBOX_ORCA_PATH = "${orcaCurl}/bin:${env}/bin:/usr/bin";
       # Claude reads these from the image; agy reads them as its global AGENTS.md.
       AGENT_SANDBOX_INSTRUCTIONS = "${instructions}";
+      AGENT_SANDBOX_RUNNER = lib.getExe runner;
     };
     text = builtins.readFile ./agent-sandbox.sh;
   };
@@ -757,6 +837,22 @@ symlinkJoin {
   name = "agent-sandbox";
   passthru = {
     imageRef = "agent-sandbox:${image.imageTag}";
+    inherit image;
+    smoke = sandboxSmoke;
+    runnerTests =
+      runCommand "agent-sandbox-runner-tests"
+        {
+          nativeBuildInputs = [
+            git
+            python3
+          ];
+        }
+        ''
+          cp ${./runner/runner.py} runner.py
+          cp ${./runner/test-runner.py} test-runner.py
+          python3 -B test-runner.py -v
+          touch $out
+        '';
     unrealTools = unreal.tools;
     unrealTests = unreal.tests;
     displayTests =

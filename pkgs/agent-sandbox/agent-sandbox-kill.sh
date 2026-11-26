@@ -34,6 +34,24 @@ if [[ -n $ids ]]; then
   docker rm -f "${containers[@]}" >/dev/null
 fi
 
+# Stacks and their networks and volumes that sandbox-runner started carry its owner label.
+label=agent-sandbox.runner.owner
+ids=$(docker ps -aq --filter "label=$label")
+if [[ -n $ids ]]; then
+  mapfile -t runner_containers <<<"$ids"
+  docker rm -f --volumes "${runner_containers[@]}" >/dev/null
+  containers+=("${runner_containers[@]}")
+fi
+for kind in network volume; do
+  ids=$(docker "$kind" ls -q --filter "label=$label")
+  if [[ -n $ids ]]; then
+    mapfile -t owned <<<"$ids"
+    docker "$kind" rm "${owned[@]}" >/dev/null || true
+  fi
+done
+pkill -f -- "--state-dir $data/runner/" || true
+rm -rf -- "$runtime"/agent-sandbox-runner/* "$data/runner"
+
 # A launcher that died hard never ran its cleanup trap, and its clipboard
 # watcher would otherwise keep writing into the dirs removed below.
 pkill -f "agent-sandbox-clipboard-sync $runtime/agent-sandbox-clipboard" || true
