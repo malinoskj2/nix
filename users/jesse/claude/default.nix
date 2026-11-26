@@ -72,6 +72,7 @@ in
       qwen-uncensored-prompt = ./skills/qwen-uncensored-prompt;
     };
     rules = {
+      agent-team = ./rules/agent-team.md;
       documentation = ./rules/documentation.md;
       git-push = ./rules/git-push.md;
       local-models = ./rules/local-models.md;

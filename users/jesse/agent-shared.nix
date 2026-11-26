@@ -14,6 +14,7 @@ in
       ./claude/rules/host-switch.md
     ]
     ++ [
+      ./claude/rules/agent-team.md
       ./claude/rules/documentation.md
       ./claude/rules/git-push.md
       ./claude/rules/local-models.md
