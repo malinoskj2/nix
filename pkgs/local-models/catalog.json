@@ -3092,6 +3092,57 @@
         "Images without an alpha channel go through hy3dgen.rembg, whose rembg session downloads u2net on first use; pass RGBA input or a BiRefNet mask to stay offline."
       ]
     },
+    "hunyuan3d-2mv": {
+      "enabled": true,
+      "kind": "model",
+      "files": [
+        {
+          "repository": "tencent/Hunyuan3D-2mv",
+          "revision": "3a761b539b29fe4ff64714813aa9560fd66f5de0",
+          "path": "hunyuan3d-dit-v2-mv/config.yaml",
+          "target": "hunyuan3d-dit-v2-mv/config.yaml",
+          "size": 1608,
+          "gitSha1": "7a9b1f3b1ca62e16a24257b8e8328573d299c5e4",
+          "imports": []
+        },
+        {
+          "repository": "tencent/Hunyuan3D-2mv",
+          "revision": "3a761b539b29fe4ff64714813aa9560fd66f5de0",
+          "path": "hunyuan3d-dit-v2-mv/model.fp16.safetensors",
+          "target": "hunyuan3d-dit-v2-mv/model.fp16.safetensors",
+          "size": 4928151562,
+          "sha256": "d36f5881bcdc56726b73e517cd444c13c60732431622da7268145355c8d38e9c",
+          "imports": []
+        },
+        {
+          "repository": "tencent/Hunyuan3D-2mv",
+          "revision": "3a761b539b29fe4ff64714813aa9560fd66f5de0",
+          "path": "LICENSE",
+          "target": "LICENSE",
+          "size": 17828,
+          "gitSha1": "58e0779d576cb14caed1d443cf4d5785c2497fe1",
+          "imports": []
+        },
+        {
+          "repository": "tencent/Hunyuan3D-2mv",
+          "revision": "3a761b539b29fe4ff64714813aa9560fd66f5de0",
+          "path": "NOTICE",
+          "target": "NOTICE",
+          "size": 32064,
+          "gitSha1": "0e623667e16ed2034540ca9ace4ebc8b33865baf",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "hy3dgen (Tencent/Hunyuan3D-2 runtime source): Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(\"$MODEL_ROOT/by-name/hunyuan3d-2mv\", subfolder=\"hunyuan3d-dit-v2-mv\"), with an expanded absolute path so it doesn't fall back to the Hub; call the pipeline with image={\"front\": ..., \"left\": ..., \"back\": ...}",
+      "notes": [
+        "Licence: Tencent Hunyuan Community License (LICENSE and NOTICE in the alias). It does not apply in the EU, UK or South Korea, and needs a separate licence above 1 million monthly active users.",
+        "VRAM: the 1.1B multi-view DiT is the same size as Hunyuan3D-2's shape model, which upstream quotes at about 6 GB, so it fits an 8 GB GPU for shape alone; the multi-view peak is unmeasured. Reserve gpu-run --vram 8GiB until measured. Texture reuses hunyuan3d-2's paint pipeline on the front view and needs that entry's VRAM plan.",
+        "Only the base hunyuan3d-dit-v2-mv subfolder is included; the fast and turbo distillations and the duplicate .ckpt are omitted. The pipeline reads model.fp16.safetensors, its default variant, and the DINOv2 conditioner is built from config.yaml without a Hub download.",
+        "Images without an alpha channel go through hy3dgen.rembg, whose rembg session downloads u2net on first use; pass RGBA input or a BiRefNet mask to stay offline."
+      ]
+    },
     "diff3f-sd15": {
       "enabled": true,
       "kind": "component",
