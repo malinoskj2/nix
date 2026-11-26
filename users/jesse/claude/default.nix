@@ -64,7 +64,11 @@ in
       sandbox-wayland-display = ./skills/sandbox-wayland-display;
       tiktok-search = ./skills/tiktok-search;
       true-random = ./skills/true-random;
+      ts-build-jesse = ./skills/ts-build-jesse;
+      ts-review-jesse = ./skills/ts-review-jesse;
       video-download = ./skills/video-download;
+      vue-build-jesse = ./skills/vue-build-jesse;
+      vue-review-jesse = ./skills/vue-review-jesse;
       youtube-search = ./skills/youtube-search;
     }
     // lib.optionalAttrs isHome {

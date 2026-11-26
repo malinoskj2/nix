@@ -1,0 +1,4 @@
+interface:
+  display_name: "TypeScript Builder"
+  short_description: "Implement and verify repository-aware TypeScript changes"
+  default_prompt: "Use $ts-build-jesse to implement and verify this TypeScript change."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vue Review"
+  short_description: "Review Vue reactivity, components, routing, and accessibility"
+  default_prompt: "Use $vue-review-jesse with $ts-review-jesse to review this Vue change and report findings."

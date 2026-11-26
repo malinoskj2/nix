@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vue Builder"
+  short_description: "Implement and verify Vue 3 changes in TypeScript"
+  default_prompt: "Use $vue-build-jesse with $ts-build-jesse to implement and verify this Vue change."
