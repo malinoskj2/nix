@@ -1,4 +1,5 @@
 """Offline response handling regression tests; no YouTube requests."""
+
 import io
 import json
 from pathlib import Path
@@ -21,8 +22,7 @@ class Response(io.BytesIO):
 class SearchTests(unittest.TestCase):
     def test_success_keeps_only_unique_short_ids(self):
         renderer = {"reelItemRenderer": {"videoId": "abcdefghijk"}}
-        data = {"twoColumnSearchResultsRenderer": [renderer, renderer,
-                {"videoRenderer": {"videoId": "lmnopqrstuv"}}]}
+        data = {"twoColumnSearchResultsRenderer": [renderer, renderer, {"videoRenderer": {"videoId": "lmnopqrstuv"}}]}
         page = ("var ytInitialData = " + json.dumps(data) + ";").encode()
         with patch.object(collector, "urlopen", return_value=Response(page)):
             report = collector.search("test")
@@ -39,8 +39,13 @@ class SearchTests(unittest.TestCase):
             self.assertIn("Changed page", (Path(folder) / "response.html").read_text())
 
     def test_http_failure_preserves_body_and_retry_after(self):
-        error = HTTPError("https://www.youtube.com/results", 429, "Too Many Requests",
-                          {"Retry-After": "120"}, io.BytesIO(b"rate limit"))
+        error = HTTPError(
+            "https://www.youtube.com/results",
+            429,
+            "Too Many Requests",
+            {"Retry-After": "120"},
+            io.BytesIO(b"rate limit"),
+        )
         with tempfile.TemporaryDirectory() as folder:
             with patch.object(collector, "urlopen", side_effect=error):
                 with self.assertRaises(collector.SearchFailure) as raised:
@@ -53,7 +58,7 @@ class SearchTests(unittest.TestCase):
     def test_parser_failures_remain_distinct(self):
         for page, expected in [
             (b"var ytInitialData = invalid;", "invalid_search_data"),
-            (b'var ytInitialData = {};', "layout_changed"),
+            (b"var ytInitialData = {};", "layout_changed"),
             (b'var ytInitialData = {"twoColumnSearchResultsRenderer": {}};', "no_short_renderers"),
         ]:
             with self.subTest(expected=expected), patch.object(collector, "urlopen", return_value=Response(page)):

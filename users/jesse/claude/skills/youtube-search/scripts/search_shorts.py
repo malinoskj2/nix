@@ -63,7 +63,10 @@ def classify_response(status, final_url, html):
         raise SearchFailure("access_denied", f"HTTP {status}; inspect the saved response")
     if urlsplit(final_url).hostname in ("consent.youtube.com", "consent.google.com"):
         raise SearchFailure("consent_required", "YouTube redirected to consent; resolve in a browser")
-    if "unusual traffic from your computer network" in html.lower() or "Our systems have detected unusual traffic" in html:
+    if (
+        "unusual traffic from your computer network" in html.lower()
+        or "Our systems have detected unusual traffic" in html
+    ):
         raise SearchFailure("bot_challenge", "YouTube returned a traffic challenge; resolve in a browser")
     if status >= 400:
         raise SearchFailure("http_error", f"HTTP {status}; inspect the saved response")
@@ -88,20 +91,34 @@ def search(query, diagnostics_dir=None):
         destination = Path(diagnostics_dir)
         destination.mkdir(parents=True, exist_ok=True)
         (destination / "response.html").write_text(html, encoding="utf-8")
-        (destination / "response.json").write_text(json.dumps({
-            "status": status, "final_url": final_url, "content_type": content_type,
-            "retry_after": retry_after, "bytes_read": len(page), "truncated": len(page) > 8_000_000,
-        }, indent=2), encoding="utf-8")
+        (destination / "response.json").write_text(
+            json.dumps(
+                {
+                    "status": status,
+                    "final_url": final_url,
+                    "content_type": content_type,
+                    "retry_after": retry_after,
+                    "bytes_read": len(page),
+                    "truncated": len(page) > 8_000_000,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
     classify_response(status, final_url, html)
     if len(page) > 8_000_000:
         raise SearchFailure("response_too_large", "Search page exceeded the 8 MB limit")
     marker = re.search(r"(?:var\s+)?ytInitialData\s*=\s*", html)
     if not marker:
-        raise SearchFailure("missing_search_data", "No ytInitialData found; cause unknown, inspect response diagnostics")
+        raise SearchFailure(
+            "missing_search_data", "No ytInitialData found; cause unknown, inspect response diagnostics"
+        )
     try:
         data, _ = json.JSONDecoder().raw_decode(html[marker.end() :])
     except ValueError as error:
-        raise SearchFailure("invalid_search_data", "Cannot decode ytInitialData; inspect response diagnostics") from error
+        raise SearchFailure(
+            "invalid_search_data", "Cannot decode ytInitialData; inspect response diagnostics"
+        ) from error
     if not any("twoColumnSearchResultsRenderer" in obj for obj in objects(data)):
         raise SearchFailure("layout_changed", "YouTube search layout missing; cannot confirm search results")
     videos = list(extract_shorts(data))
@@ -117,7 +134,9 @@ def search(query, diagnostics_dir=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("query")
-    parser.add_argument("--diagnostics-dir", help="Save bounded response HTML and HTTP metadata here; use a fresh directory per query")
+    parser.add_argument(
+        "--diagnostics-dir", help="Save bounded response HTML and HTTP metadata here; use a fresh directory per query"
+    )
     args = parser.parse_args()
     try:
         report = search(args.query, args.diagnostics_dir)

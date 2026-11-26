@@ -48,7 +48,10 @@ let
   # Runs only while the session is locked, so the unlocked session keeps its own, longer timeouts.
   whileLocked =
     command:
-    if tohru then "${tohruLock} --running && ${command}" else "${pidof} hyprlock >/dev/null && ${command}";
+    if tohru then
+      "${tohruLock} --running && ${command}"
+    else
+      "${pidof} hyprlock >/dev/null && ${command}";
 in
 {
   programs.hyprlock = {

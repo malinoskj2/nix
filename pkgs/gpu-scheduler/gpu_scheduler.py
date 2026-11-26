@@ -134,12 +134,18 @@ def host_gpu_snapshot():
     """Read host PIDs: container /proc cannot identify other containers' GPU workers."""
     result = subprocess.run(
         ["nvidia-smi", "--query-compute-apps=gpu_uuid,pid,used_gpu_memory", "--format=csv,noheader,nounits"],
-        check=True, capture_output=True, text=True, timeout=3,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=3,
     )
     processes = result.stdout.splitlines()
     result = subprocess.run(
         ["nvidia-smi", "--id=0", "--query-gpu=uuid,memory.total,memory.used", "--format=csv,noheader,nounits"],
-        check=True, capture_output=True, text=True, timeout=3,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=3,
     )
     gpu, total, used = (value.strip() for value in result.stdout.strip().split(","))
     allocations = {}
@@ -162,8 +168,9 @@ def host_gpu_snapshot():
                 fields = environment.read(1024 * 1024).split(b"\0")
         except OSError:
             continue
-        lease = next((field[13:].decode("ascii", errors="replace") for field in fields
-                      if field.startswith(b"GPU_LEASE_ID=")), "")
+        lease = next(
+            (field[13:].decode("ascii", errors="replace") for field in fields if field.startswith(b"GPU_LEASE_ID=")), ""
+        )
         if re.fullmatch(r"[0-9a-f]{32}", lease):
             allocations[lease] = allocations.get(lease, 0) + int(amount)
     return validate_snapshot({"total_mib": int(total), "used_mib": int(used), "allocations_mib": allocations})
@@ -171,11 +178,18 @@ def host_gpu_snapshot():
 
 def validate_snapshot(value):
     total, used, allocations = value["total_mib"], value["used_mib"], value["allocations_mib"]
-    if (type(total) is not int or type(used) is not int or total <= 0 or not 0 <= used <= total
-            or not isinstance(allocations, dict)
-            or any(not re.fullmatch(r"[0-9a-f]{32}", key) or type(amount) is not int or amount < 0
-                   for key, amount in allocations.items())
-            or sum(allocations.values()) > used):
+    if (
+        type(total) is not int
+        or type(used) is not int
+        or total <= 0
+        or not 0 <= used <= total
+        or not isinstance(allocations, dict)
+        or any(
+            not re.fullmatch(r"[0-9a-f]{32}", key) or type(amount) is not int or amount < 0
+            for key, amount in allocations.items()
+        )
+        or sum(allocations.values()) > used
+    ):
         raise ValueError("Invalid GPU attribution telemetry")
     return value
 
@@ -251,7 +265,10 @@ class OrcaWorker:
             try:
                 out = subprocess.run(
                     [cli, "orchestration", "check", "--peek", "--json", "--full"],
-                    capture_output=True, text=True, timeout=30, check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=True,
                 )
                 dispatch = json.loads(out.stdout)["result"].get("dispatchId")
             except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError, AttributeError):
@@ -263,9 +280,21 @@ class OrcaWorker:
             while not self.stopped.is_set():
                 started = time.monotonic()
                 self.waiter = subprocess.Popen(
-                    [self.cli, "orchestration", "check", "--peek", "--wait", "--types", self.HOLD_TYPE,
-                     "--timeout-ms", "300000", "--json"],
-                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    [
+                        self.cli,
+                        "orchestration",
+                        "check",
+                        "--peek",
+                        "--wait",
+                        "--types",
+                        self.HOLD_TYPE,
+                        "--timeout-ms",
+                        "300000",
+                        "--json",
+                    ],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
                 )
                 self.waiter.wait()
                 if time.monotonic() - started < 5:
@@ -281,9 +310,25 @@ class OrcaWorker:
     def wake(self, subject, body):
         try:
             subprocess.run(
-                [self.cli, "orchestration", "send", "--from", self.sender, "--to", f"dispatch:{self.dispatch}",
-                 "--type", "status", "--subject", subject, "--body", body],
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60,
+                [
+                    self.cli,
+                    "orchestration",
+                    "send",
+                    "--from",
+                    self.sender,
+                    "--to",
+                    f"dispatch:{self.dispatch}",
+                    "--type",
+                    "status",
+                    "--subject",
+                    subject,
+                    "--body",
+                    body,
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=60,
             )
         except (OSError, subprocess.SubprocessError) as error:
             print(f"gpu-run: could not wake the Orca worker: {error}", file=sys.stderr, flush=True)
@@ -314,10 +359,25 @@ def launch_background(args, label):
     ready, report = os.pipe()
     with open(log, "ab") as output:
         coordinator = subprocess.Popen(
-            [sys.executable, os.path.abspath(__file__), *options,
-             "--daemon-ready-fd", str(report), "--orca-dispatch", worker.dispatch, "--orca-from", worker.sender,
-             "--log", str(log), *command],
-            stdin=subprocess.DEVNULL, stdout=output, stderr=output, pass_fds=(report,), start_new_session=True,
+            [
+                sys.executable,
+                os.path.abspath(__file__),
+                *options,
+                "--daemon-ready-fd",
+                str(report),
+                "--orca-dispatch",
+                worker.dispatch,
+                "--orca-from",
+                worker.sender,
+                "--log",
+                str(log),
+                *command,
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=output,
+            stderr=output,
+            pass_fds=(report,),
+            start_new_session=True,
         )
     os.close(report)
     with os.fdopen(ready) as reader:
@@ -336,14 +396,14 @@ def split_argv(args, drop_flags=(), drop_valued=()):
     """This invocation's options and command, without the given options."""
     tail = len(args.command)
     options, skip = [], False
-    for token in sys.argv[1:len(sys.argv) - tail]:
+    for token in sys.argv[1 : len(sys.argv) - tail]:
         if skip:
             skip = False
         elif token in drop_valued:
             skip = True
         elif token not in drop_flags and not any(token.startswith(f"{name}=") for name in drop_valued):
             options.append(token)
-    return options, sys.argv[len(sys.argv) - tail:]
+    return options, sys.argv[len(sys.argv) - tail :]
 
 
 def run_background(scheduler, args, label):
@@ -383,7 +443,10 @@ def run_background(scheduler, args, label):
                 granted = True
                 print(f"gpu-run: lease {current['id'][:8]} granted", flush=True)
                 if args.wake_on_grant:
-                    worker.wake(f"gpu-run granted: {label}", f"The reservation started and the command is running. Log: {args.log}")
+                    worker.wake(
+                        f"gpu-run granted: {label}",
+                        f"The reservation started and the command is running. Log: {args.log}",
+                    )
             time.sleep(1)
         code = child.returncode if child.returncode >= 0 else 128 - child.returncode
         outcome = f"exit {code}"
@@ -489,7 +552,9 @@ def status(scheduler, as_json):
             attribution_available = allocations is not None
             allocations = allocations or {}
             memory = {
-                "total_mib": total, "used_mib": used, "headroom_mib": scheduler.headroom,
+                "total_mib": total,
+                "used_mib": used,
+                "headroom_mib": scheduler.headroom,
                 "attributed_mib": sum(allocations.get(job["id"], 0) for job in jobs if job["state"] == "running"),
                 "attribution_available": attribution_available,
             }
@@ -534,12 +599,15 @@ def main():
         mode = action.add_mutually_exclusive_group(required=name == "run")
         mode.add_argument("--exclusive", action="store_true", default=name == "game")
         if name == "run":
-            mode.add_argument("--vram", type=memory_size, help="Peak VRAM including weights, inference caches and working memory")
+            mode.add_argument(
+                "--vram", type=memory_size, help="Peak VRAM including weights, inference caches and working memory"
+            )
         action.set_defaults(vram=None)
         action.add_argument("--name", help="Human-readable workload name")
         action.add_argument("--timeout", type=float, help="Maximum queue wait in seconds")
         action.add_argument(
-            "--background", action="store_true",
+            "--background",
+            action="store_true",
             help="Return at once; an Orca worker's idle turn counts as waiting and Orca mails it the result",
         )
         action.add_argument("--wake-on-grant", action="store_true", help="With --background, also mail when granted")

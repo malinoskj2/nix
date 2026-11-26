@@ -47,6 +47,42 @@
       "compatibility": "unverified",
       "loader": "llama.cpp GGUF; use the bundled mmproj file for vision; chat template, tool use and peak VRAM require runtime validation"
     },
+    "qwen3.6-35b-a3b": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "unsloth/Qwen3.6-35B-A3B-MTP-GGUF",
+          "revision": "5bc3e238d916f48a861bac2f8a1990a0e9b7e98d",
+          "path": "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
+          "target": "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
+          "size": 22853663008,
+          "sha256": "55983c5a75a1ab969824077b3bb3de4146e82a9234072b48ad4e8f92ad3fe9f1",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "Strata 0.2.22 qwen35moe engine (its own pinned UD-Q4_K_XL, MTP draft block inside the file) or llama.cpp GGUF; vision needs mmproj-F16.gguf, which is not cataloged"
+    },
+    "qwen3.6-35b-a3b-uncensored": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "files": [
+        {
+          "repository": "huihui-ai/Huihui-Qwen3.6-35B-A3B-abliterated-MTP-GGUF",
+          "revision": "1fbb5305060b5365c84879612a619d0d2c0b137a",
+          "path": "Huihui-Qwen3.6-35B-A3B-abliterated-ggml-model-Q4_K.gguf",
+          "target": "Huihui-Qwen3.6-35B-A3B-abliterated-Q4_K.gguf",
+          "size": 21712409824,
+          "sha256": "63b75afb4b68fc61059c78115b580037074de88146e0762f4a496081e410cf81",
+          "imports": []
+        }
+      ],
+      "dependencies": [],
+      "compatibility": "unverified",
+      "loader": "Strata 0.2.22 qwen35moe engine (tensor types pass its q36_types loader checks; MTP draft block inside the file) or llama.cpp GGUF"
+    },
     "qwen-image": {
       "enabled": true,
       "kind": "checkpoint",

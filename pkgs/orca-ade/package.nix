@@ -51,7 +51,7 @@ let
   # Keep the desktop bridge independent of Python environments on the user's PATH.
   computerUsePython = stdenv.mkDerivation {
     pname = "orca-computer-python";
-    version = python3.version;
+    inherit (python3) version;
     dontUnpack = true;
     nativeBuildInputs = [
       gobject-introspection

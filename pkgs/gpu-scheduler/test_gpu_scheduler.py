@@ -48,16 +48,19 @@ class AdmissionTests(unittest.TestCase):
     def test_over_budget_usage_and_unmanaged_memory_still_count(self):
         active = self.job("model", vram=20 * 1024, state="running")
         small = self.job("small", vram=4 * 1024)
-        self.assertIn("insufficient", admission_reason(
-            small, [active, small], (32768, 27 * 1024), 4096, {"model": 26 * 1024}))
-        self.assertIn("insufficient", admission_reason(
-            small, [active, small], (32768, 29 * 1024), 4096, {"model": 20 * 1024}))
+        self.assertIn(
+            "insufficient", admission_reason(small, [active, small], (32768, 27 * 1024), 4096, {"model": 26 * 1024})
+        )
+        self.assertIn(
+            "insufficient", admission_reason(small, [active, small], (32768, 29 * 1024), 4096, {"model": 20 * 1024})
+        )
 
     def test_unknown_leases_do_not_credit_unmanaged_memory(self):
         active = self.job("model", vram=4096, state="running")
         small = self.job("small", vram=4096)
-        self.assertIn("insufficient", admission_reason(
-            small, [active, small], (32768, 26000), 4096, {"retired": 20000}))
+        self.assertIn(
+            "insufficient", admission_reason(small, [active, small], (32768, 26000), 4096, {"retired": 20000})
+        )
 
     def test_exclusive_waits_for_leases_and_resident_memory(self):
         exclusive = self.job("video", mode="exclusive")
@@ -159,7 +162,7 @@ class IntegrationTests(unittest.TestCase):
         self.directory.mkdir(exist_ok=True)
         listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.addCleanup(listener.close)
-        listener.bind(str(self.directory / 'telemetry.sock'))
+        listener.bind(str(self.directory / "telemetry.sock"))
         listener.listen(16)
         bootstrap = (
             "import os, sys; "
@@ -168,8 +171,12 @@ class IntegrationTests(unittest.TestCase):
             "os.execv(sys.executable, [sys.executable, sys.argv[1], 'serve-telemetry'])"
         )
         process = subprocess.Popen(
-            [sys.executable, '-c', bootstrap, SCRIPT], env=self.env,
-            pass_fds=(listener.fileno(),), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            [sys.executable, "-c", bootstrap, SCRIPT],
+            env=self.env,
+            pass_fds=(listener.fileno(),),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
         self.processes.append(process)
         return process
@@ -177,15 +184,20 @@ class IntegrationTests(unittest.TestCase):
     def test_host_attribution_allows_loaded_models_to_share_across_clients(self):
         self.start_telemetry()
         marker = self.root / "worker-pid"
-        self.start("large", "--vram", "24GiB", code=(
-            f"import os, time; from pathlib import Path; Path({str(marker)!r}).write_text(str(os.getpid())); time.sleep(30)"
-        ))
+        self.start(
+            "large",
+            "--vram",
+            "24GiB",
+            code=(
+                f"import os, time; from pathlib import Path; Path({str(marker)!r}).write_text(str(os.getpid())); time.sleep(30)"
+            ),
+        )
         self.wait_for(lambda jobs: marker.exists())
         self.memory.write_text("32768, 21504\n")
         self.compute.write_text(f"GPU-test, {marker.read_text()}, 20480\n")
         self.start("small", "--vram", "2GiB")
-        jobs = self.wait_for(lambda jobs: len(jobs) == 2 and all(j['state'] == 'running' for j in jobs))
-        self.assertEqual(next(j for j in jobs if j['label'] == 'large')['allocated_mib'], 20480)
+        jobs = self.wait_for(lambda jobs: len(jobs) == 2 and all(j["state"] == "running" for j in jobs))
+        self.assertEqual(next(j for j in jobs if j["label"] == "large")["allocated_mib"], 20480)
 
     def test_unreadable_host_process_and_missing_metrics_get_no_credit(self):
         self.start_telemetry()
@@ -194,7 +206,7 @@ class IntegrationTests(unittest.TestCase):
         blocked = self.start("blocked", "--vram", "8GiB", "--timeout", "0.1")
         _, error = blocked.communicate(timeout=5)
         self.assertNotEqual(blocked.returncode, 0)
-        self.assertIn('insufficient', error)
+        self.assertIn("insufficient", error)
 
     def test_invalid_attribution_falls_back_to_aggregate_usage(self):
         self.start_telemetry()
@@ -351,16 +363,24 @@ class TelemetryTests(unittest.TestCase):
                 validate_snapshot(dict(total_mib=32768, used_mib=1000, allocations_mib=allocations))
 
     def test_multiple_workers_aggregate_once_and_other_gpus_are_ignored(self):
-        lease = 'a' * 32
-        processes = f"GPU-test, 123, 4096\nGPU-test, 456, 2048\nGPU-test, 123, 4096\nGPU-other, 123, 9999\n"
+        lease = "a" * 32
+        processes = "GPU-test, 123, 4096\nGPU-test, 456, 2048\nGPU-test, 123, 4096\nGPU-other, 123, 9999\n"
         from io import BytesIO
-        with patch('gpu_scheduler.subprocess.run', side_effect=[
-            subprocess.CompletedProcess([], 0, processes),
-            subprocess.CompletedProcess([], 0, 'GPU-test, 32768, 8000\n'),
-        ]), patch('gpu_scheduler.Path.stat') as stat, patch('gpu_scheduler.Path.open') as opened:
+
+        with (
+            patch(
+                "gpu_scheduler.subprocess.run",
+                side_effect=[
+                    subprocess.CompletedProcess([], 0, processes),
+                    subprocess.CompletedProcess([], 0, "GPU-test, 32768, 8000\n"),
+                ],
+            ),
+            patch("gpu_scheduler.Path.stat") as stat,
+            patch("gpu_scheduler.Path.open") as opened,
+        ):
             stat.return_value.st_uid = os.getuid()
-            opened.side_effect = lambda *args: BytesIO(f'GPU_LEASE_ID={lease}\0'.encode())
-            self.assertEqual(host_gpu_snapshot()['allocations_mib'], {lease: 6144})
+            opened.side_effect = lambda *args: BytesIO(f"GPU_LEASE_ID={lease}\0".encode())
+            self.assertEqual(host_gpu_snapshot()["allocations_mib"], {lease: 6144})
 
 
 if __name__ == "__main__":
