@@ -1,9 +1,11 @@
 import argparse
+import contextlib
 import os
 from pathlib import Path
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -16,6 +18,7 @@ MEMBERS = ("codex", "claude", "gemini")
 INLINE_LIMIT = 100_000
 CONTEXT_LIMIT = 400_000
 STDOUT_BUDGET = 9_000
+KILL_GRACE = 5
 
 
 def build_prompt(prompt_file, context_files):
@@ -43,7 +46,7 @@ def command(member, prompt, prompt_path, last_message, timeout):
             "-o",
             str(last_message),
             "-",
-        ], prompt
+        ], True
     if member == "claude":
         return [
             "claude",
@@ -59,7 +62,7 @@ def command(member, prompt, prompt_path, last_message, timeout):
             "--no-session-persistence",
             "--output-format",
             "text",
-        ], prompt
+        ], True
     if len(prompt.encode()) > INLINE_LIMIT:
         text = f"Read the file {prompt_path} and follow the instructions in it exactly."
     else:
@@ -75,7 +78,7 @@ def command(member, prompt, prompt_path, last_message, timeout):
         "--print-timeout",
         f"{timeout}s",
         f"-p={text}",
-    ], None
+    ], False
 
 
 def run_member(member, prompt, prompt_path, out_dir, timeout, results):
@@ -91,51 +94,53 @@ def run_member(member, prompt, prompt_path, out_dir, timeout, results):
         }
 
 
+def stop_group(proc):
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(proc.pid, sig)
+        except ProcessLookupError:
+            return
+        deadline = time.monotonic() + KILL_GRACE
+        while time.monotonic() < deadline:
+            proc.poll()
+            try:
+                os.killpg(proc.pid, 0)
+            except ProcessLookupError:
+                return
+            time.sleep(0.05)
+
+
 def ask(member, prompt, prompt_path, out_dir, timeout, results):
     answer = out_dir / f"{member}.md"
     log = out_dir / f"{member}.log"
-    argv, stdin = command(member, prompt, prompt_path, answer, timeout)
+    argv, feeds_stdin = command(member, prompt, prompt_path, answer, timeout)
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
     start = time.monotonic()
     result = {"member": member, "answer": answer, "log": log}
-    try:
-        with open(log, "wb") as log_file:
+    with contextlib.ExitStack() as files:
+        stdin = files.enter_context(open(prompt_path if feeds_stdin else os.devnull, "rb"))
+        log_file = files.enter_context(open(log, "xb"))
+        stdout = log_file if member == "codex" else files.enter_context(open(answer, "xb"))
+        try:
             proc = subprocess.Popen(
                 argv,
-                stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
-                stdout=subprocess.PIPE if member != "codex" else log_file,
+                stdin=stdin,
+                stdout=stdout,
                 stderr=log_file,
                 env=env,
                 start_new_session=True,
             )
-            reader = None
-            captured = []
-            if member != "codex":
-                reader = threading.Thread(target=lambda: captured.append(proc.stdout.read()))
-                reader.start()
-            if stdin is not None:
-                try:
-                    proc.stdin.write(stdin.encode())
-                    proc.stdin.close()
-                except BrokenPipeError:
-                    pass
+        except FileNotFoundError:
+            result["status"] = f"failed: {argv[0]} not found on PATH"
+        else:
             try:
                 code = proc.wait(timeout=timeout)
                 result["status"] = "ok" if code == 0 else f"failed: exit {code}"
             except subprocess.TimeoutExpired:
-                os.killpg(proc.pid, signal.SIGTERM)
-                try:
-                    proc.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                    proc.wait()
                 result["status"] = f"failed: timed out after {timeout}s"
-            if reader is not None:
-                reader.join(timeout=10)
-                answer.write_bytes(captured[0] if captured else b"")
-    except FileNotFoundError:
-        result["status"] = f"failed: {argv[0]} not found on PATH"
-    if result["status"] == "ok" and (not answer.exists() or not answer.read_text().strip()):
+            finally:
+                stop_group(proc)
+    if result["status"] == "ok" and (not answer.exists() or not answer.read_text(errors="replace").strip()):
         result["status"] = "failed: empty answer"
     if result["status"] != "ok" and log.exists():
         tail = log.read_bytes()[-600:].decode(errors="replace").strip()
@@ -162,7 +167,7 @@ def report(results, members, out_dir):
     sections = []
     for member in members:
         r = results[member]
-        body = r["answer"].read_text() if r["answer"].exists() else ""
+        body = r["answer"].read_text(errors="replace") if r["answer"].exists() else ""
         if r["status"] != "ok":
             body = (body + "\n\n" if body.strip() else "") + "Log tail:\n\n" + r.get("log_tail", "(empty)")
         sections.append((member, body.strip()))
@@ -170,13 +175,22 @@ def report(results, members, out_dir):
     council = out_dir / "council.md"
     council.write_text("\n\n".join(combined) + "\n")
 
-    lines = [f"Council output: {council}", *status]
-    budget = max(500, (STDOUT_BUDGET - sum(len(s) for s in lines)) // len(members))
-    for member, body in sections:
-        if len(body) > budget:
-            body = body[:budget] + f"\n[truncated; full text in {results[member]['answer']}]"
-        lines.append(f"\n## {LABELS[member]} ({results[member]['status']})\n\n{body}")
-    print("\n".join(lines))
+    header = "\n".join([f"Council output: {council}", *status])
+    heads = [f"\n\n## {LABELS[m]} ({results[m]['status']})\n\n" for m, _ in sections]
+    notices = [f"\n[truncated; full text in {results[m]['answer']}]" for m, _ in sections]
+    fixed = sum(len(x.encode()) for x in [header, "\n", *heads, *notices])
+    budget = max(0, (STDOUT_BUDGET - fixed) // len(sections))
+    out = [header]
+    for (member, body), head, notice in zip(sections, heads, notices):
+        encoded = body.encode()
+        if len(encoded) > budget:
+            body = clip(encoded, budget) + notice
+        out.append(head + body)
+    sys.stdout.buffer.write(clip(("".join(out) + "\n").encode(), STDOUT_BUDGET).encode())
+
+
+def clip(data, limit):
+    return data[:limit].decode("utf-8", errors="ignore")
 
 
 def default_out_dir():
@@ -186,7 +200,9 @@ def default_out_dir():
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         root = os.getcwd()
-    return Path(root) / ".tmp" / "council" / time.strftime("%Y%m%d-%H%M%S")
+    parent = Path(root) / ".tmp" / "council"
+    parent.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix=time.strftime("%Y%m%d-%H%M%S-"), dir=parent))
 
 
 def main():
@@ -209,11 +225,17 @@ def main():
         parser.error(f"prompt and context total {size} bytes, over {CONTEXT_LIMIT}; pass less context")
 
     prompt = build_prompt(args.prompt_file, args.context_file)
-    out_dir = (Path(args.out_dir) if args.out_dir else default_out_dir()).resolve()
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if args.out_dir:
+        out_dir = Path(args.out_dir).resolve()
+        try:
+            out_dir.mkdir(parents=True)
+        except FileExistsError:
+            parser.error(f"--out-dir {out_dir} already exists; give a new directory")
+    else:
+        out_dir = default_out_dir().resolve()
     prompt_path = out_dir / "prompt.md"
-    prompt_path.touch(mode=0o600)
-    prompt_path.write_text(prompt)
+    with open(prompt_path, "x", opener=lambda path, flags: os.open(path, flags, 0o600)) as f:
+        f.write(prompt)
 
     results = {}
     threads = [

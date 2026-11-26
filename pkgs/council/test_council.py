@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 COUNCIL = Path(__file__).with_name("council.py")
@@ -24,6 +25,14 @@ print('codex progress noise')
     "claude": RECORD + "print('claude finding')\n",
     "agy": RECORD + "print('gemini finding')\n",
 }
+
+
+def alive(pid):
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+    except FileNotFoundError:
+        return False
+    return state != "Z"
 
 
 class CouncilTest(unittest.TestCase):
@@ -47,7 +56,7 @@ class CouncilTest(unittest.TestCase):
         path.write_text(f"#!{sys.executable}\n" + code)
         path.chmod(0o700)
 
-    def run_council(self, *extra, path=None):
+    def run_council(self, *extra, path=None, out_dir=True, text=True):
         env = os.environ | {
             "PATH": str(self.bin) + os.pathsep + (path or os.environ["PATH"]),
             "CAPTURE": str(self.capture),
@@ -61,15 +70,14 @@ class CouncilTest(unittest.TestCase):
                 str(self.prompt),
                 "--context-file",
                 str(self.context),
-                "--out-dir",
-                str(self.root / "out"),
+                *(["--out-dir", str(self.root / "out")] if out_dir else []),
                 *extra,
             ],
             env=env,
             cwd=self.root,
             capture_output=True,
-            text=True,
-            timeout=30,
+            text=text,
+            timeout=60,
         )
 
     def captured(self, name):
@@ -151,6 +159,59 @@ class CouncilTest(unittest.TestCase):
         self.assertLess(len(result.stdout.encode()), 10_000)
         self.assertIn("[truncated; full text in", result.stdout)
         self.assertIn("c" * 50_000, (self.root / "out" / "council.md").read_text())
+
+    def test_timeout_covers_a_member_that_never_reads_stdin(self):
+        self.fake("codex", "import time; time.sleep(60)\n")
+        self.fake("claude", "print('claude finding')\n")
+        self.context.write_text("x" * 300_000)
+        start = time.monotonic()
+        result = self.run_council("--members", "codex,claude", "--timeout", "2")
+        self.assertLess(time.monotonic() - start, 20)
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertIn("Codex gpt-6.2-sol (medium): failed: timed out after 2s", result.stdout)
+        self.assertIn("Claude Opus 5.5 (medium): ok", result.stdout)
+        self.assertIn("claude finding", result.stdout)
+
+    def test_descendant_holding_stdout_neither_blocks_nor_loses_the_answer(self):
+        self.fake(
+            "claude",
+            "import os, subprocess, sys\n"
+            "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+            "open(os.path.join(os.environ['CAPTURE'], 'grandchild'), 'w').write(str(child.pid))\n"
+            "print('claude finding', flush=True)\n",
+        )
+        start = time.monotonic()
+        result = self.run_council("--members", "claude", "--timeout", "30")
+        self.assertLess(time.monotonic() - start, 20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("claude finding", result.stdout)
+        self.assertFalse(alive(int((self.capture / "grandchild").read_text())))
+
+    def test_each_run_gets_a_fresh_directory(self):
+        self.fake("codex", FAKES["codex"])
+        first = self.run_council("--members", "codex", out_dir=False)
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        self.fake("codex", "pass\n")
+        second = self.run_council("--members", "codex", out_dir=False)
+        self.assertEqual(second.returncode, 4, second.stdout + second.stderr)
+        self.assertIn("failed: empty answer", second.stdout)
+        self.assertEqual(len(list((self.root / ".tmp" / "council").iterdir())), 2)
+
+        (self.root / "out").mkdir()
+        (self.root / "out" / "codex.md").write_text("stale finding")
+        reused = self.run_council("--members", "codex")
+        self.assertEqual(reused.returncode, 2)
+        self.assertIn("already exists", reused.stderr)
+
+    def test_stdout_budget_counts_bytes_and_keeps_utf8_valid(self):
+        self.fake("codex", RECORD + "argv = sys.argv[1:]\nPath(argv[argv.index('-o') + 1]).write_text('é' * 50_000)\n")
+        self.fake("claude", RECORD + "print('🦀' * 50_000)\n")
+        self.fake("agy", RECORD + "print('λx' * 50_000)\n")
+        result = self.run_council(text=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertLessEqual(len(result.stdout), 9_000)
+        output = result.stdout.decode("utf-8")
+        self.assertEqual(output.count("[truncated; full text in"), 3)
 
     def test_oversized_context_is_refused(self):
         self.context.write_text("x" * 500_000)

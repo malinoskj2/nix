@@ -28,14 +28,16 @@ Members run read-only and non-interactively, never with Fable:
 - Claude: `claude -p --model claude-opus-5-5 --effort medium --permission-mode plan --tools Read,Grep,Glob`.
 - Gemini: `agy --model gemini-4-neon-high --mode plan -p=<prompt>`, through the Antigravity CLI and its saved login.
 
-Each member has its own timeout (default 900 s). A failure, timeout or missing
-CLI is reported for that member and the others still finish. Exit status is 0
+Each member has its own timeout (default 900 s); when it exits or times out,
+its whole process group is stopped. A failure, timeout or missing CLI is
+reported for that member and the others still finish. Exit status is 0
 when all succeed, 3 when some fail, 4 when all fail and 2 for bad arguments.
 
-Output goes to `.tmp/council/<timestamp>/` (or `--out-dir`): `prompt.md`, each
+Each run writes to a fresh `.tmp/council/<timestamp>-<random>/`, or to
+`--out-dir`, which must not exist yet: `prompt.md`, each
 member's `<member>.md` answer and `<member>.log`, and `council.md` with every
 answer verbatim under its model's name. Stdout repeats the status lines and the
-answers, truncating long ones with a pointer to the full file.
+answers within 9,000 bytes, truncating long ones with a pointer to the full file.
 
 The council does not judge or merge findings. Weigh them yourself: check each
 against the code, keep the warranted ones and say why you dropped the rest.
