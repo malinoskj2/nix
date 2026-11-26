@@ -1,7 +1,8 @@
 probe_url() {
-  local url=$1 timeout=$2 body meta
+  local url=$1 timeout=$2 body meta extra=()
+  [[ -n ${3:-} ]] && extra=(--resolve "$3")
   body=$(mktemp)
-  meta=$(curl -ks -L --max-redirs 5 --connect-timeout "$timeout" --max-time "$((timeout * 2))" \
+  meta=$(curl "${extra[@]}" -ks -L --max-redirs 5 --connect-timeout "$timeout" --max-time "$((timeout * 2))" \
     -H 'Accept: text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.5' \
     -o "$body" -w '%{http_code}\t%{time_connect}\t%{content_type}' "$url") && probe_rc=0 || probe_rc=$?
   probe_code=${meta%%$'\t'*}
@@ -46,6 +47,29 @@ probe_all() {
   for target in "$@"; do
     probe_port "${target%:*}" "${target##*:}" "$timeout" >"$dir/${target##*:}" &
     pids+=($!)
+  done
+  ((${#pids[@]} == 0)) || wait "${pids[@]}"
+  cat "$dir"/* 2>/dev/null || true
+  rm -rf "$dir"
+}
+
+probe_sites() {
+  local timeout=$1 dir i=0 url pids=()
+  shift
+  dir=$(mktemp -d)
+  while (($#)); do
+    url=$1
+    (
+      probe_url "$url" "$timeout" "$2"
+      if [[ $probe_code == 000 ]]; then
+        printf '%s\tnone\n' "$url"
+      else
+        printf '%s\tok\t%s\t%s\t%s\t%s\n' "$url" "$url" "$probe_code" "$probe_type" "$probe_title"
+      fi
+    ) >"$dir/$i" &
+    pids+=($!)
+    i=$((i + 1))
+    shift 2
   done
   ((${#pids[@]} == 0)) || wait "${pids[@]}"
   cat "$dir"/* 2>/dev/null || true

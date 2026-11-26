@@ -33,3 +33,16 @@ if command -v docker >/dev/null 2>&1; then
     }
   }'
 fi
+
+if command -v docker >/dev/null 2>&1; then
+  docker ps --format '{{.Names}}	{{.Image}}' 2>/dev/null | while IFS='	' read -r name image; do
+    case $image in *caddy*) ;; *) continue ;; esac
+    config=$(docker exec "$name" sh -c 'wget -qO- http://127.0.0.1:2019/config/ 2>/dev/null || caddy adapt --config /etc/caddy/Caddyfile 2>/dev/null' </dev/null | tr -d '\n\t')
+    [ -n "$config" ] && [ "$config" != null ] && printf 'P\t%s\t%s\n' "$name" "$config"
+  done
+fi
+
+if command -v caddy >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
+  config=$(curl -s --max-time 2 http://127.0.0.1:2019/config/ | tr -d '\n\t')
+  [ -n "$config" ] && [ "$config" != null ] && printf 'P\tcaddy\t%s\n' "$config"
+fi

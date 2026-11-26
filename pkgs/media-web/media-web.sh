@@ -57,7 +57,7 @@ source "$MEDIA_WEB_PROBE"
 
 lan_addr=$(ssh -G "$host" | awk '$1 == "hostname" { print $2; exit }')
 
-discovery=$(ssh "$host" bash -s <"$MEDIA_WEB_DISCOVER") || {
+discovery=$(ssh -T "$host" bash -s <"$MEDIA_WEB_DISCOVER") || {
   echo "media-web: discovery over ssh to $host failed" >&2
   exit 1
 }
@@ -87,6 +87,21 @@ candidates=$(jq -nR '
     )
 ' <<<"$discovery")
 
+sites=$(jq -nR '
+  [inputs | split("\t") | select(.[0] == "P") | .[1] as $proxy
+    | (.[2] | fromjson? // empty) | (.apps.http.servers // {})[]
+    | ((.listen // []) | map(sub(".*:"; "") | tonumber? // empty)) as $ports
+    | (.routes // [])[] | (.match // [])[] as $m
+    | ($m.host // [])[] as $h | select($h | test("\\*") | not)
+    | (($m.path // ["/"])[] | rtrimstr("*") | if startswith("/") then . else "/" + . end) as $path
+    | $ports[] as $port
+    | (if $port == 443 then "https" else "http" end) as $scheme
+    | {proxy: $proxy, host: $h, port: $port,
+       url: "\($scheme)://\($h)\(if ($scheme == "http" and $port == 80) or ($scheme == "https" and $port == 443) then "" else ":\($port)" end)\($path)",
+       label: "\($h)\(if $path == "/" then "" else $path end)"}]
+  | unique_by(.url)
+' <<<"$discovery")
+
 mapfile -t lan_ports < <(jq -r --arg a "$lan_addr" '.[] | select(.lan) | "\($a):\(.port)"' <<<"$candidates")
 direct=$(probe_all "$timeout" "${lan_ports[@]}")
 
@@ -103,10 +118,29 @@ if ((${#remote_targets[@]})); then
     printf 'probe_all %q' "$timeout"
     printf ' %q' "${remote_targets[@]}"
     printf '\n'
-  } | ssh "$host" bash -s) || echo "media-web: probing through ssh failed" >&2
+  } | ssh -T "$host" bash -s) || echo "media-web: probing through ssh failed" >&2
 fi
 
-results=$(jq -nR --argjson c "$candidates" --argjson api "$api" '
+site_args=()
+if [[ $lan_addr =~ ^[0-9.]+$|: ]]; then
+  mapfile -t site_args < <(jq -r --arg a "$lan_addr" '.[] | .url, "\(.host):\(.port):\($a)"' <<<"$sites")
+else
+  mapfile -t site_args < <(jq -r '.[] | .url, ""' <<<"$sites")
+fi
+site_probes=$(probe_sites "$timeout" "${site_args[@]}")
+
+site_results=$(jq -nR --argjson s "$sites" --argjson api "$api" '
+  [inputs | split("\t") | select(.[1] == "ok")
+    | {url: .[2], via: "direct", status: (.[3] | tonumber), content_type: .[4], title: .[5]}
+    | . as $r | ($s[] | select(.url == $r.url)) as $k
+    | $r + {port: $k.port, label: $k.label, containers: [$k.proxy], units: [], processes: []}]
+  | map(select(
+      (.content_type | test("text/html|application/xhtml"; "i"))
+      or ($api == 1 and (.content_type | test("json"; "i")))
+    ))
+' <<<"$site_probes")
+
+results=$(jq -nR --argjson c "$candidates" --argjson api "$api" --argjson sites "$site_results" '
   [inputs | split("\t") | select(.[1] == "ok")
     | {port: (.[0] | tonumber), via: .[6], url: .[2], status: (.[3] | tonumber), content_type: .[4], title: .[5]}]
   | map(select(
@@ -116,6 +150,7 @@ results=$(jq -nR --argjson c "$candidates" --argjson api "$api" '
   | group_by(.port) | map(sort_by(.via) | .[0])
   | map(. as $r | ($c[] | select(.port == $r.port)) as $k
       | $r + {label: $k.label, containers: $k.containers, units: $k.units, processes: $k.processes})
+  | . + $sites
   | sort_by(.label, .port)
 ' < <(
   if [[ -n $direct ]]; then awk '{ print $0 "\tdirect" }' <<<"$direct"; fi
@@ -168,10 +203,9 @@ open_tunnel() {
 selection=$(fzf --multi --delimiter '\t' --with-nth 1,2,3,4 --tabstop 4 \
   --header 'label  port  title  url (tab: select several)' <<<"$rows") || exit 0
 
-while IFS=$'\t' read -r _ port _ _; do
-  entry=$(jq -c --argjson p "$port" '.[] | select(.port == $p)' <<<"$results")
-  url=$(jq -r .url <<<"$entry")
-  if [[ $(jq -r .via <<<"$entry") == ssh ]]; then
+while IFS=$'\t' read -r _ port _ shown; do
+  url=${shown% (ssh)}
+  if [[ $shown == *" (ssh)" ]]; then
     target=$(jq -r --argjson p "$port" '.[] | select(.port == $p) | .target' <<<"$candidates")
     open_tunnel "$target" "$port" "${url%%:*}"
   else
