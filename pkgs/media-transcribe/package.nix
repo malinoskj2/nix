@@ -36,7 +36,7 @@ in
         touch "$out"
       '';
     };
-    meta = {
+    meta = (old.meta or { }) // {
       description = "On-demand local audio transcription with faster-whisper";
       mainProgram = "media-transcribe";
       platforms = lib.platforms.linux;
