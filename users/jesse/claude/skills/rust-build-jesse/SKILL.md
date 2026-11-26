@@ -22,13 +22,28 @@ requirements and repository instructions take precedence over this guidance.
   repository evidence; ask only when an unresolved product choice changes the
   outcome.
 
+## Mechanized rules
+
+Run `rust-lints` at the workspace root before finishing and fix its findings in
+the code you changed. It applies the shared lint levels, `clippy.toml` and Dylint
+library to any Cargo project without editing it, keeps the project's own lint
+settings and lists where they differ. Exit status 0 is clean, 1 findings, 2 a
+build or tool failure; `--json` gives a machine-readable report.
+`rust-lints --paths` prints the source of truth for these rules: `lints.toml`,
+`clippy.toml` and the Dylint sources (`pkgs/rust-lints/` in the Nix repository).
+Rules below that name a lint are enforced there. Suppress a justified finding
+with `#[expect(lint, reason = "...")]`, or
+`#[cfg_attr(dylint_lib = "jesse_lints", expect(lint, reason = "..."))]` for a
+Dylint lint.
+
 ## Project structure
 
 Use one of these two patterns: a single package with a library and thin binary
 entry points, or a Cargo workspace with multiple focused crates. Start with the
 single-package pattern; split into crates when independent consumers, dependency
 boundaries or distinct responsibilities justify it. Keep business logic out of
-`main.rs`. Organize modules by domain responsibility, not a catch-all `utils`.
+`main.rs`. Organize modules by domain responsibility (catch-all names:
+`catch_all_module`).
 The names below are examples; create only modules and crates the project needs.
 
 Single package with a library:
@@ -79,10 +94,11 @@ than scattering `cfg` through shared logic.
 
 ## Module ownership
 
-Avoid heavily nested logic within functions: use guard clauses where they clarify
-control flow, split work at cohesive responsibility boundaries, and consider
-whether deep nesting signals a missing domain abstraction that should own the
-rules or state. Introduce an abstraction when it clarifies those responsibilities.
+Avoid heavily nested logic within functions (`clippy::excessive_nesting` flags
+the deepest): use guard clauses where they clarify control flow, split work at
+cohesive responsibility boundaries, and consider whether deep nesting signals a
+missing domain abstraction that should own the rules or state. Introduce an
+abstraction when it clarifies those responsibilities.
 
 - **Organize by responsibility.** Keep parsing, transport and lifecycle details
   under their owning feature. Split files when responsibilities separate.
@@ -176,21 +192,19 @@ Use `thiserror` derives for owned domain, adapter and reusable-library error
 types; use `anyhow::Result` and `anyhow::Context` at executable and report-only
 orchestration boundaries. Keep typed errors until the last caller that needs to
 match them. Do not replace these crates with hand-written error boilerplate,
-string errors or another error framework. Add the dependencies to the crates
+string errors or another error framework (`manual_error_impl`,
+`stringly_error`). Add the dependencies to the crates
 that use them; a library without a report-only boundary does not need artificial
 `anyhow` conversions merely to use both crates.
 
-A `thiserror` variant that carries its cause through `#[from]` or `#[source]`
-must not repeat that cause in its `#[error]` message. The message names the step
-that failed; the cause is printed once when the chain is reported (`{:#}` on
-`anyhow::Error`, or a walk of `source()`). Test the rendered chain where users
-see it.
+An `#[error]` message names the failed step without repeating its source:
+`thiserror_source_in_message`. Test the rendered chain where users see it.
 
-Outside tests, avoid `unwrap` and `expect` wherever a non-panicking form exists:
-destructuring instead of indexing, `get_or_insert_with`, `try_from` with a
-returned error, checked arithmetic or a value computed in a `const` context.
-Keep `expect` for invariants the types cannot express, with a message stating
-the invariant.
+`unwrap` outside tests: `clippy::unwrap_used`. Avoid `expect` where a
+non-panicking form exists: destructuring instead of indexing,
+`get_or_insert_with`, `try_from` with a returned error, checked arithmetic or a
+value computed in a `const` context. Keep `expect` for invariants the types
+cannot express, with a message stating the invariant.
 
 ## Enums
 
@@ -204,12 +218,12 @@ only the data valid in that variant.
 - Return an outcome enum from an operation with several meaningful results, such
   as `Fresh`, `Unchanged` and `Resized`, instead of a `bool`, a sentinel value or
   an error used as control flow. Keep `Result` for failures.
-- Use a two-variant enum instead of a `bool` parameter when the call site would
-  otherwise read `f(true)`.
+- A `bool` literal argument (`bool_literal_argument`) calls for a two-variant
+  enum.
 - Prefer an enum to a trait object when the crate owns a closed set of
   implementations; use a trait when callers supply them.
-- Match domain enums exhaustively where the match makes a decision, without a
-  wildcard arm, so a new variant forces each dependent decision to be revisited.
+- Match domain enums exhaustively where the match makes a decision
+  (`local_enum_wildcard_arm` covers enums of the same crate).
 
 ## Unsafe code and FFI
 
@@ -219,15 +233,15 @@ called. Keep the code above that boundary safe Rust, and prefer maintained safe
 wrappers (`rustix`, `bytemuck` for plain-old-data casts, the platform's wrapper
 crate) to hand-written bindings.
 
-- Each `unsafe` block performs one unsafe operation and carries a `// SAFETY:`
-  comment stating the invariant that makes it sound.
+- One operation and one `// SAFETY:` invariant per `unsafe` block:
+  `clippy::multiple_unsafe_ops_per_block`, `clippy::undocumented_unsafe_blocks`.
 - Wrap every foreign handle, allocation and registration in an owning type whose
   `Drop` releases it. Tie function pointers and objects obtained from a loaded
   library to that library's lifetime, through a borrow or shared ownership, so
   the library cannot be unloaded first.
 - Encode thread affinity in the type: a guard for a thread-bound context or
-  apartment is `!Send`. Never implement `Send` or `Sync` without a `SAFETY`
-  comment justifying it.
+  apartment is `!Send`. `unsafe impl Send`/`Sync` needs a `SAFETY` comment
+  (`clippy::undocumented_unsafe_blocks`).
 - Check `#[repr(C)]` layouts and versioned structure sizes against the foreign
   headers at compile time with `const _: () = assert!(...)`, `size_of` and
   `offset_of!`.
@@ -236,17 +250,13 @@ crate) to hand-written bindings.
 
 ## Lints
 
-Follow the repository's lint configuration. When establishing one, use
-`[lints]` in `Cargo.toml`: deny `unsafe_code`; warn on `unreachable_pub`;
-enable Clippy's `pedantic` group at priority -1 together with
-`undocumented_unsafe_blocks`, `multiple_unsafe_ops_per_block` and
-`allow_attributes_without_reason`; and allow only the pedantic lints the project
-deliberately rejects. Suppress a lint locally with
-`#[expect(lint, reason = "...")]` rather than `#[allow]`, so a suppression that
-no longer applies is reported. CI runs `cargo fmt --check`,
-`cargo clippy --locked --all-targets` and `cargo test --locked` with warnings
-denied, and tests the declared `rust-version` in its own job. Do not impose this
-policy on an existing project as unrelated work.
+Follow the repository's lint configuration. When establishing one, paste
+`lints.toml` into `[workspace.lints]` and copy `clippy.toml`, then allow only
+the pedantic lints the project deliberately rejects. Suppress locally with
+`#[expect(lint, reason = "...")]` (`clippy::allow_attributes`). CI runs `cargo
+fmt --check`, `cargo clippy --locked --all-targets` and `cargo test --locked`
+with warnings denied, and tests the declared `rust-version` in its own job. Do
+not impose this policy on an existing project as unrelated work.
 
 ## Formatting
 
@@ -254,12 +264,8 @@ Within functions, use a single blank line to separate meaningful logical steps
 (such as validation, preparation, effects and results), keeping tightly related
 statements together and short cohesive functions compact.
 
-Put exactly one empty line between Rust items, including between free functions
-and between methods in an `impl` block. Never place function or method
-definitions directly against each other. The empty line may be omitted only
-between logically grouped non-function items, such as a compact group of module
-declarations, imports or closely related constants. Preserve this spacing when
-running rustfmt and check item boundaries in the final diff.
+One empty line between items: `missing_item_separator`. rustfmt does not insert
+a missing one.
 
 ## Implement
 
@@ -293,10 +299,12 @@ entry point, domain logic and persistence or external boundary.
   executable and orchestration functions whose caller only reports failure;
   attach actionable `Context` at I/O and subsystem boundaries. Keep a concrete
   error type until no caller needs to match on it, and avoid string inspection
-  as control flow.
-- Bound network bodies, deadlines, retries, concurrency, queues and result sets.
-  Every spawned task needs an owner and a shutdown path; avoid blocking or
-  holding a mutex guard across `.await`.
+  as control flow (`error_string_matching`).
+- Bound network bodies, deadlines, retries, concurrency, queues and result sets
+  (unbounded channels and timeout-less HTTP clients: `clippy.toml`). Every
+  spawned task needs an owner and a shutdown path (`detached_spawn`); avoid
+  blocking or holding a mutex guard across `.await` (`blocking_call_in_async`,
+  `clippy::await_holding_lock`).
 - Put related writes and read-check-write invariants in the appropriate
   transaction. Keep network work outside a database transaction unless the
   repository documents a reason otherwise.
@@ -317,8 +325,8 @@ Use `assert_cmd` when exit status or stdout/stderr is the contract, and consider
 
 Discover required checks from the repository's CI, task runner and scripts, then
 run the checks relevant to the change. Normally this includes formatting,
-Clippy with the repository's warning policy, focused tests and the broader test
-target required by CI. Run architectural checks and measured performance or
+Clippy with the repository's warning policy, `rust-lints`, focused tests and the
+broader test target required by CI. Run architectural checks and measured performance or
 statement baselines when the affected project defines them. Do not claim a check
 passed when its service, fixture or toolchain was unavailable.
 

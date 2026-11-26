@@ -199,6 +199,19 @@ Treat a bump as a hardware change and test it on the device.
   `terminal/requirements.txt` for a new CUDA or Python requirement. Then run
   `qwen-prompt --strata` for both models and check that the engine log still
   reads the GGUF on the `qwen35moe` path with its MTP block loaded.
+- **rust-lints.** [`pkgs/rust-lints/`](../pkgs/rust-lints) builds a Dylint
+  library against one nightly from the `rust-overlay` input. `nightlyDate`,
+  `dylintVersion` and `clippyUtilsVersion` move together: take the newest
+  `clippy_utils` release, the nightly its README names, and the Dylint release
+  that supports it. Change `channel` in `lints/rust-toolchain.toml` and the
+  `clippy_utils`, `dylint_*` and `dylint-driver` versions in both crates'
+  manifests, refresh both lockfiles with that nightly's `cargo`, then refresh
+  the crate and vendor hashes. `dylint_driver`'s build script reads
+  `clippy_utils/src/sym.rs` from a Clippy checkout; the package fakes one from
+  the pinned crate, so rustc API changes surface as compile errors in
+  `lints/src`. Build `checks.<system>.rust-lints-library` (UI tests) and
+  `rust-lints-fixture` (the runner on a stable project, offline), then run
+  `rust-lints` on a real workspace.
 - **htop.** [`pkgs/htop-vim-navigation/`](../pkgs/htop-vim-navigation) asserts
   the htop versions its patch was checked against. If a nixpkgs update trips
   it, re-check the patch next to it and add the new version.

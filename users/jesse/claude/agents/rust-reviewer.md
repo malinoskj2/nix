@@ -14,7 +14,8 @@ skill directs. An unresolved `$ARGUMENTS` placeholder is not a literal target.
 
 Keep the review read-only. Use shell commands for inspection, history and diffs,
 but do not edit files, run formatters, install dependencies or execute checks
-that mutate the project. Report any resulting verification limit.
+that mutate the project. `rust-lints` is allowed: it writes only under the
+target directory. Report any resulting verification limit.
 
 Return findings first in severity order, with concrete evidence and corrections.
 Keep requirement gaps, verified defects, questions and residual risks distinct.
