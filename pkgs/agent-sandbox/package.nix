@@ -129,6 +129,7 @@
   tmux,
   tokei,
   tree,
+  ts-lints,
   tzdata,
   unrar,
   unzip,
@@ -484,6 +485,7 @@ let
       tmux
       tokei
       tree
+      ts-lints
       unrar
       unreal.tools
       unzip

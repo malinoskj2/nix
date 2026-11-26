@@ -20,6 +20,7 @@
     pkg-config
     playwright-test
     python3
+    ts-lints
   ];
 
   home.sessionVariables = {
