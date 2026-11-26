@@ -22,9 +22,11 @@ CONTEXT_LIMIT = 400_000
 STDOUT_BUDGET = 9_000
 KILL_GRACE = 5
 AGY_TIMEOUT_MARGIN = 15
-AGY_AGENT = "council-member"
+AGY_AGENT = "council-member-7c41e9"
+AGY_MARKER = "# Written by the council command, which rewrites this file; rename it to keep your own agent."
 # read_file is agy's whole read-only group (view, list and search); nothing else, so no shell, edits or web.
 AGY_AGENT_FILE = f"""---
+{AGY_MARKER}
 name: {AGY_AGENT}
 description: Read-only member of the council skill's review panel.
 tools: [read_file]
@@ -35,7 +37,8 @@ hidden: true
 
 You review code and answer design questions read-only, from the repository and the context you are given.
 """
-AUTH_PROMPT = b"Authentication required"
+# agy writes this line to stderr before its session starts, then waits for a browser sign-in.
+AUTH_PROMPT = b"Authentication required. Please visit the URL to log in:"
 AUTH_FIX = "failed: agy is not signed in; run `agy` on the host and sign in (a sandbox copies the login when it starts)"
 
 
@@ -99,11 +102,24 @@ def command(member, prompt, prompt_path, last_message, timeout):
     ], False
 
 
+class AgentConflict(Exception):
+    pass
+
+
 def install_agy_agent():
     path = Path.home() / ".gemini/config/agents" / f"{AGY_AGENT}.md"
-    if path.exists() and path.read_text() == AGY_AGENT_FILE:
-        return
     path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(path, "x") as f:
+            f.write(AGY_AGENT_FILE)
+        return
+    except FileExistsError:
+        pass
+    current = path.read_text(errors="replace")
+    if current == AGY_AGENT_FILE:
+        return
+    if AGY_MARKER not in current.splitlines():
+        raise AgentConflict(f"{path} exists and wasn't written by council; move it aside and rerun")
     with tempfile.NamedTemporaryFile("w", dir=path.parent, prefix=f".{AGY_AGENT}.", delete=False) as f:
         f.write(AGY_AGENT_FILE)
     os.replace(f.name, path)
@@ -171,13 +187,19 @@ def stop_group(proc):
             time.sleep(0.05)
 
 
-def wait(proc, timeout, log):
+def agy_awaits_sign_in(log, stream):
+    if stream.stat().st_size:
+        return False
+    return AUTH_PROMPT in log.read_bytes().splitlines()
+
+
+def wait(proc, timeout, log, agy_stream):
     deadline = time.monotonic() + timeout
     while True:
         try:
             return proc.wait(timeout=min(0.5, max(0, deadline - time.monotonic())))
         except subprocess.TimeoutExpired:
-            if AUTH_PROMPT in log.read_bytes():
+            if agy_stream and agy_awaits_sign_in(log, agy_stream):
                 return AUTH_PROMPT
             if time.monotonic() >= deadline:
                 raise
@@ -197,7 +219,12 @@ def ask(member, prompt, prompt_path, out_dir, timeout, results):
         if member == "codex":
             stdout = log_file
         elif member == "gemini":
-            install_agy_agent()
+            try:
+                install_agy_agent()
+            except AgentConflict as error:
+                result |= {"status": f"failed: {error}", "seconds": 0}
+                results[member] = result
+                return
             stdout = files.enter_context(open(stream, "xb"))
         else:
             stdout = files.enter_context(open(answer, "xb"))
@@ -214,7 +241,7 @@ def ask(member, prompt, prompt_path, out_dir, timeout, results):
             result["status"] = f"failed: {argv[0]} not found on PATH"
         else:
             try:
-                code = wait(proc, timeout, log)
+                code = wait(proc, timeout, log, stream if member == "gemini" else None)
                 if code is AUTH_PROMPT:
                     result["status"] = AUTH_FIX
                 else:

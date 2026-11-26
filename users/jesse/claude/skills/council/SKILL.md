@@ -26,8 +26,8 @@ Members run read-only and non-interactively, never with Fable:
 
 - Codex: `codex exec --model gpt-6.2-sol -c model_reasoning_effort="medium" --sandbox read-only`.
 - Claude: `claude -p --model claude-opus-5-5 --effort medium --permission-mode plan --tools Read,Grep,Glob`.
-- Gemini: `agy --agent council-member --model gemini-4-neon-high -p=<prompt>`, through the Antigravity CLI and its saved login.
-  council writes `~/.gemini/config/agents/council-member.md`, whose only tool is `read_file` (view, list and
+- Gemini: `agy --agent council-member-7c41e9 --model gemini-4-neon-high -p=<prompt>`, through the Antigravity CLI and its saved login.
+  council writes `~/.gemini/config/agents/council-member-7c41e9.md`, whose only tool is `read_file` (view, list and
   search): no shell, edits or web search. agy's plan mode isn't used, because it tells the model to research
   exhaustively and doesn't stop web search. If agy isn't signed in, Gemini fails at once with the fix instead
   of waiting on the sign-in prompt.

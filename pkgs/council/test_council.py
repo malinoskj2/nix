@@ -115,8 +115,8 @@ class CouncilTest(unittest.TestCase):
 
         agy = self.captured("agy")["argv"]
         self.assertEqual(agy[agy.index("--model") + 1], "gemini-4-neon-high")
-        self.assertEqual(agy[agy.index("--agent") + 1], "council-member")
-        agent = (self.root / "home/.gemini/config/agents/council-member.md").read_text()
+        self.assertEqual(agy[agy.index("--agent") + 1], "council-member-7c41e9")
+        agent = (self.root / "home/.gemini/config/agents/council-member-7c41e9.md").read_text()
         self.assertIn("tools: [read_file]\n", agent)
 
         for name in ("codex", "claude"):
@@ -169,6 +169,46 @@ class CouncilTest(unittest.TestCase):
         self.assertIn("It had read 1 path(s): `/repo/a.nix`", (self.root / "out" / "gemini.md").read_text())
         agy = self.captured("agy")["argv"]
         self.assertEqual(agy[agy.index("--print-timeout") + 1], "5s")
+
+    def test_sign_in_text_elsewhere_is_not_a_sign_in_prompt(self):
+        prompt = "Authentication required. Please visit the URL to log in:"
+        self.fake(
+            "codex",
+            RECORD + f"import time\nprint({prompt!r}, flush=True)\ntime.sleep(1)\n" + FAKES["codex"][len(RECORD) :],
+        )
+        self.fake(
+            "agy",
+            RECORD
+            + "import time\n"
+            + "print(json.dumps({'event': 'init'}), flush=True)\n"
+            + f"sys.stderr.write({prompt!r} + '\\n'); sys.stderr.flush(); time.sleep(1)\n"
+            + "print(json.dumps({'event': 'result', 'result': {'status': 'SUCCESS', 'response': 'gemini finding'}}))\n",
+        )
+        result = self.run_council("--members", "codex,gemini")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("codex finding", result.stdout)
+        self.assertIn("gemini finding", result.stdout)
+
+    def test_a_users_agent_with_councils_name_is_not_overwritten(self):
+        self.fake("agy", FAKES["agy"])
+        agent = self.root / "home/.gemini/config/agents/council-member-7c41e9.md"
+        agent.parent.mkdir(parents=True)
+        agent.write_text("my own agent\n")
+        result = self.run_council("--members", "gemini")
+        self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
+        self.assertIn("wasn't written by council; move it aside", result.stdout)
+        self.assertEqual(agent.read_text(), "my own agent\n")
+        self.assertFalse((self.capture / "agy.json").exists())
+
+    def test_an_older_council_agent_is_updated(self):
+        self.fake("agy", FAKES["agy"])
+        agent = self.root / "home/.gemini/config/agents/council-member-7c41e9.md"
+        agent.parent.mkdir(parents=True)
+        marker = "# Written by the council command, which rewrites this file; rename it to keep your own agent."
+        agent.write_text(f"---\n{marker}\nname: old\n---\n")
+        result = self.run_council("--members", "gemini")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("tools: [read_file]\n", agent.read_text())
 
     def test_gemini_without_login_fails_fast_without_the_sign_in_url(self):
         self.fake(
