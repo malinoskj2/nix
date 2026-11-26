@@ -92,6 +92,7 @@
           qwen-prompt = self'.packages.qwen-prompt.tests.launchers;
           unreal-sandbox = self'.packages.agent-sandbox.unrealTests;
           agent-sandbox-exec = self'.packages.agent-sandbox.execTests;
+          agent-sandbox-codex = self'.packages.agent-sandbox.codexTests;
           sandbox-display = self'.packages.agent-sandbox.displayTests;
         };
     };

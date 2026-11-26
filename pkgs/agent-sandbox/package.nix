@@ -288,12 +288,17 @@ let
     ]) (ghidraMcp // { command = lib.getExe pyghidra-mcp; })
   );
 
-  codex' = writeShellScriptBin "codex" ''
+  codex' = writeShellApplication {
+    name = "codex";
     # The container provides isolation. Set this before app-server startup checks, too.
-    exec ${lib.getExe codex} --no-alt-screen \
-      -c 'sandbox_mode="danger-full-access"' -c 'approval_policy="never"' \
-      ${lib.escapeShellArgs codexMcpOverrides} "$@"
-  '';
+    text = ''
+      CODEX=${lib.getExe codex}
+      set -- --no-alt-screen \
+        -c 'sandbox_mode="danger-full-access"' -c 'approval_policy="never"' \
+        ${lib.escapeShellArgs codexMcpOverrides} "$@"
+    ''
+    + builtins.readFile ./codex.sh;
+  };
 
   # The desktop CLI connects to its Unix runtime socket through the read-only
   # ~/.config/orca mount. The Electron app itself is never started here.
@@ -785,6 +790,20 @@ symlinkJoin {
           cp ${./agent-sandbox-resume.sh} agent-sandbox-resume.sh
           cp ${./test-agent-sandbox-exec.py} test-agent-sandbox-exec.py
           python3 -B test-agent-sandbox-exec.py -v
+          touch $out
+        '';
+    codexTests =
+      runCommand "agent-sandbox-codex-tests"
+        {
+          nativeBuildInputs = [
+            bashInteractive
+            python3
+          ];
+        }
+        ''
+          cp ${./codex.sh} codex.sh
+          cp ${./test-codex.py} test-codex.py
+          python3 -B test-codex.py -v
           touch $out
         '';
   };

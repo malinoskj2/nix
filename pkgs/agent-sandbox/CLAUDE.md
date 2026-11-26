@@ -73,6 +73,8 @@ Media galleries don't use these ports: `media-gallery serve` publishes them on t
 
 ## Tools
 
+`codex --cloud` (or `sandbox codex --cloud` on the host) starts Codex with `tui_multi_backend` enabled, so the TUI's Cloud backend (Ctrl-X B, then Ctrl-X E) lists ChatGPT Work cloud environments; it is off otherwise.
+
 `tiktok-search` collects TikTok video links and metadata through Chromium, with
 local date and popularity filters. It runs only when invoked; use the
 `tiktok-search` skill for limits, browser-session requirements and coverage.
