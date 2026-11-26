@@ -58,10 +58,14 @@ source "$MEDIA_WEB_PROBE"
 ssh_opts=(-T -o RequestTTY=no -o LogLevel=ERROR)
 lan_addr=$(ssh "${ssh_opts[@]}" -G "$host" | awk '$1 == "hostname" { print $2; exit }')
 
-discovery=$(ssh "${ssh_opts[@]}" "$host" bash -s <"$MEDIA_WEB_DISCOVER") || {
+discovery_status=0
+discovery=$(ssh "${ssh_opts[@]}" "$host" bash -s <"$MEDIA_WEB_DISCOVER") || discovery_status=$?
+if [[ -z $discovery ]]; then
   echo "media-web: discovery over ssh to $host failed" >&2
   exit 1
-}
+elif ((discovery_status)); then
+  echo "media-web: discovery on $host exited with $discovery_status; using what it found" >&2
+fi
 
 candidates=$(jq -nR '
   [inputs | split("\t")] as $rows
@@ -92,12 +96,14 @@ sites=$(jq -nR '
   [inputs | split("\t") | select(.[0] == "P") | .[1] as $proxy
     | (.[2] | fromjson? // empty) | (.apps.http.servers // {})[]
     | ((.listen // []) | map(sub(".*:"; "") | tonumber? // empty)) as $ports
-    | (.routes // [])[] | (.match // [])[] as $m
+    | (.routes // [])[] as $route
+    | ([$route.handle // [] | .. | objects | select(.handler? == "reverse_proxy") | .upstreams[]?.dial] | unique | join(",")) as $upstream
+    | ($route.match // [])[] as $m
     | ($m.host // [])[] as $h | select($h | test("\\*") | not)
     | (($m.path // ["/"])[] | rtrimstr("*") | if startswith("/") then . else "/" + . end) as $path
     | $ports[] as $port
     | (if $port == 443 then "https" else "http" end) as $scheme
-    | {proxy: $proxy, host: $h, port: $port,
+    | {proxy: $proxy, host: $h, port: $port, upstream: $upstream,
        url: "\($scheme)://\($h)\(if ($scheme == "http" and $port == 80) or ($scheme == "https" and $port == 443) then "" else ":\($port)" end)\($path)",
        label: "\($h)\(if $path == "/" then "" else $path end)"}]
   | unique_by(.url)
@@ -132,18 +138,19 @@ site_probes=$(probe_sites "$timeout" "${site_args[@]}")
 
 site_results=$(jq -nR --argjson s "$sites" --argjson api "$api" '
   [inputs | split("\t") | select(.[1] == "ok")
-    | {url: .[2], via: "direct", status: (.[3] | tonumber), content_type: .[4], title: .[5]}
+    | {url: .[2], via: "direct", status: (.[3] | tonumber), content_type: .[4], title: .[5], hash: .[6]}
     | . as $r | ($s[] | select(.url == $r.url)) as $k
-    | $r + {port: $k.port, label: $k.label, containers: [$k.proxy], units: [], processes: []}]
+    | $r + {port: $k.port, label: $k.label, upstream: $k.upstream, containers: [$k.proxy], units: [], processes: []}]
   | map(select(
       (.content_type | test("text/html|application/xhtml"; "i"))
       or ($api == 1 and (.content_type | test("json"; "i")))
     ))
 ' <<<"$site_probes")
 
-results=$(jq -nR --argjson c "$candidates" --argjson api "$api" --argjson sites "$site_results" '
+empty_hash=$(printf '' | sha256sum | cut -c 1-16)
+results=$(jq -nR --argjson c "$candidates" --argjson api "$api" --argjson sites "$site_results" --arg empty "$empty_hash" '
   [inputs | split("\t") | select(.[1] == "ok")
-    | {port: (.[0] | tonumber), via: .[6], url: .[2], status: (.[3] | tonumber), content_type: .[4], title: .[5]}]
+    | {port: (.[0] | tonumber), via: .[7], url: .[2], status: (.[3] | tonumber), content_type: .[4], title: .[5], hash: .[6], upstream: ""}]
   | map(select(
       (.content_type | test("text/html|application/xhtml"; "i"))
       or ($api == 1 and (.content_type | test("json"; "i")))
@@ -152,10 +159,11 @@ results=$(jq -nR --argjson c "$candidates" --argjson api "$api" --argjson sites 
   | map(. as $r | ($c[] | select(.port == $r.port)) as $k
       | $r + {label: $k.label, containers: $k.containers, units: $k.units, processes: $k.processes})
   | . + $sites
-  | group_by(if .title == "" then .url else [.port, .status, .title] end)
+  | group_by(if .hash == $empty then [.url] else [.port, .status, .hash, .upstream] end)
   | map(
       sort_by([(.url | test("^[a-z]+://([0-9.]+|\\[[^]]*\\])(:|/|$)")), (.url | length)])
       | .[0] + {aliases: (.[1:] | map({label, url}))}
+      | del(.hash)
     )
   | sort_by(.label, .port)
 ' < <(

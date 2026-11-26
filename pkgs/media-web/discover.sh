@@ -20,7 +20,7 @@ grep -o 'pid=[0-9]*' <<<"$listeners" | sort -u | while IFS='=' read -r _ pid; do
 done
 
 if command -v docker >/dev/null 2>&1; then
-  docker ps --format '{{.Names}}	{{.Ports}}' 2>/dev/null | awk -F '\t' '{
+  timeout 10 docker ps --format '{{.Names}}	{{.Ports}}' 2>/dev/null | awk -F '\t' '{
     n = split($2, ports, ", ")
     for (i = 1; i <= n; i++) {
       if (ports[i] !~ /->[0-9-]+\/tcp$/) continue
@@ -34,15 +34,28 @@ if command -v docker >/dev/null 2>&1; then
   }'
 fi
 
+caddy_config() {
+  local source=$1 config status=0
+  shift
+  config=$(timeout 8 "$@" </dev/null 2>/dev/null) || status=$?
+  config=${config//[$'\n\t']/}
+  if [ "$status" = 124 ]; then
+    echo "media-web: skipped $source's Caddy config: timed out" >&2
+  elif [ -n "$config" ] && [ "$config" != null ]; then
+    printf 'P\t%s\t%s\n' "$source" "$config"
+  fi
+}
+
 if command -v docker >/dev/null 2>&1; then
-  docker ps --format '{{.Names}}	{{.Image}}' 2>/dev/null | while IFS='	' read -r name image; do
+  timeout 10 docker ps --format '{{.Names}}	{{.Image}}' 2>/dev/null | while IFS='	' read -r name image; do
     case $image in *caddy*) ;; *) continue ;; esac
-    config=$(docker exec "$name" sh -c 'wget -qO- http://127.0.0.1:2019/config/ 2>/dev/null || caddy adapt --config /etc/caddy/Caddyfile 2>/dev/null' </dev/null | tr -d '\n\t')
-    [ -n "$config" ] && [ "$config" != null ] && printf 'P\t%s\t%s\n' "$name" "$config"
+    caddy_config "$name" docker exec "$name" sh -c \
+      'wget -q -T 3 -O- http://127.0.0.1:2019/config/ 2>/dev/null || caddy adapt --config /etc/caddy/Caddyfile 2>/dev/null'
   done
 fi
 
 if command -v caddy >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
-  config=$(curl -s --max-time 2 http://127.0.0.1:2019/config/ | tr -d '\n\t')
-  [ -n "$config" ] && [ "$config" != null ] && printf 'P\tcaddy\t%s\n' "$config"
+  caddy_config caddy curl -s --max-time 3 http://127.0.0.1:2019/config/
 fi
+
+exit 0
