@@ -50,7 +50,7 @@ export default createRule({
   name: "vue-composable-call-position",
   meta: {
     type: "problem",
-    docs: { description: "Require composables to be called unconditionally at the top of setup or another composable; Pinia store accessors are exempt" },
+    docs: { description: "Require composables to be called unconditionally at the top of setup or another composable; Pinia store accessors may also be called in callbacks such as navigation guards" },
     messages: {
       moduleScope: "`{{name}}()` at module scope runs outside any component or effect scope: call it inside setup or a composable.",
       nested: "`{{name}}()` inside a callback runs outside setup: call it at the top of setup or a composable and use its result here.",
@@ -71,12 +71,15 @@ export default createRule({
     return {
       "CallExpression[callee.type='Identifier']"(node) {
         const name = node.callee.name;
-        if (!COMPOSABLE.test(name) || isStoreAccessor(node.callee)) {
+        if (!COMPOSABLE.test(name)) {
           return;
         }
         const fn = enclosingFunction(node);
         if (!fn && !isVue) {
           context.report({ node, messageId: "moduleScope", data: { name } });
+          return;
+        }
+        if (isStoreAccessor(node.callee)) {
           return;
         }
         if (fn && !isSetupFunction(fn)) {

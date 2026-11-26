@@ -106,6 +106,7 @@ tester.run("vue-composable-call-position", rules["vue-composable-call-position"]
   ],
   invalid: [
     { code: "const route = useRoute();", filename: "a.ts", errors: [{ messageId: "moduleScope" }] },
+    { code: "const session = useSessionStore();", filename: "a.ts", errors: [{ messageId: "moduleScope" }] },
     { code: "export function useA() { onMounted(() => { useB(); }); }", filename: "a.ts", errors: [{ messageId: "nested" }] },
     { code: "export function useA(x) { if (x) { useB(); } }", filename: "a.ts", errors: [{ messageId: "conditional" }] },
     { code: "export function useA(xs) { for (const x of xs) useB(x); }", filename: "a.ts", errors: [{ messageId: "conditional" }] },
