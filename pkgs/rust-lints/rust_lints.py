@@ -106,9 +106,9 @@ def merge_levels(ours: dict[str, Setting], members: dict[str, dict[str, Setting]
             configured.setdefault(name, {})[member] = setting
 
     flags = [
-        Setting(name, "warn", setting.priority)
+        Setting(name, "allow" if setting.level == "allow" else "warn", setting.priority)
         for name, setting in ours.items()
-        if name not in configured and setting.level != "allow"
+        if name not in configured
     ]
 
     overrides = []
@@ -132,7 +132,14 @@ def merge_levels(ours: dict[str, Setting], members: dict[str, dict[str, Setting]
                 )
             )
 
-    ordered = sorted(flags, key=lambda s: s.priority) + sorted(replay, key=lambda s: s.priority)
+    # Groups (negative priority) come first, so an individual level from either side beats a group.
+    ordered = [
+        setting
+        for groups in (True, False)
+        for side in (flags, replay)
+        for setting in sorted(side, key=lambda s: s.priority)
+        if (setting.priority < 0) == groups
+    ]
     return [flag for setting in ordered for flag in level_flag(setting)], overrides
 
 

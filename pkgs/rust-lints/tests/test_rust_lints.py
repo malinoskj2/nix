@@ -37,6 +37,14 @@ class MergeLevels(unittest.TestCase):
         self.assertIsNone(reported["clippy::module_name_repetitions"].ours)
         self.assertFalse(reported["clippy::unwrap_used"].mixed)
 
+    def test_individual_levels_follow_every_group(self):
+        ours = OURS | {"clippy::must_use_candidate": rust_lints.Setting("clippy::must_use_candidate", "allow", 0)}
+        project = {"clippy::pedantic": rust_lints.Setting("clippy::pedantic", "warn", -1)}
+        flags, _ = rust_lints.merge_levels(ours, {"Cargo.toml": project})
+        self.assertEqual(flags[:2], ["-W", "clippy::pedantic"])
+        self.assertLess(flags.index("clippy::pedantic"), flags.index("clippy::must_use_candidate"))
+        self.assertEqual(flags[flags.index("clippy::must_use_candidate") - 1], "-A")
+
     def test_project_deny_is_kept(self):
         project = {"unsafe_code": rust_lints.Setting("unsafe_code", "forbid", 0)}
         flags, _ = rust_lints.merge_levels(OURS, {"Cargo.toml": project})

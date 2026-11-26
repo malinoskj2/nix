@@ -233,8 +233,9 @@ called. Keep the code above that boundary safe Rust, and prefer maintained safe
 wrappers (`rustix`, `bytemuck` for plain-old-data casts, the platform's wrapper
 crate) to hand-written bindings.
 
-- One operation and one `// SAFETY:` invariant per `unsafe` block:
-  `clippy::multiple_unsafe_ops_per_block`, `clippy::undocumented_unsafe_blocks`.
+- One operation per `unsafe` block, with its `// SAFETY:` invariant
+  (`clippy::undocumented_unsafe_blocks`). The one-operation rule is a review
+  point, not a lint.
 - Wrap every foreign handle, allocation and registration in an owning type whose
   `Drop` releases it. Tie function pointers and objects obtained from a loaded
   library to that library's lifetime, through a borrow or shared ownership, so
