@@ -6,7 +6,7 @@ export default createRule({
   name: "no-file-header-comment",
   meta: {
     type: "suggestion",
-    docs: { description: "Disallow a comment at the top of a file that describes the file" },
+    docs: { description: "Disallow a comment at the top of a file that describes the file rather than the declaration below it" },
     messages: {
       header: "File header comment: drop it; the module's name and exports describe it.",
     },
@@ -22,10 +22,12 @@ export default createRule({
           return;
         }
         const first = source.ast.tokens[0];
-        if (first && comment.range[0] > first.range[0]) {
+        if (!first || comment.range[0] > first.range[0] || node.body.length === 0) {
           return;
         }
-        if (node.body.length === 0) {
+        const documentsDeclaration =
+          node.body[0].type !== "ImportDeclaration" && first.loc.start.line === comment.loc.end.line + 1;
+        if (documentsDeclaration) {
           return;
         }
         context.report({ loc: comment.loc, messageId: "header" });

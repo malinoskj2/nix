@@ -17,11 +17,13 @@ tester.run("vue-no-index-key", rules["vue-no-index-key"], {
     sfc('<li v-for="item in items" :key="item.id">{{ item.name }}</li>'),
     sfc('<li v-for="(item, i) in items" :key="`${item.id}-${i}`">{{ i }}</li>'),
     sfc('<li v-for="(value, key) in record" :key="key">{{ value }}</li>'),
+    sfc('<li v-for="(value, k) in record" :key="k">{{ value }}</li>'),
     sfc('<li v-for="n in 5" :key="n">{{ n }}</li>'),
   ],
   invalid: [
     { ...sfc('<li v-for="(item, i) in items" :key="i">{{ item }}</li>'), errors: [{ messageId: "indexKey" }] },
     { ...sfc('<li v-for="(item, index) in items" :key="`row-${index}`">{{ item }}</li>'), errors: [{ messageId: "indexKey" }] },
+    { ...sfc('<li v-for="(item, rowIndex) in items" :key="rowIndex">{{ item }}</li>'), errors: [{ messageId: "indexKey" }] },
     {
       ...sfc('<template v-for="(item, i) in items"><li :key="i">{{ item }}</li></template>'),
       errors: [{ messageId: "indexKey" }],

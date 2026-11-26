@@ -39,19 +39,27 @@ tester.run("no-file-header-comment", rules["no-file-header-comment"], {
     "/*! license */\nexport const a = 1;",
     "/// <reference types=\"vite/client\" />\nexport const a = 1;",
     "import a from 'a';\n// why this ordering matters\nexport const b = a;",
+    "/** @deprecated Use `load` instead. */\nexport function fetchAll() {}",
+    "// Retries stop after the deadline because the upstream bills per call.\nexport const retries = 3;",
   ],
   invalid: [
-    { code: "// Session storage helpers.\nexport const a = 1;", errors: [{ messageId: "header" }] },
+    { code: "// Session storage helpers.\n\nexport const a = 1;", errors: [{ messageId: "header" }] },
     { code: "/**\n * The router module.\n */\nimport a from 'a';\nexport const b = a;", errors: [{ messageId: "header" }] },
   ],
 });
 
 tester.run("no-error-message-matching", rules["no-error-message-matching"], {
-  valid: ["if (error instanceof TimeoutError) retry();", "log(error.message);", "if (error.code === 'ENOENT') {}"],
+  valid: [
+    "if (error instanceof TimeoutError) retry();",
+    "log(error.message);",
+    "if (error.code === 'ENOENT') {}",
+    "if (chat.message.includes('hello')) highlight();",
+  ],
   invalid: [
     { code: "if (error.message.includes('timeout')) retry();", errors: [{ messageId: "matching" }] },
     { code: "if (e.message === 'not found') {}", errors: [{ messageId: "matching" }] },
     { code: "if (/denied/.test(err.message)) {}", errors: [{ messageId: "matching" }] },
+    { code: "try { a(); } catch (failure) { if (failure.message.startsWith('x')) {} }", errors: [{ messageId: "matching" }] },
   ],
 });
 

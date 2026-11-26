@@ -56,3 +56,13 @@ tester.run("vue-watch-source-getter (typed)", rules["vue-watch-source-getter"], 
     { code: `import { watch } from 'vue'; ${props} watch(props.id, () => {});`, errors: [{ messageId: "getter" }] },
   ],
 });
+
+tester.run("no-error-message-matching (typed)", rules["no-error-message-matching"], {
+  valid: ["declare const chat: { message: string }; if (chat.message.includes('hi')) {}"],
+  invalid: [
+    {
+      code: "declare const failure: TypeError; if (failure.message === 'x') {}",
+      errors: [{ messageId: "matching" }],
+    },
+  ],
+});

@@ -85,22 +85,48 @@ function readManifests(packageFiles, notices) {
   });
 }
 
-function parseTsconfig(file, notices) {
-  const read = ts.readConfigFile(file, ts.sys.readFile);
-  if (read.error) {
-    notices.push(`${file}: ${ts.flattenDiagnosticMessageText(read.error.messageText, "\n")}`);
-    return null;
-  }
-  return ts.parseJsonConfigFileContent(read.config, ts.sys, path.dirname(file), undefined, file, undefined, VUE_EXTENSION);
+function configFinding(context, file, diagnostic) {
+  const message =
+    typeof diagnostic === "string" ? diagnostic : ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
+  context.problems.push({
+    tool: "tsc",
+    rule: typeof diagnostic === "string" ? "tsconfig" : `TS${diagnostic.code}`,
+    severity: "error",
+    message,
+    file: path.relative(context.root, file),
+    line: null,
+    column: null,
+  });
 }
 
-function projectClosure(file, cache, notices, seen = new Set()) {
+function parseTsconfig(file, context) {
+  const read = ts.readConfigFile(file, ts.sys.readFile);
+  if (read.error) {
+    configFinding(context, file, read.error);
+    return null;
+  }
+  const parsed = ts.parseJsonConfigFileContent(
+    read.config,
+    ts.sys,
+    path.dirname(file),
+    undefined,
+    file,
+    undefined,
+    VUE_EXTENSION,
+  );
+  for (const error of parsed.errors) {
+    configFinding(context, file, error);
+  }
+  return parsed;
+}
+
+function projectClosure(file, cache, context, seen = new Set()) {
   if (seen.has(file)) {
     return [];
   }
   seen.add(file);
   if (!cache.has(file)) {
-    cache.set(file, parseTsconfig(file, notices));
+    cache.set(file, parseTsconfig(file, context));
   }
   const parsed = cache.get(file);
   if (!parsed) {
@@ -110,9 +136,9 @@ function projectClosure(file, cache, notices, seen = new Set()) {
   for (const reference of parsed.projectReferences ?? []) {
     const target = ts.resolveProjectReferencePath(reference);
     if (fs.existsSync(target)) {
-      projects.push(...projectClosure(target, cache, notices, seen));
+      projects.push(...projectClosure(target, cache, context, seen));
     } else {
-      notices.push(`${file}: referenced project ${target} does not exist`);
+      configFinding(context, file, `Referenced project ${path.relative(context.root, target)} does not exist.`);
     }
   }
   return projects;
@@ -132,7 +158,8 @@ function nearestTsconfig(file, root, roots) {
 
 function planProjects(root, sources, tsconfigs, notices) {
   const cache = new Map();
-  const closures = new Map(tsconfigs.map((file) => [file, projectClosure(file, cache, notices)]));
+  const context = { root, problems: [] };
+  const closures = new Map(tsconfigs.map((file) => [file, projectClosure(file, cache, context)]));
   const leaves = new Map();
   for (const projects of closures.values()) {
     for (const project of projects) {
@@ -161,7 +188,7 @@ function planProjects(root, sources, tsconfigs, notices) {
     (installed.get(tsconfig) ? typed : untyped).push(file);
   }
   const checked = [...leaves.values()].filter((project) => dependencyDir(path.dirname(project.file), root) !== null);
-  return { typed, untyped, leaves: checked };
+  return { typed, untyped, leaves: checked, problems: context.problems };
 }
 
 async function lint(root, files, options) {
@@ -216,6 +243,34 @@ function deprecatedOptions(project, tsconfig) {
   }));
 }
 
+function resolveExtends(file, specifier) {
+  if (specifier.startsWith(".") || path.isAbsolute(specifier)) {
+    const target = path.resolve(path.dirname(file), specifier);
+    return fs.existsSync(target) ? target : `${target}.json`;
+  }
+  try {
+    return createRequire(file).resolve(specifier);
+  } catch {
+    return null;
+  }
+}
+
+function vueCompilerOptions(file, seen = new Set()) {
+  if (seen.has(file)) {
+    return {};
+  }
+  seen.add(file);
+  const { config } = ts.readConfigFile(file, ts.sys.readFile);
+  const options = {};
+  for (const specifier of [config?.extends ?? []].flat()) {
+    const base = resolveExtends(file, specifier);
+    if (base) {
+      Object.assign(options, vueCompilerOptions(base, seen));
+    }
+  }
+  return { ...options, ...config?.vueCompilerOptions };
+}
+
 function strictOptions(project) {
   const ours = {};
   const overrides = [];
@@ -228,7 +283,7 @@ function strictOptions(project) {
     }
   }
   const vue = {};
-  const projectVue = project.parsed.raw?.vueCompilerOptions ?? {};
+  const projectVue = vueCompilerOptions(project.file);
   for (const [option, value] of Object.entries(STRICT.vueCompilerOptions)) {
     if (projectVue[option] === undefined) {
       vue[option] = value;
@@ -239,7 +294,14 @@ function strictOptions(project) {
   return { ours, vue, overrides };
 }
 
-const DATA_ATTRIBUTE_UNKNOWN = /^Object literal may only specify known properties, and ''data-/;
+const NATIVE_DATA_ATTRIBUTE =
+  /^Object literal may only specify known properties, and ''data-[^']*'' does not exist in type '\w*HTMLAttributes & ReservedProps'\.$/;
+
+function isNativeDataAttribute(diagnostic) {
+  return (
+    diagnostic.rule === "TS2353" && diagnostic.file.endsWith(".vue") && NATIVE_DATA_ATTRIBUTE.test(diagnostic.message)
+  );
+}
 const DIAGNOSTIC = /^(.+?)\((\d+),(\d+)\): (error|warning) (TS\d+): (.*)$/;
 const GLOBAL_DIAGNOSTIC = /^(error|warning) (TS\d+): (.*)$/;
 
@@ -271,20 +333,22 @@ function parseDiagnostic(line, root, tsconfig, wrapper) {
 
 function parseDiagnostics(output, root, tsconfig, wrapper) {
   const findings = [];
+  let suppressed = 0;
   let current = null;
   for (const line of output.split("\n")) {
     const diagnostic = parseDiagnostic(line, root, tsconfig, wrapper);
     if (diagnostic) {
-      const ignored = diagnostic.rule === "TS2353" && DATA_ATTRIBUTE_UNKNOWN.test(diagnostic.message);
-      current = ignored ? null : diagnostic;
+      current = isNativeDataAttribute(diagnostic) ? null : diagnostic;
       if (current) {
         findings.push(current);
+      } else {
+        suppressed += 1;
       }
     } else if (line.startsWith("  ") && current) {
       current.message += `\n${line.trimEnd()}`;
     }
   }
-  return findings;
+  return { findings, suppressed };
 }
 
 function dependencyDir(directory, root) {
@@ -352,8 +416,8 @@ function typeCheck(root, leaves, vue, notices) {
     if (result.error) {
       throw new RunError(`${checkerName} failed to start: ${result.error.message}`);
     }
-    const diagnostics = parseDiagnostics(result.stdout, root, tsconfig, wrapper);
-    if (result.status !== 0 && diagnostics.length === 0) {
+    const { findings: diagnostics, suppressed } = parseDiagnostics(result.stdout, root, tsconfig, wrapper);
+    if (result.status !== 0 && diagnostics.length === 0 && suppressed === 0) {
       throw new RunError(`${checkerName} -p ${tsconfig} exited ${result.status}: ${result.stderr.trim()}`);
     }
     if (diagnostics.length > 0 && diagnostics.every((finding) => finding.line === null)) {
@@ -384,6 +448,7 @@ async function run(args) {
     plan.untyped.push(...plan.typed.splice(0));
   }
   const findings = [
+    ...plan.problems,
     ...(await lint(root, plan.typed, { vue, vitest, typed: true })),
     ...(await lint(root, plan.untyped, { vue, vitest, typed: false })),
   ];

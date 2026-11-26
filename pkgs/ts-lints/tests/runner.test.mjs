@@ -77,6 +77,35 @@ test("keeps a project's explicit compiler option and reports it", () => {
   ]);
 });
 
+test("reports a broken tsconfig and keeps TS2353 outside Vue templates", () => {
+  const directory = fixture("ts-app", { installed: true });
+  fs.writeFileSync(
+    path.join(directory, "src", "options.ts"),
+    "export const options: { valid: number } = { valid: 1, 'data-secret': 1 };\n",
+  );
+  const { report } = run(directory);
+  assert.ok(rules(report).has("TS2353"));
+
+  fs.writeFileSync(path.join(directory, "tsconfig.json"), "{broken");
+  const broken = run(directory);
+  assert.equal(broken.status, 1);
+  assert.ok(broken.report.findings.some((finding) => finding.file === "tsconfig.json" && finding.tool === "tsc"));
+});
+
+test("reads vueCompilerOptions through extends", () => {
+  const directory = fixture("ts-app", { installed: true });
+  const tsconfig = path.join(directory, "tsconfig.json");
+  const config = JSON.parse(fs.readFileSync(tsconfig, "utf8"));
+  fs.writeFileSync(path.join(directory, "base.json"), JSON.stringify({ vueCompilerOptions: { strictTemplates: false } }));
+  fs.writeFileSync(tsconfig, JSON.stringify({ ...config, extends: "./base.json" }));
+  const { report } = run(directory);
+  assert.ok(
+    report.project_overrides.some(
+      (override) => override.option === "vueCompilerOptions.strictTemplates" && override.project === false,
+    ),
+  );
+});
+
 test("fails with status 2 on a missing directory", () => {
   const result = spawnSync(process.execPath, [runner, "--json", path.join(os.tmpdir(), "ts-lints-missing")], {
     encoding: "utf8",

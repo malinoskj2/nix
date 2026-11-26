@@ -4,6 +4,8 @@ function bindingName(pattern) {
   return pattern?.type === "Identifier" ? pattern.name : null;
 }
 
+const INDEX_NAME = /^(?:i|j|n|idx|index|position|\w+Index|\w+Idx)$/;
+
 function indexNames(forExpression) {
   const [value, second, third] = forExpression.left;
   const names = new Set();
@@ -12,7 +14,7 @@ function indexNames(forExpression) {
     names.add(position);
   }
   const index = bindingName(second);
-  if (index && !third && !/key|id|name|prop/i.test(index)) {
+  if (index && !third && INDEX_NAME.test(index)) {
     names.add(index);
   }
   return { names, value };
