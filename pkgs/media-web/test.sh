@@ -49,17 +49,30 @@ cat >"$fakes/curl" <<'STUB'
 #!/usr/bin/env bash
 url=${!#}
 resolve=""
+format=""
 while (($#)); do
-  [[ $1 == --resolve ]] && resolve=$2
+  case $1 in
+    --resolve) resolve=$2 ;;
+    -w) format=$2 ;;
+  esac
   shift
 done
-reply() { printf '%s\037%s\t0.001\t%s' "$2" "$1" "$3"; }
+format=${format//\\t/$'\t'}
+format=${format//\\n/$'\n'}
+reply() {
+  local w=${format//'%{http_code}'/$1}
+  w=${w//'%{time_connect}'/$([[ $1 == 000 ]] && echo 0.000000 || echo 0.001)}
+  printf '%s%s' "$2" "${w//'%{content_type}'/$3}"
+}
 case "$url|$resolve" in
   "http://10.0.0.1:80/|" | "http://home.test/|home.test:80:10.0.0.1")
     reply 200 '<html><title>Home</title>static</html>' 'text/html' ;;
   "http://a.test/|a.test:80:10.0.0.1") reply 200 '<html><title>Login</title>app a</html>' 'text/html' ;;
   "http://b.test/|b.test:80:10.0.0.1") reply 200 '<html><title>Login</title>app b</html>' 'text/html' ;;
-  *) printf '\037000\t0.000000\t'; exit 7 ;;
+  *)
+    reply 000 "" ""
+    exit 7
+    ;;
 esac
 STUB
 sed -i "1s|.*|#!$BASH|" "$fakes"/*

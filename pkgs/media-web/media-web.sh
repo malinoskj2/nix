@@ -10,6 +10,7 @@ Options:
   -j, --json         Print the web UIs as JSON
   -a, --api          Also include ports that answer with JSON
   -t, --timeout SEC  Per-request connect timeout (default: 2)
+  -d, --debug        Report discovery records and every probe on stderr
   -h, --help         Show this help
 
 Ports that answer only through SSH (loopback or firewalled) open through an
@@ -31,6 +32,7 @@ while (($#)); do
     -l | --list) mode=list ;;
     -j | --json) mode=json ;;
     -a | --api) api=1 ;;
+    -d | --debug) export MEDIA_WEB_DEBUG=1 ;;
     -t | --timeout)
       timeout=${2:?--timeout needs a value}
       shift
@@ -66,6 +68,11 @@ if [[ -z $discovery ]]; then
 elif ((discovery_status)); then
   echo "media-web: discovery on $host exited with $discovery_status; using what it found" >&2
 fi
+
+debug() {
+  if [[ -n ${MEDIA_WEB_DEBUG:-} ]]; then printf 'media-web: %s\n' "$*" >&2; fi
+}
+debug "discovery exit=$discovery_status records: $(cut -f 1 <<<"$discovery" | sort | uniq -c | tr -s ' \n' ' ')"
 
 candidates=$(jq -nR '
   [inputs | split("\t")] as $rows
@@ -109,6 +116,8 @@ sites=$(jq -nR '
   | unique_by(.url)
 ' <<<"$discovery")
 
+debug "candidates=$(jq length <<<"$candidates") sites=$(jq length <<<"$sites") lan_addr=$lan_addr"
+
 mapfile -t lan_ports < <(jq -r --arg a "$lan_addr" '.[] | select(.lan) | "\($a):\(.port)"' <<<"$candidates")
 direct=$(probe_all "$timeout" "${lan_ports[@]}")
 
@@ -121,6 +130,7 @@ mapfile -t remote_targets < <(
 tunneled=""
 if ((${#remote_targets[@]})); then
   tunneled=$({
+    if [[ -n ${MEDIA_WEB_DEBUG:-} ]]; then echo 'MEDIA_WEB_DEBUG=1'; fi
     cat "$MEDIA_WEB_PROBE"
     printf 'probe_all %q' "$timeout"
     printf ' %q' "${remote_targets[@]}"
@@ -170,6 +180,8 @@ results=$(jq -nR --argjson c "$candidates" --argjson api "$api" --argjson sites 
   if [[ -n $direct ]]; then awk '{ print $0 "\tdirect" }' <<<"$direct"; fi
   if [[ -n $tunneled ]]; then awk '{ print $0 "\tssh" }' <<<"$tunneled"; fi
 ))
+
+debug "direct=$(grep -c $'\tok\t' <<<"$direct" || true) ssh=$(grep -c $'\tok\t' <<<"$tunneled" || true) sites=$(grep -c $'\tok\t' <<<"$site_probes" || true) kept=$(jq length <<<"$results")"
 
 if [[ $mode == json ]]; then
   printf '%s\n' "$results"

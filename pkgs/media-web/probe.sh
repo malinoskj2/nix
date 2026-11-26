@@ -4,7 +4,7 @@ probe_url() {
   resp=$(
     curl "${extra[@]}" -ks -L --max-redirs 5 --connect-timeout "$timeout" --max-time "$((timeout * 2))" \
       --max-filesize 1048576 -H 'Accept: text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.5' \
-      -o - -w '\037%{http_code}\t%{time_connect}\t%{content_type}' "$url" | tr -d '\000'
+      -o - -w $'\037''%{http_code}\t%{time_connect}\t%{content_type}' "$url" | tr -d '\000'
     exit "${PIPESTATUS[0]}"
   ) && probe_rc=0 || probe_rc=$?
   meta=${resp##*$'\037'}
@@ -22,6 +22,9 @@ probe_url() {
     sed -e 's/<[^>]*>//' -e 's/&amp;/\&/g; s/&lt;/</g; s/&gt;/>/g; s/&quot;/"/g; s/&#39;/'"'"'/g' \
       -e 's/^ *//; s/ *$//; s/  */ /g' | head -c 120) || probe_title=""
   probe_hash=$(printf '%s' "$body" | sha256sum | cut -c 1-16)
+  if [[ -n ${MEDIA_WEB_DEBUG:-} ]]; then
+    printf 'media-web: probe %s curl=%s status=%s type=%s title=%s\n' "$url" "$probe_rc" "$probe_code" "$probe_type" "$probe_title" >&2
+  fi
   probe_https_hint=0
   if grep -qiE 'https (server|port)|plain http request' <<<"$body"; then probe_https_hint=1; fi
 }
