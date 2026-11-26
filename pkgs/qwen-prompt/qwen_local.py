@@ -33,6 +33,11 @@ MOE_MODELS = {
     ),
 }
 MOE_BOOKING = ("--exclusive",)
+# Strata sizes its RAM from the host's MemAvailable, not the sandboxes' shared
+# cgroup, so it would pin every lendable expert and load the 28.8 GB n-gram table.
+# Cap it under half the 64 GiB slice: the experts the GPU doesn't hold, a few GiB
+# of prompt-path lend slots and parked conversations, with the table read from disk.
+STRATA_RAM_GIB = {"experts": 24, "conversations": 4}
 
 PR_SET_PDEATHSIG = 1
 
@@ -285,6 +290,12 @@ def strata_command(model, port, key, context, directory):
                     "--kv",
                     "int8",
                     "--resident-experts",
+                    "--resident-budget-gib",
+                    str(STRATA_RAM_GIB["experts"]),
+                    "--conversation-cache-mib",
+                    str(STRATA_RAM_GIB["conversations"] * 1024),
+                    "--ple-io",
+                    "direct",
                 ],
             }
         )
