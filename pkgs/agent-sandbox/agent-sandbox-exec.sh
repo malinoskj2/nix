@@ -22,6 +22,9 @@ if [[ $agent != claude && $agent != codex && $agent != antigravity && $agent != 
   exit 2
 fi
 
+bot_status=0
+bot_home=$(agent-sandbox-bot-home) || bot_status=$?
+
 if repo_root=$(git rev-parse --show-toplevel 2>/dev/null); then
   # Linked worktrees use the main repository's name, regardless of their directory.
   git_common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
@@ -29,11 +32,13 @@ if repo_root=$(git rev-parse --show-toplevel 2>/dev/null); then
     repo_root=$(dirname "$git_common_dir")
   fi
   alias=sandbox-$(basename "$repo_root")
-elif [[ $PWD == "$HOME"/.orca/bots/?* ]]; then
+elif [[ $bot_status == 0 ]]; then
   # Orca bots chat from their home, outside Git, and each keeps its own sandbox.
   # This wins over the chat account path, which every Codex chat sets.
-  bot=${PWD#"$HOME"/.orca/bots/}
-  alias=sandbox-bot-${bot%%/*}
+  alias=sandbox-bot-${bot_home%%$'\n'*}
+  cd "${bot_home#*$'\n'}" || exit 2
+elif [[ $bot_status == 2 ]]; then
+  exit 2
 elif [[ $agent == codex && -n ${CODEX_HOME:-} ]] ||
   [[ $agent == claude && -n ${CLAUDE_CONFIG_DIR:-} ]]; then
   # Chat's model/account probes run from its account directory, outside Git.

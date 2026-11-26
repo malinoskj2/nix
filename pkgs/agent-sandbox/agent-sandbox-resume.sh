@@ -29,12 +29,25 @@ started_in_sandbox() {
   esac
 }
 
-# agent-sandbox-exec names its sandbox after the Git repository or Orca bot home it runs in.
-in_sandbox_workdir() {
-  git rev-parse --show-toplevel >/dev/null 2>&1 || [[ $PWD == "$HOME"/.orca/bots/?* ]]
+host_bot() {
+  local id
+  id=$(jq -er '.id | strings' "$1/bot.json" 2>/dev/null) || return 1
+  [[ " ${AGENT_SANDBOX_HOST_BOT_IDS:-} " == *" $id "* ]]
 }
 
-if ! started_in_sandbox || ! in_sandbox_workdir; then
+bot_status=0
+bot_home=$(agent-sandbox-bot-home) || bot_status=$?
+if [[ $bot_status == 2 ]]; then
+  exit 2
+fi
+
+# Bots chat in their own sandbox with whatever account Orca selected, so where
+# their transcript lives says nothing about where they ran. Only host bots resume
+# on the host, and an unreadable bot.json keeps a bot in its sandbox.
+if [[ $bot_status == 0 ]] && ! host_bot "$HOME/.orca/bots/${bot_home%%$'\n'*}"; then
+  cd "${bot_home#*$'\n'}" || exit 2
+# agent-sandbox-exec names any other sandbox after the Git repository it runs in.
+elif ! started_in_sandbox || ! git rev-parse --show-toplevel >/dev/null 2>&1; then
   if [[ $agent == antigravity ]]; then
     exec agy "$@"
   fi

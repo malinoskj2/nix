@@ -33,7 +33,11 @@ The sandbox name is derived from the Git repository name: `j2bar` becomes
 main repository's name. Run the command inside a Git repository, or in an
 Orca bot's home: a bot in `~/.orca/bots/elma` runs in `sandbox-bot-elma`, for
 every agent and probe, with its home writable and the same project mounts as
-any other sandbox. Only Tohru's chats run on the host. The Zsh
+any other sandbox. Bot homes are recognized by their resolved path, so a
+symlink into one works and a symlink out of one is refused. Orca's resumes of
+a bot's sessions go back to its sandbox whatever account Orca selected. Only
+the bots listed in `pkgs/agent-sandbox/host-bots.nix`, Tohru, run and resume
+on the host. The Zsh
 alias also lets you use `sandbox codex`, for example.
 
 Sandboxes start without their headless displays. `agent-sandbox-exec --display
