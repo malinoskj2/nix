@@ -129,7 +129,6 @@ stdenv.mkDerivation (finalAttrs: {
     ./desktop-voice-completion-observability.patch
     ./desktop-voice-quick.patch
     ./desktop-bot-auto-steer.patch
-    ./thin-home-chat-only.patch
   ];
 
   postPatch = ''
@@ -318,8 +317,6 @@ stdenv.mkDerivation (finalAttrs: {
       src/main/bots/desktop-bot-auto-steer.test.ts \
       src/main/bots/desktop-voice-side.test.ts \
       src/main/runtime/rpc/methods/bots-voice-side.test.ts \
-      src/main/claude/claude-thin-home-options.test.ts \
-      src/main/claude/structured/launch/nix-thin-home-scope.test.ts \
       src/main/bots/bot-chat-session.test.ts \
       src/main/bots/desktop-voice-continuations.test.ts \
       src/main/bots/desktop-voice-task-queue.test.ts \
