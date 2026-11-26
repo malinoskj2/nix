@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 base=$1
 target=$2
 

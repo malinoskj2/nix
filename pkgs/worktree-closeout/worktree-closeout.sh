@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 usage() {
   cat <<'USAGE'
 Usage: worktree-closeout [--into <ref>] [--delete-branch] [--dry-run] <worktree>
