@@ -97,9 +97,46 @@ responsible for CPU policy; its hooks cannot gate GPU allocations before launch.
 Keep the command running until GPU cleanup is complete. Persistent model servers
 must run inside their reservation for their whole resident lifetime. For a
 per-request integration, unload the model before allowing the reserved command
-to exit. Suspending a process does not free VRAM. No model servers are declared in
-this repository, so unloading is currently the workload's responsibility rather
-than a runtime-specific adapter.
+to exit. Suspending a process does not free VRAM. Unloading is the workload's
+responsibility; `qwen-opencode` below is the one model server here that
+holds a reservation only while it is in use.
+
+## Interactive Qwen in OpenCode
+
+`qwen-opencode [--uncensored] [--idle-minutes N] [opencode args...]` opens the
+OpenCode TUI (`opencode --standalone`) on the same pinned Qwen GGUFs as the
+`qwen-prompt` skills, with the same readiness checks: a model that isn't ready
+fails before anything starts, with no download or fallback. Arguments after its
+own leading options go to OpenCode unchanged.
+
+OpenCode talks to a small proxy on a loopback port that stays fixed for the
+session. The model loads on the first request: the proxy starts
+`gpu-run --vram 26GiB -- llama-server ...` and holds requests until it is
+healthy, queueing normally behind games or other work. A streaming request
+that waits gets SSE comments every 15 seconds so OpenCode's header timeout never
+fires. Listing models doesn't load anything. After `--idle-minutes` (default 5,
+or `QWEN_OPENCODE_IDLE_MINUTES`) without a request in flight, it stops
+llama-server, which frees the VRAM and ends the reservation; OpenCode stays
+open and the next request books the GPU again. Quitting OpenCode, a signal or
+a crash of either process stops llama-server and releases the reservation:
+gpu-run and OpenCode are started with a parent-death signal, and llama-server
+gets one from gpu-run. Server output goes to
+`~/.local/state/qwen-opencode/<pid>.log`, which is kept only after a failure.
+
+The context is 64k tokens with an f16 KV cache, one slot and full offload.
+Qwen3.8 27B is hybrid: only 16 of its 65 layers use attention, with 4 KV heads
+of 256, so the cache costs 64 KiB per token, 4 GiB at 64k. With a 63,750-token
+prompt the regular model peaked at about 24.2 GiB (26,083 MiB on the GPU
+against a 1,902 MiB desktop baseline); the uncensored weights are 1.3 GB
+smaller. 26 GiB leaves about 2 GiB of margin and still fits the 28.5 GiB
+the scheduler allows a shared request.
+
+In Orca's agent picker, OpenCode on `home` runs
+`orca-sandbox-launch orca-sandbox opencode`, which `agent-sandbox-exec` turns
+into `qwen-opencode --uncensored` in the repository's sandbox, where the
+scheduler directory and `$MODEL_ROOT` are mounted. Orca's OpenCode status
+plugin posts to Orca's loopback port with `fetch`, which the container can't
+reach, so sandboxed OpenCode panes show no working or done status.
 
 ## Shared leases and lifecycle
 
@@ -143,11 +180,13 @@ directory. `systemctl --user status gpu-scheduler-telemetry.socket` checks it.
 
 ```sh
 python3 -m unittest discover -s pkgs/gpu-scheduler -v
-nix build .#gpu-scheduler .#checks.x86_64-linux.gpu-scheduler
+nix build .#gpu-scheduler .#checks.x86_64-linux.gpu-scheduler .#checks.x86_64-linux.qwen-prompt
 nix build .#nixosConfigurations.home.config.system.build.toplevel
 ```
 
 Tests use a fake NVIDIA memory probe and real processes and file locks. They
 cover concurrent grants, exclusive barriers, game priority, cancellation,
 telemetry failure, descendant lifetime and command exit status without loading
-models or allocating GPU memory.
+models or allocating GPU memory. `qwen-opencode`'s tests use fake gpu-run,
+llama-server and OpenCode to cover idle unload, reacquisition, a queued request
+cancelled at exit, and cleanup after quitting, SIGTERM, SIGHUP and SIGKILL.

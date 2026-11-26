@@ -374,6 +374,10 @@ Treat a bump as a hardware change and test it on the device.
     reopen it and check that both sandboxed sessions resume in new sandbox
     containers, the plain Codex resumes on the host, and an agent in a sandbox
     workspace over SSH resumes with its plain command;
+  - on `home`, pick OpenCode in the new-worktree agent picker and check that
+    it opens `qwen-opencode --uncensored` in that repository's sandbox, since
+    `agentCmdOverrides.opencode` relies on Orca treating a resolvable override
+    as installed;
   - open a Claude chat tab (Settings → Experimental) and check that its
     `claude` process has `--settings`;
   - check the chat view, sidebars, tabs, popovers and status bar use Mocha, then

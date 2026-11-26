@@ -37,7 +37,7 @@ describe('Nix native migrations against this Orca release', () => {
     mkdirSync(bin, { recursive: true })
     copyFileSync('nix-sandbox-launch.sh', join(bin, 'orca-sandbox-launch'))
     chmodSync(join(bin, 'orca-sandbox-launch'), 0o755)
-    for (const agent of ['codex', 'claude', 'antigravity']) {
+    for (const agent of ['codex', 'claude', 'antigravity', 'opencode']) {
       const command = `~/.orca/nix/bin/orca-sandbox-launch orca-sandbox ${agent}`
       const plan = structuredAgentCommandPlan(command, 'linux')!
       expect(plan).toEqual({ program: '~/.orca/nix/bin/orca-sandbox-launch', prefixArgs: ['orca-sandbox', agent] })

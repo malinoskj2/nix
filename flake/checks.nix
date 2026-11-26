@@ -84,6 +84,7 @@
                 python -B ${../pkgs/local-models/test_activation.py}
                 touch "$out"
               '';
+          qwen-prompt = self'.packages.qwen-prompt.tests.launchers;
           unreal-sandbox = self'.packages.agent-sandbox.unrealTests;
         };
     };

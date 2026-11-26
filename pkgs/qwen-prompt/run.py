@@ -1,76 +1,27 @@
 """One scheduled, foreground OpenCode task with a private llama.cpp server."""
 
 import argparse
-import json
 import os
-from pathlib import Path
-import re
 import secrets
-import shutil
 import signal
 import socket
 import subprocess
 import sys
 import tempfile
-import time
-import urllib.error
-import urllib.request
+from pathlib import Path
 
-
-MODELS = {
-    "regular": ("qwen3.8-27b", "Qwen3.8-27B-Q5_K_M.gguf"),
-    "uncensored": ("qwen3.8-27b-uncensored", "Qwen3.8-27B-Uncensored-Q5_K_M.gguf"),
-}
-
-
-def opencode_major(version):
-    match = re.match(r"(?:opencode\s+)?v?(\d+)\.", version.strip())
-    if match is None:
-        raise RuntimeError(f"Unrecognized OpenCode version: {version!r}")
-    return int(match.group(1))
-
-
-def stop(process):
-    if process is None:
-        return
-    # Kill the whole private group, including any remaining tool descendants.
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-    try:
-        process.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        pass
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    process.wait()
-
-
-def configuration(port, major):
-    model = {"name": "Local Qwen", "limit": {"context": 16384, "output": 4096}}
-    if major == 2:
-        return {
-            "$schema": "https://opencode.ai/config.json",
-            "model": "local-qwen/qwen",
-            "small_model": "local-qwen/qwen",
-            "enabled_providers": ["local-qwen"],
-            "update": "disable",
-            "share": "disabled",
-            "warming": False,
-            "providers": {
-                "local-qwen": {
-                    "package": "@opencode/ai/providers/openai-compatible",
-                    "name": "Local Qwen",
-                    "env": ["QWEN_LOCAL_API_KEY"],
-                    "settings": {"baseURL": f"http://127.0.0.1:{port}/v1"},
-                    "models": {"qwen": model},
-                }
-            },
-        }
-    raise RuntimeError(f"OpenCode major version {major} has not been validated by this runner")
+from qwen_local import (
+    MODELS,
+    checked_opencode_major,
+    configuration,
+    llama_command,
+    opencode_environment,
+    refuse_nesting,
+    require,
+    resolve_model,
+    stop,
+    wait_healthy,
+)
 
 
 def main():
@@ -86,22 +37,10 @@ def main():
     prompt = args.prompt_file.read_bytes().decode("utf-8")
     if not prompt.strip() or "\0" in prompt:
         parser.error("prompt must be nonempty UTF-8 and contain no NUL")
-    for command in ("opencode", "llama-server", "gpu-run"):
-        if not shutil.which(command):
-            raise RuntimeError(f"Missing {command}; deploy the qwen-prompt Nix package first")
-    root = Path(os.environ.get("MODEL_ROOT", str(Path.home() / ".local/share/models")))
-    alias, filename = MODELS[args.model]
-    catalog = json.loads((root / "catalog.json").read_text())
-    readiness = json.loads((root / "readiness.json").read_text())
-    model = root / "by-name" / alias / filename
-    if alias not in catalog["entries"] or readiness["entries"][alias]["status"] != "ready":
-        raise RuntimeError(f"Local model {alias} is not ready; no download or fallback attempted")
-    expected = next(f["size"] for f in catalog["entries"][alias]["files"] if f["target"] == filename)
-    if not model.is_file() or model.stat().st_size != expected:
-        raise RuntimeError(f"Missing or incomplete model: {model}")
+    require("opencode", "llama-server", "gpu-run")
+    model = resolve_model(args.model)
     if not args.allocated:
-        if os.environ.get("GPU_LEASE_ID"):
-            raise RuntimeError("Already inside a GPU reservation; invoke from outside it to avoid exceeding its budget")
+        refuse_nesting()
         # Fixed 16k context, one slot, full GPU offload. Budget includes weights,
         # KV cache and workspace margin.
         command = [
@@ -124,10 +63,8 @@ def main():
         os.execvp(command[0], command)
     if not os.environ.get("GPU_LEASE_ID"):
         raise RuntimeError("--allocated requires a GPU reservation")
-    version = subprocess.check_output(["opencode", "--version"], text=True).strip()
-    major = opencode_major(version)
     # Validate the harness before starting the GPU process.
-    configuration(1, major)
+    major = checked_opencode_major()
     server = harness = None
 
     def interrupted(signum, _frame):
@@ -141,58 +78,16 @@ def main():
                 probe.bind(("127.0.0.1", 0))
                 port = probe.getsockname()[1]
             key = secrets.token_hex(24)
-            config = Path(directory) / "opencode.json"
-            config.write_text(json.dumps(configuration(port, major)))
-            env = os.environ.copy()
-            env["OPENCODE_CONFIG_CONTENT"] = config.read_text()
-            env["OPENCODE_CONFIG"] = str(config)
-            env["QWEN_LOCAL_API_KEY"] = key
-            env["OPENCODE_DISABLE_AUTOUPDATE"] = "true"
+            env = opencode_environment(configuration(port, major), key, directory)
             # --auto makes the requested task unattended; OpenCode still honors
             # explicit deny rules from the project and managed configuration.
             server = subprocess.Popen(
-                [
-                    "llama-server",
-                    "--model",
-                    str(model),
-                    "--alias",
-                    "qwen",
-                    "--host",
-                    "127.0.0.1",
-                    "--port",
-                    str(port),
-                    "--api-key",
-                    key,
-                    "--ctx-size",
-                    "16384",
-                    "--parallel",
-                    "1",
-                    "--threads",
-                    "4",
-                    "--n-gpu-layers",
-                    "99",
-                    "--jinja",
-                ],
+                llama_command(model, port, key),
                 stdout=sys.stderr,
                 stderr=sys.stderr,
                 start_new_session=True,
             )
-            deadline = time.monotonic() + min(args.timeout, 300)
-            request = urllib.request.Request(
-                f"http://127.0.0.1:{port}/health", headers={"Authorization": f"Bearer {key}"}
-            )
-            while True:
-                if server.poll() is not None:
-                    raise RuntimeError(f"llama-server exited with code {server.returncode}")
-                try:
-                    with urllib.request.urlopen(request, timeout=2) as response:
-                        if response.status == 200:
-                            break
-                except (urllib.error.URLError, TimeoutError):
-                    pass
-                if time.monotonic() >= deadline:
-                    raise RuntimeError("Timed out loading Qwen")
-                time.sleep(0.5)
+            wait_healthy(server, port, key, min(args.timeout, 300))
             harness = subprocess.Popen(
                 [
                     "opencode",

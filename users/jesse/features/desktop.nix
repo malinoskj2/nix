@@ -58,6 +58,7 @@ let
         "antigravity"
         "claude"
         "codex"
+        "opencode"
       ] sandboxAgentCommand;
     };
     telemetryOptedIn = false;

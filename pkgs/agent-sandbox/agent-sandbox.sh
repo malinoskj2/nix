@@ -16,7 +16,7 @@ while [[ $# -gt 0 ]]; do
       display=1
       shift
       ;;
-    --claude | --codex | --antigravity)
+    --claude | --codex | --antigravity | --opencode)
       agent=${1#--}
       shift
       break
@@ -505,6 +505,8 @@ case $agent in
   claude) set -- claude --dangerously-skip-permissions "$@" ;;
   codex) set -- codex --dangerously-bypass-approvals-and-sandbox "$@" ;;
   antigravity) set -- agy --dangerously-skip-permissions "$@" ;;
+  # OpenCode runs on local uncensored Qwen, booking the GPU only while it serves.
+  opencode) set -- qwen-opencode --uncensored "$@" ;;
 esac
 
 # Serialize port selection with container creation across concurrent
