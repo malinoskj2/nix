@@ -666,6 +666,21 @@ symlinkJoin {
   passthru = {
     unrealTools = unreal.tools;
     unrealTests = unreal.tests;
+    execTests =
+      runCommand "agent-sandbox-exec-tests"
+        {
+          nativeBuildInputs = [
+            bashInteractive
+            git
+            python3
+          ];
+        }
+        ''
+          cp ${./agent-sandbox-exec.sh} agent-sandbox-exec.sh
+          cp ${./test-agent-sandbox-exec.py} test-agent-sandbox-exec.py
+          python3 -B test-agent-sandbox-exec.py -v
+          touch $out
+        '';
   };
   paths = [
     launcher

@@ -30,7 +30,10 @@ agent-sandbox-exec antigravity   # or agy
 
 The sandbox name is derived from the Git repository name: `j2bar` becomes
 `sandbox-j2bar`. This works from subdirectories, and linked worktrees use the
-main repository's name. Run the command inside a Git repository. The Zsh
+main repository's name. Run the command inside a Git repository, or in an
+Orca bot's home: a bot in `~/.orca/bots/elma` runs in `sandbox-bot-elma`, for
+every agent and probe, with its home writable and the same project mounts as
+any other sandbox. Only Tohru's chats run on the host. The Zsh
 alias also lets you use `sandbox codex`, for example.
 
 Sandboxes start without their headless displays. `agent-sandbox-exec --display

@@ -29,8 +29,12 @@ started_in_sandbox() {
   esac
 }
 
-# agent-sandbox-exec names its sandbox after the Git repository it runs in.
-if ! started_in_sandbox || ! git rev-parse --show-toplevel >/dev/null 2>&1; then
+# agent-sandbox-exec names its sandbox after the Git repository or Orca bot home it runs in.
+in_sandbox_workdir() {
+  git rev-parse --show-toplevel >/dev/null 2>&1 || [[ $PWD == "$HOME"/.orca/bots/?* ]]
+}
+
+if ! started_in_sandbox || ! in_sandbox_workdir; then
   if [[ $agent == antigravity ]]; then
     exec agy "$@"
   fi

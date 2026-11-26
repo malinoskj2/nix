@@ -29,6 +29,11 @@ if repo_root=$(git rev-parse --show-toplevel 2>/dev/null); then
     repo_root=$(dirname "$git_common_dir")
   fi
   alias=sandbox-$(basename "$repo_root")
+elif [[ $PWD == "$HOME"/.orca/bots/?* ]]; then
+  # Orca bots chat from their home, outside Git, and each keeps its own sandbox.
+  # This wins over the chat account path, which every Codex chat sets.
+  bot=${PWD#"$HOME"/.orca/bots/}
+  alias=sandbox-bot-${bot%%/*}
 elif [[ $agent == codex && -n ${CODEX_HOME:-} ]] ||
   [[ $agent == claude && -n ${CLAUDE_CONFIG_DIR:-} ]]; then
   # Chat's model/account probes run from its account directory, outside Git.
