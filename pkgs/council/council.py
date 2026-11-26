@@ -109,20 +109,24 @@ class AgentConflict(Exception):
 def install_agy_agent():
     path = Path.home() / ".gemini/config/agents" / f"{AGY_AGENT}.md"
     path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with open(path, "x") as f:
-            f.write(AGY_AGENT_FILE)
-        return
-    except FileExistsError:
-        pass
-    current = path.read_text(errors="replace")
-    if current == AGY_AGENT_FILE:
-        return
-    if AGY_MARKER not in current.splitlines():
-        raise AgentConflict(f"{path} exists and wasn't written by council; move it aside and rerun")
     with tempfile.NamedTemporaryFile("w", dir=path.parent, prefix=f".{AGY_AGENT}.", delete=False) as f:
         f.write(AGY_AGENT_FILE)
-    os.replace(f.name, path)
+    try:
+        try:
+            os.link(f.name, path)
+            return
+        except FileExistsError:
+            pass
+        current = path.read_text(errors="replace")
+        if current == AGY_AGENT_FILE:
+            return
+        # A zero-byte file can only be an interrupted write; anything else unmarked belongs to the user.
+        if current and AGY_MARKER not in current.splitlines():
+            raise AgentConflict(f"{path} exists and wasn't written by council; move it aside and rerun")
+        os.replace(f.name, path)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(f.name)
 
 
 def agy_answer(stream, answer):

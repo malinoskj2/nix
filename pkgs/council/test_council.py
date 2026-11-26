@@ -210,6 +210,64 @@ class CouncilTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("tools: [read_file]\n", agent.read_text())
 
+    def test_an_empty_leftover_agent_is_replaced(self):
+        self.fake("agy", FAKES["agy"])
+        agent = self.root / "home/.gemini/config/agents/council-member-7c41e9.md"
+        agent.parent.mkdir(parents=True)
+        agent.write_text("")
+        result = self.run_council("--members", "gemini")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("tools: [read_file]\n", agent.read_text())
+
+    def test_concurrent_first_installs_both_succeed(self):
+        home = self.root / "home"
+        script = (
+            "import sys, tempfile, threading, types\n"
+            f"sys.path.insert(0, {str(COUNCIL.parent)!r})\n"
+            "import council\n"
+            "second_done = threading.Event()\n"
+            "first = threading.Event()\n"
+            "class Paused:\n"
+            "    def __init__(self, f):\n"
+            "        self.f, self.name = f, getattr(f, 'name', None)\n"
+            "    def __enter__(self):\n"
+            "        self.f.__enter__()\n"
+            "        return self\n"
+            "    def __exit__(self, *exc):\n"
+            "        return self.f.__exit__(*exc)\n"
+            "    def write(self, text):\n"
+            "        if threading.current_thread().name == 'first':\n"
+            "            first.set()\n"
+            "            second_done.wait(timeout=10)\n"
+            "        return self.f.write(text)\n"
+            "council.open = lambda *a, **k: Paused(open(*a, **k))\n"
+            "council.tempfile = types.SimpleNamespace(NamedTemporaryFile=lambda *a, **k: Paused(tempfile.NamedTemporaryFile(*a, **k)))\n"
+            "errors = []\n"
+            "def install():\n"
+            "    try:\n"
+            "        council.install_agy_agent()\n"
+            "    except Exception as error:\n"
+            "        errors.append(repr(error))\n"
+            "a = threading.Thread(target=install, name='first')\n"
+            "a.start()\n"
+            "first.wait(timeout=10)\n"
+            "install()\n"
+            "second_done.set()\n"
+            "a.join()\n"
+            "print(errors)\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            env=os.environ | {"HOME": str(home)},
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(result.stdout.strip(), "[]", result.stderr)
+        agents = home / ".gemini/config/agents"
+        self.assertEqual([p.name for p in agents.iterdir()], ["council-member-7c41e9.md"])
+        self.assertIn("tools: [read_file]\n", (agents / "council-member-7c41e9.md").read_text())
+
     def test_gemini_without_login_fails_fast_without_the_sign_in_url(self):
         self.fake(
             "agy",
