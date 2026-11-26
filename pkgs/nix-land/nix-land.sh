@@ -189,12 +189,12 @@ if [[ -z $switch ]]; then
   exit 0
 fi
 
-# host-switch activates whatever main's head is when it starts, so make sure
-# that is still this landing and that it reports switching exactly that commit.
+# The switch request names this commit, and the service refuses it unless it is
+# still main's head; the report must then name exactly this commit too.
 [[ $(git -C "$repo" rev-parse refs/heads/main) == "$merged" ]] ||
   fail switch "main moved past $merged before the switch; nothing was switched"
 say 'host-switch'
-switch_out=$(host-switch 2>&1) || {
+switch_out=$(host-switch --expect "$merged" 2>&1) || {
   printf '%s\n' "$switch_out" >>"$log"
   fail switch "host-switch failed for $merged: ${switch_out##*$'\n'}"
 }
