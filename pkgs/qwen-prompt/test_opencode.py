@@ -10,7 +10,7 @@ import tempfile
 import threading
 import unittest
 
-spec = importlib.util.spec_from_file_location("runner", Path(__file__).with_name("run.py"))
+spec = importlib.util.spec_from_file_location("runner", Path(__file__).with_name("qwen_local.py"))
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 
