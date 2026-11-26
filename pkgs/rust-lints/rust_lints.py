@@ -323,6 +323,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--no-clippy", action="store_true", help="skip the Clippy pass")
     parser.add_argument("--no-dylint", action="store_true", help="skip the Dylint pass")
     parser.add_argument("--print-flags", action="store_true", help="print the merged lint flags and exit")
+    parser.add_argument(
+        "--paths", action="store_true", help="print where the lint levels, clippy.toml and Dylint sources live"
+    )
     parser.add_argument("cargo_args", nargs="*", help="extra arguments for cargo check, after --")
     return parser.parse_args(argv)
 
@@ -440,8 +443,21 @@ def print_human(report: dict, verbose: bool) -> None:
     out.write("\n")
 
 
+def print_paths() -> None:
+    for name, path in (
+        ("lints.toml", DATA_DIR / "lints.toml"),
+        ("clippy.toml", DATA_DIR / "clippy.toml"),
+        ("dylint sources", DATA_DIR / "dylint" / "src"),
+        ("dylint library", library_path()),
+    ):
+        sys.stdout.write(f"{name}: {path}\n")
+
+
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    if args.paths:
+        print_paths()
+        return EXIT_CLEAN
     try:
         report = run(args)
     except RunError as error:
