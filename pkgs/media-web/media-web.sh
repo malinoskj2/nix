@@ -55,9 +55,10 @@ done
 # shellcheck source=/dev/null
 source "$MEDIA_WEB_PROBE"
 
+ssh_opts=(-T -o RequestTTY=no -o LogLevel=ERROR)
 lan_addr=$(ssh -G "$host" | awk '$1 == "hostname" { print $2; exit }')
 
-discovery=$(ssh -T "$host" bash -s <"$MEDIA_WEB_DISCOVER") || {
+discovery=$(ssh "${ssh_opts[@]}" "$host" bash -s <"$MEDIA_WEB_DISCOVER") || {
   echo "media-web: discovery over ssh to $host failed" >&2
   exit 1
 }
@@ -118,7 +119,7 @@ if ((${#remote_targets[@]})); then
     printf 'probe_all %q' "$timeout"
     printf ' %q' "${remote_targets[@]}"
     printf '\n'
-  } | ssh -T "$host" bash -s) || echo "media-web: probing through ssh failed" >&2
+  } | ssh "${ssh_opts[@]}" "$host" bash -s) || echo "media-web: probing through ssh failed" >&2
 fi
 
 site_args=()
@@ -151,6 +152,11 @@ results=$(jq -nR --argjson c "$candidates" --argjson api "$api" --argjson sites 
   | map(. as $r | ($c[] | select(.port == $r.port)) as $k
       | $r + {label: $k.label, containers: $k.containers, units: $k.units, processes: $k.processes})
   | . + $sites
+  | group_by(if .title == "" then .url else [.port, .status, .title] end)
+  | map(
+      sort_by([(.url | test("^[a-z]+://([0-9.]+|\\[[^]]*\\])(:|/|$)")), (.url | length)])
+      | .[0] + {aliases: (.[1:] | map({label, url}))}
+    )
   | sort_by(.label, .port)
 ' < <(
   if [[ -n $direct ]]; then awk '{ print $0 "\tdirect" }' <<<"$direct"; fi
@@ -195,7 +201,7 @@ open_tunnel() {
   until port_free "$local_port"; do
     local_port=$((RANDOM % 20000 + 40000))
   done
-  ssh -f -N -o ExitOnForwardFailure=yes -L "127.0.0.1:$local_port:$target:$port" "$host" || return 1
+  ssh "${ssh_opts[@]}" -f -N -o ExitOnForwardFailure=yes -L "127.0.0.1:$local_port:$target:$port" "$host" || return 1
   echo "media-web: tunnel localhost:$local_port -> $host $target:$port (stop with: pkill -f 'L 127.0.0.1:$local_port:')" >&2
   open_url "$scheme://localhost:$local_port/"
 }
