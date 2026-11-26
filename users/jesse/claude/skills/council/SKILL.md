@@ -26,16 +26,22 @@ Members run read-only and non-interactively, never with Fable:
 
 - Codex: `codex exec --model gpt-6.2-sol -c model_reasoning_effort="medium" --sandbox read-only`.
 - Claude: `claude -p --model claude-opus-5-5 --effort medium --permission-mode plan --tools Read,Grep,Glob`.
-- Gemini: `agy --model gemini-4-neon-high --mode plan -p=<prompt>`, through the Antigravity CLI and its saved login.
+- Gemini: `agy --agent council-member-7c41e9 --model gemini-4-neon-high -p=<prompt>`, through the Antigravity CLI and its saved login.
+  council writes `~/.gemini/config/agents/council-member-7c41e9.md`, whose only tool is `read_file` (view, list and
+  search): no shell, edits or web search. agy's plan mode isn't used, because it tells the model to research
+  exhaustively and doesn't stop web search. If agy isn't signed in, Gemini fails at once with the fix instead
+  of waiting on the sign-in prompt.
 
 Each member has its own timeout (default 900 s); when it exits or times out,
-its whole process group is stopped. A failure, timeout or missing CLI is
+its whole process group is stopped. Gemini gets agy's own print timeout 15 s
+earlier, and a Gemini that runs out of time keeps what it had written, and the
+files it had read, in `gemini.md` under a partial-answer note. A failure, timeout or missing CLI is
 reported for that member and the others still finish. Exit status is 0
 when all succeed, 3 when some fail, 4 when all fail and 2 for bad arguments.
 
 Each run writes to a fresh `.tmp/council/<timestamp>-<random>/`, or to
 `--out-dir`, which must not exist yet: `prompt.md`, each
-member's `<member>.md` answer and `<member>.log`, and `council.md` with every
+member's `<member>.md` answer and `<member>.log`, Gemini's event stream in `gemini.jsonl`, and `council.md` with every
 answer verbatim under its model's name. Stdout repeats the status lines and the
 answers within 9,000 bytes, truncating long ones with a pointer to the full file.
 

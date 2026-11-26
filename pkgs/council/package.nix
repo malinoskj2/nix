@@ -17,16 +17,20 @@ in
     exec ${lib.getExe python3} ${source}/council.py "$@"
   '';
 }).overrideAttrs
-  {
-    passthru.tests.council =
-      runCommand "council-tests"
-        {
-          nativeBuildInputs = [ python3 ];
-        }
-        ''
-          cp ${source}/*.py .
-          python -m unittest -v test_council
-          touch "$out"
-        '';
-    meta.description = "Ask Codex, Claude and Gemini the same review or question in parallel";
-  }
+  (old: {
+    passthru = (old.passthru or { }) // {
+      tests.council =
+        runCommand "council-tests"
+          {
+            nativeBuildInputs = [ python3 ];
+          }
+          ''
+            cp ${source}/*.py .
+            python -m unittest -v test_council
+            touch "$out"
+          '';
+    };
+    meta = (old.meta or { }) // {
+      description = "Ask Codex, Claude and Gemini the same review or question in parallel";
+    };
+  })
