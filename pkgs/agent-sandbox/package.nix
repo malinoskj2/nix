@@ -640,9 +640,16 @@ let
     text = builtins.readFile ./agent-sandbox-kill.sh;
   };
 
+  botHome = writeShellApplication {
+    name = "agent-sandbox-bot-home";
+    runtimeInputs = [ coreutils ];
+    text = builtins.readFile ./agent-sandbox-bot-home.sh;
+  };
+
   execAgent = writeShellApplication {
     name = "agent-sandbox-exec";
     runtimeInputs = [
+      botHome
       coreutils
       git
     ];
@@ -657,9 +664,12 @@ let
   resumeAgent = writeShellApplication {
     name = "agent-sandbox-resume";
     runtimeInputs = [
+      botHome
       execAgent
       git
+      jq
     ];
+    runtimeEnv.AGENT_SANDBOX_HOST_BOT_IDS = lib.concatStringsSep " " (import ./host-bots.nix);
     text = builtins.readFile ./agent-sandbox-resume.sh;
   };
 in
@@ -668,6 +678,24 @@ symlinkJoin {
   passthru = {
     unrealTools = unreal.tools;
     unrealTests = unreal.tests;
+    execTests =
+      runCommand "agent-sandbox-exec-tests"
+        {
+          nativeBuildInputs = [
+            bashInteractive
+            git
+            jq
+            python3
+          ];
+        }
+        ''
+          cp ${./agent-sandbox-bot-home.sh} agent-sandbox-bot-home.sh
+          cp ${./agent-sandbox-exec.sh} agent-sandbox-exec.sh
+          cp ${./agent-sandbox-resume.sh} agent-sandbox-resume.sh
+          cp ${./test-agent-sandbox-exec.py} test-agent-sandbox-exec.py
+          python3 -B test-agent-sandbox-exec.py -v
+          touch $out
+        '';
   };
   paths = [
     launcher

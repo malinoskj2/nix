@@ -87,6 +87,7 @@
           council = self'.packages.council.tests.council;
           qwen-prompt = self'.packages.qwen-prompt.tests.launchers;
           unreal-sandbox = self'.packages.agent-sandbox.unrealTests;
+          agent-sandbox-exec = self'.packages.agent-sandbox.execTests;
         };
     };
 }
