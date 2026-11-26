@@ -24,6 +24,12 @@ fi
 
 bot_status=0
 bot_home=$(agent-sandbox-bot-home) || bot_status=$?
+if [[ $bot_status == 2 ]]; then
+  exit 2
+elif [[ $bot_status == 0 ]]; then
+  # Even a repository inside a bot home starts from the path the launcher mounts.
+  cd "${bot_home#*$'\n'}" || exit 2
+fi
 
 if repo_root=$(git rev-parse --show-toplevel 2>/dev/null); then
   # Linked worktrees use the main repository's name, regardless of their directory.
@@ -36,9 +42,6 @@ elif [[ $bot_status == 0 ]]; then
   # Orca bots chat from their home, outside Git, and each keeps its own sandbox.
   # This wins over the chat account path, which every Codex chat sets.
   alias=sandbox-bot-${bot_home%%$'\n'*}
-  cd "${bot_home#*$'\n'}" || exit 2
-elif [[ $bot_status == 2 ]]; then
-  exit 2
 elif [[ $agent == codex && -n ${CODEX_HOME:-} ]] ||
   [[ $agent == claude && -n ${CLAUDE_CONFIG_DIR:-} ]]; then
   # Chat's model/account probes run from its account directory, outside Git.

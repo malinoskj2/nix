@@ -41,17 +41,24 @@ if [[ $bot_status == 2 ]]; then
   exit 2
 fi
 
-# Bots chat in their own sandbox with whatever account Orca selected, so where
-# their transcript lives says nothing about where they ran. Only host bots resume
-# on the host, and an unreadable bot.json keeps a bot in its sandbox.
-if [[ $bot_status == 0 ]] && ! host_bot "$HOME/.orca/bots/${bot_home%%$'\n'*}"; then
-  cd "${bot_home#*$'\n'}" || exit 2
-# agent-sandbox-exec names any other sandbox after the Git repository it runs in.
-elif ! started_in_sandbox || ! git rev-parse --show-toplevel >/dev/null 2>&1; then
+run_on_host() {
   if [[ $agent == antigravity ]]; then
     exec agy "$@"
   fi
   exec "$agent" "$@"
+}
+
+# Bots chat in their own sandbox with whatever account Orca selected, so where
+# their transcript lives says nothing about where they ran. Only host bots resume
+# on the host, and an unreadable bot.json keeps a bot in its sandbox.
+if [[ $bot_status == 0 ]]; then
+  if host_bot "$HOME/.orca/bots/${bot_home%%$'\n'*}"; then
+    run_on_host "$@"
+  fi
+  cd "${bot_home#*$'\n'}" || exit 2
+# agent-sandbox-exec names any other sandbox after the Git repository it runs in.
+elif ! started_in_sandbox || ! git rev-parse --show-toplevel >/dev/null 2>&1; then
+  run_on_host "$@"
 fi
 
 # The launcher adds Codex's bypass flag itself, and Codex refuses it twice.

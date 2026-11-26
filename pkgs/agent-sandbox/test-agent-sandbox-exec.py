@@ -16,6 +16,12 @@ BOT_HOME = HERE / "agent-sandbox-bot-home.sh"
 TOHRU = "3001d2e5-f2ec-4efc-965d-7be4b9e99e02"
 
 
+def git_init(path):
+    path.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
+    return path
+
+
 class Harness(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -110,9 +116,7 @@ class SandboxAliasTest(Harness):
                 self.assertIn("inside a Git repository", result.stderr)
 
     def test_repository_uses_its_name(self):
-        repo = self.bots / "tester/project"
-        repo.mkdir(parents=True)
-        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        repo = git_init(self.bots / "tester/project")
         alias, _, _ = self.alias(self.launch(repo))
         self.assertEqual(alias, "sandbox-project")
 
@@ -145,6 +149,20 @@ class SandboxAliasTest(Harness):
         result = self.launch(self.bots / "kanna/outside", "codex", CODEX_HOME=str(self.home))
         self.assertEqual(result.returncode, 2)
         self.assertIn("outside", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_symlink_into_a_bot_repository_starts_in_its_mounted_path(self):
+        repo = git_init(self.bot("kanna") / "project")
+        (self.home / "alias").symlink_to(self.bots / "kanna")
+        alias, cwd, _ = self.alias(self.launch(self.home / "alias/project"))
+        self.assertEqual(alias, "sandbox-project")
+        self.assertEqual(cwd, str(repo))
+
+    def test_symlink_out_of_a_bot_home_into_a_repository_is_refused(self):
+        outside = git_init(self.home / "outside")
+        (self.bot("kanna") / "outside").symlink_to(outside)
+        result = self.launch(self.bots / "kanna/outside")
+        self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
 
 
@@ -211,6 +229,27 @@ class ResumeTest(Harness):
         outside.mkdir()
         (self.bot("kanna", "8db85289-0c24-4efe-9efc-d36b1a386a2a") / "outside").symlink_to(outside)
         result = self.resume(self.bots / "kanna/outside", "codex", "resume", "abc", CODEX_HOME=str(self.account))
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, "")
+
+    def test_host_bot_in_a_repository_resumes_on_the_host(self):
+        bot = self.bot("tohru", TOHRU)
+        for cwd in (git_init(bot / "project"), git_init(bot)):
+            for agent in ("claude", "codex", "antigravity"):
+                with self.subTest(cwd=cwd, agent=agent):
+                    place, _, args = self.where(self.resume(cwd, agent, "--resume", "abc"))
+                    self.assertEqual((place, args[0]), ("host", "agy" if agent == "antigravity" else agent))
+
+    def test_bot_repository_through_a_symlink_resumes_from_its_mounted_path(self):
+        repo = git_init(self.bot("kanna", "8db85289-0c24-4efe-9efc-d36b1a386a2a") / "project")
+        (self.home / "alias").symlink_to(self.bots / "kanna")
+        result = self.resume(self.home / "alias/project", "codex", "resume", "abc", CODEX_HOME=str(self.account))
+        self.assertEqual(self.where(result)[:2], ("sandbox", str(repo)))
+
+    def test_symlink_out_of_a_bot_home_into_a_repository_runs_nowhere(self):
+        outside = git_init(self.home / "outside")
+        (self.bot("kanna", "8db85289-0c24-4efe-9efc-d36b1a386a2a") / "outside").symlink_to(outside)
+        result = self.resume(self.bots / "kanna/outside", "claude", "--resume", "abc")
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
 
