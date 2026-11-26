@@ -97,10 +97,12 @@ def open_beneath(dir_fd, parts, kind, shown):
 
 
 class Pins:
-    """Host paths held open by descriptor, so a later symlink swap cannot redirect them.
+    """A worktree and paths in it, checked without following any symlink.
 
-    Docker resolves a bind source when it mounts it. A source of /proc/<pid>/fd/<n> makes it
-    mount exactly the directory validated here, wherever the caller renames things afterwards.
+    The caller can swap a checked directory for a symlink before Docker mounts it, so Docker gets
+    no caller-named host path. It mounts a runner-owned bind volume of the allowed root with
+    `volume-subpath`, which Docker opens beneath the root race-free; Compose's client sees the
+    worktree through the descriptor held here.
     """
 
     def __init__(self, worktree, roots):
@@ -110,6 +112,8 @@ class Pins:
         for root in roots:
             root_parts = path_parts(root)
             if self.worktree_parts[: len(root_parts)] == root_parts and len(self.worktree_parts) > len(root_parts):
+                self.root = root
+                self.root_parts = root_parts
                 root_fd = os.open(root, os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC)
                 try:
                     self.fd = open_beneath(root_fd, self.worktree_parts[len(root_parts) :], "dir", worktree)
@@ -131,14 +135,21 @@ class Pins:
             refuse(f"path outside the worktree {self.worktree}: {path}")
         return parts[len(self.worktree_parts) :]
 
-    def pin(self, path, kind="any"):
-        fd = open_beneath(self.fd, self.inside(path), kind, path)
-        self.fds.append(fd)
-        return f"/proc/{os.getpid()}/fd/{fd}"
+    def subpath(self, path, kind="any"):
+        """Check path, then name it relative to the allowed root for a volume-subpath mount."""
+        os.close(open_beneath(self.fd, self.inside(path), kind, path))
+        return "/".join(path_parts(path)[len(self.root_parts) :])
 
-    @property
-    def worktree_source(self):
-        return f"/proc/{os.getpid()}/fd/{self.fd}"
+    def read(self, path, limit=1 << 20):
+        fd = open_beneath(self.fd, self.inside(path), "file", path)
+        try:
+            with open(f"/proc/self/fd/{fd}", "rb") as handle:
+                data = handle.read(limit + 1)
+        finally:
+            os.close(fd)
+        if len(data) > limit:
+            refuse(f"{path}: larger than {limit} bytes")
+        return data
 
     def close(self):
         for fd in self.fds:
@@ -223,7 +234,10 @@ BUILD_KEYS = {
     "no_cache",
     "secrets",
 }
-DEPLOY_KEYS = {"replicas", "resources"}
+DEPLOY_KEYS = {"replicas", "resources", "mode"}
+# Swarm-only on a single engine; Compose ignores them, so they are dropped with a warning.
+DEPLOY_IGNORED = {"placement", "restart_policy", "update_config", "rollback_config", "endpoint_mode", "labels"}
+ROOT_VOLUME = "asr-worktree-root"
 RESOURCE_KEYS = {"cpus", "memory", "pids"}
 NETWORK_KEYS = {"name", "driver", "internal", "labels", "ipam", "enable_ipv6"}
 VOLUME_KEYS = {"name", "driver", "labels"}
@@ -257,12 +271,15 @@ def add_labels(entry, labels):
 
 
 class ComposeModel:
-    def __init__(self, model, project, pins, labels):
+    def __init__(self, model, project, pins, labels, root_volume="asr-root"):
         self.model = copy.deepcopy(model)
         self.project = project
         self.pins = pins
         self.labels = labels
+        self.root_volume = root_volume
         self.images = {}
+        self.warnings = []
+        self.uses_root = False
 
     def validate(self):
         model = self.model
@@ -289,6 +306,8 @@ class ComposeModel:
                 self.images.setdefault(image, f"{self.project}-built/{self.image_suffix(image)}")
         for name, service in services.items():
             self.service(name, service, services, networks, volumes)
+        if self.uses_root:
+            model.setdefault("volumes", {})[ROOT_VOLUME] = {"external": True, "name": self.root_volume}
         return self.model
 
     @staticmethod
@@ -310,6 +329,8 @@ class ComposeModel:
         add_labels(network, self.labels)
 
     def volume(self, key, volume):
+        if key.startswith("asr-"):
+            refuse(f"volumes.{key}: names starting with asr- are reserved")
         volume = volume or {}
         self.model["volumes"][key] = volume
         check_keys(f"volumes.{key}", volume, VOLUME_KEYS)
@@ -324,7 +345,10 @@ class ComposeModel:
         if "name" in entry and entry["name"] != f"{self.project}_{key}":
             refuse(f"{kind}.{key}: a custom name is refused")
         if "file" in entry:
-            entry["file"] = self.pins.pin(entry["file"], "file")
+            try:
+                entry["content"] = self.pins.read(entry.pop("file")).decode()
+            except UnicodeDecodeError:
+                refuse(f"{kind}.{key}: file sources must be text")
         elif "content" not in entry:
             refuse(f"{kind}.{key}: only file and content sources are allowed")
 
@@ -378,7 +402,12 @@ class ComposeModel:
                 refuse(f"{where}: ulimit {limit} is refused")
         deploy = service.get("deploy")
         if deploy is not None:
+            for key in DEPLOY_IGNORED & set(deploy):
+                if deploy.pop(key) not in (None, {}, []):
+                    self.warnings.append(f"{where}.deploy.{key} is ignored on a single engine")
             check_keys(f"{where}.deploy", deploy, DEPLOY_KEYS)
+            if deploy.get("mode", "replicated") != "replicated":
+                refuse(f"{where}.deploy: only replicated mode is allowed")
             resources = deploy.get("resources") or {}
             check_keys(f"{where}.deploy.resources", resources, {"limits", "reservations"})
             for kind, entry in resources.items():
@@ -449,11 +478,16 @@ class ComposeModel:
         )
         if kind == "bind":
             check_keys(f"{where}.volumes.bind", mount.get("bind") or {}, {"create_host_path", "selinux"})
-            mount = {**mount, "source": self.pins.pin(mount.get("source"), "any")}
-            mount.pop("bind", None)
+            self.uses_root = True
+            mount = {
+                **{key: value for key, value in mount.items() if key not in ("bind", "source")},
+                "type": "volume",
+                "source": ROOT_VOLUME,
+                "volume": {"subpath": self.pins.subpath(mount.get("source"), "any")},
+            }
         elif kind == "volume":
             source = mount.get("source")
-            if source and source not in volumes:
+            if source and (source not in volumes or source == ROOT_VOLUME):
                 refuse(f"{where}: volume {source} is not defined in this project")
             check_keys(f"{where}.volumes.volume", mount.get("volume") or {}, {"nocopy", "subpath"})
         elif kind != "tmpfs":
@@ -513,9 +547,11 @@ class Runner:
         for network in self.owned("network", *filters):
             self.disconnect_owner(network)
             self.docker("network", "rm", network, check=False)
+        # Never --force: a root volume binds a shared directory, and Docker must refuse to remove one
+        # a container still uses rather than unmount it underneath.
         volumes = self.owned("volume", *filters)
         if volumes:
-            self.docker("volume", "rm", "--force", *volumes, check=False)
+            self.docker("volume", "rm", *volumes, check=False)
         images = self.docker(
             "image",
             "ls",
@@ -757,9 +793,35 @@ class Runner:
             probe.settimeout(0.2)
             return probe.connect_ex(("127.0.0.1", port)) == 0
 
+    def root_volume(self, root):
+        """A bind volume of an allowed root, which mounts take a checked volume-subpath of."""
+        name = f"asr-root-{self.oid}-{short_hash(root, 8)}"
+        with self.lock:
+            if self.docker("volume", "inspect", name, check=False).returncode != 0:
+                self.docker(
+                    "volume",
+                    "create",
+                    "--driver",
+                    "local",
+                    "--opt",
+                    "type=none",
+                    "--opt",
+                    "o=bind",
+                    "--opt",
+                    f"device={root}",
+                    "--label",
+                    f"{OWNER_LABEL}={self.owner}",
+                    "--label",
+                    f"{KIND_LABEL}=root",
+                    name,
+                )
+        return name
+
     def sandbox_launch(self, request, emit):
         image = self.allowed_image(request.get("image"))
         worktree = request.get("worktree")
+        if isinstance(worktree, str) and re.search(r'[,"\n]', worktree):
+            refuse("the worktree path may not contain commas, quotes or newlines")
         pins = Pins(worktree, self.args.root)
         with self.lock:
             if len(self.sandboxes) >= MAX_SANDBOXES:
@@ -768,7 +830,7 @@ class Runner:
             name = f"agent-sandbox-run-{self.oid}-{secrets.token_hex(3)}"
             self.sandboxes[name] = {"pins": pins, "worktree": worktree, "touched": time.monotonic()}
         try:
-            return self.create_sandbox(name, image, pins, worktree, request)
+            return self.create_sandbox(name, image, pins, worktree, request, emit)
         except BaseException:
             with self.lock:
                 self.sandboxes.pop(name, None)
@@ -777,7 +839,7 @@ class Runner:
             shutil.rmtree(self.state / name, ignore_errors=True)
             raise
 
-    def create_sandbox(self, name, image, pins, worktree, request):
+    def create_sandbox(self, name, image, pins, worktree, request, emit):
         uid, gid = os.getuid(), os.getgid()
         runtime = f"/run/user/{uid}"
         home = os.environ["HOME"]
@@ -833,7 +895,7 @@ class Runner:
             "--volume",
             f"{root / 'home'}:{home}",
             "--mount",
-            f"type=bind,src={pins.worktree_source},dst={worktree}",
+            f"type=volume,src={self.root_volume(pins.root)},dst={worktree},volume-subpath={pins.subpath(worktree, 'dir')}",
             "--workdir",
             worktree,
             "--env",
@@ -977,7 +1039,7 @@ class Runner:
         with self.lock:
             return self.project_locks.setdefault(project, threading.Lock())
 
-    def compose_submit(self, project, request):
+    def compose_submit(self, project, request, emit):
         model = request.get("model")
         worktree = request.get("worktree")
         if not isinstance(model, dict):
@@ -985,10 +1047,13 @@ class Runner:
         pins = Pins(worktree, self.args.root)
         try:
             labels = {**self.base_labels, KIND_LABEL: "compose", PROJECT_LABEL: project}
-            validated = ComposeModel(model, project, pins, labels).validate()
+            checker = ComposeModel(model, project, pins, labels, self.root_volume(pins.root))
+            validated = checker.validate()
         except BaseException:
             pins.close()
             raise
+        for warning in checker.warnings:
+            emit("err", f"sandbox-runner: {warning}\n")
         directory = self.state / "compose" / project
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "compose.json").write_text(json.dumps(validated, indent=2))
@@ -1077,7 +1142,7 @@ class Runner:
     def compose_up(self, request, emit):
         project = self.project_name(request)
         with self.compose_lock(project):
-            entry = self.compose_submit(project, request)
+            entry = self.compose_submit(project, request, emit)
             argv = ["up", "--detach", "--remove-orphans"]
             if request.get("build"):
                 argv.append("--build")
@@ -1092,7 +1157,7 @@ class Runner:
     def compose_build(self, request, emit):
         project = self.project_name(request)
         with self.compose_lock(project):
-            entry = self.compose_submit(project, request)
+            entry = self.compose_submit(project, request, emit)
             command, fds = self.compose_command(entry, project, "build", *self.services(request, entry))
             return {"exit": self.stream(command, emit, self.timeout(request), fds), "project": project}
 

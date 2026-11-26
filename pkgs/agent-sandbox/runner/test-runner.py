@@ -41,13 +41,14 @@ class Tree(unittest.TestCase):
 
 
 class PinsTest(Tree):
-    def test_pins_resolve_to_the_validated_directory(self):
+    def test_subpaths_are_relative_to_the_root(self):
         pins = self.pins()
-        source = pins.pin(f"{self.worktree}/data", "dir")
-        self.assertEqual(os.path.realpath(source), f"{self.worktree}/data")
-        os.rename(f"{self.worktree}/data", f"{self.worktree}/moved")
-        os.symlink(f"{self.root}/secret", f"{self.worktree}/data")
-        self.assertEqual(os.path.realpath(source), f"{self.worktree}/moved")
+        self.assertEqual(pins.root, self.roots[0])
+        self.assertEqual(pins.subpath(f"{self.worktree}/data", "dir"), "app/data")
+        self.assertEqual(pins.subpath(self.worktree, "dir"), "app")
+        self.assertEqual(pins.read(f"{self.worktree}/token"), b"token")
+        with self.assertRaises(runner.Refused):
+            pins.read(f"{self.worktree}/link/key")
 
     def test_refuses_symlinks_dotdot_and_outside(self):
         pins = self.pins()
@@ -60,7 +61,7 @@ class PinsTest(Tree):
             f"{self.worktree}//data",
         ):
             with self.subTest(path=path), self.assertRaises(runner.Refused):
-                pins.pin(path)
+                pins.subpath(path)
 
     def test_worktree_must_be_a_git_checkout_under_a_root(self):
         for path in (f"{self.root}/secret", f"{self.root}/projects", f"{self.worktree}/data"):
@@ -123,7 +124,7 @@ def social_hub(worktree):
 
 class ComposeTest(Tree):
     def validate(self, model):
-        return runner.ComposeModel(model, PROJECT, self.pins(), LABELS).validate()
+        return runner.ComposeModel(model, PROJECT, self.pins(), LABELS, "asr-root").validate()
 
     def test_accepts_and_confines_a_real_stack(self):
         model = self.validate(social_hub(self.worktree))
@@ -139,8 +140,18 @@ class ComposeTest(Tree):
             self.assertEqual(service["restart"], "no")
             self.assertLessEqual(service["pids_limit"], runner.MAX_PIDS)
             self.assertEqual(service["labels"][runner.OWNER_LABEL], "agent-sandbox-test")
-        source = model["services"]["wiremock"]["volumes"][0]["source"]
-        self.assertRegex(source, r"^/proc/\d+/fd/\d+$")
+        mount = model["services"]["wiremock"]["volumes"][0]
+        self.assertEqual(
+            mount,
+            {
+                "type": "volume",
+                "source": runner.ROOT_VOLUME,
+                "target": "/home/wiremock",
+                "read_only": True,
+                "volume": {"subpath": "app/data"},
+            },
+        )
+        self.assertEqual(model["volumes"][runner.ROOT_VOLUME], {"external": True, "name": "asr-root"})
         self.assertEqual(model["volumes"]["postgres"]["labels"][runner.PROJECT_LABEL], PROJECT)
         self.assertEqual(model["networks"]["default"]["labels"][runner.PROJECT_LABEL], PROJECT)
         self.assertEqual(model["services"]["server"]["build"]["labels"][runner.OWNER_LABEL], "agent-sandbox-test")
@@ -197,6 +208,9 @@ class ComposeTest(Tree):
                 volumes_from=["container:agent-sandbox-x"]
             ),
             "provider": lambda m: services(m)["postgres"].update(provider={"type": "x"}),
+            "reserved volume": lambda m: services(m)["postgres"]["volumes"][0].update(source=runner.ROOT_VOLUME),
+            "reserved volume key": lambda m: m["volumes"].update({"asr-worktree-root": {}}),
+            "global mode": lambda m: services(m)["server"].update(deploy={"mode": "global"}),
         }
         for name, change in cases.items():
             with self.subTest(name):
@@ -206,7 +220,20 @@ class ComposeTest(Tree):
         model = social_hub(self.worktree)
         model["secrets"] = {"token": {"file": f"{self.worktree}/token"}}
         model["services"]["postgres"]["secrets"] = [{"source": "token"}]
-        self.assertRegex(self.validate(model)["secrets"]["token"]["file"], r"^/proc/\d+/fd/\d+$")
+        self.assertEqual(self.validate(model)["secrets"]["token"], {"content": "token"})
+
+    def test_swarm_deploy_keys_are_dropped_with_a_warning(self):
+        model = social_hub(self.worktree)
+        model["services"]["worker"]["deploy"] = {
+            "replicas": 1,
+            "placement": {"constraints": ["node.role==manager"]},
+            "restart_policy": {},
+            "resources": {"limits": {"memory": "512m"}},
+        }
+        checker = runner.ComposeModel(model, PROJECT, self.pins(), LABELS, "asr-root")
+        deploy = checker.validate()["services"]["worker"]["deploy"]
+        self.assertEqual(deploy, {"replicas": 1, "resources": {"limits": {"memory": "512m"}}})
+        self.assertEqual(len(checker.warnings), 1)
 
 
 class RetagTest(unittest.TestCase):
