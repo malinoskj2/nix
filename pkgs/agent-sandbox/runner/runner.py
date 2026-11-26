@@ -838,7 +838,7 @@ class Runner:
                 pins.close()
                 refuse(f"at most {MAX_SANDBOXES} disposable sandboxes per sandbox")
             name = f"agent-sandbox-run-{self.oid}-{secrets.token_hex(3)}"
-            self.sandboxes[name] = {"pins": pins, "worktree": worktree, "touched": time.monotonic()}
+            self.sandboxes[name] = {"pins": pins, "worktree": worktree, "image": image, "touched": time.monotonic()}
         try:
             return self.create_sandbox(name, image, pins, worktree, request, emit)
         except BaseException:
@@ -1023,7 +1023,14 @@ class Runner:
         shutil.rmtree(root, ignore_errors=True)
         with self.lock:
             self.sandboxes.pop(name, None)
-        return {"removed": name}
+            image = sandbox["image"]
+            unused = image in self.images and all(other["image"] != image for other in self.sandboxes.values())
+            if unused:
+                self.images.remove(image)
+        # A candidate goes with the last sandbox started from it; launching again reloads it.
+        if unused:
+            self.docker("image", "rm", "--force", image, check=False)
+        return {"removed": name, **({"image_removed": image} if unused else {})}
 
     def ls(self, request, emit):
         with self.lock:

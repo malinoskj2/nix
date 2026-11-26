@@ -128,7 +128,7 @@ Cargo compiles through sccache, whose cache at `~/.cache/sccache` every sandbox 
 A disposable sandbox is a fresh sibling with one Git worktree shared read-write at the same path, its own empty home, the GPU, and its own VNC and preview ports. It has no logins and none of the other shared directories.
 
 - `sandbox-runner sandbox launch [--worktree DIR] [--display] [--no-gpu]` starts one from this sandbox's image and prints its ID, address, VNC and preview URLs.
-- To review a sandbox image change, build it and launch from the result: `sandbox-runner sandbox launch --build "$(nix build --no-link --print-out-paths .#agent-sandbox.image)"`. `sandbox-runner image load <path>` loads one without launching.
+- To review a sandbox image change, build it and launch from the result: `sandbox-runner sandbox launch --build "$(nix build --no-link --print-out-paths .#agent-sandbox.image)"`. `sandbox-runner image load <path>` loads one without launching. A candidate is removed with the last disposable sandbox started from it, and launching again reloads it.
 - `sandbox-runner sandbox exec ID [--cwd DIR] [--env NAME=VALUE] [--timeout S] -- COMMAND...` runs a command there and exits with its status, for example `sandbox-runner sandbox exec ID -- sandbox-smoke`.
 - `sandbox-runner sandbox logs ID` and `sandbox-runner sandbox rm ID`; `sandbox-runner ls` lists what this sandbox owns.
 
