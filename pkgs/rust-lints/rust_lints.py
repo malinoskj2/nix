@@ -78,7 +78,7 @@ def load_toml(path: Path) -> dict:
         return tomllib.load(file)
 
 
-def member_settings(metadata: dict) -> dict[str, dict[str, Setting]]:
+def member_settings(metadata: dict) -> dict[str, tuple[str, dict[str, Setting]]]:
     root = Path(metadata["workspace_root"])
     root_manifest = root / "Cargo.toml"
     workspace_lints = {}
@@ -92,46 +92,18 @@ def member_settings(metadata: dict) -> dict[str, dict[str, Setting]]:
         manifest = Path(package["manifest_path"])
         lints = load_toml(manifest).get("lints", {})
         label = str(manifest.relative_to(root)) if manifest.is_relative_to(root) else str(manifest)
-        if lints.get("workspace") is True:
-            result[label] = workspace_lints
-        else:
-            result[label] = parse_table(lints)
+        settings = workspace_lints if lints.get("workspace") is True else parse_table(lints)
+        result[label] = (package["name"], settings)
     return result
 
 
-def merge_levels(ours: dict[str, Setting], members: dict[str, dict[str, Setting]]) -> tuple[list[str], list[Override]]:
-    configured: dict[str, dict[str, Setting]] = {}
-    for member, settings in members.items():
-        for name, setting in settings.items():
-            configured.setdefault(name, {})[member] = setting
-
+def member_flags(ours: dict[str, Setting], settings: dict[str, Setting]) -> list[str]:
     flags = [
         Setting(name, "allow" if setting.level == "allow" else "warn", setting.priority)
         for name, setting in ours.items()
-        if name not in configured
+        if name not in settings
     ]
-
-    overrides = []
-    replay = []
-    for name, by_member in sorted(configured.items()):
-        levels = {setting.level for setting in by_member.values()}
-        level = min(levels, key=lambda level: LEVEL_RANK.get(level, 1))
-        priority = min(setting.priority for setting in by_member.values())
-        mixed = len(levels) > 1 or len(by_member) < len(members)
-        replay.append(Setting(name, level, priority))
-        mine = ours.get(name)
-        differs = mine.level != level if mine else level in ("allow", "expect")
-        if differs or mixed:
-            overrides.append(
-                Override(
-                    lint=name,
-                    ours=mine.level if mine else None,
-                    project=level,
-                    sources=sorted(by_member),
-                    mixed=mixed,
-                )
-            )
-
+    replay = [settings[name] for name in sorted(settings)]
     # Groups (negative priority) come first, so an individual level from either side beats a group.
     ordered = [
         setting
@@ -140,7 +112,38 @@ def merge_levels(ours: dict[str, Setting], members: dict[str, dict[str, Setting]
         for setting in sorted(side, key=lambda s: s.priority)
         if (setting.priority < 0) == groups
     ]
-    return [flag for setting in ordered for flag in level_flag(setting)], overrides
+    return [flag for setting in ordered for flag in level_flag(setting)]
+
+
+def merge_levels(
+    ours: dict[str, Setting], members: dict[str, dict[str, Setting]]
+) -> tuple[dict[str, list[str]], list[Override]]:
+    flags = {member: member_flags(ours, settings) for member, settings in members.items()}
+    configured: dict[str, dict[str, Setting]] = {}
+    for member, settings in members.items():
+        for name, setting in settings.items():
+            configured.setdefault(name, {})[member] = setting
+
+    overrides = []
+    for name, by_member in sorted(configured.items()):
+        by_level: dict[str, list[str]] = {}
+        for member, setting in by_member.items():
+            by_level.setdefault(setting.level, []).append(member)
+        mixed = len(by_level) > 1 or len(by_member) < len(members)
+        mine = ours.get(name)
+        for level, sources in sorted(by_level.items()):
+            differs = mine.level != level if mine else level in ("allow", "expect")
+            if differs or mixed:
+                overrides.append(
+                    Override(
+                        lint=name,
+                        ours=mine.level if mine else None,
+                        project=level,
+                        sources=sorted(sources),
+                        mixed=mixed,
+                    )
+                )
+    return flags, overrides
 
 
 def level_flag(setting: Setting) -> list[str]:
@@ -196,18 +199,21 @@ def nested_clippy_configs(metadata: dict, root: Path) -> list[str]:
 
 
 def cargo_metadata(manifest_path: str | None, offline: bool) -> dict:
-    command = ["cargo", "metadata", "--no-deps", "--format-version", "1"]
+    command = ["cargo", "metadata", "--locked", "--format-version", "1"]
     if manifest_path:
         command += ["--manifest-path", manifest_path]
     if offline:
         command.append("--offline")
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
-        raise RunError(f"cargo metadata failed:\n{result.stderr.strip()}")
+        hint = ""
+        if "--locked" in result.stderr:
+            hint = "\nrust-lints runs Cargo with --locked and never writes Cargo.lock; create or update it first."
+        raise RunError(f"cargo metadata failed:\n{result.stderr.strip()}{hint}")
     return json.loads(result.stdout)
 
 
-def run_cargo(command: list[str], env: dict[str, str], log) -> tuple[int, list[dict]]:
+def run_cargo(command: list[str], env: dict[str, str], log) -> tuple[int, list[dict], str]:
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
     messages = []
     stdout, stderr = process.communicate()
@@ -218,7 +224,7 @@ def run_cargo(command: list[str], env: dict[str, str], log) -> tuple[int, list[d
             except json.JSONDecodeError:
                 pass
     log.write(stderr)
-    return process.returncode, messages
+    return process.returncode, messages, stderr
 
 
 def lint_tool(code: str, dylint: set[str]) -> str:
@@ -327,14 +333,33 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--json", action="store_const", const="json", dest="message_format")
     parser.add_argument("--verbose", "-v", action="store_true", help="print each rendered diagnostic")
     parser.add_argument("--offline", action="store_true", help="pass --offline to Cargo")
+    parser.add_argument(
+        "--package", "-p", action="append", default=[], help="lint only this workspace member (repeatable)"
+    )
     parser.add_argument("--no-clippy", action="store_true", help="skip the Clippy pass")
     parser.add_argument("--no-dylint", action="store_true", help="skip the Dylint pass")
     parser.add_argument("--print-flags", action="store_true", help="print the merged lint flags and exit")
     parser.add_argument(
         "--paths", action="store_true", help="print where the lint levels, clippy.toml and Dylint sources live"
     )
-    parser.add_argument("cargo_args", nargs="*", help="extra arguments for cargo check, after --")
+    parser.add_argument("cargo_args", nargs="*", help="extra arguments for both Cargo passes, after --")
     return parser.parse_args(argv)
+
+
+def select_members(metadata: dict, packages: list[str]) -> dict[str, tuple[str, dict[str, Setting]]]:
+    members = member_settings(metadata)
+    if not packages:
+        return members
+    unknown = sorted(set(packages) - {name for name, _ in members.values()})
+    if unknown:
+        raise RunError(f"not workspace members: {', '.join(unknown)}")
+    return {label: member for label, member in members.items() if member[0] in packages}
+
+
+def error_reported(messages: list[dict]) -> bool:
+    return any(
+        item.get("reason") == "compiler-message" and item["message"].get("level") == "error" for item in messages
+    )
 
 
 def run(args: argparse.Namespace) -> dict:
@@ -344,7 +369,8 @@ def run(args: argparse.Namespace) -> dict:
     ours = our_settings()
     dylint = set(dylint_lints())
     groups = clippy_groups()
-    flags, overrides = merge_levels(ours, member_settings(metadata))
+    members = select_members(metadata, args.package)
+    flags, overrides = merge_levels(ours, {label: settings for label, (_, settings) in members.items()})
     clippy_config, notes, config_overrides = merge_clippy_config(root)
     notes += [f"member clippy config not merged: {path}" for path in nested_clippy_configs(metadata, root)]
 
@@ -368,37 +394,62 @@ def run(args: argparse.Namespace) -> dict:
     log_path = work / "cargo.log"
 
     env = build_env(os.environ)
-    common = ["--message-format=json", "--all-targets", "--workspace", "--keep-going"]
+    common = ["--message-format=json", "--all-targets", "--keep-going", "--locked"]
     if args.offline:
         common.append("--offline")
-    common += args.cargo_args
     manifest = ["--manifest-path", args.manifest_path] if args.manifest_path else []
+    selection = [flag for _, (name, _) in sorted(members.items()) for flag in ("-p", name)]
+
+    # Each member's own levels apply only to that member, so members sharing a flag set are linted together.
+    flag_groups: dict[tuple[str, ...], list[str]] = {}
+    for label, (name, _) in sorted(members.items()):
+        flag_groups.setdefault(tuple(flags[label]), []).append(name)
+
+    passes = []
+    if not args.no_clippy:
+        for index, (group_flags, names) in enumerate(flag_groups.items()):
+            packages = [flag for name in names for flag in ("-p", name)]
+            command = [
+                "cargo",
+                "clippy",
+                "--no-deps",
+                "--target-dir",
+                str(work / "clippy"),
+                *manifest,
+                *packages,
+                *common,
+                *args.cargo_args,
+                "--",
+                *group_flags,
+            ]
+            label = "clippy" if len(flag_groups) == 1 else f"clippy[{index}]"
+            passes.append((label, command, dict(env, CLIPPY_CONF_DIR=str(conf_dir))))
+    if not args.no_dylint:
+        command = [
+            os.environ.get("RUST_LINTS_CARGO_DYLINT", "cargo-dylint"),
+            "dylint",
+            "--lib-path",
+            str(library_path()),
+            *manifest,
+            "--",
+            *selection,
+            *common,
+            *args.cargo_args,
+        ]
+        passes.append(("dylint", command, env))
 
     seen: set = set()
     with open(log_path, "w") as log:
-        if not args.no_clippy:
-            clippy_env = dict(env, CLIPPY_CONF_DIR=str(conf_dir))
-            command = ["cargo", "clippy", "--target-dir", str(work / "clippy"), *manifest, *common, "--", *flags]
-            status, messages = run_cargo(command, clippy_env, log)
+        for label, command, pass_env in passes:
+            log.write(f"$ {' '.join(command)}\n")
+            status, messages, stderr = run_cargo(command, pass_env, log)
             findings, errors = collect(messages, root, ours, dylint, groups, seen)
+            if status != 0 and not error_reported(messages):
+                tail = "\n".join(stderr.strip().splitlines()[-5:])
+                errors.append(f"{label} pass exited with status {status} without a compiler error:\n{tail}")
             report["findings"] += findings
             report["errors"] += errors
-            report["passes"]["clippy"] = status
-        if not args.no_dylint:
-            command = [
-                os.environ.get("RUST_LINTS_CARGO_DYLINT", "cargo-dylint"),
-                "dylint",
-                "--lib-path",
-                str(library_path()),
-                *manifest,
-                "--",
-                *common,
-            ]
-            status, messages = run_cargo(command, env, log)
-            findings, errors = collect(messages, root, ours, dylint, groups, seen)
-            report["findings"] += findings
-            report["errors"] += errors
-            report["passes"]["dylint"] = status
+            report["passes"][label] = status
     report["log"] = str(log_path)
     return report
 
@@ -408,8 +459,7 @@ def library_path() -> Path:
 
 
 def exit_status(report: dict) -> int:
-    failed = any(status != 0 for status in report["passes"].values()) and not report["findings"]
-    if report["errors"] or failed:
+    if report["errors"]:
         return EXIT_FAILURE
     return EXIT_FINDINGS if report["findings"] else EXIT_CLEAN
 
@@ -480,7 +530,8 @@ def main(argv: list[str]) -> int:
             sys.stdout.write("\n")
         else:
             print_human(report, verbose=False)
-            sys.stdout.write(" ".join(report["flags"]) + "\n")
+            for member, flags in report["flags"].items():
+                sys.stdout.write(f"{member}: {' '.join(flags)}\n")
         return EXIT_CLEAN
     status = exit_status(report)
     if args.message_format == "json":

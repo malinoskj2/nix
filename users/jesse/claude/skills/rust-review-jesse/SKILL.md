@@ -30,8 +30,10 @@ be run.
 
 Run `rust-lints` (`--json` for a machine-readable report) at the workspace root
 first. It applies the shared lint levels, `clippy.toml` and Dylint library to any
-Cargo project without editing it, writing only under the target directory. It
-keeps the project's own lint settings and lists where they differ from ours.
+Cargo project without editing it, writing only under the target directory; it
+needs an up-to-date `Cargo.lock`, since it runs Cargo with `--locked`. Each
+member keeps its own lint settings, and the report lists where they differ from
+ours.
 Exit status 0 is clean, 1 findings, 2 a build or tool failure. Report findings
 in the reviewed scope with their lint names, and project overrides that hide a
 rule. `rust-lints --paths` prints the source of truth for these rules:

@@ -26,8 +26,9 @@ requirements and repository instructions take precedence over this guidance.
 
 Run `rust-lints` at the workspace root before finishing and fix its findings in
 the code you changed. It applies the shared lint levels, `clippy.toml` and Dylint
-library to any Cargo project without editing it, keeps the project's own lint
-settings and lists where they differ. Exit status 0 is clean, 1 findings, 2 a
+library to any Cargo project without editing it (it needs an up-to-date
+`Cargo.lock`), keeps each member's own lint settings and lists where they
+differ. Exit status 0 is clean, 1 findings, 2 a
 build or tool failure; `--json` gives a machine-readable report.
 `rust-lints --paths` prints the source of truth for these rules: `lints.toml`,
 `clippy.toml` and the Dylint sources (`pkgs/rust-lints/` in the Nix repository).

@@ -19,7 +19,7 @@ class MergeLevels(unittest.TestCase):
     def test_ours_are_warnings_with_groups_first(self):
         flags, overrides = rust_lints.merge_levels(OURS, {"Cargo.toml": {}})
         self.assertEqual(
-            flags,
+            flags["Cargo.toml"],
             ["-W", "clippy::pedantic", "-W", "clippy::unwrap_used", "-W", "unsafe_code"],
         )
         self.assertEqual(overrides, [])
@@ -30,6 +30,7 @@ class MergeLevels(unittest.TestCase):
             "clippy::module_name_repetitions": rust_lints.Setting("clippy::module_name_repetitions", "allow", 0),
         }
         flags, overrides = rust_lints.merge_levels(OURS, {"Cargo.toml": project})
+        flags = flags["Cargo.toml"]
         self.assertNotIn("clippy::unwrap_used", flags[: flags.index("unsafe_code")])
         self.assertEqual(flags[-4:], ["-A", "clippy::module_name_repetitions", "-A", "clippy::unwrap_used"])
         reported = {item.lint: item for item in overrides}
@@ -40,24 +41,30 @@ class MergeLevels(unittest.TestCase):
     def test_individual_levels_follow_every_group(self):
         ours = OURS | {"clippy::must_use_candidate": rust_lints.Setting("clippy::must_use_candidate", "allow", 0)}
         project = {"clippy::pedantic": rust_lints.Setting("clippy::pedantic", "warn", -1)}
-        flags, _ = rust_lints.merge_levels(ours, {"Cargo.toml": project})
+        flags = rust_lints.merge_levels(ours, {"Cargo.toml": project})[0]["Cargo.toml"]
         self.assertEqual(flags[:2], ["-W", "clippy::pedantic"])
         self.assertLess(flags.index("clippy::pedantic"), flags.index("clippy::must_use_candidate"))
         self.assertEqual(flags[flags.index("clippy::must_use_candidate") - 1], "-A")
 
     def test_project_deny_is_kept(self):
         project = {"unsafe_code": rust_lints.Setting("unsafe_code", "forbid", 0)}
-        flags, _ = rust_lints.merge_levels(OURS, {"Cargo.toml": project})
+        flags = rust_lints.merge_levels(OURS, {"Cargo.toml": project})[0]["Cargo.toml"]
         self.assertEqual(flags[-2:], ["-F", "unsafe_code"])
 
-    def test_members_that_disagree_use_the_most_permissive_level(self):
+    def test_each_member_keeps_its_own_levels(self):
         members = {
-            "a/Cargo.toml": {"clippy::unwrap_used": rust_lints.Setting("clippy::unwrap_used", "allow", 0)},
-            "b/Cargo.toml": {},
+            "a/Cargo.toml": {"unsafe_code": rust_lints.Setting("unsafe_code", "allow", 0)},
+            "b/Cargo.toml": {"unsafe_code": rust_lints.Setting("unsafe_code", "deny", 0)},
+            "c/Cargo.toml": {},
         }
         flags, overrides = rust_lints.merge_levels(OURS, members)
-        self.assertEqual(flags[-2:], ["-A", "clippy::unwrap_used"])
-        self.assertTrue(overrides[0].mixed)
+        self.assertEqual(flags["a/Cargo.toml"][-2:], ["-A", "unsafe_code"])
+        self.assertEqual(flags["b/Cargo.toml"][-2:], ["-D", "unsafe_code"])
+        self.assertEqual(flags["c/Cargo.toml"][-2:], ["-W", "unsafe_code"])
+        self.assertEqual(
+            [(o.project, o.sources, o.mixed) for o in overrides],
+            [("allow", ["a/Cargo.toml"], True), ("deny", ["b/Cargo.toml"], True)],
+        )
 
 
 class ClippyConfig(unittest.TestCase):
@@ -76,6 +83,21 @@ class ClippyConfig(unittest.TestCase):
         self.assertIn("std::process::exit", paths)
         self.assertIn("tokio::sync::mpsc::unbounded_channel", paths)
         self.assertTrue(notes)
+
+
+class ExitStatus(unittest.TestCase):
+    def test_unexplained_pass_failure_beats_findings(self):
+        report = {
+            "findings": [object()],
+            "errors": ["dylint pass exited with status 42"],
+            "passes": {"clippy": 0, "dylint": 42},
+        }
+        self.assertEqual(rust_lints.exit_status(report), rust_lints.EXIT_FAILURE)
+
+    def test_error_message_accounts_for_failure(self):
+        error = {"reason": "compiler-message", "message": {"level": "error"}}
+        self.assertTrue(rust_lints.error_reported([error]))
+        self.assertFalse(rust_lints.error_reported([{"reason": "build-finished", "success": False}]))
 
 
 class Collect(unittest.TestCase):
