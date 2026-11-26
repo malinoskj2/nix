@@ -9,6 +9,7 @@
     cargo-preferences
     clippy
     rust-analyzer
+    rust-lints
     rustc
     rustfmt
     sccache

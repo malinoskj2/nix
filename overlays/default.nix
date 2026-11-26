@@ -30,6 +30,10 @@ in
       };
     };
 
+  rust-bin = final: _prev: {
+    rust-bin = inputs.rust-overlay.lib.mkRustBin { } final;
+  };
+
   pins = final: _prev: {
     inherit (importNixpkgs inputs.nixpkgs-firefox final) firefox;
     inherit (importNixpkgs inputs.nixpkgs-hyprland final)

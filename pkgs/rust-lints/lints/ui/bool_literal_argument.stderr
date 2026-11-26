@@ -1,0 +1,43 @@
+warning: `true` passed to `render` does not say what it selects
+  --> $DIR/bool_literal_argument.rs:19:18
+   |
+LL |     panel.render(true);
+   |                  ^^^^
+   |
+   = help: take a two-variant enum that names the choice
+   = note: `#[warn(bool_literal_argument)]` on by default
+
+warning: `false` passed to `connect` does not say what it selects
+  --> $DIR/bool_literal_argument.rs:20:13
+   |
+LL |     connect(false, true);
+   |             ^^^^^
+   |
+   = help: take a two-variant enum that names the choice
+
+warning: `true` passed to `connect` does not say what it selects
+  --> $DIR/bool_literal_argument.rs:20:20
+   |
+LL |     connect(false, true);
+   |                    ^^^^
+   |
+   = help: take a two-variant enum that names the choice
+
+warning: `true` passed to `connect` does not say what it selects
+  --> $DIR/bool_literal_argument.rs:25:21
+   |
+LL |     assert!(connect(true, true) || std::hint::black_box(false));
+   |                     ^^^^
+   |
+   = help: take a two-variant enum that names the choice
+
+warning: `true` passed to `connect` does not say what it selects
+  --> $DIR/bool_literal_argument.rs:25:27
+   |
+LL |     assert!(connect(true, true) || std::hint::black_box(false));
+   |                           ^^^^
+   |
+   = help: take a two-variant enum that names the choice
+
+warning: 5 warnings emitted
+

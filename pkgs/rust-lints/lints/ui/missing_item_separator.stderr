@@ -1,0 +1,83 @@
+warning: struct placed directly against the previous constant
+  --> $DIR/missing_item_separator.rs:5:1
+   |
+LL | struct First;
+   | ^
+   |
+   = help: separate the items with one empty line
+   = note: `#[warn(missing_item_separator)]` on by default
+
+warning: implementation placed directly against the previous struct
+  --> $DIR/missing_item_separator.rs:6:1
+   |
+LL | impl First {
+   | ^
+   |
+   = help: separate the items with one empty line
+
+warning: function placed directly against the previous function
+  --> $DIR/missing_item_separator.rs:42:1
+   |
+LL | fn gamma() {}
+   | ^
+   |
+   = help: separate the items with one empty line
+
+warning: method placed directly against the previous method
+  --> $DIR/missing_item_separator.rs:11:5
+   |
+LL |     fn two(&self) {}
+   |     ^
+   |
+   = help: separate the items with one empty line
+
+warning: method placed directly against the previous method
+  --> $DIR/missing_item_separator.rs:15:5
+   |
+LL |     /// Directly against `three`.
+   |     ^
+   |
+   = help: separate the items with one empty line
+
+warning: method placed directly against the previous method
+  --> $DIR/missing_item_separator.rs:20:5
+   |
+LL |     fn six(&self) {}
+   |     ^
+   |
+   = help: separate the items with one empty line
+
+warning: method placed directly against the previous method
+  --> $DIR/missing_item_separator.rs:26:5
+   |
+LL |     fn describe(&self) -> String {
+   |     ^
+   |
+   = help: separate the items with one empty line
+
+warning: method placed directly against the previous method
+  --> $DIR/missing_item_separator.rs:29:5
+   |
+LL |     fn print(&self) {}
+   |     ^
+   |
+   = help: separate the items with one empty line
+
+warning: method placed directly against the previous associated type
+  --> $DIR/missing_item_separator.rs:34:5
+   |
+LL |     fn next(&mut self) -> Option<u8> {
+   |     ^
+   |
+   = help: separate the items with one empty line
+
+warning: struct placed directly against the previous struct
+  --> $DIR/missing_item_separator.rs:46:5
+   |
+LL |     pub struct B;
+   |     ^
+   |
+   = help: separate the items with one empty line
+
+warning: 10 warnings emitted
+

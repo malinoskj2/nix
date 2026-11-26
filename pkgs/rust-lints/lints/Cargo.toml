@@ -1,0 +1,23 @@
+[package]
+name = "jesse_lints"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+clippy_utils = "=0.1.102"
+dylint_linting = "=6.4.0"
+
+[dev-dependencies]
+dylint_testing = "=6.4.0"
+thiserror = "2"
+
+[[example]]
+name = "thiserror_source_in_message"
+path = "examples/thiserror_source_in_message.rs"
+
+[package.metadata.rust-analyzer]
+rustc_private = true

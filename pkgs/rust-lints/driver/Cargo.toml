@@ -1,0 +1,10 @@
+[package]
+name = "dylint-driver"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+dylint_driver = "=6.4.0"
+env_logger = "0.11"

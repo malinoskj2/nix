@@ -66,6 +66,12 @@
       repo = "nixpkgs";
       ref = "nixos-unstable";
     };
+    rust-overlay = {
+      type = "github";
+      owner = "oxalica";
+      repo = "rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     tohru = {
       type = "github";
       owner = "malinoskj2";
@@ -142,6 +148,7 @@
           "pyghidra-mcp"
           "qwen-prompt"
           "qwen3-tts-python"
+          "rust-lints"
           "strata"
           "switch-and-reset-sandboxes"
           "tiktok-search"

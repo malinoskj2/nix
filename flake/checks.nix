@@ -35,6 +35,8 @@
           devshell = self'.devShells.default;
           gpu-scheduler = self'.packages.gpu-scheduler.tests.scheduler;
           cargo-preferences = self'.packages.cargo-preferences;
+          rust-lints-library = self'.packages.rust-lints.lintLibrary;
+          rust-lints-fixture = self'.packages.rust-lints.tests.fixture;
           zsh-claude-command = self'.packages.zsh-claude-command.tests.widget;
         }
         // lib.optionalAttrs (system == "x86_64-linux") {

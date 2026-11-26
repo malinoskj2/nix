@@ -1,0 +1,11 @@
+warning: hand-written `Error` impl
+  --> $DIR/manual_error_impl.rs:12:1
+   |
+LL | impl std::error::Error for ParseError {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: derive `thiserror::Error` and describe each variant with `#[error(...)]`
+   = note: `#[warn(manual_error_impl)]` on by default
+
+warning: 1 warning emitted
+

@@ -111,6 +111,7 @@
   ripgrep,
   runCommand,
   rust-analyzer,
+  rust-lints,
   rustc,
   rustfmt,
   sccache,
@@ -401,6 +402,7 @@ let
       ]))
       ripgrep
       rust-analyzer
+      rust-lints
       rustc
       rustfmt
       sandboxDisplay

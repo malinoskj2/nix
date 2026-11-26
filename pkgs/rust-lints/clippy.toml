@@ -1,0 +1,16 @@
+allow-dbg-in-tests = true
+allow-print-in-tests = true
+allow-unwrap-in-tests = true
+doc-valid-idents = ["NixOS", "GitHub", ".."]
+excessive-nesting-threshold = 6
+
+disallowed-methods = [
+    { path = "std::sync::mpsc::channel", reason = "bound the queue with `sync_channel(capacity)`" },
+    { path = "tokio::sync::mpsc::unbounded_channel", reason = "bound the queue with `mpsc::channel(capacity)`", allow-invalid = true },
+    { path = "futures_channel::mpsc::unbounded", reason = "bound the queue with `mpsc::channel(capacity)`", allow-invalid = true },
+    { path = "crossbeam_channel::unbounded", reason = "bound the queue with `bounded(capacity)`", allow-invalid = true },
+    { path = "flume::unbounded", reason = "bound the queue with `bounded(capacity)`", allow-invalid = true },
+    { path = "async_channel::unbounded", reason = "bound the queue with `bounded(capacity)`", allow-invalid = true },
+    { path = "reqwest::Client::new", reason = "set a deadline with `Client::builder().timeout(..)`", allow-invalid = true },
+    { path = "reqwest::get", reason = "use a shared client built with a timeout", allow-invalid = true },
+]

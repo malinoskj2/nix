@@ -1,0 +1,35 @@
+warning: blocking call to `std::thread::sleep` inside an async body
+  --> $DIR/blocking_call_in_async.rs:4:5
+   |
+LL |     std::thread::sleep(Duration::from_millis(1));
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: use the runtime's async eq$DIRvalent or move the work into `spawn_blocking`
+   = note: `#[warn(blocking_call_in_async)]` on by default
+
+warning: blocking call to `std::fs::read_to_string` inside an async body
+  --> $DIR/blocking_call_in_async.rs:8:5
+   |
+LL |     std::fs::read_to_string("state.json")
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: use the runtime's async eq$DIRvalent or move the work into `spawn_blocking`
+
+warning: blocking call to `std::fs::File::open` inside an async body
+  --> $DIR/blocking_call_in_async.rs:12:5
+   |
+LL |     std::fs::File::open("state.json")
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: use the runtime's async eq$DIRvalent or move the work into `spawn_blocking`
+
+warning: blocking call to `std::process::Command::output` inside an async body
+  --> $DIR/blocking_call_in_async.rs:16:5
+   |
+LL |     std::process::Command::new("true").output()
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: use the runtime's async eq$DIRvalent or move the work into `spawn_blocking`
+
+warning: 4 warnings emitted
+
