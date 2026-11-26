@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -49,6 +50,17 @@ server.listen()
 time.sleep(3600)
 """
 
+LISTEN = """
+import socket, sys, time
+port = int(sys.argv[sys.argv.index("--listen") + 1] if "--listen" in sys.argv else sys.argv[-1])
+server = socket.socket()
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server.bind(("127.0.0.1", port))
+server.listen()
+while True:
+    server.accept()[0].close()
+"""
+
 IDLE = """
 import time
 time.sleep(3600)
@@ -58,11 +70,17 @@ STUBS = {
     "sway": SWAY,
     "swaymsg": SWAYMSG,
     "agent-sandbox-nested-hyprland": HYPRLAND,
-    "wayvnc": IDLE,
-    "novnc": IDLE,
+    "wayvnc": LISTEN,
+    "novnc": LISTEN,
     "inotifywait": IDLE,
     "wl-copy": "",
 }
+
+
+def free_port():
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
 
 
 class SandboxDisplayTests(unittest.TestCase):
@@ -84,6 +102,8 @@ class SandboxDisplayTests(unittest.TestCase):
             "XDG_RUNTIME_DIR": str(self.runtime),
             "WAYLAND_DISPLAY": "wayland-1",
             "AGENT_SANDBOX_RENDERERS": "pixman",
+            "SANDBOX_DISPLAY_VNC_PORT": str(free_port()),
+            "SANDBOX_DISPLAY_NOVNC_PORT": str(free_port()),
         }
 
     def tearDown(self):
@@ -142,6 +162,20 @@ class SandboxDisplayTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("nested Hyprland: up", result.stdout)
         self.assertEqual(self.lock_holders(), [])
+
+    def test_up_restarts_a_dead_wayvnc(self):
+        result = self.display("up")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("wayvnc: up", result.stdout)
+        for pid in self.daemons():
+            if b"wayvnc" in Path(f"/proc/{pid}/cmdline").read_bytes():
+                os.kill(pid, signal.SIGKILL)
+        time.sleep(0.3)
+        self.assertIn("wayvnc: down", self.display("status").stdout)
+        result = self.display("up")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("wayvnc: up", result.stdout)
+        self.assertIn("noVNC: up", result.stdout)
 
 
 if __name__ == "__main__":

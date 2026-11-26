@@ -213,7 +213,7 @@ def main():
             command.add_argument("--cwd")
             command.add_argument("--env", action="append", metavar="NAME=VALUE")
             command.add_argument("--timeout", type=int)
-            command.add_argument("command", nargs=argparse.REMAINDER)
+            command.add_argument("command", nargs="*", help="after --")
         if action == "logs":
             command.add_argument("--tail", type=int)
 
@@ -237,7 +237,7 @@ def main():
             command.add_argument("--user")
             command.add_argument("--workdir")
             command.add_argument("--env", action="append", metavar="NAME=VALUE")
-            command.add_argument("command", nargs=argparse.REMAINDER)
+            command.add_argument("command", nargs="*", help="after --")
         elif action in ("build", "up", "logs"):
             command.add_argument("services", nargs="*")
 

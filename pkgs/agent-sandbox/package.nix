@@ -30,6 +30,7 @@
   dejavu_fonts,
   diffutils,
   dig,
+  docker-buildx,
   docker-client,
   docker-compose,
   dockerTools,
@@ -233,6 +234,8 @@ let
     args:
     writeText "playwright-mcp.json" (
       builtins.toJSON {
+        # Its default persistent profile goes under the read-only browsers path.
+        browser.isolated = true;
         browser.launchOptions = {
           channel = "chromium";
           inherit args;
@@ -244,7 +247,14 @@ let
     name = "playwright-mcp";
     runtimeInputs = [ browserGpuProbe ];
     runtimeEnv = {
-      SANDBOX_PLAYWRIGHT_MCP = lib.getExe playwright-mcp;
+      # nixpkgs' wrapper sets its own browsers path, which lacks the GStreamer and ffmpeg fixes.
+      SANDBOX_PLAYWRIGHT_MCP = lib.getExe (
+        playwright-mcp.override (old: {
+          playwright-driver = old.playwright-driver // {
+            browsers = playwright-browsers;
+          };
+        })
+      );
       SANDBOX_PLAYWRIGHT_MCP_GPU_CONFIG = playwrightMcpConfig chromiumGpuArgs;
       SANDBOX_PLAYWRIGHT_MCP_CPU_CONFIG = playwrightMcpConfig [ ];
     };
@@ -339,7 +349,8 @@ let
     exec ${lib.getExe python3} ${./runner/runner.py} \
       --docker ${lib.getExe docker-client} \
       --compose ${lib.getExe docker-compose} \
-      --bwrap ${lib.getExe bubblewrap} "$@"
+      --bwrap ${lib.getExe bubblewrap} \
+      --buildx ${docker-buildx}/libexec/docker/cli-plugins/docker-buildx "$@"
   '';
 
   runnerClient = writeShellScriptBin "sandbox-runner" ''
@@ -348,7 +359,11 @@ let
 
   sandboxSmoke = writeShellApplication {
     name = "sandbox-smoke";
-    runtimeEnv.SANDBOX_SMOKE_BROWSERS = ./smoke/browsers.js;
+    runtimeEnv = {
+      SANDBOX_SMOKE_BROWSERS = ./smoke/browsers.js;
+      SANDBOX_SMOKE_MCP = ./smoke/mcp.js;
+      SANDBOX_PLAYWRIGHT_MCP = lib.getExe playwrightMcp;
+    };
     text = builtins.readFile ./smoke/sandbox-smoke.sh;
   };
 

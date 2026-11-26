@@ -271,7 +271,7 @@ def add_labels(entry, labels):
 
 
 class ComposeModel:
-    def __init__(self, model, project, pins, labels, root_volume="asr-root"):
+    def __init__(self, model, project, pins, labels, root_volume="asr-root", files=None):
         self.model = copy.deepcopy(model)
         self.project = project
         self.pins = pins
@@ -279,6 +279,7 @@ class ComposeModel:
         self.root_volume = root_volume
         self.images = {}
         self.warnings = []
+        self.files = files
         self.uses_root = False
 
     def validate(self):
@@ -342,13 +343,22 @@ class ComposeModel:
 
     def secret(self, kind, key, entry):
         check_keys(f"{kind}.{key}", entry, SECRET_KEYS)
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", key):
+            refuse(f"{kind}.{key}: names may use letters, digits, dot, dash and underscore")
         if "name" in entry and entry["name"] != f"{self.project}_{key}":
             refuse(f"{kind}.{key}: a custom name is refused")
         if "file" in entry:
-            try:
-                entry["content"] = self.pins.read(entry.pop("file")).decode()
-            except UnicodeDecodeError:
-                refuse(f"{kind}.{key}: file sources must be text")
+            # Docker bind-mounts a secret file by its host path, so it gets a copy the runner made
+            # through a checked descriptor, in a directory no sandbox can write.
+            data = self.pins.read(entry.pop("file"))
+            if self.files is None:
+                refuse(f"{kind}.{key}: file sources need a project directory")
+            copy = self.files / kind / key
+            copy.parent.mkdir(parents=True, exist_ok=True)
+            copy.write_bytes(data)
+            entry["file"] = str(copy)
+        elif kind == "secrets":
+            refuse(f"{kind}.{key}: only file sources are allowed")
         elif "content" not in entry:
             refuse(f"{kind}.{key}: only file and content sources are allowed")
 
@@ -1047,15 +1057,15 @@ class Runner:
         pins = Pins(worktree, self.args.root)
         try:
             labels = {**self.base_labels, KIND_LABEL: "compose", PROJECT_LABEL: project}
-            checker = ComposeModel(model, project, pins, labels, self.root_volume(pins.root))
+            directory = self.state / "compose" / project
+            directory.mkdir(parents=True, exist_ok=True)
+            checker = ComposeModel(model, project, pins, labels, self.root_volume(pins.root), directory)
             validated = checker.validate()
         except BaseException:
             pins.close()
             raise
         for warning in checker.warnings:
             emit("err", f"sandbox-runner: {warning}\n")
-        directory = self.state / "compose" / project
-        directory.mkdir(parents=True, exist_ok=True)
         (directory / "compose.json").write_text(json.dumps(validated, indent=2))
         with self.lock:
             previous = self.projects.get(project)
@@ -1098,13 +1108,13 @@ class Runner:
             "/tmp",
             "--setenv",
             "PATH",
-            "/var/empty",
+            os.path.dirname(os.path.realpath(self.args.docker)),
             "--setenv",
             "DOCKER_HOST",
             "unix:///run/docker.sock",
             "--setenv",
-            "COMPOSE_BAKE",
-            "false",
+            "DOCKER_BUILDKIT",
+            "1",
             "--setenv",
             "DOCKER_CLI_HINTS",
             "false",
@@ -1120,6 +1130,11 @@ class Runner:
             "--bind",
             self.args.docker_socket,
             "/run/docker.sock",
+            # Compose builds with BuildKit only through buildx; without it, it falls back to the
+            # classic builder, which has no RUN --mount.
+            "--ro-bind",
+            self.args.buildx,
+            "/usr/libexec/docker/cli-plugins/docker-buildx",
             "--ro-bind",
             str(entry["dir"]),
             str(entry["dir"]),
@@ -1394,6 +1409,7 @@ def parse_args(argv):
     parser.add_argument("--docker", default="docker")
     parser.add_argument("--compose", default="docker-compose")
     parser.add_argument("--bwrap", default="bwrap")
+    parser.add_argument("--buildx", default="/usr/libexec/docker/cli-plugins/docker-buildx")
     parser.add_argument("--docker-socket", default="/run/docker.sock")
     parser.add_argument("--ttl", type=int, default=12 * 3600, help="seconds a sandbox or stack may sit idle")
     return parser.parse_args(argv)

@@ -3,6 +3,8 @@
 log_dir=$XDG_RUNTIME_DIR/logs
 nested_socket=$XDG_RUNTIME_DIR/nested-sway.sock
 host_clipboard=/run/host-clipboard
+vnc_port=${SANDBOX_DISPLAY_VNC_PORT:-5900}
+novnc_port=${SANDBOX_DISPLAY_NOVNC_PORT:-6080}
 
 usage() {
   echo 'usage: sandbox-display up [--hyprland] | status' >&2
@@ -42,6 +44,28 @@ nested_ready() {
   swaymsg --socket "$nested_socket" -t get_version
 }
 
+listening() {
+  (: <"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+}
+
+# wayvnc and noVNC can die on their own while sway keeps running, so up checks them every time.
+start_vnc() {
+  if ! listening "$vnc_port"; then
+    spawn wayvnc.log wayvnc --log-level=warning 0.0.0.0 "$vnc_port"
+    if ! wait_for_server $! listening "$vnc_port"; then
+      echo "sandbox-display: wayvnc failed to start; see $log_dir/wayvnc.log" >&2
+      return 1
+    fi
+  fi
+  if ! listening "$novnc_port"; then
+    spawn novnc.log novnc --listen "$novnc_port" --vnc "localhost:$vnc_port"
+    if ! wait_for_server $! listening "$novnc_port"; then
+      echo "sandbox-display: noVNC failed to start; see $log_dir/novnc.log" >&2
+      return 1
+    fi
+  fi
+}
+
 hyprland_ready() {
   [[ -S $XDG_RUNTIME_DIR/hyprland-1 ]]
 }
@@ -73,8 +97,6 @@ start_sway() {
     if wait_for_server $! sway_ready; then
       echo "$renderer" >"$XDG_RUNTIME_DIR/renderer"
       spawn clipboard.log "$0" sync-clipboard
-      spawn wayvnc.log wayvnc --log-level=warning 0.0.0.0 5900
-      spawn novnc.log novnc --listen 6080 --vnc localhost:5900
       return 0
     fi
   done
@@ -116,6 +138,7 @@ up() {
   if ! sway_ready >/dev/null 2>&1; then
     start_sway || return 1
   fi
+  start_vnc || return 1
   if [[ -n $hyprland ]] && ! hyprland_ready; then
     start_nested_hyprland || return 1
   fi
@@ -127,6 +150,16 @@ status() {
     echo "sway: up on $WAYLAND_DISPLAY with the $(<"$XDG_RUNTIME_DIR/renderer") renderer; VNC at ${AGENT_SANDBOX_VNC_URL:-port 5900}"
   else
     echo 'sway: down'
+  fi
+  if listening "$vnc_port"; then
+    echo "wayvnc: up on container port $vnc_port"
+  else
+    echo 'wayvnc: down; sandbox-display up restarts it'
+  fi
+  if listening "$novnc_port"; then
+    echo "noVNC: up on container port $novnc_port"
+  else
+    echo 'noVNC: down; sandbox-display up restarts it'
   fi
   if hyprland_ready; then
     echo 'nested Hyprland: up on hyprland-1; VNC on container port 5901'

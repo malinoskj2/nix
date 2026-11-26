@@ -220,7 +220,11 @@ class ComposeTest(Tree):
         model = social_hub(self.worktree)
         model["secrets"] = {"token": {"file": f"{self.worktree}/token"}}
         model["services"]["postgres"]["secrets"] = [{"source": "token"}]
-        self.assertEqual(self.validate(model)["secrets"]["token"], {"content": "token"})
+        directory = Path(self.root, "project")
+        checker = runner.ComposeModel(model, PROJECT, self.pins(), LABELS, "asr-root", directory)
+        secret = checker.validate()["secrets"]["token"]
+        self.assertEqual(secret, {"file": f"{directory}/secrets/token"})
+        self.assertEqual(Path(secret["file"]).read_text(), "token")
 
     def test_swarm_deploy_keys_are_dropped_with_a_warning(self):
         model = social_hub(self.worktree)

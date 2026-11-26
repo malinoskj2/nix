@@ -110,8 +110,12 @@ if [[ -n $gpu ]]; then
   browsers() {
     node "$SANDBOX_SMOKE_BROWSERS" "$work/clip.mp4"
   }
+  mcp() {
+    SMOKE_MCP_OUTPUT=$work node "$SANDBOX_SMOKE_MCP" "$SANDBOX_PLAYWRIGHT_MCP"
+  }
   display() {
-    sandbox-display up &&
+    sandbox-display up | tee "$work/display-status" &&
+      grep -q '^wayvnc: up' "$work/display-status" &&
       grim "$work/screen.png" &&
       [[ $(magick identify -format '%wx%h' "$work/screen.png") == 1280x800 ]] &&
       grep -qvx pixman "$XDG_RUNTIME_DIR/renderer"
@@ -119,12 +123,14 @@ if [[ -n $gpu ]]; then
   gpu_checks() {
     check 'browsers: Chromium WebGL on ANGLE Vulkan, WebKit decodes a local video' browsers
     sed 's/^/      /' "$log"
-    check 'sandbox-display up, grim captures 1280x800 on the GPU renderer' display
+    check 'Playwright MCP opens a page and renders WebGL on ANGLE Vulkan' mcp
+    sed 's/^/      /' "$log"
+    check 'sandbox-display up with wayvnc, grim captures 1280x800 on the GPU renderer' display
   }
   if [[ -n ${GPU_LEASE_ID:-} ]]; then
     gpu_checks
   else
-    export -f check pass fail gpu_checks browsers display
+    export -f check pass fail gpu_checks browsers mcp display
     export log work failures
     # The checks print their own results; the count comes back through the exit status.
     # shellcheck disable=SC2016 # expanded by the inner shell
