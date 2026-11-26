@@ -333,6 +333,8 @@ args=(
   --cgroup-parent agent-sandbox.slice
   # The container's cgroup namespace hides the shared parent limit and usage.
   --mount "type=bind,src=/sys/fs/cgroup/agent.slice/agent-sandbox.slice,dst=/run/agent-sandbox-cgroup,readonly"
+  # The parent also bounds the host's Nix builds alongside every sandbox.
+  --mount "type=bind,src=/sys/fs/cgroup/agent.slice,dst=/run/agent-cgroup,readonly"
   # No Docker cpuset: the slice's AllowedCPUs changes while a game runs, and a
   # container's own cpuset would pin it to whatever was set at launch.
   # Under host-wide OOM, kill sandbox processes before the desktop's.
