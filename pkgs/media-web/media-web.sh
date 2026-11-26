@@ -56,7 +56,7 @@ done
 source "$MEDIA_WEB_PROBE"
 
 ssh_opts=(-T -o RequestTTY=no -o LogLevel=ERROR)
-lan_addr=$(ssh -G "$host" | awk '$1 == "hostname" { print $2; exit }')
+lan_addr=$(ssh "${ssh_opts[@]}" -G "$host" | awk '$1 == "hostname" { print $2; exit }')
 
 discovery=$(ssh "${ssh_opts[@]}" "$host" bash -s <"$MEDIA_WEB_DISCOVER") || {
   echo "media-web: discovery over ssh to $host failed" >&2
