@@ -178,7 +178,11 @@ in
 
   environment.systemPackages = with pkgs; [
     agent-sandbox
+    bot-sandbox-refresh
     gpu-scheduler
+    main-checkout-report
+    nix-health
+    nix-land
     switch-and-reset-sandboxes
     libva-utils
 

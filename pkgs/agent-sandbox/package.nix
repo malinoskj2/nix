@@ -633,7 +633,7 @@ let
         # write objects the host links. Each container runs its own server, so each enforces
         # the size cap on its own.
         RUSTC_WRAPPER = "sccache";
-        SCCACHE_CACHE_SIZE = "50G";
+        SCCACHE_CACHE_SIZE = "30G";
       };
     };
   };
@@ -749,6 +749,7 @@ in
 symlinkJoin {
   name = "agent-sandbox";
   passthru = {
+    imageRef = "agent-sandbox:${image.imageTag}";
     unrealTools = unreal.tools;
     unrealTests = unreal.tests;
     displayTests =

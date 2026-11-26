@@ -103,7 +103,9 @@ another host, with `--target-host` (`docs/bootstrap.md`). No host needs
 Tohru, the Orca bot started in `/home/jesse/.orca/bots/tohru`, merges finished
 work to `main` and switches `home` when it judges the switch safe, without asking again. Every other agent,
 including Orca workers and sandboxed agents, commits on its branch and reports
-instead. To switch, Tohru commits on `main`, builds the host, then runs
+instead. To land a branch, Tohru runs `nix-land <branch>` (merge, checks, push,
+`host-switch`, idle bot sandbox restarts; last line `LANDED <sha>` or
+`FAILED <stage> <reason>`). To switch by hand, Tohru commits on `main`, builds the host, then runs
 `host-switch` (or `nix run /home/jesse/nix#host-switch` in a sandbox that predates
 it). Root's `host-switch` service on `home` builds and activates exactly the head
 of `main`, never a working tree or another branch, and refuses anything else.
