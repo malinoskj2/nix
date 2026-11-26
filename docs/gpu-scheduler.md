@@ -131,6 +131,20 @@ against a 1,902 MiB desktop baseline); the uncensored weights are 1.3 GB
 smaller. 26 GiB leaves about 2 GiB of margin and still fits the 28.5 GiB
 the scheduler allows a shared request.
 
+`--strata` (on `qwen-opencode` and `qwen-prompt`) serves
+[Strata](https://github.com/Niko1221/Strata) instead of llama.cpp. Strata
+only runs mixture-of-experts models, so it swaps the dense 27B for
+Qwen3.6-35B-A3B (`qwen3.6-35b-a3b`, or `qwen3.6-35b-a3b-uncensored` with
+`--uncensored`). `qwen-opencode --strata` uses a 256k context with an f16 KV
+cache; `qwen-prompt --strata` keeps 16k. Strata sizes its expert cache and
+buffers to whatever VRAM is free (29.3 to 30.3 GiB at every context measured,
+`--expert-vram` included), above what a shared request may take, so it books
+the GPU with `--exclusive`. At 256k the experts that don't fit beside the cache
+are computed on the CPU, and the engine pins all 18.75 GiB of routed experts in
+system RAM. Compared with llama.cpp on the same file, Strata decodes short
+prompts faster through its MTP drafts but is several times slower on long
+prompts.
+
 In Orca's agent picker, OpenCode on `home` runs
 `orca-sandbox-launch orca-sandbox opencode`, which `agent-sandbox-exec` turns
 into `qwen-opencode --uncensored` in the repository's sandbox, where the

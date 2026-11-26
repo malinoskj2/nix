@@ -8,13 +8,18 @@ import time
 import unittest
 from pathlib import Path
 
+from qwen_local import MODELS, STRATA_CONTEXT, STRATA_MODELS
+
 LAUNCHER = Path(__file__).with_name("opencode.py")
 
 GPU_RUN = """import os, signal, subprocess, sys, time
 from pathlib import Path
 args = sys.argv[1:]
-assert args[args.index('--vram') + 1] == '26GiB', args
-assert '--exclusive' not in args
+if os.environ['EXPECT_VRAM'] == 'exclusive':
+    assert '--exclusive' in args and '--vram' not in args, args
+else:
+    assert args[args.index('--vram') + 1] == os.environ['EXPECT_VRAM'], args
+    assert '--exclusive' not in args
 command = args[args.index('--') + 1:]
 log = Path(os.environ['GPU_LOG'])
 def interrupted(signum, _frame):
@@ -22,6 +27,8 @@ def interrupted(signum, _frame):
         f.write(f'cancel {os.getpid()}\\n')
     sys.exit(143)
 signal.signal(signal.SIGTERM, interrupted)
+with log.open('a') as f:
+    f.write(f'queued {os.getpid()}\\n')
 time.sleep(float(os.environ.get('GPU_QUEUE', '0')))
 with log.open('a') as f:
     f.write(f'acquire {os.getpid()}\\n')
@@ -43,7 +50,17 @@ LLAMA_SERVER = """import http.server, json, os, sys
 from pathlib import Path
 assert os.environ.get('GPU_LEASE_ID') == 'fake'
 argv = sys.argv
-assert argv[argv.index('--ctx-size') + 1] == '65536'
+if 'strata' in argv[0]:
+    config = json.loads(Path(argv[argv.index('--config') + 1]).read_text())
+    args = config['args']
+    assert argv[argv.index('--engine') + 1] == 'strata'
+    assert args[args.index('--native') + 1].endswith(os.environ['EXPECT_MODEL']), args
+    assert args[args.index('--max-context') + 1] == os.environ['EXPECT_CONTEXT'], args
+    assert args[args.index('--kv') + 1] == 'fp16' and config['arch'] == 'qwen35moe', config
+    assert Path(config['exe']).is_absolute(), config
+    assert Path(config['tokenizer'], 'vocab.json').is_file(), config
+else:
+    assert argv[argv.index('--ctx-size') + 1] == os.environ['EXPECT_CONTEXT']
 key = argv[argv.index('--api-key') + 1]
 with Path(os.environ['SERVER_PIDS']).open('a') as f:
     f.write(f'{os.getpid()}\\n')
@@ -59,9 +76,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return False
     def do_GET(self):
         if self.authorized():
+            body = json.dumps({'status': 'ok', 'loaded': True}).encode()
             self.send_response(200)
-            self.send_header('Content-Length', '0')
+            self.send_header('Content-Length', str(len(body)))
             self.end_headers()
+            self.wfile.write(body)
     def do_POST(self):
         if not self.authorized():
             return
@@ -85,15 +104,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
 http.server.HTTPServer(('127.0.0.1', int(argv[argv.index('--port') + 1])), Handler).serve_forever()
 """
 
+STRATA_TOKENIZER = """import os, sys
+from pathlib import Path
+argv = sys.argv
+assert argv[argv.index('--gguf') + 1].endswith('.gguf')
+with Path(os.environ['TOKENIZER_LOG']).open('a') as f:
+    f.write('built\\n')
+out = Path(argv[argv.index('--out') + 1]) / 'tokenizer'
+out.mkdir(parents=True)
+(out / 'vocab.json').write_text('{}')
+"""
+
 OPENCODE = """import json, os, sys, time, urllib.error, urllib.request
 from pathlib import Path
 if '--version' in sys.argv:
     print('opencode v2.3.0')
     sys.exit()
-assert sys.argv[1:] == ['--standalone', 'project-dir', '--prompt', '-h', '--uncensored'], sys.argv
+assert sys.argv[1:] == ['--standalone', 'project-dir', '--prompt', '-h', '--uncensored', '--strata'], sys.argv
 config = json.loads(os.environ['OPENCODE_CONFIG_CONTENT'])
 assert config['model'] == 'local-qwen/qwen'
-assert config['providers']['local-qwen']['models']['qwen']['limit']['context'] == 65536
+assert config['providers']['local-qwen']['models']['qwen']['limit']['context'] == int(os.environ['EXPECT_CONTEXT'])
 base = config['providers']['local-qwen']['settings']['baseURL']
 key = os.environ['QWEN_LOCAL_API_KEY']
 log = Path(os.environ['GPU_LOG'])
@@ -143,16 +173,26 @@ class LauncherTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        alias, filename = "qwen3.8-27b-uncensored", "Qwen3.8-27B-Uncensored-Q5_K_M.gguf"
-        (self.root / "by-name" / alias).mkdir(parents=True)
-        (self.root / "by-name" / alias / filename).write_bytes(b"fake")
-        (self.root / "catalog.json").write_text(
-            json.dumps({"entries": {alias: {"files": [{"target": filename, "size": 4}]}}})
+        models = [MODELS["uncensored"], STRATA_MODELS["uncensored"]]
+        for alias, filename in models:
+            (self.root / "by-name" / alias).mkdir(parents=True)
+            (self.root / "by-name" / alias / filename).write_bytes(b"fake")
+        catalog = {alias: {"files": [{"target": filename, "size": 4}]} for alias, filename in models}
+        (self.root / "catalog.json").write_text(json.dumps({"entries": catalog}))
+        (self.root / "readiness.json").write_text(
+            json.dumps({"entries": {alias: {"status": "ready"} for alias, _ in models}})
         )
-        (self.root / "readiness.json").write_text(json.dumps({"entries": {alias: {"status": "ready"}}}))
         bin_dir = self.root / "bin"
         bin_dir.mkdir()
-        for name, code in {"gpu-run": GPU_RUN, "llama-server": LLAMA_SERVER, "opencode": OPENCODE}.items():
+        scripts = {
+            "gpu-run": GPU_RUN,
+            "llama-server": LLAMA_SERVER,
+            "strata-server": LLAMA_SERVER,
+            "strata-tokenizer": STRATA_TOKENIZER,
+            "strata": "",
+            "opencode": OPENCODE,
+        }
+        for name, code in scripts.items():
             path = bin_dir / name
             path.write_text(f"#!{sys.executable}\n" + code)
             path.chmod(0o700)
@@ -163,24 +203,19 @@ class LauncherTest(unittest.TestCase):
             "GPU_LOG": str(self.root / "gpu.log"),
             "SERVER_PIDS": str(self.root / "servers"),
             "READY": str(self.root / "ready"),
+            "XDG_CACHE_HOME": str(self.root / "cache"),
+            "TOKENIZER_LOG": str(self.root / "tokenizer.log"),
+            "EXPECT_VRAM": "26GiB",
+            "EXPECT_CONTEXT": "65536",
         }
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def launch(self, scenario, **env):
+    def launch(self, scenario, strata=False, **env):
+        own = ["--uncensored", "--idle-minutes", "0.02", *(["--strata"] if strata else [])]
         return subprocess.Popen(
-            [
-                sys.executable,
-                str(LAUNCHER),
-                "--uncensored",
-                "--idle-minutes",
-                "0.02",
-                "project-dir",
-                "--prompt",
-                "-h",
-                "--uncensored",
-            ],
+            [sys.executable, str(LAUNCHER), *own, "project-dir", "--prompt", "-h", "--uncensored", "--strata"],
             env=self.env | {"SCENARIO": scenario} | env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -219,6 +254,33 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual(events.count("acquire"), 2)
         self.assertEqual(len((self.root / "servers").read_text().split()), 2)
 
+    def test_strata_serves_the_moe_model_at_full_context_and_caches_its_tokenizer(self):
+        self.env |= {
+            "EXPECT_VRAM": "exclusive",
+            "EXPECT_CONTEXT": str(STRATA_CONTEXT),
+            "EXPECT_MODEL": STRATA_MODELS["uncensored"][1],
+        }
+        for _ in range(2):
+            for name in ("gpu.log", "servers"):
+                (self.root / name).unlink(missing_ok=True)
+            process = self.launch("cycle", strata=True, EXIT_CODE="0", GPU_QUEUE="0.5")
+            _, stderr = process.communicate(timeout=60)
+            self.assertEqual(process.returncode, 0, stderr)
+            self.assertIn(STRATA_MODELS["uncensored"][0], stderr)
+            self.assertEqual(self.assert_released().count("acquire"), 2)
+        self.assertEqual((self.root / "tokenizer.log").read_text().split(), ["built"])
+
+    def test_strata_model_not_ready_starts_nothing(self):
+        (self.root / "readiness.json").write_text(
+            json.dumps({"entries": {STRATA_MODELS["uncensored"][0]: {"status": "missing"}}})
+        )
+        process = self.launch("cycle", strata=True)
+        _, stderr = process.communicate(timeout=30)
+        self.assertEqual(process.returncode, 1)
+        self.assertIn("not ready; no download or fallback attempted", stderr)
+        self.assertFalse((self.root / "gpu.log").exists())
+        self.assertFalse((self.root / "tokenizer.log").exists())
+
     def test_termination_stops_server_and_opencode(self):
         for sig in (signal.SIGTERM, signal.SIGHUP):
             with self.subTest(signal=sig):
@@ -241,18 +303,17 @@ class LauncherTest(unittest.TestCase):
     def test_queued_request_cancelled_on_exit(self):
         process = self.launch("hold", GPU_QUEUE="60")
         deadline = time.monotonic() + 15
-        while not (self.root / "state" / "qwen-opencode").exists() or not any(
-            "requesting" in log.read_text() for log in (self.root / "state" / "qwen-opencode").iterdir()
-        ):
+        log = self.root / "gpu.log"
+        while not log.exists() or "queued" not in log.read_text():
             self.assertLess(time.monotonic(), deadline)
             time.sleep(0.1)
         process.terminate()
         process.communicate(timeout=30)
-        self.assertEqual((self.root / "gpu.log").read_text().split()[0], "cancel")
+        self.assertEqual(log.read_text().split()[::2], ["queued", "cancel"])
 
     def test_unready_model_starts_nothing(self):
         (self.root / "readiness.json").write_text(
-            json.dumps({"entries": {"qwen3.8-27b-uncensored": {"status": "missing"}}})
+            json.dumps({"entries": {MODELS["uncensored"][0]: {"status": "missing"}}})
         )
         process = self.launch("cycle")
         _, stderr = process.communicate(timeout=30)

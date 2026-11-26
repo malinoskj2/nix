@@ -17,23 +17,27 @@ from pathlib import Path
 
 from qwen_local import (
     MODELS,
+    STRATA_BOOKING,
+    STRATA_CONTEXT,
+    STRATA_MODELS,
     checked_opencode_major,
     configuration,
     guarded,
     healthy,
-    llama_command,
     opencode_environment,
     refuse_nesting,
     require,
     resolve_model,
+    server_command,
     stop,
+    strata_tokenizer,
 )
 
 CONTEXT = 65536
 # Hybrid Qwen3.8 27B: 16 of 65 layers use attention, 4 KV heads of 256, so an
 # f16 KV cache costs 64 KiB per token, 4 GiB at 64k. Regular weights are
 # 19.5 GiB; measured peak with a full context is in docs/gpu-scheduler.md.
-VRAM = "26GiB"
+BOOKING = ("--vram", "26GiB")
 KEEPALIVE = 15
 
 
@@ -44,8 +48,11 @@ class Backend:
     forking thread, so gpu-run must be forked by the thread that outlives the rest.
     """
 
-    def __init__(self, model, label, idle, log):
+    def __init__(self, model, label, idle, log, directory, strata=False):
         self.model = model
+        self.directory = directory
+        self.strata = strata
+        self.context, self.booking = (STRATA_CONTEXT, STRATA_BOOKING) if strata else (CONTEXT, BOOKING)
         self.log = log
         self.label = label
         self.idle = idle
@@ -96,12 +103,11 @@ class Backend:
         self.process = subprocess.Popen(
             guarded(
                 "gpu-run",
-                "--vram",
-                VRAM,
+                *self.booking,
                 "--name",
                 self.label,
                 "--",
-                *guarded(*llama_command(self.model, self.port, self.key, CONTEXT)),
+                *guarded(*server_command(self.model, self.port, self.key, self.context, self.strata, self.directory)),
             ),
             stdin=subprocess.DEVNULL,
             stdout=self.log,
@@ -278,9 +284,14 @@ class Proxy(http.server.ThreadingHTTPServer):
 
 def main():
     parser = argparse.ArgumentParser(
-        description=__doc__, allow_abbrev=False, usage="%(prog)s [--uncensored] [opencode args...]"
+        description=__doc__, allow_abbrev=False, usage="%(prog)s [--uncensored] [--strata] [opencode args...]"
     )
     parser.add_argument("--uncensored", action="store_true", help="Use the uncensored Qwen variant")
+    parser.add_argument(
+        "--strata",
+        action="store_true",
+        help="Serve Qwen3.6-35B-A3B through Strata at 256k, with experts that don't fit in VRAM in system RAM; books the whole GPU",
+    )
     parser.add_argument(
         "--idle-minutes",
         type=float,
@@ -292,7 +303,7 @@ def main():
     argv = sys.argv[1:]
     own = 0
     while own < len(argv):
-        if argv[own] in ("--uncensored", "-h", "--help") or argv[own].startswith("--idle-minutes="):
+        if argv[own] in ("--uncensored", "--strata", "-h", "--help") or argv[own].startswith("--idle-minutes="):
             own += 1
         elif argv[own] == "--idle-minutes":
             own += 2
@@ -303,11 +314,13 @@ def main():
     if args.idle_minutes <= 0:
         parser.error("--idle-minutes must be positive")
     name = "uncensored" if args.uncensored else "regular"
-    require("opencode", "llama-server", "gpu-run")
-    model = resolve_model(name)
+    require("opencode", "strata-server" if args.strata else "llama-server", "gpu-run")
+    model = resolve_model(name, args.strata)
     refuse_nesting()
     major = checked_opencode_major()
-    alias = MODELS[name][0]
+    alias = (STRATA_MODELS if args.strata else MODELS)[name][0]
+    if args.strata:
+        strata_tokenizer(model)
     state = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "qwen-opencode"
     state.mkdir(parents=True, exist_ok=True)
     # OpenCode shares the terminal's foreground group and decides what Ctrl-C means;
@@ -329,7 +342,8 @@ def main():
         tempfile.TemporaryDirectory(prefix="qwen-opencode-") as directory,
         open(state / f"{os.getpid()}.log", "w", buffering=1) as log,
     ):
-        backend = Backend(model, f"Qwen OpenCode ({name})", args.idle_minutes * 60, log)
+        label = f"Qwen OpenCode ({name}{', Strata' if args.strata else ''})"
+        backend = Backend(model, label, args.idle_minutes * 60, log, directory, args.strata)
         proxy = Proxy(("127.0.0.1", 0), handler_for(backend, key))
         threading.Thread(target=proxy.serve_forever, daemon=True).start()
         print(
@@ -337,7 +351,7 @@ def main():
             file=sys.stderr,
             flush=True,
         )
-        env = opencode_environment(configuration(proxy.server_port, major, CONTEXT), key, directory)
+        env = opencode_environment(configuration(proxy.server_port, major, backend.context), key, directory)
         try:
             harness = subprocess.Popen(guarded("opencode", "--standalone", *opencode_args), env=env)
             while harness.poll() is None:

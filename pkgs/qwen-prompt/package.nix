@@ -2,6 +2,7 @@
   lib,
   python3,
   runCommand,
+  strata,
   symlinkJoin,
   unstable,
   writeShellApplication,
@@ -26,6 +27,7 @@ let
         python3
         unstable.opencode
         llama-cpp
+        strata
       ];
       text = ''
         exec ${lib.getExe python3} ${source}/${script} "$@"
