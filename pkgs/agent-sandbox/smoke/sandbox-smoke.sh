@@ -2,17 +2,27 @@
 
 # Checks a sandbox the way a reviewer would use it. --full adds the CPU torch wheel, a
 # multi-hundred-megabyte download the first time; --no-gpu skips the browser and display checks.
-full='' gpu=1
-for arg in "$@"; do
-  case $arg in
+# The GPU checks wait at most --gpu-wait seconds (default 600) for a gpu-run grant, then are
+# skipped; with nothing else failing, the exit status is then 75 rather than 0.
+full='' gpu=1 gpu_wait=600
+usage() {
+  echo 'usage: sandbox-smoke [--full] [--no-gpu] [--gpu-wait SECONDS]' >&2
+  exit 2
+}
+while (($#)); do
+  case $1 in
     --full) full=1 ;;
     --no-gpu) gpu='' ;;
-    *)
-      echo 'usage: sandbox-smoke [--full] [--no-gpu]' >&2
-      exit 2
+    --gpu-wait)
+      [[ ${2:-} =~ ^[0-9]+$ ]] || usage
+      gpu_wait=$2
+      shift
       ;;
+    *) usage ;;
   esac
+  shift
 done
+gpu_skipped=''
 
 work=$(mktemp -d /tmp/sandbox-smoke.XXXXXX)
 log=$work/log
@@ -105,7 +115,17 @@ else
   echo "skip  sandbox-runner: no host runner socket in this sandbox"
 fi
 
+display() {
+  sandbox-display up | tee "$work/display-status" &&
+    grep -q '^wayvnc: up' "$work/display-status" &&
+    grim "$work/screen.png" &&
+    [[ $(magick identify -format '%wx%h' "$work/screen.png") == 1280x800 ]] &&
+    grep -qvx pixman "$XDG_RUNTIME_DIR/renderer"
+}
+# The compositor needs no reservation, and gpu-run waits for every process started under it, so
+# the display's long-lived sway and wayvnc must start outside one.
 if [[ -n $gpu ]]; then
+  check 'sandbox-display up with wayvnc, grim captures 1280x800 on the GPU renderer' display
   ffmpeg -loglevel error -f lavfi -i testsrc=size=320x240:rate=30 -t 3 -c:v libx264 -pix_fmt yuv420p "$work/clip.mp4"
   browsers() {
     node "$SANDBOX_SMOKE_BROWSERS" "$work/clip.mp4"
@@ -113,33 +133,37 @@ if [[ -n $gpu ]]; then
   mcp() {
     SMOKE_MCP_OUTPUT=$work node "$SANDBOX_SMOKE_MCP" "$SANDBOX_PLAYWRIGHT_MCP"
   }
-  display() {
-    sandbox-display up | tee "$work/display-status" &&
-      grep -q '^wayvnc: up' "$work/display-status" &&
-      grim "$work/screen.png" &&
-      [[ $(magick identify -format '%wx%h' "$work/screen.png") == 1280x800 ]] &&
-      grep -qvx pixman "$XDG_RUNTIME_DIR/renderer"
-  }
   gpu_checks() {
     check 'browsers: Chromium WebGL on ANGLE Vulkan, WebKit decodes a local video' browsers
     sed 's/^/      /' "$log"
     check 'Playwright MCP opens a page and renders WebGL on ANGLE Vulkan' mcp
     sed 's/^/      /' "$log"
-    check 'sandbox-display up with wayvnc, grim captures 1280x800 on the GPU renderer' display
   }
   if [[ -n ${GPU_LEASE_ID:-} ]]; then
     gpu_checks
   else
-    export -f check pass fail gpu_checks browsers mcp display
+    export -f check pass fail gpu_checks browsers mcp
     export log work failures
     # The checks print their own results; the count comes back through the exit status.
     # shellcheck disable=SC2016 # expanded by the inner shell
-    gpu-run --vram 2GiB --name 'sandbox-smoke browsers and display' -- bash -c 'gpu_checks; exit $failures' || failures=$((failures + $?))
+    gpu-run --vram 2GiB --timeout "$gpu_wait" --name 'sandbox-smoke browsers' -- \
+      bash -c ': >"$work/gpu-granted"; gpu_checks; exit $failures'
+    status=$?
+    if [[ ! -e $work/gpu-granted ]]; then
+      gpu_skipped=1
+      echo "skip  GPU checks: GPU busy, no gpu-run grant within ${gpu_wait}s (gpu-status shows who holds it)"
+    else
+      failures=$((failures + status))
+    fi
   fi
 fi
 
 if [[ $failures -gt 0 ]]; then
   echo "sandbox-smoke: $failures check(s) failed"
   exit 1
+fi
+if [[ -n $gpu_skipped ]]; then
+  echo 'sandbox-smoke: all checks run passed; GPU checks skipped because the GPU is busy'
+  exit 75
 fi
 echo 'sandbox-smoke: all checks passed'
