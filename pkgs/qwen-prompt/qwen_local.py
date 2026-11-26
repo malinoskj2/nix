@@ -69,9 +69,13 @@ def server_binary(mode):
     return "strata-server" if mode == "moe" else "llama-server"
 
 
+def model_root():
+    return Path(os.environ.get("MODEL_ROOT", str(Path.home() / ".local/share/models")))
+
+
 def resolve_model(name, mode="dense"):
     """Return the pinned GGUF for a model name, refusing anything not fully ready."""
-    root = Path(os.environ.get("MODEL_ROOT", str(Path.home() / ".local/share/models")))
+    root = model_root()
     alias, filename = (MODELS if mode == "dense" else MOE_MODELS)[name]
     catalog = json.loads((root / "catalog.json").read_text())
     readiness = json.loads((root / "readiness.json").read_text())
@@ -170,39 +174,56 @@ def llama_command(model, port, key, context=16384):
     ]
 
 
-def pack_complete(pack):
+def pack_source(model):
+    """What a pack is built from: the catalog digests of the model's GGUF shards and the Strata build."""
+    stem = model.name.split("-00001-of-")[0]
+    entry = json.loads((model_root() / "catalog.json").read_text())["entries"][model.parent.name]
+    shards = {
+        f["target"]: f.get("sha256") or f.get("gitSha1")
+        for f in entry["files"]
+        if re.fullmatch(re.escape(stem) + r"-\d{5}-of-\d{5}\.gguf", f["target"])
+    }
+    return {"shards": shards, "strata": Path(shutil.which("strata") or "strata").resolve().parent.parent.name}
+
+
+def pack_complete(pack, source):
     """iq_pack.py writes native_experts.txt last; the resident mode also reads experts.bin."""
     try:
         if (pack / "native_experts.txt").stat().st_size == 0 or (pack / "experts.bin").stat().st_size == 0:
             return False
         for name in ("vocab.json", "tokenizer.json"):
             json.loads((pack / "tokenizer" / name).read_text())
+        return json.loads((pack / "source.json").read_text()) == source
     except (OSError, ValueError):
         return False
-    return True
 
 
 def strata_pack(model):
-    """Strata's pack for a Flash-Next GGUF: its tensor index, tokenizer and experts.bin, built once per model file.
+    """Strata's pack for a Flash-Next GGUF: its tensor index, tokenizer and experts.bin, built once per source.
 
-    One build runs at a time per model, under a lock, in a private directory
-    that is renamed into place only once complete, so an interrupted run never
-    leaves a pack that looks finished. A build killed outright leaves its
-    staging directory behind; the next build removes it.
+    The pack records the shard digests and Strata build it came from, and any
+    change rebuilds it. One build runs at a time per model, under a lock, in a
+    private directory that is renamed into place only once complete, so an
+    interrupted run never leaves a pack that looks finished. A build killed
+    outright leaves its staging directory behind; the next build removes it.
     """
+    source = pack_source(model)
     root = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "qwen-prompt" / "strata"
     final = root / model.name
-    if pack_complete(final):
+    if pack_complete(final, source):
         return final
     root.mkdir(parents=True, exist_ok=True)
     with open(root / f"{model.name}.lock", "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        if pack_complete(final):
+        if pack_complete(final, source):
             return final
         for leftover in root.glob(f".{model.name}.*"):
             shutil.rmtree(leftover, ignore_errors=True)
         staging = Path(tempfile.mkdtemp(prefix=f".{model.name}.", dir=root))
         try:
+            if final.exists():
+                os.rename(final, staging / "old")
+                shutil.rmtree(staging / "old")
             print(f"Preparing Strata's pack for {model.name} (once, about 43 GB) ...", file=sys.stderr, flush=True)
             built = staging / "pack"
             subprocess.run(
@@ -210,10 +231,9 @@ def strata_pack(model):
                 check=True,
                 stdout=sys.stderr,
             )
-            if not pack_complete(built):
+            (built / "source.json").write_text(json.dumps(source))
+            if not pack_complete(built, source):
                 raise RuntimeError(f"Strata's pack for {model.name} is incomplete")
-            if final.exists():
-                os.rename(final, staging / "old")
             os.rename(built, final)
         finally:
             shutil.rmtree(staging, ignore_errors=True)

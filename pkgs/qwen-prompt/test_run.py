@@ -240,18 +240,30 @@ class PackCacheTest(unittest.TestCase):
         (bin / "strata-pack").chmod(0o700)
         (bin / "strata").write_text("")
         (bin / "strata").chmod(0o700)
-        self.model = self.root / "model-00001-of-00002.gguf"
+        self.models = self.root / "models"
+        self.model = self.models / "by-name" / "flash" / "model-00001-of-00002.gguf"
+        self.model.parent.mkdir(parents=True)
         self.model.write_text("")
+        self.catalog("a" * 64)
         self.cache = self.root / "cache" / "qwen-prompt" / "strata"
         self.log = self.root / "pack.log"
         env = {
             "PATH": f"{bin}:{os.environ['PATH']}",
             "XDG_CACHE_HOME": str(self.root / "cache"),
             "PACK_LOG": str(self.log),
+            "MODEL_ROOT": str(self.models),
         }
         patcher = unittest.mock.patch.dict(os.environ, env)
         patcher.start()
         self.addCleanup(patcher.stop)
+
+    def catalog(self, digest):
+        files = [
+            {"target": self.model.name, "size": 0, "sha256": digest},
+            {"target": "model-00002-of-00002.gguf", "size": 0, "sha256": "b" * 64},
+            {"target": "mtp/rt/experts.bin", "size": 0, "sha256": "c" * 64},
+        ]
+        (self.models / "catalog.json").write_text(json.dumps({"entries": {"flash": {"files": files}}}))
 
     def entries(self):
         return sorted(p.name for p in self.cache.iterdir() if p.suffix != ".lock")
@@ -293,7 +305,7 @@ class PackCacheTest(unittest.TestCase):
         ):
             results = list(pool.map(lambda _: strata_pack(self.model), range(4)))
         for pack in results:
-            self.assertTrue(qwen_local.pack_complete(pack))
+            self.assertTrue(qwen_local.pack_complete(pack, qwen_local.pack_source(self.model)))
         self.assertEqual(self.entries(), [self.model.name])
 
     def test_concurrent_builds_run_once(self):
@@ -303,6 +315,25 @@ class PackCacheTest(unittest.TestCase):
         ):
             list(pool.map(lambda _: strata_pack(self.model), range(4)))
         self.assertEqual(self.log.read_text().split(), ["good"])
+
+    def test_a_new_model_file_under_the_same_name_rebuilds_the_pack(self):
+        self.build("good")
+        self.model.write_text("replaced")
+        self.catalog("d" * 64)
+        pack = self.build("good")
+        self.assertEqual(self.log.read_text().split(), ["good", "good"])
+        self.assertEqual(json.loads((pack / "source.json").read_text())["shards"][self.model.name], "d" * 64)
+        self.assertEqual(self.entries(), [self.model.name])
+
+    def test_another_strata_build_rebuilds_the_pack(self):
+        self.build("good")
+        other = self.root / "other" / "bin"
+        other.mkdir(parents=True)
+        (other / "strata").write_text("")
+        (other / "strata").chmod(0o700)
+        with unittest.mock.patch.dict(os.environ, {"PATH": f"{other}:{os.environ['PATH']}"}):
+            self.build("good")
+        self.assertEqual(self.log.read_text().split(), ["good", "good"])
 
     def test_a_killed_build_leaves_no_staging_behind_the_next_one(self):
         leftover = self.cache / f".{self.model.name}.killed" / "pack"

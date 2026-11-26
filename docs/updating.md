@@ -196,9 +196,9 @@ Treat a bump as a hardware change and test it on the device.
   its Python server and preparation tools from `terminal/`. Inkling, Hy4 and the
   vision encoder aren't built. To move it, change `version`, `rev` and the
   hash, and check the release's `tools/nix/flake.nix` and
-  `terminal/requirements.txt` for a new CUDA or Python requirement. A new
-  release may change the pack format: remove `~/.cache/qwen-prompt/strata/`
-  so `--moe` rebuilds it. Then run `qwen-prompt --moe` for both models and
+  `terminal/requirements.txt` for a new CUDA or Python requirement. The pack
+  in `~/.cache/qwen-prompt/strata/` records the Strata build it came from, so
+  the next `--moe` launch rebuilds it for a new one. Then run `qwen-prompt --moe` for both models and
   check that the engine log reports the resident low-RAM mode, the MTP draft
   layer and the n-gram table read from the second shard.
 - **rust-lints.** [`pkgs/rust-lints/`](../pkgs/rust-lints) builds a Dylint
