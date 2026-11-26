@@ -85,7 +85,7 @@ discovery. Issue calls serially, as required by Unreal's game-thread execution.
 A visible configuration entry or successful protocol fixture test is insufficient
 evidence that the real editor works.
 
-Epic recommends 32G RAM. The sandbox slice shares a 60G limit across all
+Epic recommends 32G RAM. The sandbox slice shares a 64G limit across all
 containers. Run one editor/heavy build at a time; full source-engine compilation
 requires a separately sized environment. Keep reusable engine/cache files and
 report their disk footprint. Store captures in the current repository root's

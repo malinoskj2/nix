@@ -13,7 +13,7 @@ let
   };
   setSandboxCpus =
     cpus:
-    "${config.systemd.package}/bin/systemctl set-property --runtime agent-sandbox.slice AllowedCPUs=${cpus}";
+    "${config.systemd.package}/bin/systemctl set-property --runtime agent.slice AllowedCPUs=${cpus}";
   gamingUnit = "agent-sandbox-gaming.service";
 in
 {
@@ -62,8 +62,8 @@ in
   ];
 
   nix.settings = {
-    # Run one build at a time so parallel builds don't multiply the core budget.
-    max-jobs = 1;
+    # Peak build memory scales with max-jobs × cores, which nix-daemon's limits bound.
+    max-jobs = 4;
     cores = 8;
   };
 
@@ -86,9 +86,16 @@ in
   ];
 
   systemd.services.nix-daemon.serviceConfig = {
-    MemoryHigh = "14G";
-    MemoryMax = "16G";
+    # Shares the sandboxes' CPUs, so host rebuilds also leave the desktop's cores free.
+    Slice = "agent-nix.slice";
+    MemoryHigh = "20G";
+    MemoryMax = "24G";
+    # Throttled builds would otherwise spill into the swap the sandboxes and desktop rely on.
+    MemorySwapMax = "8G";
   };
+
+  # Parent of agent-sandbox.slice and agent-nix.slice; GameMode's hook narrows it.
+  systemd.slices.agent.sliceConfig.AllowedCPUs = sandboxCpus.idle;
 
   # agent-sandbox runs its containers under this slice.
   systemd.slices.agent-sandbox = {
@@ -96,12 +103,11 @@ in
     # before the first container starts.
     wantedBy = [ "multi-user.target" ];
     sliceConfig = {
-      AllowedCPUs = sandboxCpus.idle;
-
       # No MemoryHigh: once swap is full it can't reclaim anon memory and throttles
       # every sandbox indefinitely instead of killing anything. MemoryMax reclaims
-      # too, then OOM-kills the largest process.
-      MemoryMax = "60G";
+      # too, then OOM-kills the largest process. Together with nix-daemon's 24G and the
+      # desktop's 16G floor this overcommits RAM by 11G, which the capped swap covers.
+      MemoryMax = "64G";
 
       # Swapping out idle agents and display stacks beats OOM-killing a build.
       MemorySwapMax = "16G";
@@ -113,7 +119,7 @@ in
   systemd.slices.user.sliceConfig.MemoryLow = "16G";
 
   systemd.services.agent-sandbox-gaming = {
-    description = "Keep agent sandboxes off the V-Cache CCD while a game runs";
+    description = "Keep agent sandboxes and Nix builds off the V-Cache CCD while a game runs";
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
