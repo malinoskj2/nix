@@ -10,6 +10,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
+import qwen_local
 from qwen_local import MOE_MODELS, healthy, strata_command, strata_tokenizer
 
 RUNNER = Path(__file__).with_name("run.py")
@@ -231,6 +232,9 @@ if os.environ['TOKENIZER_MODE'] == 'good':
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def entries(self):
+        return sorted(p.name for p in self.cache.iterdir() if p.suffix != ".lock")
+
     def extract(self, mode):
         with unittest.mock.patch.dict(os.environ, {"TOKENIZER_MODE": mode}):
             return strata_tokenizer(self.model)
@@ -241,7 +245,7 @@ if os.environ['TOKENIZER_MODE'] == 'good':
         self.assertEqual(list(self.cache.iterdir()), [])
         tokenizer = self.extract("good")
         self.assertEqual(tokenizer, self.cache / "model.gguf" / "tokenizer")
-        self.assertEqual(sorted(p.name for p in self.cache.iterdir()), ["model.gguf"])
+        self.assertEqual(self.entries(), ["model.gguf"])
         self.extract("good")
         self.assertEqual(self.log.read_text().split(), ["crash", "good"])
 
@@ -256,7 +260,7 @@ if os.environ['TOKENIZER_MODE'] == 'good':
         (partial / "vocab.json").write_text('{"a": 0}')
         tokenizer = self.extract("good")
         self.assertTrue((tokenizer / "token_type.json").is_file())
-        self.assertEqual(sorted(p.name for p in self.cache.iterdir()), ["model.gguf"])
+        self.assertEqual(self.entries(), ["model.gguf"])
         self.assertEqual(self.log.read_text().split(), ["good"])
 
     def test_concurrent_extractions_all_return_a_complete_cache(self):
@@ -267,7 +271,49 @@ if os.environ['TOKENIZER_MODE'] == 'good':
             results = list(pool.map(lambda _: strata_tokenizer(self.model), range(4)))
         for tokenizer in results:
             self.assertTrue((tokenizer / "tokenizer.json").is_file())
-        self.assertEqual(sorted(p.name for p in self.cache.iterdir()), ["model.gguf"])
+        self.assertEqual(self.entries(), ["model.gguf"])
+
+    def test_a_published_cache_is_never_replaced_by_a_competing_publisher(self):
+        # Pause the first publisher between its final completeness check and its
+        # rename, and give the second publisher that window to publish.
+        final = self.cache / "model.gguf" / "tokenizer"
+        checked, published = threading.Event(), threading.Event()
+        calls = {"first": 0}
+        real = qwen_local.tokenizer_complete
+
+        def complete(path):
+            result = real(path)
+            if threading.current_thread().name == "first" and path == final:
+                calls["first"] += 1
+                if calls["first"] == 2:
+                    checked.set()
+                    published.wait(2)
+            return result
+
+        returned = {}
+
+        def second():
+            returned["second"] = strata_tokenizer(self.model)
+            returned["inode"] = (final.parent).stat().st_ino
+            published.set()
+
+        with (
+            unittest.mock.patch.dict(os.environ, {"TOKENIZER_MODE": "good"}),
+            unittest.mock.patch.object(qwen_local, "tokenizer_complete", complete),
+        ):
+            first = threading.Thread(
+                target=lambda: returned.setdefault("first", strata_tokenizer(self.model)), name="first"
+            )
+            first.start()
+            self.assertTrue(checked.wait(30))
+            other = threading.Thread(target=second)
+            other.start()
+            first.join(30)
+            other.join(30)
+        self.assertEqual(returned["first"], returned["second"])
+        self.assertEqual(final.parent.stat().st_ino, returned["inode"])
+        self.assertTrue(real(final))
+        self.assertEqual(self.entries(), ["model.gguf"])
 
     def test_the_server_runs_offline(self):
         self.extract("good")

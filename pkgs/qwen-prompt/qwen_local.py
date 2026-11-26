@@ -1,6 +1,7 @@
 """Model table, readiness, OpenCode configuration and llama.cpp handling shared by the Qwen launchers."""
 
 import ctypes
+import fcntl
 import json
 import os
 import re
@@ -186,7 +187,8 @@ def strata_tokenizer(model):
 
     Extraction runs in a private directory that is renamed into place only once
     complete, so an interrupted or concurrent run never leaves a cache that
-    looks finished. An incomplete cache is rebuilt.
+    looks finished. Replacing an incomplete cache and publishing happen under a
+    per-model lock, so no publisher removes a cache another one just published.
     """
     root = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "qwen-prompt" / "strata"
     final = root / model.name
@@ -199,23 +201,17 @@ def strata_tokenizer(model):
         subprocess.run(["strata-tokenizer", "--gguf", str(model), "--out", str(staging)], check=True, stdout=sys.stderr)
         if not tokenizer_complete(staging / "tokenizer"):
             raise RuntimeError(f"Strata's tokenizer extraction for {model.name} left an incomplete tokenizer")
-        for _ in range(3):
+        with open(root / f"{model.name}.lock", "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
             if tokenizer_complete(tokenizer):
                 return tokenizer
             if final.exists():
                 stale = Path(tempfile.mkdtemp(prefix=f".{model.name}.stale.", dir=root))
-                try:
-                    os.rename(final, stale / "old")
-                except FileNotFoundError:
-                    pass
+                os.rename(final, stale / "old")
                 shutil.rmtree(stale, ignore_errors=True)
-            try:
-                os.rename(staging, final)
-                staging = None
-                return tokenizer
-            except OSError:
-                continue
-        raise RuntimeError(f"Cannot publish Strata's tokenizer cache at {final}")
+            os.rename(staging, final)
+            staging = None
+        return tokenizer
     finally:
         if staging is not None:
             shutil.rmtree(staging, ignore_errors=True)
