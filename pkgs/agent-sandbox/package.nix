@@ -75,6 +75,7 @@
   lldb,
   lshw,
   makeFontsConf,
+  makeWrapper,
   man-db,
   markdown-to-pdf,
   media-gallery,
@@ -108,6 +109,7 @@
   pulseaudio,
   pyghidra-mcp,
   python3,
+  replaceVars,
   ripgrep,
   runCommand,
   rust-analyzer,
@@ -170,6 +172,69 @@ let
   # Chromium's setuid and user-namespace sandboxes can't start inside the container.
   chromium' = chromium.override { commandLineArgs = "--no-sandbox --test-type"; };
 
+  # Playwright's headless shell always renders with SwiftShader. Its "chromium" channel runs the
+  # full browser in new headless mode, which renders on the GPU through ANGLE's Vulkan backend,
+  # display or not.
+  chromiumGpuArgs = [
+    "--use-angle=vulkan"
+    "--ignore-gpu-blocklist"
+  ];
+
+  browserGpuProbe = writeShellApplication {
+    name = "browser-gpu-probe";
+    runtimeInputs = [
+      gnugrep
+      vulkan-tools
+    ];
+    text = builtins.readFile ./playwright/browser-gpu-probe.sh;
+  };
+
+  sandboxPlaywright = runCommand "sandbox-playwright" { } ''
+    install -Dm644 ${
+      replaceVars ./playwright/sandbox-playwright.js {
+        probe = lib.getExe browserGpuProbe;
+        gpuArgs = builtins.toJSON chromiumGpuArgs;
+      }
+    } $out/lib/node_modules/sandbox-playwright/index.js
+  '';
+
+  playwrightNodePath = "${sandboxPlaywright}/lib/node_modules:${playwright-test}/lib/node_modules";
+  inherit (playwright-browsers) gstPluginSystemPath;
+
+  playwright = symlinkJoin {
+    name = "playwright-test-sandbox";
+    paths = [ playwright-test ];
+    nativeBuildInputs = [ makeWrapper ];
+    postBuild = ''
+      wrapProgram $out/bin/playwright \
+        --set-default PLAYWRIGHT_BROWSERS_PATH ${playwright-browsers} \
+        --set-default GST_PLUGIN_SYSTEM_PATH_1_0 ${gstPluginSystemPath} \
+        --prefix NODE_PATH : ${sandboxPlaywright}/lib/node_modules
+    '';
+  };
+
+  playwrightMcpConfig =
+    args:
+    writeText "playwright-mcp.json" (
+      builtins.toJSON {
+        browser.launchOptions = {
+          channel = "chromium";
+          inherit args;
+        };
+      }
+    );
+
+  playwrightMcp = writeShellApplication {
+    name = "playwright-mcp";
+    runtimeInputs = [ browserGpuProbe ];
+    runtimeEnv = {
+      SANDBOX_PLAYWRIGHT_MCP = lib.getExe playwright-mcp;
+      SANDBOX_PLAYWRIGHT_MCP_GPU_CONFIG = playwrightMcpConfig chromiumGpuArgs;
+      SANDBOX_PLAYWRIGHT_MCP_CPU_CONFIG = playwrightMcpConfig [ ];
+    };
+    text = builtins.readFile ./playwright/playwright-mcp.sh;
+  };
+
   claudePlugin =
     let
       manifest = writeText "plugin.json" (builtins.toJSON { name = "agent-sandbox"; });
@@ -177,7 +242,7 @@ let
         builtins.toJSON {
           mcpServers = {
             playwright = {
-              command = lib.getExe playwright-mcp;
+              command = lib.getExe playwrightMcp;
               args = [
                 "--output-dir"
                 "/tmp/playwright-mcp"
@@ -357,6 +422,7 @@ let
       hyprland'
       imagemagick
       inotify-tools
+      iproute2
       jq
       killall
       ktx-tools
@@ -391,7 +457,7 @@ let
       pandoc
       pciutils
       pkg-config
-      playwright-test
+      playwright
       procps
       pipewire
       pulseaudio
@@ -486,6 +552,9 @@ let
     extraCommands = ''
       mkdir -p bin usr/bin lib64 etc/nix etc/claude-code etc/sway etc/fonts etc/ssl/certs tmp \
         etc/pipewire/pipewire.conf.d etc/wireplumber/wireplumber.conf.d
+      # WebKit's media buffer writes to the hardcoded /var/tmp, which joins the on-disk /tmp.
+      mkdir var
+      ln -s /tmp var/tmp
       ln -s ${bashInteractive}/bin/bash bin/sh
       ln -s ${bashInteractive}/bin/bash bin/bash
       ln -s ${coreutils}/bin/env usr/bin/env
@@ -553,6 +622,8 @@ let
         NIXOS_OZONE_WL = "1";
         PLAYWRIGHT_BROWSERS_PATH = "${playwright-browsers}";
         PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
+        NODE_PATH = playwrightNodePath;
+        GST_PLUGIN_SYSTEM_PATH_1_0 = gstPluginSystemPath;
         CARGO_PROFILE_DEV_DEBUG = "line-tables-only";
         CARGO_PROFILE_TEST_DEBUG = "line-tables-only";
         CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS = "-C link-arg=-fuse-ld=mold";
