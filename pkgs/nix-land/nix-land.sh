@@ -145,7 +145,7 @@ done
 ((${#manifests[@]})) || say 'no changed Rust'
 
 say "nix flake check (log: $log)"
-nix flake check --print-build-logs >>"$log" 2>&1 || fail flake-check "nix flake check failed: $(grep -m1 -E '^error' "$log" | cut -c1-200)"
+nix flake check --keep-going --print-build-logs >>"$log" 2>&1 || fail flake-check "nix flake check failed: $(grep -m1 -E '^error' "$log" | cut -c1-200)"
 
 if [[ -n $dry_run ]]; then
   say "dry run: not pushing $merged"

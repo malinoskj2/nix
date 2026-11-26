@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 command -v ss >/dev/null 2>&1 || echo "media-web: ss is missing on $(uname -n)" >&2
 listeners=$(ss -ltnpH 2>/dev/null)
 
