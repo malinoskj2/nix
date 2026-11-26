@@ -16,18 +16,18 @@ import time
 from pathlib import Path
 
 from qwen_local import (
-    MODELS,
     STRATA_BOOKING,
-    STRATA_CONTEXT,
-    STRATA_MODELS,
     checked_opencode_major,
     configuration,
     guarded,
     healthy,
+    mode_of,
+    model_alias,
     opencode_environment,
     refuse_nesting,
     require,
     resolve_model,
+    server_binary,
     server_command,
     stop,
     strata_tokenizer,
@@ -38,6 +38,16 @@ CONTEXT = 65536
 # f16 KV cache costs 64 KiB per token, 4 GiB at 64k. Regular weights are
 # 19.5 GiB; measured peak with a full context is in docs/gpu-scheduler.md.
 BOOKING = ("--vram", "26GiB")
+# Qwen3.6-35B-A3B on llama.cpp, all on the GPU: 10 attention layers with 2 KV heads
+# of 256 make the f16 cache 20 KiB per token, 5 GiB at 256k. With a 234k-token prompt
+# UD-Q4_K_XL peaked at 27,129 MiB above the desktop baseline (the abliterated Q4_K at
+# 26,351), under the 28,511 MiB a shared request may take.
+MOE_BOOKING = ("--vram", "28000MiB")
+MODES = {
+    "dense": (CONTEXT, BOOKING),
+    "moe": (262144, MOE_BOOKING),
+    "strata": (262144, STRATA_BOOKING),
+}
 KEEPALIVE = 15
 
 
@@ -48,11 +58,11 @@ class Backend:
     forking thread, so gpu-run must be forked by the thread that outlives the rest.
     """
 
-    def __init__(self, model, label, idle, log, directory, strata=False):
+    def __init__(self, model, label, idle, log, directory, mode="dense"):
         self.model = model
         self.directory = directory
-        self.strata = strata
-        self.context, self.booking = (STRATA_CONTEXT, STRATA_BOOKING) if strata else (CONTEXT, BOOKING)
+        self.mode = mode
+        self.context, self.booking = MODES[mode]
         self.log = log
         self.label = label
         self.idle = idle
@@ -107,7 +117,7 @@ class Backend:
                 "--name",
                 self.label,
                 "--",
-                *guarded(*server_command(self.model, self.port, self.key, self.context, self.strata, self.directory)),
+                *guarded(*server_command(self.model, self.port, self.key, self.context, self.mode, self.directory)),
             ),
             stdin=subprocess.DEVNULL,
             stdout=self.log,
@@ -284,10 +294,16 @@ class Proxy(http.server.ThreadingHTTPServer):
 
 def main():
     parser = argparse.ArgumentParser(
-        description=__doc__, allow_abbrev=False, usage="%(prog)s [--uncensored] [--strata] [opencode args...]"
+        description=__doc__, allow_abbrev=False, usage="%(prog)s [--uncensored] [--moe | --strata] [opencode args...]"
     )
     parser.add_argument("--uncensored", action="store_true", help="Use the uncensored Qwen variant")
-    parser.add_argument(
+    backends = parser.add_mutually_exclusive_group()
+    backends.add_argument(
+        "--moe",
+        action="store_true",
+        help="Serve Qwen3.6-35B-A3B with llama.cpp at 256k, all on the GPU, instead of the dense 27B at 64k",
+    )
+    backends.add_argument(
         "--strata",
         action="store_true",
         help="Serve Qwen3.6-35B-A3B through Strata at 256k, with experts that don't fit in VRAM in system RAM; books the whole GPU",
@@ -303,7 +319,9 @@ def main():
     argv = sys.argv[1:]
     own = 0
     while own < len(argv):
-        if argv[own] in ("--uncensored", "--strata", "-h", "--help") or argv[own].startswith("--idle-minutes="):
+        if argv[own] in ("--uncensored", "--moe", "--strata", "-h", "--help") or argv[own].startswith(
+            "--idle-minutes="
+        ):
             own += 1
         elif argv[own] == "--idle-minutes":
             own += 2
@@ -314,12 +332,13 @@ def main():
     if args.idle_minutes <= 0:
         parser.error("--idle-minutes must be positive")
     name = "uncensored" if args.uncensored else "regular"
-    require("opencode", "strata-server" if args.strata else "llama-server", "gpu-run")
-    model = resolve_model(name, args.strata)
+    mode = mode_of(args)
+    require("opencode", server_binary(mode), "gpu-run")
+    model = resolve_model(name, mode)
     refuse_nesting()
     major = checked_opencode_major()
-    alias = (STRATA_MODELS if args.strata else MODELS)[name][0]
-    if args.strata:
+    alias = model_alias(name, mode)
+    if mode == "strata":
         strata_tokenizer(model)
     state = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "qwen-opencode"
     state.mkdir(parents=True, exist_ok=True)
@@ -342,8 +361,8 @@ def main():
         tempfile.TemporaryDirectory(prefix="qwen-opencode-") as directory,
         open(state / f"{os.getpid()}.log", "w", buffering=1) as log,
     ):
-        label = f"Qwen OpenCode ({name}{', Strata' if args.strata else ''})"
-        backend = Backend(model, label, args.idle_minutes * 60, log, directory, args.strata)
+        label = f"Qwen OpenCode ({name}{'' if mode == 'dense' else ', ' + mode})"
+        backend = Backend(model, label, args.idle_minutes * 60, log, directory, mode)
         proxy = Proxy(("127.0.0.1", 0), handler_for(backend, key))
         threading.Thread(target=proxy.serve_forever, daemon=True).start()
         print(

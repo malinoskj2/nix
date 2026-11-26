@@ -18,12 +18,11 @@ MODELS = {
     "uncensored": ("qwen3.8-27b-uncensored", "Qwen3.8-27B-Uncensored-Q5_K_M.gguf"),
 }
 
-# Strata only runs mixture-of-experts files, so --strata swaps the dense 27B for Qwen3.6-35B-A3B.
-STRATA_MODELS = {
+# --moe (llama.cpp) and --strata serve Qwen3.6-35B-A3B; Strata only runs mixture-of-experts files.
+MOE_MODELS = {
     "regular": ("qwen3.6-35b-a3b", "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf"),
     "uncensored": ("qwen3.6-35b-a3b-uncensored", "Huihui-Qwen3.6-35B-A3B-abliterated-Q4_K.gguf"),
 }
-STRATA_CONTEXT = 262144
 # Strata sizes its buffers and expert cache to whatever VRAM is free (29.3-30.3 GiB
 # measured at every context, --expert-vram included), above the 28.5 GiB the
 # scheduler grants a shared request, so it books the whole GPU.
@@ -51,10 +50,23 @@ def require(*commands):
             raise RuntimeError(f"Missing {command}; deploy the qwen-prompt Nix package first")
 
 
-def resolve_model(name, strata=False):
+def mode_of(args):
+    """dense (the default), moe or strata, from a launcher's --moe and --strata flags."""
+    return "strata" if args.strata else "moe" if args.moe else "dense"
+
+
+def model_alias(name, mode="dense"):
+    return (MODELS if mode == "dense" else MOE_MODELS)[name][0]
+
+
+def server_binary(mode):
+    return "strata-server" if mode == "strata" else "llama-server"
+
+
+def resolve_model(name, mode="dense"):
     """Return the pinned GGUF for a model name, refusing anything not fully ready."""
     root = Path(os.environ.get("MODEL_ROOT", str(Path.home() / ".local/share/models")))
-    alias, filename = (STRATA_MODELS if strata else MODELS)[name]
+    alias, filename = (MODELS if mode == "dense" else MOE_MODELS)[name]
     catalog = json.loads((root / "catalog.json").read_text())
     readiness = json.loads((root / "readiness.json").read_text())
     model = root / "by-name" / alias / filename
@@ -206,8 +218,8 @@ def strata_command(model, port, key, context, directory):
     ]
 
 
-def server_command(model, port, key, context, strata, directory):
-    if strata:
+def server_command(model, port, key, context, mode, directory):
+    if mode == "strata":
         return strata_command(model, port, key, context, directory)
     return llama_command(model, port, key, context)
 

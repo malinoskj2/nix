@@ -8,20 +8,22 @@ import threading
 import unittest
 from pathlib import Path
 
-from qwen_local import STRATA_MODELS, healthy
+from qwen_local import MOE_MODELS, healthy
 
 RUNNER = Path(__file__).with_name("run.py")
 
 
 class ForwardingTest(unittest.TestCase):
     def test_exact_prompt_and_cleanup_on_success_and_failure(self):
-        for model_name, alias, filename, exit_code, strata in (
-            ("regular", "qwen3.8-27b", "Qwen3.8-27B-Q5_K_M.gguf", 0, False),
-            ("uncensored", "qwen3.8-27b-uncensored", "Qwen3.8-27B-Uncensored-Q5_K_M.gguf", 7, False),
-            ("regular", *STRATA_MODELS["regular"], 0, True),
-            ("uncensored", *STRATA_MODELS["uncensored"], 3, True),
+        for model_name, alias, filename, exit_code, mode in (
+            ("regular", "qwen3.8-27b", "Qwen3.8-27B-Q5_K_M.gguf", 0, "dense"),
+            ("uncensored", "qwen3.8-27b-uncensored", "Qwen3.8-27B-Uncensored-Q5_K_M.gguf", 7, "dense"),
+            ("regular", *MOE_MODELS["regular"], 0, "moe"),
+            ("uncensored", *MOE_MODELS["uncensored"], 5, "moe"),
+            ("regular", *MOE_MODELS["regular"], 0, "strata"),
+            ("uncensored", *MOE_MODELS["uncensored"], 3, "strata"),
         ):
-            with self.subTest(exit_code=exit_code, strata=strata), tempfile.TemporaryDirectory() as tmp:
+            with self.subTest(exit_code=exit_code, mode=mode), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 model_dir = root / "by-name" / alias
                 model_dir.mkdir(parents=True)
@@ -87,7 +89,7 @@ out.mkdir(parents=True)
                         model_name,
                         "--prompt-file",
                         str(prompt_file),
-                        *(["--strata"] if strata else []),
+                        *([] if mode == "dense" else [f"--{mode}"]),
                         "--allocated",
                     ],
                     env=env,
@@ -98,21 +100,28 @@ out.mkdir(parents=True)
                 self.assertEqual(result.returncode, exit_code, result.stderr)
                 self.assertEqual(json.loads((root / "capture").read_text()), prompt)
                 argv, config = json.loads((root / "argv").read_text())
-                if strata:
+                if mode == "strata":
                     self.assertEqual(config["args"][config["args"].index("--native") + 1], str(model_dir / filename))
                     self.assertEqual(config["args"][config["args"].index("--max-context") + 1], "16384")
                 else:
                     self.assertEqual(argv[argv.index("--ctx-size") + 1], "16384")
+                    self.assertEqual(argv[argv.index("--model") + 1], str(model_dir / filename))
                 with self.assertRaises(ProcessLookupError):
                     os.kill(int((root / "pid").read_text()), 0)
 
 
 class BookingTest(unittest.TestCase):
-    def test_dense_books_26gib_and_strata_the_whole_gpu(self):
-        for strata, booking in ((False, ["--vram", "26GiB"]), (True, ["--exclusive"])):
-            with self.subTest(strata=strata), tempfile.TemporaryDirectory() as tmp:
+    def test_dense_and_moe_book_26gib_and_strata_the_whole_gpu(self):
+        for mode, booking in (
+            ("dense", ["--vram", "26GiB"]),
+            ("moe", ["--vram", "26GiB"]),
+            ("strata", ["--exclusive"]),
+        ):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
-                alias, filename = STRATA_MODELS["regular"] if strata else ("qwen3.8-27b", "Qwen3.8-27B-Q5_K_M.gguf")
+                alias, filename = (
+                    MOE_MODELS["regular"] if mode != "dense" else ("qwen3.8-27b", "Qwen3.8-27B-Q5_K_M.gguf")
+                )
                 (root / "by-name" / alias).mkdir(parents=True)
                 (root / "by-name" / alias / filename).write_bytes(b"fake")
                 (root / "catalog.json").write_text(
@@ -143,13 +152,20 @@ out.mkdir(parents=True)
                 }
                 command = [sys.executable, str(RUNNER), "--model", "regular", "--prompt-file", str(root / "prompt.txt")]
                 result = subprocess.run(
-                    command + (["--strata"] if strata else []), env=env, capture_output=True, text=True, timeout=15
+                    command + ([] if mode == "dense" else [f"--{mode}"]),
+                    check=False,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 argv = json.loads((root / "capture").read_text())
                 self.assertEqual(argv[: len(booking)], booking)
-                self.assertEqual("--strata" in argv, strata)
-                self.assertEqual((root / "cache" / "qwen-prompt" / "strata" / filename).is_dir(), strata)
+                self.assertEqual(
+                    [flag for flag in ("--moe", "--strata") if flag in argv], [] if mode == "dense" else [f"--{mode}"]
+                )
+                self.assertEqual((root / "cache" / "qwen-prompt" / "strata" / filename).is_dir(), mode == "strata")
 
 
 class HealthTest(unittest.TestCase):

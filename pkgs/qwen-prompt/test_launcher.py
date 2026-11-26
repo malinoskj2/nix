@@ -8,7 +8,7 @@ import time
 import unittest
 from pathlib import Path
 
-from qwen_local import MODELS, STRATA_CONTEXT, STRATA_MODELS
+from qwen_local import MODELS, MOE_MODELS
 
 LAUNCHER = Path(__file__).with_name("opencode.py")
 
@@ -61,6 +61,7 @@ if 'strata' in argv[0]:
     assert Path(config['tokenizer'], 'vocab.json').is_file(), config
 else:
     assert argv[argv.index('--ctx-size') + 1] == os.environ['EXPECT_CONTEXT']
+    assert argv[argv.index('--model') + 1].endswith(os.environ['EXPECT_MODEL']), argv
 key = argv[argv.index('--api-key') + 1]
 with Path(os.environ['SERVER_PIDS']).open('a') as f:
     f.write(f'{os.getpid()}\\n')
@@ -173,7 +174,7 @@ class LauncherTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        models = [MODELS["uncensored"], STRATA_MODELS["uncensored"]]
+        models = [MODELS["uncensored"], MOE_MODELS["uncensored"]]
         for alias, filename in models:
             (self.root / "by-name" / alias).mkdir(parents=True)
             (self.root / "by-name" / alias / filename).write_bytes(b"fake")
@@ -207,13 +208,14 @@ class LauncherTest(unittest.TestCase):
             "TOKENIZER_LOG": str(self.root / "tokenizer.log"),
             "EXPECT_VRAM": "26GiB",
             "EXPECT_CONTEXT": "65536",
+            "EXPECT_MODEL": MODELS["uncensored"][1],
         }
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def launch(self, scenario, strata=False, **env):
-        own = ["--uncensored", "--idle-minutes", "0.02", *(["--strata"] if strata else [])]
+    def launch(self, scenario, mode="dense", **env):
+        own = ["--uncensored", "--idle-minutes", "0.02", *(f"--{flag}" for flag in mode.split() if flag != "dense")]
         return subprocess.Popen(
             [sys.executable, str(LAUNCHER), *own, "project-dir", "--prompt", "-h", "--uncensored", "--strata"],
             env=self.env | {"SCENARIO": scenario} | env,
@@ -257,24 +259,40 @@ class LauncherTest(unittest.TestCase):
     def test_strata_serves_the_moe_model_at_full_context_and_caches_its_tokenizer(self):
         self.env |= {
             "EXPECT_VRAM": "exclusive",
-            "EXPECT_CONTEXT": str(STRATA_CONTEXT),
-            "EXPECT_MODEL": STRATA_MODELS["uncensored"][1],
+            "EXPECT_CONTEXT": "262144",
+            "EXPECT_MODEL": MOE_MODELS["uncensored"][1],
         }
         for _ in range(2):
             for name in ("gpu.log", "servers"):
                 (self.root / name).unlink(missing_ok=True)
-            process = self.launch("cycle", strata=True, EXIT_CODE="0", GPU_QUEUE="0.5")
+            process = self.launch("cycle", "strata", EXIT_CODE="0", GPU_QUEUE="0.5")
             _, stderr = process.communicate(timeout=60)
             self.assertEqual(process.returncode, 0, stderr)
-            self.assertIn(STRATA_MODELS["uncensored"][0], stderr)
+            self.assertIn(MOE_MODELS["uncensored"][0], stderr)
             self.assertEqual(self.assert_released().count("acquire"), 2)
         self.assertEqual((self.root / "tokenizer.log").read_text().split(), ["built"])
 
+    def test_moe_serves_qwen36_on_llama_cpp_at_256k_under_a_shared_booking(self):
+        self.env |= {"EXPECT_VRAM": "28000MiB", "EXPECT_CONTEXT": "262144", "EXPECT_MODEL": MOE_MODELS["uncensored"][1]}
+        process = self.launch("cycle", "moe", EXIT_CODE="0", GPU_QUEUE="0.5")
+        _, stderr = process.communicate(timeout=60)
+        self.assertEqual(process.returncode, 0, stderr)
+        self.assertIn(MOE_MODELS["uncensored"][0], stderr)
+        self.assertEqual(self.assert_released().count("acquire"), 2)
+        self.assertFalse((self.root / "tokenizer.log").exists())
+
+    def test_moe_and_strata_are_exclusive(self):
+        process = self.launch("cycle", "moe strata")
+        _, stderr = process.communicate(timeout=30)
+        self.assertEqual(process.returncode, 2)
+        self.assertIn("not allowed with argument", stderr)
+        self.assertFalse((self.root / "gpu.log").exists())
+
     def test_strata_model_not_ready_starts_nothing(self):
         (self.root / "readiness.json").write_text(
-            json.dumps({"entries": {STRATA_MODELS["uncensored"][0]: {"status": "missing"}}})
+            json.dumps({"entries": {MOE_MODELS["uncensored"][0]: {"status": "missing"}}})
         )
-        process = self.launch("cycle", strata=True)
+        process = self.launch("cycle", "strata")
         _, stderr = process.communicate(timeout=30)
         self.assertEqual(process.returncode, 1)
         self.assertIn("not ready; no download or fallback attempted", stderr)
