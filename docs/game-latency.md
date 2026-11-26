@@ -76,6 +76,15 @@ before this change keep their own `8-15,24-31` Docker cpuset until they are
 recreated. Check actual game thread affinity with the diagnostic after GameMode
 reloads its configuration. Building alone does not apply any of these limits.
 
+nix-daemon runs with `KillMode=process` and isn't stopped on a switch, so
+build processes already running when `Slice=agent-nix.slice` first takes
+effect stay in `system.slice` with all CPUs until they finish. Switch while no
+builds run, then start a fresh build (for example
+`nix build --rebuild 'nixpkgs#hello'`) and check one of its build processes:
+`/proc/<pid>/cgroup` should name `/agent.slice/agent-nix.slice/nix-daemon.service`,
+and that cgroup's `cpuset.cpus.effective` should be `2-15,18-31`, or
+`8-15,24-31` while a game runs.
+
 Under the earlier CCD1-only layout, live checks on 1 October 2026 confirmed all three running
 sandboxes had Docker and effective cgroup CPU sets of `8-15,24-31`. The physical
 desktop Hyprland and Firefox processes retained `0-31`. Every inspected thread
