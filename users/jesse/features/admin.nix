@@ -9,6 +9,7 @@
     ata-devs
     battery
     find-service
+    media-web
     wifi-connect
 
     dig
