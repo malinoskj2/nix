@@ -1,5 +1,6 @@
 import argparse
 import contextlib
+import json
 import os
 from pathlib import Path
 import signal
@@ -11,6 +12,7 @@ import time
 
 PREAMBLE = """You are one member of a review council. Two other models answer the same request independently, and the caller weighs all three.
 Work read-only: never edit, create or delete files, commit, push or change any state. Reading files and running read-only commands is fine.
+Answer from the repository and the context given here: don't search the web or fetch URLs, and keep your investigation proportionate, since the caller is waiting on all three answers.
 Answer the request below. For a review, list each finding with its location, what is wrong, a concrete failure scenario and your confidence. Say plainly when you find nothing.
 """
 
@@ -19,6 +21,22 @@ INLINE_LIMIT = 100_000
 CONTEXT_LIMIT = 400_000
 STDOUT_BUDGET = 9_000
 KILL_GRACE = 5
+AGY_TIMEOUT_MARGIN = 15
+AGY_AGENT = "council-member"
+# read_file is agy's whole read-only group (view, list and search); nothing else, so no shell, edits or web.
+AGY_AGENT_FILE = f"""---
+name: {AGY_AGENT}
+description: Read-only member of the council skill's review panel.
+tools: [read_file]
+subagent: false
+hidden: true
+---
+# {AGY_AGENT}
+
+You review code and answer design questions read-only, from the repository and the context you are given.
+"""
+AUTH_PROMPT = b"Authentication required"
+AUTH_FIX = "failed: agy is not signed in; run `agy` on the host and sign in (a sandbox copies the login when it starts)"
 
 
 def build_prompt(prompt_file, context_files):
@@ -69,16 +87,59 @@ def command(member, prompt, prompt_path, last_message, timeout):
         text = prompt
     return [
         "agy",
+        "--agent",
+        AGY_AGENT,
         "--model",
         "gemini-4-neon-high",
-        "--mode",
-        "plan",
         "--output-format",
-        "text",
+        "stream-json",
         "--print-timeout",
-        f"{timeout}s",
+        f"{max(1, timeout - AGY_TIMEOUT_MARGIN)}s",
         f"-p={text}",
     ], False
+
+
+def install_agy_agent():
+    path = Path.home() / ".gemini/config/agents" / f"{AGY_AGENT}.md"
+    if path.exists() and path.read_text() == AGY_AGENT_FILE:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", dir=path.parent, prefix=f".{AGY_AGENT}.", delete=False) as f:
+        f.write(AGY_AGENT_FILE)
+    os.replace(f.name, path)
+
+
+def agy_answer(stream, answer):
+    steps, read, final, error = {}, [], None, None
+    for line in stream.read_text(errors="replace").splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if event.get("event") == "result":
+            result = event.get("result", {})
+            if result.get("status") == "SUCCESS":
+                final = result.get("response", "")
+            else:
+                error = result.get("error") or result.get("status") or "unknown error"
+            continue
+        update = event.get("step_update") or {}
+        if update.get("step_type") == "agent_response" and update.get("text_delta"):
+            steps[update.get("step_index")] = steps.get(update.get("step_index"), "") + update["text_delta"]
+        elif update.get("step_type") == "tool" and update.get("state") == "DONE":
+            path = (update.get("tool_info") or {}).get("parameters", {}).get("Path")
+            if path and path not in read:
+                read.append(path)
+    if final is not None:
+        answer.write_text(final)
+        return None
+    text = "\n\n".join(t.strip() for t in steps.values() if t.strip())
+    if text or read:
+        note = "> Partial answer: Gemini stopped before finishing."
+        if read:
+            note += f" It had read {len(read)} path(s): " + ", ".join(f"`{p}`" for p in read) + "."
+        answer.write_text(note + "\n\n" + (text or "(no answer text yet)") + "\n")
+    return error or "no result"
 
 
 def run_member(member, prompt, prompt_path, out_dir, timeout, results):
@@ -110,9 +171,22 @@ def stop_group(proc):
             time.sleep(0.05)
 
 
+def wait(proc, timeout, log):
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            return proc.wait(timeout=min(0.5, max(0, deadline - time.monotonic())))
+        except subprocess.TimeoutExpired:
+            if AUTH_PROMPT in log.read_bytes():
+                return AUTH_PROMPT
+            if time.monotonic() >= deadline:
+                raise
+
+
 def ask(member, prompt, prompt_path, out_dir, timeout, results):
     answer = out_dir / f"{member}.md"
     log = out_dir / f"{member}.log"
+    stream = out_dir / f"{member}.jsonl"
     argv, feeds_stdin = command(member, prompt, prompt_path, answer, timeout)
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
     start = time.monotonic()
@@ -120,7 +194,13 @@ def ask(member, prompt, prompt_path, out_dir, timeout, results):
     with contextlib.ExitStack() as files:
         stdin = files.enter_context(open(prompt_path if feeds_stdin else os.devnull, "rb"))
         log_file = files.enter_context(open(log, "xb"))
-        stdout = log_file if member == "codex" else files.enter_context(open(answer, "xb"))
+        if member == "codex":
+            stdout = log_file
+        elif member == "gemini":
+            install_agy_agent()
+            stdout = files.enter_context(open(stream, "xb"))
+        else:
+            stdout = files.enter_context(open(answer, "xb"))
         try:
             proc = subprocess.Popen(
                 argv,
@@ -134,15 +214,26 @@ def ask(member, prompt, prompt_path, out_dir, timeout, results):
             result["status"] = f"failed: {argv[0]} not found on PATH"
         else:
             try:
-                code = proc.wait(timeout=timeout)
-                result["status"] = "ok" if code == 0 else f"failed: exit {code}"
+                code = wait(proc, timeout, log)
+                if code is AUTH_PROMPT:
+                    result["status"] = AUTH_FIX
+                else:
+                    result["status"] = "ok" if code == 0 else f"failed: exit {code}"
             except subprocess.TimeoutExpired:
                 result["status"] = f"failed: timed out after {timeout}s"
             finally:
                 stop_group(proc)
+    if member == "gemini" and stream.exists():
+        error = agy_answer(stream, answer)
+        if error and error.startswith("print timeout"):
+            result["status"] = f"failed: timed out after {timeout}s"
+        elif error and result["status"] == "ok":
+            result["status"] = f"failed: {error}"
+        if error and answer.exists():
+            result["status"] += " (partial answer kept)"
     if result["status"] == "ok" and (not answer.exists() or not answer.read_text(errors="replace").strip()):
         result["status"] = "failed: empty answer"
-    if result["status"] != "ok" and log.exists():
+    if result["status"] not in ("ok", AUTH_FIX) and log.exists():
         tail = log.read_bytes()[-600:].decode(errors="replace").strip()
         if tail:
             result["log_tail"] = tail

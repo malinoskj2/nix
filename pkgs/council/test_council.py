@@ -23,8 +23,18 @@ Path(argv[argv.index('-o') + 1]).write_text('codex finding')
 print('codex progress noise')
 """,
     "claude": RECORD + "print('claude finding')\n",
-    "agy": RECORD + "print('gemini finding')\n",
+    "agy": RECORD
+    + "print(json.dumps({'event': 'result', 'result': {'status': 'SUCCESS', 'response': 'gemini finding'}}))\n",
 }
+
+
+def agy_stream(text, sleep=0):
+    return (
+        RECORD
+        + "import time\n"
+        + f"print(json.dumps({{'event': 'step_update', 'step_update': {{'step_index': 3, 'step_type': 'agent_response', 'text_delta': {text!r}}}}}), flush=True)\n"
+        + f"time.sleep({sleep})\n"
+    )
 
 
 def alive(pid):
@@ -61,6 +71,7 @@ class CouncilTest(unittest.TestCase):
             "PATH": str(self.bin) + os.pathsep + (path or os.environ["PATH"]),
             "CAPTURE": str(self.capture),
             "CLAUDECODE": "1",
+            "HOME": str(self.root / "home"),
         }
         return subprocess.run(
             [
@@ -104,7 +115,9 @@ class CouncilTest(unittest.TestCase):
 
         agy = self.captured("agy")["argv"]
         self.assertEqual(agy[agy.index("--model") + 1], "gemini-4-neon-high")
-        self.assertEqual(agy[agy.index("--mode") + 1], "plan")
+        self.assertEqual(agy[agy.index("--agent") + 1], "council-member")
+        agent = (self.root / "home/.gemini/config/agents/council-member.md").read_text()
+        self.assertIn("tools: [read_file]\n", agent)
 
         for name in ("codex", "claude"):
             stdin = self.captured(name)["stdin"]
@@ -133,6 +146,45 @@ class CouncilTest(unittest.TestCase):
         self.assertIn("quota exhausted", result.stdout)
         self.assertIn("Gemini 4 Neon (high): failed: timed out after 2s", result.stdout)
 
+    def test_gemini_timeout_keeps_the_partial_answer(self):
+        self.fake("agy", agy_stream("half a finding", sleep=30))
+        result = self.run_council("--members", "gemini", "--timeout", "2")
+        self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
+        self.assertIn("Gemini 4 Neon (high): failed: timed out after 2s (partial answer kept)", result.stdout)
+        self.assertIn("half a finding", (self.root / "out" / "gemini.md").read_text())
+        self.assertIn("Partial answer", result.stdout)
+
+    def test_gemini_print_timeout_reports_what_it_had_read(self):
+        self.fake(
+            "agy",
+            RECORD
+            + "tool = {'step_type': 'tool', 'state': 'DONE', 'tool_name': 'read_file', 'tool_info': {'parameters': {'Path': '/repo/a.nix'}}}\n"
+            + "print(json.dumps({'event': 'step_update', 'step_update': tool}))\n"
+            + "print(json.dumps({'event': 'result', 'result': {'status': 'ERROR', 'error': 'print timeout after 5s'}}))\n"
+            + "sys.exit(3)\n",
+        )
+        result = self.run_council("--members", "gemini", "--timeout", "20")
+        self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
+        self.assertIn("Gemini 4 Neon (high): failed: timed out after 20s (partial answer kept)", result.stdout)
+        self.assertIn("It had read 1 path(s): `/repo/a.nix`", (self.root / "out" / "gemini.md").read_text())
+        agy = self.captured("agy")["argv"]
+        self.assertEqual(agy[agy.index("--print-timeout") + 1], "5s")
+
+    def test_gemini_without_login_fails_fast_without_the_sign_in_url(self):
+        self.fake(
+            "agy",
+            RECORD
+            + "import time\n"
+            + "sys.stderr.write('Authentication required. Please visit the URL to log in:\\n  https://accounts.example/secret\\n')\n"
+            + "sys.stderr.flush(); time.sleep(30)\n",
+        )
+        start = time.monotonic()
+        result = self.run_council("--members", "gemini", "--timeout", "30")
+        self.assertLess(time.monotonic() - start, 15)
+        self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
+        self.assertIn("agy is not signed in; run `agy` on the host and sign in", result.stdout)
+        self.assertNotIn("accounts.example", result.stdout)
+
     def test_missing_cli_is_reported(self):
         self.fake("codex", FAKES["codex"])
         result = self.run_council("--members", "codex,gemini", path="/nonexistent")
@@ -153,7 +205,11 @@ class CouncilTest(unittest.TestCase):
     def test_stdout_is_bounded(self):
         self.fake("codex", RECORD + "argv = sys.argv[1:]\nPath(argv[argv.index('-o') + 1]).write_text('c' * 50_000)\n")
         self.fake("claude", RECORD + "print('d' * 50_000)\n")
-        self.fake("agy", RECORD + "print('g' * 50_000)\n")
+        self.fake(
+            "agy",
+            RECORD
+            + "print(json.dumps({'event': 'result', 'result': {'status': 'SUCCESS', 'response': 'g' * 50_000}}))\n",
+        )
         result = self.run_council()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertLess(len(result.stdout.encode()), 10_000)
@@ -206,7 +262,11 @@ class CouncilTest(unittest.TestCase):
     def test_stdout_budget_counts_bytes_and_keeps_utf8_valid(self):
         self.fake("codex", RECORD + "argv = sys.argv[1:]\nPath(argv[argv.index('-o') + 1]).write_text('é' * 50_000)\n")
         self.fake("claude", RECORD + "print('🦀' * 50_000)\n")
-        self.fake("agy", RECORD + "print('λx' * 50_000)\n")
+        self.fake(
+            "agy",
+            RECORD
+            + "print(json.dumps({'event': 'result', 'result': {'status': 'SUCCESS', 'response': 'λx' * 50_000}}))\n",
+        )
         result = self.run_council(text=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertLessEqual(len(result.stdout), 9_000)
