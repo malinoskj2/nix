@@ -110,7 +110,7 @@ sites=$(jq -nR '
     | (($m.path // ["/"])[] | rtrimstr("*") | if startswith("/") then . else "/" + . end) as $path
     | $ports[] as $port
     | (if $port == 443 then "https" else "http" end) as $scheme
-    | {proxy: $proxy, host: $h, port: $port, upstream: $upstream,
+    | {proxy: $proxy, host: $h, path: $path, port: $port, upstream: $upstream,
        url: "\($scheme)://\($h)\(if ($scheme == "http" and $port == 80) or ($scheme == "https" and $port == 443) then "" else ":\($port)" end)\($path)",
        label: "\($h)\(if $path == "/" then "" else $path end)"}]
   | unique_by(.url)
@@ -150,7 +150,7 @@ site_results=$(jq -nR --argjson s "$sites" --argjson api "$api" '
   [inputs | split("\t") | select(.[1] == "ok")
     | {url: .[2], via: "direct", status: (.[3] | tonumber), content_type: .[4], title: .[5], hash: .[6]}
     | . as $r | ($s[] | select(.url == $r.url)) as $k
-    | $r + {port: $k.port, label: $k.label, upstream: $k.upstream, containers: [$k.proxy], units: [], processes: []}]
+    | $r + {port: $k.port, label: $k.label, upstream: $k.upstream, host: $k.host, path: $k.path, containers: [$k.proxy], units: [], processes: []}]
   | map(select(
       (.content_type | test("text/html|application/xhtml"; "i"))
       or ($api == 1 and (.content_type | test("json"; "i")))
@@ -158,7 +158,7 @@ site_results=$(jq -nR --argjson s "$sites" --argjson api "$api" '
 ' <<<"$site_probes")
 
 empty_hash=$(printf '' | sha256sum | cut -c 1-16)
-results=$(jq -nR --argjson c "$candidates" --argjson api "$api" --argjson sites "$site_results" --arg empty "$empty_hash" '
+results=$(jq -nR --argjson c "$candidates" --argjson api "$api" --argjson sites "$site_results" --arg empty "$empty_hash" --arg lan "$lan_addr" '
   [inputs | split("\t") | select(.[1] == "ok")
     | {port: (.[0] | tonumber), via: .[7], url: .[2], status: (.[3] | tonumber), content_type: .[4], title: .[5], hash: .[6], upstream: ""}]
   | map(select(
@@ -169,11 +169,17 @@ results=$(jq -nR --argjson c "$candidates" --argjson api "$api" --argjson sites 
   | map(. as $r | ($c[] | select(.port == $r.port)) as $k
       | $r + {label: $k.label, containers: $k.containers, units: $k.units, processes: $k.processes})
   | . + $sites
-  | group_by(if .hash == $empty then [.url] else [.port, .status, .hash, .upstream] end)
+  | group_by(
+      if .hash == $empty then ["url", .url]
+      elif (.upstream // "") != "" then ["upstream", .port, .status, .hash, .upstream]
+      elif .host == null or (.host == $lan and .path == "/") then ["listener", .port, .status, .hash]
+      else ["url", .url]
+      end
+    )
   | map(
       sort_by([(.url | test("^[a-z]+://([0-9.]+|\\[[^]]*\\])(:|/|$)")), (.url | length)])
       | .[0] + {aliases: (.[1:] | map({label, url}))}
-      | del(.hash)
+      | del(.hash, .host, .path)
     )
   | sort_by(.label, .port)
 ' < <(

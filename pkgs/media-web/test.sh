@@ -31,7 +31,12 @@ case "$1 ${3:-}" in
     [[ $FAKE_EXEC == hang ]] && exec sleep 60
     rp() { printf '{"handler":"reverse_proxy","upstreams":[{"dial":"%s"}]}' "$1"; }
     printf '{"apps":{"http":{"servers":{"srv0":{"listen":[":80"],"routes":['
+    printf '{"match":[{"host":["10.0.0.1"]}],"handle":[{"handler":"file_server"}]},'
     printf '{"match":[{"host":["home.test"]}],"handle":[{"handler":"file_server"}]},'
+    printf '{"match":[{"host":["c.test"]}],"handle":[{"handler":"file_server"}]},'
+    printf '{"match":[{"host":["d.test"]}],"handle":[{"handler":"file_server"}]},'
+    printf '{"match":[{"host":["e.test"]}],"handle":[%s]},' "$(rp app-e:80)"
+    printf '{"match":[{"host":["f.test"]}],"handle":[%s]},' "$(rp app-e:80)"
     printf '{"match":[{"host":["a.test"]}],"handle":[%s]},' "$(rp app-a:80)"
     printf '{"match":[{"host":["b.test"]}],"handle":[{"handler":"subroute","routes":[{"handle":[%s]}]}]},' "$(rp app-b:80)"
     printf '{"match":[{"host":["*.wild.test"]}]}'
@@ -65,8 +70,12 @@ reply() {
   printf '%s%s' "$2" "${w//'%{content_type}'/$3}"
 }
 case "$url|$resolve" in
-  "http://10.0.0.1:80/|" | "http://home.test/|home.test:80:10.0.0.1")
+  "http://10.0.0.1:80/|" | "http://10.0.0.1/|10.0.0.1:80:10.0.0.1" | "http://home.test/|home.test:80:10.0.0.1")
     reply 200 '<html><title>Home</title>static</html>' 'text/html' ;;
+  "http://c.test/|c.test:80:10.0.0.1" | "http://d.test/|d.test:80:10.0.0.1")
+    reply 200 '<html><title>SPA</title>bundle</html>' 'text/html' ;;
+  "http://e.test/|e.test:80:10.0.0.1" | "http://f.test/|f.test:80:10.0.0.1")
+    reply 200 '<html><title>App E</title>e</html>' 'text/html' ;;
   "http://a.test/|a.test:80:10.0.0.1") reply 200 '<html><title>Login</title>app a</html>' 'text/html' ;;
   "http://b.test/|b.test:80:10.0.0.1") reply 200 '<html><title>Login</title>app b</html>' 'text/html' ;;
   *)
@@ -95,9 +104,14 @@ grep -q 'timed out' "$work/err" || fail "no note for the timed-out Caddy query"
 grep -q '^C	80	' "$work/discovery" || fail "a hung Caddy query lost the container records"
 
 FAKE_EXEC=ok bash "$here/media-web.sh" --json >"$work/out.json" 2>"$work/err" || fail "media-web --json: $(cat "$work/err")"
-jq -e 'length == 3' "$work/out.json" >/dev/null || fail "expected 3 entries: $(jq -c 'map(.url)' "$work/out.json")"
+urls() { jq -c "$1" "$work/out.json"; }
+jq -e 'length == 7' "$work/out.json" >/dev/null || fail "expected 7 entries: $(urls 'map(.url)')"
 jq -e 'map(select(.title == "Login")) | length == 2' "$work/out.json" >/dev/null || fail "distinct Login sites were merged"
-jq -e '.[] | select(.url == "http://home.test/") | .aliases == [{label: "proxy", url: "http://10.0.0.1:80/"}]' "$work/out.json" >/dev/null ||
-  fail "the proxy's own port wasn't merged into home.test"
+jq -e 'map(select(.title == "SPA")) | length == 2' "$work/out.json" >/dev/null || fail "identical static sites without an upstream were merged"
+jq -e 'map(select(.title == "Home")) | length == 2' "$work/out.json" >/dev/null || fail "home.test should stay apart from the proxy's own port"
+jq -e 'map(select(.title == "Home") | [.url, .aliases[].url] | sort) | any(. == ["http://10.0.0.1/", "http://10.0.0.1:80/"])' "$work/out.json" >/dev/null ||
+  fail "the proxy's own port wasn't merged with its IP site: $(urls 'map(select(.title == "Home") | {url, aliases})')"
+jq -e 'map(select(.title == "App E")) | length == 1 and (.[0].aliases | length == 1)' "$work/out.json" >/dev/null ||
+  fail "sites on the same upstream weren't merged"
 
 echo "media-web tests passed"
