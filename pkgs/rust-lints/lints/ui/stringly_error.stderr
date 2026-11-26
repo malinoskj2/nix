@@ -1,0 +1,27 @@
+warning: `String` used as an error type
+  --> $DIR/stringly_error.rs:3:26
+   |
+LL | fn parse(input: &str) -> Result<u8, String> {
+   |                          ^^^^^^^^^^^^^^^^^^
+   |
+   = help: return a `thiserror` error, or `anyhow::Result` where the caller only reports failure
+   = note: `#[warn(stringly_error)]` on by default
+
+warning: `&str` used as an error type
+  --> $DIR/stringly_error.rs:7:29
+   |
+LL | fn validate(input: &str) -> Result<(), &'static str> {
+   |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: return a `thiserror` error, or `anyhow::Result` where the caller only reports failure
+
+warning: `Box<dyn Error>` used as an error type
+  --> $DIR/stringly_error.rs:11:14
+   |
+LL | fn load() -> Result<(), Box<dyn Error + Send + Sync>> {
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: return a `thiserror` error, or `anyhow::Result` where the caller only reports failure
+
+warning: 3 warnings emitted
+

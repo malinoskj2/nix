@@ -1,0 +1,19 @@
+warning: the handle returned by `std::thread::spawn` is discarded
+  --> $DIR/detached_spawn.rs:4:5
+   |
+LL |     std::thread::spawn(work);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: keep the handle with an owner that joins or aborts it on shutdown
+   = note: `#[warn(detached_spawn)]` on by default
+
+warning: the handle returned by `std::thread::spawn` is discarded
+  --> $DIR/detached_spawn.rs:5:13
+   |
+LL |     let _ = std::thread::spawn(work);
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: keep the handle with an owner that joins or aborts it on shutdown
+
+warning: 2 warnings emitted
+

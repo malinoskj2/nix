@@ -1,0 +1,35 @@
+warning: control flow inspects an error's message text
+  --> $DIR/error_string_matching.rs:4:5
+   |
+LL |     err.to_string().contains("not found")
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: match a typed error variant or kind instead
+   = note: `#[warn(error_string_matching)]` on by default
+
+warning: control flow inspects an error's message text
+  --> $DIR/error_string_matching.rs:8:5
+   |
+LL |     err.to_string() == "denied"
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: match a typed error variant or kind instead
+
+warning: control flow inspects an error's message text
+  --> $DIR/error_string_matching.rs:12:5
+   |
+LL |     err.to_string().to_lowercase().starts_with("timed out")
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: match a typed error variant or kind instead
+
+warning: control flow inspects an error's message text
+  --> $DIR/error_string_matching.rs:16:5
+   |
+LL |     err.to_string().ends_with("closed")
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: match a typed error variant or kind instead
+
+warning: 4 warnings emitted
+

@@ -1,0 +1,19 @@
+warning: catch-all module `utils`
+  --> $DIR/catch_all_module.rs:1:5
+   |
+LL | mod utils {}
+   |     ^^^^^
+   |
+   = help: move each item to the module that owns its responsibility
+   = note: `#[warn(catch_all_module)]` on by default
+
+warning: catch-all module `helpers`
+  --> $DIR/catch_all_module.rs:3:5
+   |
+LL | mod helpers {}
+   |     ^^^^^^^
+   |
+   = help: move each item to the module that owns its responsibility
+
+warning: 2 warnings emitted
+

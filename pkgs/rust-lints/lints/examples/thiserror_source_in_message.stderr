@@ -1,0 +1,27 @@
+warning: `#[error]` message repeats its source `0`
+  --> $DIR/thiserror_source_in_message.rs:7:5
+   |
+LL |     #[error("failed to read config: {0}")]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: name the step that failed; the source is printed when the chain is reported
+   = note: `#[warn(thiserror_source_in_message)]` on by default
+
+warning: `#[error]` message repeats its source `source`
+  --> $DIR/thiserror_source_in_message.rs:9:5
+   |
+LL |     #[error("failed to parse {path}: {source}")]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: name the step that failed; the source is printed when the chain is reported
+
+warning: `#[error]` message repeats its source `cause`
+  --> $DIR/thiserror_source_in_message.rs:11:5
+   |
+LL |     #[error("failed to open {path}: {}", .cause)]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: name the step that failed; the source is printed when the chain is reported
+
+warning: 3 warnings emitted
+

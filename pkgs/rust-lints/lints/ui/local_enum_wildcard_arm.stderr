@@ -1,0 +1,28 @@
+warning: wildcard arm in a match on `State`
+  --> $DIR/local_enum_wildcard_arm.rs:10:9
+   |
+LL |         _ => false,
+   |         ^
+   |
+   = help: list the remaining variants so a new variant forces this decision to be revisited
+   = note: `#[warn(local_enum_wildcard_arm)]` on by default
+
+warning: wildcard arm in a match on `State`
+  --> $DIR/local_enum_wildcard_arm.rs:17:9
+   |
+LL |         other => {
+   |         ^^^^^
+   |
+   = help: list the remaining variants so a new variant forces this decision to be revisited
+
+warning: `true` passed to `guarded` does not say what it selects
+  --> $DIR/local_enum_wildcard_arm.rs:48:36
+   |
+LL |     let _ = (guarded(&State::Idle, true), foreign(None), matches!(State::Idle, State::Idle));
+   |                                    ^^^^
+   |
+   = help: take a two-variant enum that names the choice
+   = note: `#[warn(bool_literal_argument)]` on by default
+
+warning: 3 warnings emitted
+

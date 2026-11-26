@@ -147,6 +147,7 @@
           "pyghidra-mcp"
           "qwen-prompt"
           "qwen3-tts-python"
+          "rust-lints"
           "strata"
           "switch-and-reset-sandboxes"
           "tiktok-search"
