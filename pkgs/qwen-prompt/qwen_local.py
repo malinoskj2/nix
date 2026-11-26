@@ -8,6 +8,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -163,14 +164,61 @@ def llama_command(model, port, key, context=16384):
     ]
 
 
+# What strata_tokenizer.py always writes into <out>/tokenizer; chat_template.jinja only exists when the GGUF has one.
+TOKENIZER_FILES = ("vocab.json", "merges.txt", "tokenizer.json", "token_type.json")
+
+
+def tokenizer_complete(tokenizer):
+    try:
+        for name in TOKENIZER_FILES:
+            if (tokenizer / name).stat().st_size == 0:
+                return False
+        for name in TOKENIZER_FILES:
+            if name.endswith(".json"):
+                json.loads((tokenizer / name).read_text())
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 def strata_tokenizer(model):
-    """Strata's server reads the vocabulary from a directory it derives from the GGUF; build it once per model file."""
-    cache = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "qwen-prompt" / "strata" / model.name
-    tokenizer = cache / "tokenizer"
-    if not (tokenizer / "vocab.json").is_file():
-        cache.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["strata-tokenizer", "--gguf", str(model), "--out", str(cache)], check=True, stdout=sys.stderr)
-    return tokenizer
+    """Strata's server reads the vocabulary from a directory it derives from the GGUF; build it once per model file.
+
+    Extraction runs in a private directory that is renamed into place only once
+    complete, so an interrupted or concurrent run never leaves a cache that
+    looks finished. An incomplete cache is rebuilt.
+    """
+    root = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "qwen-prompt" / "strata"
+    final = root / model.name
+    tokenizer = final / "tokenizer"
+    if tokenizer_complete(tokenizer):
+        return tokenizer
+    root.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".{model.name}.", dir=root))
+    try:
+        subprocess.run(["strata-tokenizer", "--gguf", str(model), "--out", str(staging)], check=True, stdout=sys.stderr)
+        if not tokenizer_complete(staging / "tokenizer"):
+            raise RuntimeError(f"Strata's tokenizer extraction for {model.name} left an incomplete tokenizer")
+        for _ in range(3):
+            if tokenizer_complete(tokenizer):
+                return tokenizer
+            if final.exists():
+                stale = Path(tempfile.mkdtemp(prefix=f".{model.name}.stale.", dir=root))
+                try:
+                    os.rename(final, stale / "old")
+                except FileNotFoundError:
+                    pass
+                shutil.rmtree(stale, ignore_errors=True)
+            try:
+                os.rename(staging, final)
+                staging = None
+                return tokenizer
+            except OSError:
+                continue
+        raise RuntimeError(f"Cannot publish Strata's tokenizer cache at {final}")
+    finally:
+        if staging is not None:
+            shutil.rmtree(staging, ignore_errors=True)
 
 
 def strata_command(model, port, key, context, directory):
@@ -215,6 +263,7 @@ def strata_command(model, port, key, context, directory):
         str(port),
         "--api-key",
         key,
+        "--offline",
     ]
 
 

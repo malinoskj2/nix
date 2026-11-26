@@ -73,6 +73,20 @@ cudaPackages.backendStdenv.mkDerivation (_finalAttrs: {
       --prefix LD_LIBRARY_PATH : /run/opengl-driver/lib
     makeWrapper ${python.interpreter} $out/bin/strata-tokenizer \
       --add-flags "$out/share/strata/terminal/tools/strata_tokenizer.py"
+    licenses=$out/share/licenses/strata
+    install -Dm644 ../LICENSE $licenses/LICENSE
+    for dir in ../engine/third_party/*/; do
+      name=$(basename "$dir")
+      for file in "$dir"LICENSE* "$dir"NOTICE* "$dir"COPYING*; do
+        if [ -f "$file" ]; then
+          install -Dm644 "$file" "$licenses/third_party/$name/$(basename "$file")"
+        fi
+      done
+      if [ -d "$dir"licenses ]; then
+        cp -r "$dir"licenses "$licenses/third_party/$name/"
+      fi
+    done
+    cp -r ../tools/packaging/notices $licenses/notices
     runHook postInstall
   '';
 

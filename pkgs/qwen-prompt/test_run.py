@@ -1,3 +1,4 @@
+import concurrent.futures
 import http.server
 import json
 import os
@@ -6,9 +7,10 @@ import sys
 import tempfile
 import threading
 import unittest
+import unittest.mock
 from pathlib import Path
 
-from qwen_local import MOE_MODELS, healthy
+from qwen_local import MOE_MODELS, healthy, strata_command, strata_tokenizer
 
 RUNNER = Path(__file__).with_name("run.py")
 
@@ -65,7 +67,8 @@ http.server.HTTPServer(('127.0.0.1', int(sys.argv[sys.argv.index('--port') + 1])
 from pathlib import Path
 out = Path(sys.argv[sys.argv.index('--out') + 1]) / 'tokenizer'
 out.mkdir(parents=True)
-(out / 'vocab.json').write_text('{}')
+for name in ('vocab.json', 'merges.txt', 'tokenizer.json', 'token_type.json'):
+    (out / name).write_text('{}')
 """
                 for name, code in scripts.items():
                     path = root / name
@@ -138,7 +141,8 @@ class BookingTest(unittest.TestCase):
 from pathlib import Path
 out = Path(sys.argv[sys.argv.index('--out') + 1]) / 'tokenizer'
 out.mkdir(parents=True)
-(out / 'vocab.json').write_text('{}')
+for name in ('vocab.json', 'merges.txt', 'tokenizer.json', 'token_type.json'):
+    (out / name).write_text('{}')
 """,
                 }
                 for name, code in scripts.items():
@@ -189,6 +193,86 @@ class HealthTest(unittest.TestCase):
                     self.assertIs(healthy(server.server_port, "key"), expected)
                 finally:
                     server.server_close()
+
+
+class TokenizerCacheTest(unittest.TestCase):
+    EXTRACTOR = """import os, sys
+from pathlib import Path
+out = Path(sys.argv[sys.argv.index('--out') + 1]) / 'tokenizer'
+out.mkdir(parents=True)
+with open(os.environ['TOKENIZER_LOG'], 'a') as log:
+    log.write(os.environ['TOKENIZER_MODE'] + '\\n')
+(out / 'vocab.json').write_text('{"a": 0')
+if os.environ['TOKENIZER_MODE'] == 'crash':
+    sys.exit(1)
+(out / 'vocab.json').write_text('{"a": 0}')
+if os.environ['TOKENIZER_MODE'] == 'good':
+    for name in ('merges.txt', 'tokenizer.json', 'token_type.json'):
+        (out / name).write_text('{}')
+"""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(subprocess.run, ["rm", "-rf", str(self.root)])
+        bin = self.root / "bin"
+        bin.mkdir()
+        (bin / "strata-tokenizer").write_text(f"#!{sys.executable}\n" + self.EXTRACTOR)
+        (bin / "strata-tokenizer").chmod(0o700)
+        self.model = self.root / "model.gguf"
+        self.model.write_text("")
+        self.cache = self.root / "cache" / "qwen-prompt" / "strata"
+        self.log = self.root / "tokenizer.log"
+        env = {
+            "PATH": f"{bin}:{os.environ['PATH']}",
+            "XDG_CACHE_HOME": str(self.root / "cache"),
+            "TOKENIZER_LOG": str(self.log),
+        }
+        patcher = unittest.mock.patch.dict(os.environ, env)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def extract(self, mode):
+        with unittest.mock.patch.dict(os.environ, {"TOKENIZER_MODE": mode}):
+            return strata_tokenizer(self.model)
+
+    def test_failed_extraction_publishes_nothing_and_the_next_run_rebuilds(self):
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.extract("crash")
+        self.assertEqual(list(self.cache.iterdir()), [])
+        tokenizer = self.extract("good")
+        self.assertEqual(tokenizer, self.cache / "model.gguf" / "tokenizer")
+        self.assertEqual(sorted(p.name for p in self.cache.iterdir()), ["model.gguf"])
+        self.extract("good")
+        self.assertEqual(self.log.read_text().split(), ["crash", "good"])
+
+    def test_incomplete_extraction_that_exits_zero_is_refused(self):
+        with self.assertRaisesRegex(RuntimeError, "incomplete tokenizer"):
+            self.extract("partial")
+        self.assertEqual(list(self.cache.iterdir()), [])
+
+    def test_an_incomplete_existing_cache_is_rebuilt(self):
+        partial = self.cache / "model.gguf" / "tokenizer"
+        partial.mkdir(parents=True)
+        (partial / "vocab.json").write_text('{"a": 0}')
+        tokenizer = self.extract("good")
+        self.assertTrue((tokenizer / "token_type.json").is_file())
+        self.assertEqual(sorted(p.name for p in self.cache.iterdir()), ["model.gguf"])
+        self.assertEqual(self.log.read_text().split(), ["good"])
+
+    def test_concurrent_extractions_all_return_a_complete_cache(self):
+        with (
+            unittest.mock.patch.dict(os.environ, {"TOKENIZER_MODE": "good"}),
+            concurrent.futures.ThreadPoolExecutor(4) as pool,
+        ):
+            results = list(pool.map(lambda _: strata_tokenizer(self.model), range(4)))
+        for tokenizer in results:
+            self.assertTrue((tokenizer / "tokenizer.json").is_file())
+        self.assertEqual(sorted(p.name for p in self.cache.iterdir()), ["model.gguf"])
+
+    def test_the_server_runs_offline(self):
+        self.extract("good")
+        command = strata_command(self.model, 1, "key", 4096, self.root)
+        self.assertIn("--offline", command)
 
 
 if __name__ == "__main__":

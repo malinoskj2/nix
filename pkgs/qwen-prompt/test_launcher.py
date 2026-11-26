@@ -53,7 +53,7 @@ argv = sys.argv
 if 'strata' in argv[0]:
     config = json.loads(Path(argv[argv.index('--config') + 1]).read_text())
     args = config['args']
-    assert argv[argv.index('--engine') + 1] == 'strata'
+    assert argv[argv.index('--engine') + 1] == 'strata' and '--offline' in argv, argv
     assert args[args.index('--native') + 1].endswith(os.environ['EXPECT_MODEL']), args
     assert args[args.index('--max-context') + 1] == os.environ['EXPECT_CONTEXT'], args
     assert args[args.index('--kv') + 1] == 'fp16' and config['arch'] == 'qwen35moe', config
@@ -113,7 +113,8 @@ with Path(os.environ['TOKENIZER_LOG']).open('a') as f:
     f.write('built\\n')
 out = Path(argv[argv.index('--out') + 1]) / 'tokenizer'
 out.mkdir(parents=True)
-(out / 'vocab.json').write_text('{}')
+for name in ('vocab.json', 'merges.txt', 'tokenizer.json', 'token_type.json'):
+    (out / name).write_text('{}')
 """
 
 OPENCODE = """import json, os, sys, time, urllib.error, urllib.request
