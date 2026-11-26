@@ -37,6 +37,7 @@
           cargo-preferences = self'.packages.cargo-preferences;
           rust-lints-library = self'.packages.rust-lints.lintLibrary;
           rust-lints-fixture = self'.packages.rust-lints.tests.fixture;
+          ts-lints = self'.packages.ts-lints;
           zsh-claude-command = self'.packages.zsh-claude-command.tests.widget;
         }
         // lib.optionalAttrs (system == "x86_64-linux") {

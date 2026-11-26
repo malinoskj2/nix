@@ -149,6 +149,7 @@
           "qwen-prompt"
           "qwen3-tts-python"
           "rust-lints"
+          "ts-lints"
           "strata"
           "switch-and-reset-sandboxes"
           "tiktok-search"

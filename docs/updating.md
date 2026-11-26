@@ -214,6 +214,15 @@ Treat a bump as a hardware change and test it on the device.
   `lints/src`. Build `checks.<system>.rust-lints-library` (UI tests) and
   `rust-lints-fixture` (the runner on a stable project, offline), then run
   `rust-lints` on a real workspace.
+- **ts-lints.** [`pkgs/ts-lints/`](../pkgs/ts-lints) pins exact npm versions
+  in `package.json`. Keep `typescript` on the newest 6.0 release until
+  typescript-eslint's peer range and vue-tsc accept TypeScript 7, which has no
+  JavaScript API. Bump the rest together, run `npm install` there, refresh
+  `npmDepsHash`, and remove the local `node_modules`. The build runs the rule
+  tests and the runner on its fixtures. `typescript-eslint`'s `strict*` presets
+  and `eslint-plugin-vue`'s `recommended-error` can gain rules in a minor
+  release, so run `ts-lints` on a real Vue project afterwards and compare the
+  rule counts.
 - **htop.** [`pkgs/htop-vim-navigation/`](../pkgs/htop-vim-navigation) asserts
   the htop versions its patch was checked against. If a nixpkgs update trips
   it, re-check the patch next to it and add the new version.
