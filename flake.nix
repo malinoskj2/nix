@@ -66,6 +66,12 @@
       repo = "nixpkgs";
       ref = "nixos-unstable";
     };
+    rust-overlay = {
+      type = "github";
+      owner = "oxalica";
+      repo = "rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     tohru = {
       type = "github";
       owner = "malinoskj2";

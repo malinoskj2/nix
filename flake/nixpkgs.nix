@@ -9,6 +9,7 @@ let
     overlays = [
       self.overlays.additions
       self.overlays.unstable
+      self.overlays.rust-bin
     ]
     ++ extraOverlays;
   };
