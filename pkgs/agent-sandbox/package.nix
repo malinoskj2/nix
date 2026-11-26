@@ -9,7 +9,6 @@
   bc,
   betterleaks-push-gate,
   blender,
-  bubblewrap,
   btop,
   buildEnv,
   cacert,
@@ -349,7 +348,6 @@ let
     exec ${lib.getExe python3} ${./runner/runner.py} \
       --docker ${lib.getExe docker-client} \
       --compose ${lib.getExe docker-compose} \
-      --bwrap ${lib.getExe bubblewrap} \
       --buildx ${docker-buildx}/libexec/docker/cli-plugins/docker-buildx "$@"
   '';
 

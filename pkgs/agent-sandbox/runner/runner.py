@@ -1097,61 +1097,81 @@ class Runner:
             self.projects[project]["touched"] = time.monotonic()
             return self.projects[project]
 
-    def compose_command(self, entry, project, *argv):
-        """Run Compose's client in a namespace that holds only this worktree and the store.
+    def compose_run(self, entry, project, argv, emit, timeout):
+        """Run Compose's client in a container of the trusted sandbox image.
 
-        The client reads build contexts, Dockerfiles and secret files itself, so a symlink in the
-        worktree pointing elsewhere on the host finds nothing there.
+        The client reads build contexts, Dockerfiles and secret files itself, so it sees only this
+        worktree (read-only, through the root volume's checked subpath), the store and the model's
+        directory, and a symlink in the worktree pointing elsewhere on the host finds nothing. It
+        pulls images and fetches registry tokens for BuildKit, so it has a bridge network like any
+        container, which doesn't reach the host's loopback.
         """
         pins = entry["pins"]
+        name = f"{project}-client-{secrets.token_hex(3)}"
+        config = self.state / "docker-config" / project
+        (config / "cli-plugins").mkdir(parents=True, exist_ok=True)
+        plugin = config / "cli-plugins" / "docker-buildx"
+        if not plugin.is_symlink():
+            # Compose builds with BuildKit only through buildx; nixpkgs' Compose has no system
+            # plugin directories, so the plugin goes in the client's own configuration.
+            plugin.symlink_to(os.path.realpath(self.args.buildx))
+        worktree = pins.worktree
         command = [
-            self.args.bwrap,
-            "--unshare-all",
-            "--die-with-parent",
-            "--new-session",
-            "--clearenv",
-            "--setenv",
-            "HOME",
-            "/tmp",
-            "--setenv",
-            "PATH",
-            os.path.dirname(os.path.realpath(self.args.docker)),
-            "--setenv",
-            "DOCKER_HOST",
-            "unix:///run/docker.sock",
-            "--setenv",
-            "DOCKER_BUILDKIT",
-            "1",
-            "--setenv",
-            "DOCKER_CLI_HINTS",
-            "false",
-            "--ro-bind",
-            "/nix/store",
-            "/nix/store",
-            "--dev",
-            "/dev",
-            "--proc",
-            "/proc",
+            self.args.docker,
+            "run",
+            "--rm",
+            "--init",
+            "--name",
+            name,
+            "--user",
+            f"{os.getuid()}:{os.getgid()}",
+            "--group-add",
+            str(os.stat(self.args.docker_socket).st_gid),
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
+            "--read-only",
             "--tmpfs",
             "/tmp",
-            "--bind",
-            self.args.docker_socket,
-            "/run/docker.sock",
-            # Compose builds with BuildKit only through buildx; without it, it falls back to the
-            # classic builder, which has no RUN --mount. Nixpkgs' Compose has no system plugin
-            # directories, so the plugin goes in the user's.
-            "--ro-bind",
-            self.args.buildx,
-            "/tmp/.docker/cli-plugins/docker-buildx",
-            "--ro-bind",
+            "--pids-limit",
+            "1024",
+            "--memory",
+            "4g",
+            "--cgroup-parent",
+            "agent-sandbox.slice",
+            "--label",
+            f"{OWNER_LABEL}={self.owner}",
+            "--label",
+            f"{KIND_LABEL}=compose-client",
+            "--label",
+            f"{PROJECT_LABEL}={project}",
+            "--env",
+            "HOME=/tmp",
+            "--env",
+            f"DOCKER_CONFIG={config}",
+            "--env",
+            "DOCKER_HOST=unix:///run/docker.sock",
+            "--env",
+            "DOCKER_BUILDKIT=1",
+            "--env",
+            "DOCKER_CLI_HINTS=false",
+            "--volume",
+            "/nix/store:/nix/store:ro",
+            "--volume",
+            f"{self.args.docker_socket}:/run/docker.sock",
+            "--volume",
+            f"{config}:{config}",
+            "--volume",
+            f"{entry['dir']}:{entry['dir']}:ro",
+            "--mount",
+            f"type=volume,src={self.root_volume(pins.root)},dst={worktree},readonly,"
+            f"volume-subpath={pins.subpath(worktree, 'dir')}",
+            "--workdir",
             str(entry["dir"]),
-            str(entry["dir"]),
-            "--bind-fd",
-            str(pins.fd),
-            pins.worktree,
-            "--chdir",
-            str(entry["dir"]),
-            self.args.compose,
+            "--entrypoint",
+            os.path.realpath(self.args.compose),
+            self.args.image,
             "--project-name",
             project,
             "--file",
@@ -1160,7 +1180,11 @@ class Runner:
             str(entry["dir"]),
             *argv,
         ]
-        return command, (pins.fd,)
+        try:
+            return self.stream(command, emit, timeout)
+        finally:
+            # Killing docker's client leaves the container running.
+            self.docker("rm", "--force", name, check=False)
 
     def compose_up(self, request, emit):
         project = self.project_name(request)
@@ -1172,8 +1196,7 @@ class Runner:
             if request.get("wait"):
                 argv += ["--wait", "--wait-timeout", str(self.timeout(request))]
             argv += self.services(request, entry)
-            command, fds = self.compose_command(entry, project, *argv)
-            code = self.stream(command, emit, self.timeout(request) + 60, fds)
+            code = self.compose_run(entry, project, argv, emit, self.timeout(request) + 60)
             self.connect_owner(project)
             return {"exit": code, "project": project, "services": self.compose_ps_data(project)}
 
@@ -1181,8 +1204,8 @@ class Runner:
         project = self.project_name(request)
         with self.compose_lock(project):
             entry = self.compose_submit(project, request, emit)
-            command, fds = self.compose_command(entry, project, "build", *self.services(request, entry))
-            return {"exit": self.stream(command, emit, self.timeout(request), fds), "project": project}
+            argv = ["build", *self.services(request, entry)]
+            return {"exit": self.compose_run(entry, project, argv, emit, self.timeout(request)), "project": project}
 
     def compose_ps(self, request, emit):
         project = self.project_name(request)
@@ -1193,10 +1216,8 @@ class Runner:
         project = self.project_name(request)
         entry = self.registered(project)
         tail = str(min(int(request.get("tail") or 200), MAX_OUTPUT_LINES))
-        command, fds = self.compose_command(
-            entry, project, "logs", "--no-color", "--tail", tail, *self.services(request, entry)
-        )
-        return {"exit": self.stream(command, emit, 120, fds)}
+        argv = ["logs", "--no-color", "--tail", tail, *self.services(request, entry)]
+        return {"exit": self.compose_run(entry, project, argv, emit, 120)}
 
     def compose_exec(self, request, emit):
         project = self.project_name(request)
@@ -1216,8 +1237,7 @@ class Runner:
             if not isinstance(item, str) or not ENV_RE.match(item):
                 refuse(f"env entries must be NAME=value: {item!r}")
             args += ["--env", item]
-        command, fds = self.compose_command(entry, project, *args, service, *argv)
-        return {"exit": self.stream(command, emit, self.timeout(request), fds)}
+        return {"exit": self.compose_run(entry, project, [*args, service, *argv], emit, self.timeout(request))}
 
     def compose_down(self, request, emit):
         project = self.project_name(request)
@@ -1232,10 +1252,8 @@ class Runner:
         if entry is not None:
             for network in self.owned("network", f"label={PROJECT_LABEL}={project}"):
                 self.disconnect_owner(network)
-            command, fds = self.compose_command(
-                entry, project, "down", "--volumes", "--remove-orphans", "--rmi", "local", "--timeout", "10"
-            )
-            code = self.stream(command, emit or (lambda *_: None), 600, fds)
+            argv = ["down", "--volumes", "--remove-orphans", "--rmi", "local", "--timeout", "10"]
+            code = self.compose_run(entry, project, argv, emit or (lambda *_: None), 600)
         self.remove_owned(f"label={PROJECT_LABEL}={project}")
         with self.lock:
             entry = self.projects.pop(project, None)
@@ -1291,10 +1309,8 @@ class Runner:
             refuse(f"timeout must be between 1 and {MAX_TIMEOUT} seconds")
         return value
 
-    def stream(self, command, emit, timeout, fds=()):
-        process = subprocess.Popen(
-            command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, pass_fds=fds
-        )
+    def stream(self, command, emit, timeout):
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         deadline = time.monotonic() + timeout
         selector = selectors.DefaultSelector()
         selector.register(process.stdout, selectors.EVENT_READ, "out")
@@ -1416,7 +1432,6 @@ def parse_args(argv):
     parser.add_argument("--gpu-lease-dir")
     parser.add_argument("--docker", default="docker")
     parser.add_argument("--compose", default="docker-compose")
-    parser.add_argument("--bwrap", default="bwrap")
     parser.add_argument("--buildx", default="/usr/libexec/docker/cli-plugins/docker-buildx")
     parser.add_argument("--docker-socket", default="/run/docker.sock")
     parser.add_argument("--ttl", type=int, default=12 * 3600, help="seconds a sandbox or stack may sit idle")
