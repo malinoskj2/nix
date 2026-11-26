@@ -1,0 +1,163 @@
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+
+COUNCIL = Path(__file__).with_name("council.py")
+
+RECORD = """import json, os, sys
+from pathlib import Path
+name = Path(sys.argv[0]).name
+stdin = '' if sys.stdin is None or sys.stdin.isatty() else sys.stdin.read()
+Path(os.environ['CAPTURE'], name + '.json').write_text(json.dumps({'argv': sys.argv[1:], 'stdin': stdin, 'claudecode': os.environ.get('CLAUDECODE')}))
+"""
+
+FAKES = {
+    "codex": RECORD
+    + """argv = sys.argv[1:]
+Path(argv[argv.index('-o') + 1]).write_text('codex finding')
+print('codex progress noise')
+""",
+    "claude": RECORD + "print('claude finding')\n",
+    "agy": RECORD + "print('gemini finding')\n",
+}
+
+
+class CouncilTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.bin = self.root / "bin"
+        self.capture = self.root / "capture"
+        self.bin.mkdir()
+        self.capture.mkdir()
+        self.prompt = self.root / "prompt.txt"
+        self.prompt.write_text('Review $(touch SHOULD_NOT_EXIST) "this" λ\n')
+        self.context = self.root / "diff.patch"
+        self.context.write_text("--- a\n+++ b\n")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def fake(self, name, code):
+        path = self.bin / name
+        path.write_text(f"#!{sys.executable}\n" + code)
+        path.chmod(0o700)
+
+    def run_council(self, *extra, path=None):
+        env = os.environ | {
+            "PATH": str(self.bin) + os.pathsep + (path or os.environ["PATH"]),
+            "CAPTURE": str(self.capture),
+            "CLAUDECODE": "1",
+        }
+        return subprocess.run(
+            [
+                sys.executable,
+                str(COUNCIL),
+                "--prompt-file",
+                str(self.prompt),
+                "--context-file",
+                str(self.context),
+                "--out-dir",
+                str(self.root / "out"),
+                *extra,
+            ],
+            env=env,
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+    def captured(self, name):
+        return json.loads((self.capture / f"{name}.json").read_text())
+
+    def test_all_members_invoked_with_pinned_models_read_only(self):
+        for name, code in FAKES.items():
+            self.fake(name, code)
+        result = self.run_council()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+        codex = self.captured("codex")["argv"]
+        self.assertEqual(codex[codex.index("--model") + 1], "gpt-6.2-sol")
+        self.assertIn('model_reasoning_effort="medium"', codex)
+        self.assertEqual(codex[codex.index("--sandbox") + 1], "read-only")
+
+        claude = self.captured("claude")
+        claude_argv = claude["argv"]
+        self.assertEqual(claude_argv[claude_argv.index("--model") + 1], "claude-opus-5-5")
+        self.assertEqual(claude_argv[claude_argv.index("--effort") + 1], "medium")
+        self.assertEqual(claude_argv[claude_argv.index("--permission-mode") + 1], "plan")
+        self.assertEqual(claude_argv[claude_argv.index("--tools") + 1], "Read,Grep,Glob")
+        self.assertIsNone(claude["claudecode"])
+
+        agy = self.captured("agy")["argv"]
+        self.assertEqual(agy[agy.index("--model") + 1], "gemini-4-neon-high")
+        self.assertEqual(agy[agy.index("--mode") + 1], "plan")
+
+        for name in ("codex", "claude"):
+            stdin = self.captured(name)["stdin"]
+            self.assertIn(self.prompt.read_text(), stdin)
+            self.assertIn("+++ b", stdin)
+        self.assertIn(self.prompt.read_text(), agy[-1])
+        self.assertTrue(agy[-1].startswith("-p="))
+        for argv in (codex, claude_argv, agy):
+            self.assertFalse(any("fable" in a.lower() for a in argv))
+
+        self.assertFalse((self.root / "SHOULD_NOT_EXIST").exists())
+        for finding in ("codex finding", "claude finding", "gemini finding"):
+            self.assertIn(finding, result.stdout)
+        self.assertNotIn("codex progress noise", result.stdout)
+        council = (self.root / "out" / "council.md").read_text()
+        self.assertIn("Gemini 4 Neon (high): ok", council)
+
+    def test_one_failure_and_one_timeout_do_not_sink_the_rest(self):
+        self.fake("codex", FAKES["codex"])
+        self.fake("claude", RECORD + "sys.stderr.write('quota exhausted\\n'); sys.exit(5)\n")
+        self.fake("agy", RECORD + "import time; time.sleep(30)\n")
+        result = self.run_council("--timeout", "2")
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertIn("codex finding", result.stdout)
+        self.assertIn("Claude Opus 5.5 (medium): failed: exit 5", result.stdout)
+        self.assertIn("quota exhausted", result.stdout)
+        self.assertIn("Gemini 4 Neon (high): failed: timed out after 2s", result.stdout)
+
+    def test_missing_cli_is_reported(self):
+        self.fake("codex", FAKES["codex"])
+        result = self.run_council("--members", "codex,gemini", path="/nonexistent")
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertIn("failed: agy not found on PATH", result.stdout)
+        self.assertNotIn("Claude", result.stdout)
+
+    def test_large_prompt_is_passed_to_gemini_by_file(self):
+        for name, code in FAKES.items():
+            self.fake(name, code)
+        self.context.write_text("x" * 150_000)
+        result = self.run_council()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        agy = self.captured("agy")["argv"][-1]
+        self.assertLess(len(agy), 1000)
+        self.assertIn(str(self.root / "out" / "prompt.md"), agy)
+
+    def test_stdout_is_bounded(self):
+        self.fake("codex", RECORD + "argv = sys.argv[1:]\nPath(argv[argv.index('-o') + 1]).write_text('c' * 50_000)\n")
+        self.fake("claude", RECORD + "print('d' * 50_000)\n")
+        self.fake("agy", RECORD + "print('g' * 50_000)\n")
+        result = self.run_council()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertLess(len(result.stdout.encode()), 10_000)
+        self.assertIn("[truncated; full text in", result.stdout)
+        self.assertIn("c" * 50_000, (self.root / "out" / "council.md").read_text())
+
+    def test_oversized_context_is_refused(self):
+        self.context.write_text("x" * 500_000)
+        result = self.run_council()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("pass less context", result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

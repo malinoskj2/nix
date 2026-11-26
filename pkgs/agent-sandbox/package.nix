@@ -80,6 +80,7 @@
   media-gallery,
   media-transcribe,
   qwen-prompt,
+  council,
   mediainfo,
   mold,
   mpv,
@@ -370,6 +371,7 @@ let
       media-gallery
       media-transcribe
       qwen-prompt
+      council
       mediainfo
       mold
       mpv

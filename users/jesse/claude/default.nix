@@ -50,6 +50,7 @@ in
     };
     skills = {
       codex-image = ./codex-image;
+      council = ./skills/council;
       game-latency = ./skills/game-latency;
       gauntlet = ./skills/gauntlet;
       laravel-build-jesse = ./skills/laravel-build-jesse;
