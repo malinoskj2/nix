@@ -141,6 +141,7 @@
           "pyghidra-mcp"
           "qwen-prompt"
           "qwen3-tts-python"
+          "strata"
           "switch-and-reset-sandboxes"
           "tiktok-search"
           "wallpaper-autopause"

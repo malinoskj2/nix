@@ -12,16 +12,22 @@ from pathlib import Path
 
 from qwen_local import (
     MODELS,
+    STRATA_BOOKING,
     checked_opencode_major,
     configuration,
-    llama_command,
+    mode_of,
     opencode_environment,
     refuse_nesting,
     require,
     resolve_model,
+    server_binary,
+    server_command,
     stop,
+    strata_tokenizer,
     wait_healthy,
 )
+
+CONTEXT = 16384
 
 
 def main():
@@ -30,6 +36,13 @@ def main():
     parser.add_argument("--prompt-file", type=Path, required=True)
     parser.add_argument("--project", default=None, help="Ignored legacy option")
     parser.add_argument("--timeout", type=int, default=1800, help="Execution limit in seconds")
+    backends = parser.add_mutually_exclusive_group()
+    backends.add_argument(
+        "--moe", action="store_true", help="Run Qwen3.6-35B-A3B on llama.cpp instead of the dense 27B"
+    )
+    backends.add_argument(
+        "--strata", action="store_true", help="Run Qwen3.6-35B-A3B through Strata instead of the dense 27B"
+    )
     parser.add_argument("--allocated", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.timeout <= 0:
@@ -37,18 +50,21 @@ def main():
     prompt = args.prompt_file.read_bytes().decode("utf-8")
     if not prompt.strip() or "\0" in prompt:
         parser.error("prompt must be nonempty UTF-8 and contain no NUL")
-    require("opencode", "llama-server", "gpu-run")
-    model = resolve_model(args.model)
+    mode = mode_of(args)
+    require("opencode", server_binary(mode), "gpu-run")
+    model = resolve_model(args.model, mode)
     if not args.allocated:
         refuse_nesting()
-        # Fixed 16k context, one slot, full GPU offload. Budget includes weights,
-        # KV cache and workspace margin.
+        if mode == "strata":
+            strata_tokenizer(model)
+        # Fixed 16k context, one slot. 26 GiB covers full GPU offload's weights, KV
+        # cache and workspace margin for both the dense 27B and the MoE (23.5 GiB
+        # measured at 64k).
         command = [
             "gpu-run",
-            "--vram",
-            "26GiB",
+            *(STRATA_BOOKING if args.strata else ("--vram", "26GiB")),
             "--name",
-            f"Qwen prompt ({args.model})",
+            f"Qwen prompt ({args.model}{'' if mode == 'dense' else ', ' + mode})",
             "--",
             sys.executable,
             str(Path(__file__).resolve()),
@@ -58,6 +74,7 @@ def main():
             str(args.prompt_file.resolve()),
             "--timeout",
             str(args.timeout),
+            *([] if mode == "dense" else [f"--{mode}"]),
             "--allocated",
         ]
         os.execvp(command[0], command)
@@ -82,7 +99,7 @@ def main():
             # --auto makes the requested task unattended; OpenCode still honors
             # explicit deny rules from the project and managed configuration.
             server = subprocess.Popen(
-                llama_command(model, port, key),
+                server_command(model, port, key, CONTEXT, mode, directory),
                 stdout=sys.stderr,
                 stderr=sys.stderr,
                 start_new_session=True,

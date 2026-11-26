@@ -189,6 +189,16 @@ Treat a bump as a hardware change and test it on the device.
   is refused, and that `gh`'s refused commands in `gh.sh` still match how
   `gh` pushes (`git/client.go`'s `Push` runs `git` from `PATH`) and which
   commands write through the API.
+- **Strata.** [`pkgs/strata/`](../pkgs/strata) builds one Niko1221/Strata
+  release tag (the commit it points at) from source for `qwen-prompt --strata`
+  and `qwen-opencode --strata`: the `strata` engine for the RTX 5090 only, with
+  CUDA 13.0, which Strata pins because 13.2 miscompiles its sm_120 kernels, and
+  its Python server and tokenizer tool from `terminal/`. Inkling, Hy4 and the
+  vision encoder aren't built. To move it, change `version`, `rev` and the
+  hash, and check the release's `tools/nix/flake.nix` and
+  `terminal/requirements.txt` for a new CUDA or Python requirement. Then run
+  `qwen-prompt --strata` for both models and check that the engine log still
+  reads the GGUF on the `qwen35moe` path with its MTP block loaded.
 - **htop.** [`pkgs/htop-vim-navigation/`](../pkgs/htop-vim-navigation) asserts
   the htop versions its patch was checked against. If a nixpkgs update trips
   it, re-check the patch next to it and add the new version.
