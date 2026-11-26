@@ -251,8 +251,9 @@ def collect(
     dylint: set[str],
     groups: dict,
     seen: set,
-) -> tuple[list[Finding], list[str]]:
+) -> tuple[list[Finding], list[str], bool]:
     findings, errors = [], []
+    accounted = False
     for item in messages:
         if item.get("reason") != "compiler-message":
             continue
@@ -265,16 +266,23 @@ def collect(
         file = primary["file_name"] if primary else None
         if file and not Path(file).is_absolute():
             file = str(root / file)
+        outside = False
         if file:
-            path = Path(file)
-            if not path.is_relative_to(root):
+            path = Path(os.path.normpath(file))
+            if path.is_relative_to(root):
+                file = str(path.relative_to(root))
+            elif level == "error":
+                outside = True
+                file = str(path)
+            else:
                 continue
-            file = str(path.relative_to(root))
         key = (code, file, primary and primary["line_start"], primary and primary["column_start"], message["message"])
+        if level == "error":
+            accounted = True
         if key in seen:
             continue
         seen.add(key)
-        if code is None or (level == "error" and not code_is_lint(code)):
+        if outside or code is None or (level == "error" and not code_is_lint(code)):
             errors.append(message.get("rendered") or message["message"])
             continue
         findings.append(
@@ -290,7 +298,7 @@ def collect(
                 rendered=message.get("rendered") or "",
             )
         )
-    return findings, errors
+    return findings, errors, accounted
 
 
 def code_is_lint(code: str) -> bool:
@@ -354,12 +362,6 @@ def select_members(metadata: dict, packages: list[str]) -> dict[str, tuple[str, 
     if unknown:
         raise RunError(f"not workspace members: {', '.join(unknown)}")
     return {label: member for label, member in members.items() if member[0] in packages}
-
-
-def error_reported(messages: list[dict]) -> bool:
-    return any(
-        item.get("reason") == "compiler-message" and item["message"].get("level") == "error" for item in messages
-    )
 
 
 def run(args: argparse.Namespace) -> dict:
@@ -443,8 +445,8 @@ def run(args: argparse.Namespace) -> dict:
         for label, command, pass_env in passes:
             log.write(f"$ {' '.join(command)}\n")
             status, messages, stderr = run_cargo(command, pass_env, log)
-            findings, errors = collect(messages, root, ours, dylint, groups, seen)
-            if status != 0 and not error_reported(messages):
+            findings, errors, accounted = collect(messages, root, ours, dylint, groups, seen)
+            if status != 0 and not accounted:
                 tail = "\n".join(stderr.strip().splitlines()[-5:])
                 errors.append(f"{label} pass exited with status {status} without a compiler error:\n{tail}")
             report["findings"] += findings

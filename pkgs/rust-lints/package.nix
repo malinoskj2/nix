@@ -216,6 +216,14 @@ stdenv.mkDerivation (finalAttrs: {
           done
           case " $lints " in *" clippy::unwrap_used "*) echo "project allow was overridden"; exit 1 ;; esac
           jq -e '.project_overrides[] | select(.lint == "clippy::unwrap_used" and .project == "allow")' report.json
+
+          cp -r ${./tests/dependency-fixture} dependency
+          chmod -R u+w dependency
+          status=0
+          ${finalAttrs.finalPackage}/bin/rust-lints --offline --json --manifest-path dependency/app/Cargo.toml > dependency.json || status=$?
+          jq . dependency.json
+          test "$status" = 2
+          jq -e '.status == "failed" and (.errors | any(contains("missing_function")))' dependency.json
           touch $out
         '';
     inherit

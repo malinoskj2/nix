@@ -94,11 +94,6 @@ class ExitStatus(unittest.TestCase):
         }
         self.assertEqual(rust_lints.exit_status(report), rust_lints.EXIT_FAILURE)
 
-    def test_error_message_accounts_for_failure(self):
-        error = {"reason": "compiler-message", "message": {"level": "error"}}
-        self.assertTrue(rust_lints.error_reported([error]))
-        self.assertFalse(rust_lints.error_reported([{"reason": "build-finished", "success": False}]))
-
 
 class Collect(unittest.TestCase):
     def message(self, code, file="src/lib.rs", level="warning"):
@@ -123,7 +118,7 @@ class Collect(unittest.TestCase):
             self.message(None, level="error"),
             self.message("dead_code", file="/elsewhere/dep.rs"),
         ]
-        findings, errors = rust_lints.collect(messages, Path("/w"), OURS, {"detached_spawn"}, groups, seen)
+        findings, errors, accounted = rust_lints.collect(messages, Path("/w"), OURS, {"detached_spawn"}, groups, seen)
         self.assertEqual(
             [(f.lint, f.tool, f.policy) for f in findings],
             [
@@ -132,6 +127,29 @@ class Collect(unittest.TestCase):
             ],
         )
         self.assertEqual(len(errors), 1)
+        self.assertTrue(accounted)
+
+    def test_dependency_errors_are_kept_and_account_for_a_failure(self):
+        messages = [
+            self.message("E0425", file="../dep/src/lib.rs", level="error"),
+            self.message("dead_code", file="../dep/src/lib.rs"),
+        ]
+        findings, errors, accounted = rust_lints.collect(messages, Path("/w/app"), OURS, set(), {}, set())
+        self.assertEqual(findings, [])
+        self.assertEqual(errors, ["r"])
+        self.assertTrue(accounted)
+
+    def test_warnings_alone_do_not_account_for_a_failure(self):
+        _, _, accounted = rust_lints.collect([self.message("dead_code")], Path("/w"), OURS, set(), {}, set())
+        self.assertFalse(accounted)
+
+    def test_a_repeated_error_still_accounts_for_a_later_pass(self):
+        seen = set()
+        error = self.message("E0425", level="error")
+        rust_lints.collect([error], Path("/w"), OURS, set(), {}, seen)
+        _, errors, accounted = rust_lints.collect([error], Path("/w"), OURS, set(), {}, seen)
+        self.assertEqual(errors, [])
+        self.assertTrue(accounted)
 
 
 if __name__ == "__main__":
