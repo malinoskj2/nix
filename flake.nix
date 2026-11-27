@@ -72,6 +72,12 @@
       repo = "rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    sops-nix = {
+      type = "github";
+      owner = "Mic92";
+      repo = "sops-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     tohru = {
       type = "github";
       owner = "malinoskj2";
@@ -116,6 +122,7 @@
           "corecycler"
           "council"
           "agent-sandbox"
+          "agent-secret"
           "ai-usage"
           "antigravity-cli"
           "ata-devs"

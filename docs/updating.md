@@ -132,6 +132,18 @@ Discord's Flux dispatcher by its class's methods, because Discord's i18n
 messages Proxy answers every property and wins upstream's duck-typed search.
 That failure is silent too: the activity reaches the tab and shows nowhere.
 
+### sops-nix
+
+`sops-nix` follows its default branch with the release's nixpkgs, and moves
+with `nix flake update`. [Agent secrets](agent-secrets.md) depend on its
+`useSystemdActivation` unit, `sops-install-secrets.service`, which
+`hosts/common/optional/agent-broker.nix` gives an `ExecCondition` so a missing
+file skips deployment instead of failing the switch. After an update, build
+`checks.x86_64-linux.agent-broker-vm`: it boots without the file, adds and
+rotates secrets with `agent-secret`, and checks the decrypted files' owner and
+modes and that jesse can't read them. A renamed option or a moved unit fails
+it.
+
 ## Inputs pinned to a commit
 
 ### `apple-fonts`

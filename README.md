@@ -42,3 +42,5 @@ nix run github:malinoskj2/nix#pubip
 Unreal Engine and agent MCP setup: [`docs/unreal-sandbox.md`](docs/unreal-sandbox.md).
 
 GPU reservations for models, renders and games: [`docs/gpu-scheduler.md`](docs/gpu-scheduler.md).
+
+Secrets for agent-broker services: [`docs/agent-secrets.md`](docs/agent-secrets.md).
