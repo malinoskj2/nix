@@ -67,6 +67,60 @@ let
         };
       }
     ] (config: config.sops.secrets.token.mode);
+    template = fails "sops.templates aren't supported" [
+      {
+        agentBroker.secrets.token = { };
+        sops.templates.copy = {
+          owner = "jesse";
+          content = "token";
+        };
+      }
+    ];
+    name-override = fails "must keep their declared name" [
+      {
+        agentBroker.secrets.token = { };
+        secrets.host.zhost.owner = "jesse";
+        sops.secrets.zhost.name = "token";
+      }
+    ];
+    path-override = fails "must keep their declared name" [
+      {
+        agentBroker.secrets.token = { };
+        secrets.host.zhost.owner = "jesse";
+        sops.secrets.zhost.path = "/run/secrets/token";
+      }
+    ];
+    host-consumer-not-service = evalFails [
+      {
+        secrets.host.token = {
+          owner = "jesse";
+          restartUnits = [ "foo.socket" ];
+        };
+      }
+    ] (config: config.secrets.host.token.restartUnits);
+    host-consumer-guarded =
+      let
+        config = evaluate [
+          {
+            secrets.host = {
+              a = {
+                owner = "jesse";
+                restartUnits = [ "both.service" ];
+              };
+              b = {
+                owner = "jesse";
+                restartUnits = [ "both.service" ];
+              };
+            };
+            systemd.services.both.script = "true";
+          }
+        ];
+      in
+      lib.sort lib.lessThan config.systemd.services.both.unitConfig.ConditionPathExists == [
+        "/run/secrets/a"
+        "/run/secrets/b"
+      ]
+      && lib.elem "sops-install-secrets.service" config.systemd.services.both.after;
     jesse-in-broker-group = fails "only agent-broker may be in" [
       { users.users.jesse.extraGroups = [ "agent-broker" ]; }
     ];

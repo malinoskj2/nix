@@ -18,15 +18,20 @@
       other.isNormalUser = true;
     };
 
-    secrets.host.user-token = {
-      owner = "jesse";
-      restartUnits = [ "host-consumer.service" ];
+    secrets.host = {
+      user-token = {
+        owner = "jesse";
+        restartUnits = [ "host-consumer.service" ];
+      };
+      user-config = {
+        owner = "jesse";
+        restartUnits = [ "host-consumer.service" ];
+      };
     };
 
+    # No ordering or conditions here: the store adds them from restartUnits.
     systemd.services.host-consumer = {
       wantedBy = [ "multi-user.target" ];
-      after = [ "sops-install-secrets.service" ];
-      unitConfig.ConditionPathExists = "/run/secrets/user-token";
       serviceConfig.ExecStart = "${pkgs.coreutils}/bin/sleep infinity";
     };
 
@@ -113,7 +118,13 @@
     machine.succeed("printf 'fake-later-value' | secret add later-token")
     machine.succeed("printf 'fake-user-value' | secret add user-token")
     machine.succeed("secret apply")
-    machine.wait_for_unit("host-consumer.service")
+
+    with subtest("a host consumer waits for every secret that names it"):
+        machine.sleep(2)
+        machine.fail("systemctl is-active host-consumer.service")
+        machine.succeed("printf 'fake-config' | secret add user-config")
+        machine.succeed("secret apply")
+        machine.wait_for_unit("host-consumer.service")
 
     with subtest("broker secrets are agent-broker's, host secrets their owner's"):
         machine.succeed("test \"$(stat -Lc '%U %G %a' /run/secrets/test-token)\" = 'agent-broker agent-broker 400'")
@@ -156,6 +167,17 @@
         assert deployed("test-token") and deployed("user-token")
         machine.succeed("systemctl is-active agent-broker-echo.service host-consumer.service")
 
+    with subtest("a withdrawn host secret keeps its consumer stopped through apply"):
+        machine.succeed("secret remove user-config")
+        machine.succeed("secret apply")
+        gone("user-config")
+        machine.sleep(2)
+        machine.fail("systemctl is-active host-consumer.service")
+        assert deployed("user-token")
+        machine.succeed("printf 'fake-config' | secret add user-config")
+        machine.succeed("secret apply")
+        machine.wait_for_unit("host-consumer.service")
+
     with subtest("withdrawing a secret stops its consumers only"):
         machine.succeed("secret remove test-token")
         machine.succeed("secret apply")
@@ -174,7 +196,7 @@
         machine.wait_until_fails("systemctl is-active agent-broker-echo.service")
         machine.wait_until_fails("systemctl is-active host-consumer.service")
         machine.fail("systemctl is-failed sops-install-secrets.service")
-        for name in ["test-token", "later-token", "user-token"]:
+        for name in ["test-token", "later-token", "user-token", "user-config"]:
             gone(name)
         machine.fail(as_user("jesse", connect))
         machine.succeed("journalctl -u sops-install-secrets -o cat | grep -F 'every secret is withdrawn'")

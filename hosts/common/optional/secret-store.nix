@@ -10,6 +10,17 @@ let
   manifest = config.system.build.sops-nix-manifest;
   storeSecrets = lib.filterAttrs (_: s: s.sopsFile == cfg.file) config.sops.secrets;
   keys = lib.mapAttrsToList (_: s: s.key) storeSecrets;
+  noncanonical = lib.attrNames (
+    lib.filterAttrs (name: s: s.name != name || s.path != "/run/secrets/${name}") storeSecrets
+  );
+  # Each host consumer waits for every secret that names it.
+  hostConsumers = lib.zipAttrs (
+    lib.concatLists (
+      lib.mapAttrsToList (
+        _: s: map (unit: { ${lib.removeSuffix ".service" unit} = s.path; }) s.restartUnits
+      ) cfg.host
+    )
+  );
 
   withdrawLib = ''
     manifest=${manifest}
@@ -108,9 +119,9 @@ let
           description = "File mode; other users never get access.";
         };
         restartUnits = lib.mkOption {
-          type = lib.types.listOf lib.types.str;
+          type = lib.types.listOf (lib.types.strMatching ".+\\.service");
           default = [ ];
-          description = "Units restarted when the secret changes, and stopped when it is withdrawn.";
+          description = "Services that read the secret. They start only once every secret naming them is deployed, restart when one changes, and stop when one is withdrawn.";
         };
         path = lib.mkOption {
           type = lib.types.str;
@@ -159,6 +170,16 @@ in
     {
       assertions = [
         {
+          # A template can copy any secret's value to a file with another owner,
+          # and withdrawal doesn't track rendered files.
+          assertion = config.sops.templates == { };
+          message = "sops.templates aren't supported with the secret store: they can copy a secret to another owner";
+        }
+        {
+          assertion = noncanonical == [ ];
+          message = "secrets in ${cfg.file} must keep their declared name and /run/secrets/<name> path; overridden: ${lib.concatStringsSep ", " noncanonical}";
+        }
+        {
           assertion = lib.allUnique keys;
           message = "secrets: each key in ${cfg.file} has exactly one consumer kind, but these share keys: ${lib.concatStringsSep ", " (lib.attrNames storeSecrets)}";
         }
@@ -176,6 +197,12 @@ in
       }) cfg.host;
 
       secrets.startUnits = lib.concatMap (s: s.restartUnits) (lib.attrValues cfg.host);
+
+      systemd.services = lib.mapAttrs (_: paths: {
+        wants = [ "sops-install-secrets.service" ];
+        after = [ "sops-install-secrets.service" ];
+        unitConfig.ConditionPathExists = paths;
+      }) hostConsumers;
 
       environment.systemPackages = [ pkgs.secret ];
       environment.etc."secrets/config.json".text = builtins.toJSON {

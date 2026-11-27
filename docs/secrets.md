@@ -17,8 +17,11 @@ secret has exactly one kind of consumer:
 
 A secret can't be both. Evaluation fails if one name is declared as both
 kinds, if two secrets share a key in the file, if a broker secret's owner,
-group or mode is changed from `agent-broker:agent-broker 0400`, or if a host
-secret belongs to `agent-broker` or gives other users access.
+group or mode is changed from `agent-broker:agent-broker 0400`, if a host
+secret belongs to `agent-broker` or gives other users access, or if a secret's
+name or path is overridden away from `/run/secrets/<name>`. sops-nix
+templates aren't supported, since one could copy a broker secret into a file
+someone else owns.
 
 Nothing secret is ever committed, not even ciphertext: the repository is
 public. It only names the secrets and their consumers. A flake check
@@ -244,8 +247,11 @@ secret apply
 ## How consumers use secrets
 
 A host secret is a plain file: point the tool or service at its `path`, and
-list services that read it in `restartUnits` so they restart when it changes,
-stop when it is withdrawn and start again on `secret apply`. Its owner can
+list services that read it in `restartUnits`. Each of those services gets an
+ordering after `sops-install-secrets` and a condition on the path of every
+secret that names it, so it starts only once all of them are deployed,
+restarts when one changes, stops when one is withdrawn, and stays stopped
+through `secret apply` until it is back. Its owner can
 read it, so anything running as that owner can too, including agents on the
 host as jesse for jesse-owned secrets.
 
