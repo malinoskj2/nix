@@ -152,9 +152,13 @@ four VRAM profiles as models in OpenCode's model list:
 | `flash-next-12g` | 128k | 13 GiB | 11.6 GiB | 36 + 1 GiB | 3,040 | 45 |
 | `flash-next-8g` | 64k | 9 GiB | 8.0 GiB | 34 + 1 GiB | 980 | 26 |
 
-Pinned RAM is the expert budget plus the parked-conversation cache. Speeds
-were measured with an 8.6k-token prompt and 512 tokens out; time to the first
-token was 1.5, 2.1, 2.9 and 8.9 s. Each booking is a shared `--vram` request,
+Pinned RAM is the expert budget plus the parked-conversation cache. Peaks and
+speeds were measured on the regular model with an 8.6k-token prompt and 512
+tokens out; time to the first token was 1.5, 2.1, 2.9 and 8.9 s. The 16G run
+used a 4 GiB conversation cache, which doesn't change VRAM or speed. The KV
+cache for the whole context is allocated at load, so a longer prompt shouldn't
+raise the peak, but full-context prompts and the uncensored model haven't been
+measured; each booking leaves 1 to 1.4 GiB over its measured peak. Each booking is a shared `--vram` request,
 so Flash-Next runs next to other GPU work, but the lower profiles take most of
 the sandboxes' 64 GiB of RAM. An expert budget short of what the GPU doesn't
 hold reads the rest from the SSD and swaps the host, so the budgets aren't

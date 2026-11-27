@@ -395,5 +395,28 @@ class LauncherTest(unittest.TestCase):
         self.assertIn("Already inside a GPU reservation", stderr)
 
 
+class QueueTest(unittest.TestCase):
+    def test_the_small_model_follows_a_pending_switch(self):
+        from opencode import Backend
+
+        with tempfile.TemporaryDirectory() as directory, open(Path(directory) / "log", "w") as log:
+            backend = Backend(Path(directory) / "model", "test", 60, log, directory, "moe")
+            backend.profile, backend.ready = "flash-next-12g", True
+            selected, ready, _ = backend.acquire("flash-next-20g", 0)
+            self.assertFalse(ready)
+            title, ready, _ = backend.acquire("qwen", 0)
+            self.assertFalse(ready, "a title must not jump ahead of the pending switch")
+            self.assertEqual([backend.wants(0), backend.wants(1)], ["flash-next-20g", "flash-next-20g"])
+            backend.profile = "flash-next-20g"
+            self.assertEqual(backend.wait(selected, 0), (True, None))
+            self.assertEqual(backend.wait(title, 0), (True, None))
+            self.assertEqual(backend.waiting, [])
+            later, ready, _ = backend.acquire("qwen", 0)
+            self.assertTrue(ready)
+            for ticket in (selected, title, later):
+                backend.release(ticket)
+            self.assertEqual(backend.serving, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

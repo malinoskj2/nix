@@ -74,6 +74,8 @@ def listed_models(served):
 
 
 class Ticket:
+    """A request's place in the queue; profile None takes whichever profile serves the work ahead of it."""
+
     def __init__(self, profile):
         self.profile = profile
         self.serving = False
@@ -83,8 +85,8 @@ class Backend:
     """One llama-server or strata-server under its own gpu-run, started and stopped only by the main thread.
 
     Request threads only ask for it, each with a ticket naming the profile its
-    model ID selects. A ticket is served once that profile is loaded and no older
-    ticket waits for another one; when the oldest waiting ticket wants another
+    model ID selects, or none for the any-profile model. A ticket is served once
+    the profile it needs is loaded and no older ticket waits for another one; when the oldest waiting ticket wants another
     profile, the server is unloaded as soon as nothing is being served and the
     new one starts under its own booking. The kernel's parent-death signal
     follows the forking thread, so gpu-run must be forked by the thread that
@@ -113,23 +115,29 @@ class Backend:
         self.condition = threading.Condition()
         self.closed = False
 
+    def wants(self, position):
+        """The profile the waiting ticket at position needs.
+
+        A ticket for the any-profile model takes the one selected by the work queued
+        ahead of it, else the loaded or loading one, else the default.
+        """
+        for ticket in reversed(self.waiting[: position + 1]):
+            if ticket.profile is not None:
+                return ticket.profile
+        return self.profile or self.default
+
     def servable(self, ticket):
-        if not self.ready or self.profile != ticket.profile:
+        if not self.ready:
             return False
-        return all(other.profile == ticket.profile for other in self.waiting[: self.waiting.index(ticket)])
+        position = self.waiting.index(ticket)
+        return all(self.wants(earlier) == self.profile for earlier in range(position + 1))
 
     def acquire(self, name, timeout):
         """Queue a request for model ID name and wait up to timeout for it. Returns (ticket, ready, error)."""
         with self.condition:
             if not self.waiting and not self.serving and not self.ready:
                 self.error = None
-            if name in self.profiles:
-                profile = name
-            elif self.profile is not None:
-                profile = self.profile
-            else:
-                profile = self.waiting[0].profile if self.waiting else self.default
-            ticket = Ticket(profile)
+            ticket = Ticket(name if name in self.profiles else None)
             self.waiting.append(ticket)
             self.wanted = True
             self.condition.notify_all()
@@ -199,7 +207,7 @@ class Backend:
         """Advance the backend's state; called repeatedly from the main thread."""
         with self.condition:
             wanted, serving, last = self.wanted, self.serving, self.last
-            target = self.waiting[0].profile if self.waiting else None
+            target = self.wants(0) if self.waiting else None
         if self.process is None:
             if wanted and target is not None:
                 self.start(target)

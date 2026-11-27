@@ -48,8 +48,10 @@ class MoeProfile:
 # 64k of context. Strata sizes RAM from the host's MemAvailable, not the
 # sandboxes' 64 GiB slice, so each budget is explicit; a budget short of the
 # experts the GPU doesn't hold reads them from the SSD and thrashes the page
-# cache. Measured on the RTX 5090 with an 8.6k-token prompt, 512 tokens out
-# (peak VRAM; prompt and generation tokens/s):
+# cache. Measured on the RTX 5090 with the regular model, an 8.6k-token prompt
+# and 512 tokens out (16g with 4 GiB of conversations), with the full context's
+# KV allocated at load; bookings add 1 GiB to the peak (peak VRAM; prompt and
+# generation tokens/s):
 #   20g: 22.0 GiB, 5740 and 80     12g: 11.6 GiB, 3040 and 45
 #   16g: 16.0 GiB, 4180 and 40      8g:  8.0 GiB,  980 and 26
 MOE_PROFILES = {
