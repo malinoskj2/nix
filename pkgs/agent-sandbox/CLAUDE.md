@@ -134,9 +134,9 @@ A disposable sandbox is a fresh sibling with one Git worktree shared read-write 
 
 A stack runs a project's Compose file. The file is rendered here with `docker compose config`, so `.env`, profiles and variables work as usual, and the host checks the result against an allowlist before running it.
 
-- `sandbox-runner compose [-f FILE]... [--profile P] [--name NAME] up [--build] [--wait] [SERVICE...]`, then `ps`, `logs [SERVICE...]`, `exec SERVICE -- COMMAND...`, `build` and `down`. `down` also removes the stack's volumes, networks and built images.
+- `sandbox-runner compose [-f FILE]... [--profile P] [--name NAME] up [--build] [--wait] [SERVICE...]`, then `ps`, `logs [SERVICE...]`, `exec SERVICE [--timeout S] -- COMMAND...`, `build` and `down`. An `exec` that times out restarts the service's container to stop the command. `down` also removes the stack's volumes, networks and built images.
 - `up` and `ps` print each service's address. This sandbox joins the stack's networks, so reach services at those addresses (`psql -h <postgres address>`); published ports bind only the host's loopback, which a sandbox can't reach.
-- Refused: privileged mode, added capabilities, devices and GPUs, host or other containers' namespaces, relaxed `security_opt`, external or custom-named volumes and networks, volume driver options, bind mounts or build contexts outside the worktree or through a symlink, secrets from the host environment, build SSH and host networking, `container_name` and sandbox images. Every container gets `no-new-privileges`, the sandboxes' memory slice, a pids limit and `restart: no`. The error names the key to drop.
+- Refused: privileged mode (also on `post_start` and `pre_stop` hooks), added capabilities, devices and GPUs, host or other containers' namespaces, relaxed `security_opt`, external or custom-named volumes and networks, volume driver options, bind mounts or build contexts outside the worktree or through a symlink, secrets from the host environment, build SSH and host networking, `container_name` and sandbox images. Every container gets `no-new-privileges`, the sandboxes' memory slice, a pids limit and `restart: no`. The error names the key to drop.
 
 ## Unreal Engine
 

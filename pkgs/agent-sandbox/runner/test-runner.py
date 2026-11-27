@@ -6,6 +6,7 @@ import tarfile
 import tempfile
 import threading
 import unittest
+import unittest.mock
 from pathlib import Path
 
 import importlib.util
@@ -166,6 +167,13 @@ class ComposeTest(Tree):
         services = lambda m: m["services"]  # noqa: E731
         cases = {
             "privileged": lambda m: services(m)["postgres"].update(privileged=True),
+            "privileged post_start hook": lambda m: services(m)["postgres"].update(
+                post_start=[{"command": ["id"], "user": "root", "privileged": True}]
+            ),
+            "privileged pre_stop hook": lambda m: services(m)["postgres"].update(
+                pre_stop=[{"command": ["id"], "privileged": True}]
+            ),
+            "unknown hook key": lambda m: services(m)["postgres"].update(post_start=[{"command": ["id"], "x": 1}]),
             "cap_add": lambda m: services(m)["postgres"].update(cap_add=["SYS_ADMIN"]),
             "host network": lambda m: services(m)["postgres"].update(network_mode="host"),
             "other container's network": lambda m: services(m)["postgres"].update(network_mode="container:x"),
@@ -238,6 +246,15 @@ class ComposeTest(Tree):
         deploy = checker.validate()["services"]["worker"]["deploy"]
         self.assertEqual(deploy, {"replicas": 1, "resources": {"limits": {"memory": "512m"}}})
         self.assertEqual(len(checker.warnings), 1)
+
+    def test_unprivileged_hooks_are_kept(self):
+        model = social_hub(self.worktree)
+        hook = {"command": ["pg_isready"], "user": "postgres", "privileged": False}
+        model["services"]["postgres"]["post_start"] = [hook]
+        validated = self.validate(model)
+        self.assertEqual(
+            validated["services"]["postgres"]["post_start"], [{"command": ["pg_isready"], "user": "postgres"}]
+        )
 
 
 class RetagTest(unittest.TestCase):
@@ -331,6 +348,49 @@ class ServerTest(Tree):
     def test_project_names_are_owner_scoped(self):
         project = self.call({"op": "compose.project", "name": "stack"})["result"]["project"]
         self.assertEqual(project, f"asr-{runner.short_hash('agent-sandbox-test')}-stack")
+
+
+class TeardownTest(unittest.TestCase):
+    def runner_with_projects(self, *projects):
+        r = object.__new__(runner.Runner)
+        r.lock = threading.Lock()
+        r.projects = {}
+        r.removed = []
+        for project in projects:
+            directory = Path(tempfile.mkdtemp())
+            r.projects[project] = {"pins": unittest.mock.Mock(), "dir": directory}
+        r.owned = lambda *_: []
+        r.remove_owned = lambda *filters: r.removed.append(filters)
+        return r
+
+    def test_down_removes_leftovers_when_compose_fails(self):
+        r = self.runner_with_projects("p1")
+
+        def broken(*_):
+            raise BrokenPipeError("caller went away")
+
+        r.compose_run = broken
+        result = r.compose_down_locked("p1", emit=broken)
+        self.assertEqual(result["exit"], 1)
+        self.assertEqual(r.removed, [(f"label={runner.PROJECT_LABEL}=p1",)])
+        self.assertNotIn("p1", r.projects)
+
+    def test_a_failed_removal_keeps_the_record_and_cleanup_goes_on(self):
+        r = self.runner_with_projects("p1", "p2")
+        r.compose_run = lambda *_: 0
+        downed = []
+
+        def remove_owned(*filters):
+            downed.append(filters)
+            if filters and filters[0].endswith("=p1"):
+                raise TimeoutError("docker hung")
+
+        r.remove_owned = remove_owned
+        for project in ("p1", "p2"):
+            runner.attempt(f"down {project}", r.compose_down_locked, project)
+        self.assertIn("p1", r.projects)
+        self.assertNotIn("p2", r.projects)
+        self.assertEqual(len(downed), 2)
 
 
 if __name__ == "__main__":

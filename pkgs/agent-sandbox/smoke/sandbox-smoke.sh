@@ -143,12 +143,15 @@ if [[ -n $gpu ]]; then
     gpu_checks
   else
     export -f check pass fail gpu_checks browsers mcp
-    export log work failures
-    # The checks print their own results; the count comes back through the exit status.
+    export log work
+    # The checks print their own results; their failure count comes back as the exit status.
     # shellcheck disable=SC2016 # expanded by the inner shell
-    gpu-run --vram 2GiB --timeout "$gpu_wait" --name 'sandbox-smoke browsers' -- \
-      bash -c ': >"$work/gpu-granted"; gpu_checks; exit $failures'
-    status=$?
+    if gpu-run --vram 2GiB --timeout "$gpu_wait" --name 'sandbox-smoke browsers' -- \
+      bash -c 'failures=0; : >"$work/gpu-granted"; gpu_checks; exit $failures'; then
+      status=0
+    else
+      status=$?
+    fi
     if [[ ! -e $work/gpu-granted ]]; then
       gpu_skipped=1
       echo "skip  GPU checks: GPU busy, no gpu-run grant within ${gpu_wait}s (gpu-status shows who holds it)"

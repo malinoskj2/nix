@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import collections
 import copy
 import errno
 import fcntl
@@ -35,6 +36,7 @@ MAX_PIDS = 4096
 DEFAULT_TIMEOUT = 1800
 MAX_TIMEOUT = 4 * 3600
 MAX_IMAGE_BYTES = 4 << 30
+IMAGE_STREAM_TIMEOUT = 1800
 MAX_OUTPUT_LINES = 10000
 CHUNK = 65536
 PREVIEW_PORTS = range(8080, 8085)
@@ -50,6 +52,20 @@ class Refused(Exception):
 
 def refuse(message):
     raise Refused(message)
+
+
+def log(message):
+    print(f"agent-sandbox-runner: {message}", file=sys.stderr, flush=True)
+
+
+def attempt(what, action, *args):
+    """Run one cleanup step, so a failure in it doesn't skip the steps after it."""
+    try:
+        action(*args)
+        return True
+    except Exception as error:  # noqa: BLE001
+        log(f"{what} failed: {error}")
+        return False
 
 
 def short_hash(text, length=10):
@@ -243,6 +259,7 @@ NETWORK_KEYS = {"name", "driver", "internal", "labels", "ipam", "enable_ipv6"}
 VOLUME_KEYS = {"name", "driver", "labels"}
 SECRET_KEYS = {"name", "file", "content"}
 ULIMIT_KEYS = {"nofile", "nproc", "memlock", "stack", "core"}
+HOOK_KEYS = {"command", "user", "working_dir", "environment"}
 LOGGING_DRIVERS = {"json-file", "local"}
 
 
@@ -369,6 +386,18 @@ class ComposeModel:
             refuse(f"{where}: privileged is refused")
         service.pop("privileged", None)
         service.pop("profiles", None)
+        for hook in ("post_start", "pre_stop"):
+            entries = service.get(hook, [])
+            if not isinstance(entries, list):
+                refuse(f"{where}.{hook} must be a list")
+            for index, entry in enumerate(entries):
+                # Compose runs a hook with its own privileged flag, apart from the service's.
+                if not isinstance(entry, dict):
+                    refuse(f"{where}.{hook}[{index}] must be a mapping")
+                if entry.get("privileged"):
+                    refuse(f"{where}.{hook}[{index}]: privileged is refused")
+                entry.pop("privileged", None)
+                check_keys(f"{where}.{hook}[{index}]", entry, HOOK_KEYS)
         image = service.get("image")
         if "build" in service:
             self.build(where, service["build"])
@@ -624,10 +653,13 @@ class Runner:
                 idle_sandboxes = [n for n, e in self.sandboxes.items() if now - e["touched"] > self.args.ttl]
                 idle_projects = [n for n, e in self.projects.items() if now - e["touched"] > self.args.ttl]
             for name in idle_sandboxes:
-                self.sandbox_rm({"id": name}, lambda *_: None)
+                attempt(f"removing idle {name}", self.sandbox_rm, {"id": name}, lambda *_: None)
             for project in idle_projects:
-                with self.compose_lock(project):
-                    self.compose_down_locked(project, quiet=True)
+                attempt(f"compose down idle {project}", self.reap_project, project)
+
+    def reap_project(self, project):
+        with self.compose_lock(project):
+            self.compose_down_locked(project)
 
     def remove_candidate_images(self, oid):
         output = self.docker(
@@ -639,11 +671,11 @@ class Runner:
 
     def cleanup(self):
         for project in list(self.projects):
-            self.compose_down_locked(project, quiet=True)
-        self.remove_owned()
+            attempt(f"compose down {project}", self.compose_down_locked, project)
+        attempt("removing owned resources", self.remove_owned)
         for sandbox in self.sandboxes.values():
             sandbox["pins"].close()
-        self.remove_candidate_images(self.oid)
+        attempt("removing candidate images", self.remove_candidate_images, self.oid)
         subprocess.run(["chmod", "-R", "u+w", str(self.state)], capture_output=True)
         shutil.rmtree(self.state, ignore_errors=True)
 
@@ -698,10 +730,13 @@ class Runner:
     def stream_image(self, script, output):
         # A stream script is the caller's build output, so it runs in a container like any
         # sandbox, never on the host, and only its stdout leaves.
+        name = f"asr-stream-{self.oid}-{secrets.token_hex(3)}"
         command = [
             self.args.docker,
             "run",
             "--rm",
+            "--name",
+            name,
             "--network",
             "none",
             "--cap-drop",
@@ -729,23 +764,45 @@ class Runner:
             str(script),
             self.args.image,
         ]
+        deadline = time.monotonic() + IMAGE_STREAM_TIMEOUT
+        errors = collections.deque(maxlen=16)
         with open(output, "wb") as handle:
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(
+                command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            # stderr drains alongside stdout, so a script that fills it can't stall the stream.
+            drain = threading.Thread(
+                target=lambda: errors.extend(iter(lambda: process.stderr.read1(4096), b"")), daemon=True
+            )
+            drain.start()
             written = 0
             try:
-                while chunk := process.stdout.read(CHUNK):
-                    written += len(chunk)
-                    if written > MAX_IMAGE_BYTES:
-                        process.kill()
-                        refuse("image stream exceeds the size limit")
-                    handle.write(chunk)
-                stderr = process.stderr.read().decode(errors="replace")
-                if process.wait(timeout=1800) != 0:
-                    refuse(f"image stream failed: {stderr[-2000:]}")
+                with selectors.DefaultSelector() as selector:
+                    selector.register(process.stdout, selectors.EVENT_READ)
+                    while True:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            refuse(f"image stream timed out after {IMAGE_STREAM_TIMEOUT} s")
+                        if not selector.select(min(remaining, 1)):
+                            continue
+                        chunk = os.read(process.stdout.fileno(), CHUNK)
+                        if not chunk:
+                            break
+                        written += len(chunk)
+                        if written > MAX_IMAGE_BYTES:
+                            refuse("image stream exceeds the size limit")
+                        handle.write(chunk)
+                code = process.wait(timeout=max(deadline - time.monotonic(), 1))
+                drain.join(timeout=5)
+                if code != 0:
+                    tail = b"".join(errors).decode(errors="replace")
+                    refuse(f"image stream failed: {tail[-2000:]}")
             finally:
                 if process.poll() is None:
                     process.kill()
                     process.wait()
+                # Killing docker's client leaves the container running.
+                self.docker("rm", "--force", name, check=False)
 
     @staticmethod
     def retag(source, output, tag):
@@ -1239,7 +1296,25 @@ class Runner:
             if not isinstance(item, str) or not ENV_RE.match(item):
                 refuse(f"env entries must be NAME=value: {item!r}")
             args += ["--env", item]
-        return {"exit": self.compose_run(entry, project, [*args, service, *argv], emit, self.timeout(request))}
+        timeout = self.timeout(request)
+        started = time.monotonic()
+        code = self.compose_run(entry, project, [*args, service, *argv], emit, timeout)
+        if code == 124 and time.monotonic() - started >= timeout:
+            # The command runs in the service's container, which outlives Compose's client, and its
+            # image may have no `timeout`; restarting the container is what stops it.
+            self.restart_service(project, service)
+            emit("err", f"sandbox-runner: restarted {service} to stop the timed-out command\n")
+        return {"exit": code}
+
+    def restart_service(self, project, service):
+        containers = self.owned(
+            "ps",
+            f"label={PROJECT_LABEL}={project}",
+            f"label=com.docker.compose.service={service}",
+            "label=com.docker.compose.container-number=1",
+        )
+        if containers:
+            self.docker("restart", "--time", "10", *containers, check=False, timeout=120)
 
     def compose_down(self, request, emit):
         project = self.project_name(request)
@@ -1247,15 +1322,33 @@ class Runner:
         with self.compose_lock(project):
             return self.compose_down_locked(project, emit=emit)
 
-    def compose_down_locked(self, project, emit=None, quiet=False):
+    def compose_down_locked(self, project, emit=None):
+        """Bring a project down; its labelled leftovers are removed even if Compose fails.
+
+        The record stays when that removal fails, so the next down, the reaper or the exit
+        cleanup retries it.
+        """
         with self.lock:
             entry = self.projects.get(project)
         code = 0
         if entry is not None:
-            for network in self.owned("network", f"label={PROJECT_LABEL}={project}"):
-                self.disconnect_owner(network)
-            argv = ["down", "--volumes", "--remove-orphans", "--rmi", "local", "--timeout", "10"]
-            code = self.compose_run(entry, project, argv, emit or (lambda *_: None), 600)
+
+            def report(stream, text):
+                # A caller that went away mustn't stop the teardown.
+                if emit is not None:
+                    try:
+                        emit(stream, text)
+                    except OSError:
+                        pass
+
+            try:
+                for network in self.owned("network", f"label={PROJECT_LABEL}={project}"):
+                    self.disconnect_owner(network)
+                argv = ["down", "--volumes", "--remove-orphans", "--rmi", "local", "--timeout", "10"]
+                code = self.compose_run(entry, project, argv, report, 600)
+            except Exception as error:  # noqa: BLE001
+                log(f"compose down {project} failed, removing its resources directly: {error}")
+                code = 1
         self.remove_owned(f"label={PROJECT_LABEL}={project}")
         with self.lock:
             entry = self.projects.pop(project, None)
@@ -1324,7 +1417,8 @@ class Runner:
                 if remaining <= 0:
                     emit("err", f"sandbox-runner: timed out after {timeout} s\n")
                     process.kill()
-                    break
+                    process.wait()
+                    return 124
                 for key, _ in selector.select(min(remaining, 1)):
                     data = os.read(key.fileobj.fileno(), CHUNK)
                     if not data:
