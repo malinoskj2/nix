@@ -5,6 +5,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -475,6 +476,39 @@ class BoundedLogTest(unittest.TestCase):
             log.close()
             self.assertTrue(sizes and max(sizes) <= opencode.READ_CHUNK, sizes[:5])
             self.assertTrue(progress.endswith(path.read_bytes()))
+
+
+class LogShutdownTest(unittest.TestCase):
+    def test_close_waits_for_the_last_output_of_a_slow_reader(self):
+        from opencode import Log
+
+        with tempfile.TemporaryDirectory() as directory:
+            log = Log(Path(directory) / "tail.log")
+            reader, writer = os.pipe()
+            os.write(writer, b"FINAL ERROR\n")
+            os.close(writer)
+            log.lock.acquire()
+            log.follow(os.fdopen(reader, "rb"))
+            threading.Timer(0.3, log.lock.release).start()
+            log.close()
+            self.assertEqual(Path(log.name).read_text(), "FINAL ERROR\n")
+
+    def test_close_gives_up_on_a_pipe_a_descendant_keeps_open(self):
+        from opencode import Log
+
+        with tempfile.TemporaryDirectory() as directory:
+            log = Log(Path(directory) / "held.log")
+            reader, writer = os.pipe()
+            os.write(writer, b"before\n")
+            log.follow(os.fdopen(reader, "rb"))
+            started = time.monotonic()
+            log.close(timeout=0.5)
+            self.assertLess(time.monotonic() - started, 3)
+            os.write(writer, b"after\n")
+            os.close(writer)
+            log.readers[0].join(5)
+            self.assertFalse(log.readers[0].is_alive())
+            self.assertEqual(Path(log.name).read_text(), "before\n")
 
 
 class SessionLogTest(unittest.TestCase):

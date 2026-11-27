@@ -51,6 +51,8 @@ KEEPALIVE = 15
 LOG_LIMIT = 8 * 1024 * 1024
 READ_CHUNK = 65536
 LOGS_KEPT = 10
+# How long shutdown waits for children's output; a leftover descendant can hold a pipe open.
+DRAIN_TIMEOUT = 5
 # OpenCode closing an idle keep-alive connection, or going away mid-stream.
 DISCONNECTS = (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, TimeoutError)
 
@@ -93,6 +95,7 @@ class Log:
         self.lock = threading.Lock()
         self.failed = False
         self.readers = []
+        self.closed = False
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.file = open(path, "ab", buffering=0)
         self.size = self.file.seek(0, os.SEEK_END)
@@ -103,7 +106,7 @@ class Log:
     def write_bytes(self, data):
         """Append data, splitting it at the size limit so neither file grows past it."""
         with self.lock:
-            while data:
+            while data and not self.closed:
                 if self.size >= self.limit:
                     self.file.close()
                     os.replace(self.name, self.name + ".1")
@@ -136,8 +139,13 @@ class Log:
         thread.start()
         self.readers = [reader for reader in self.readers if reader.is_alive()] + [thread]
 
-    def close(self):
+    def close(self, timeout=DRAIN_TIMEOUT):
+        """Wait up to timeout for the children's output to end, then close; anything later is dropped."""
+        deadline = time.monotonic() + timeout
+        for reader in self.readers:
+            reader.join(max(deadline - time.monotonic(), 0))
         with self.lock:
+            self.closed = True
             self.file.close()
 
 
@@ -572,6 +580,7 @@ def main():
                 except subprocess.TimeoutExpired:
                     harness.kill()
                     harness.wait()
+            log.close()
             if log.failed:
                 print(f"qwen-opencode: errors were logged to {log.name}", file=sys.stderr, flush=True)
 
