@@ -65,6 +65,12 @@ def validate(catalog):
                 raise ValueError(f"Invalid store: {name}")
         if catalog.get("defaultStore") not in stores:
             raise ValueError("defaultStore must name a declared store")
+    for name in catalog.get("mountedStores", []):
+        if name not in (stores or {}):
+            raise ValueError(f"Unknown mounted store: {name}")
+    for name, reserve in catalog.get("storeReserves", {}).items():
+        if name not in (stores or {}) or not isinstance(reserve, int) or reserve < 0:
+            raise ValueError(f"Invalid store reserve: {name}")
     visiting, done, order = set(), set(), []
 
     def visit(alias):
@@ -217,6 +223,8 @@ class Sync:
         self.holders = holders or open_files
         self.stores = {name: Path(path) for name, path in catalog.get("stores", {"root": str(self.root)}).items()}
         self.default_store = catalog.get("defaultStore", "root")
+        self.mounted = {self.stores[name] for name in catalog.get("mountedStores", [])}
+        self.reserves = {self.stores[name]: size for name, size in catalog.get("storeReserves", {}).items()}
         self.state = self.root / ".state"
         if not readonly:
             self.state.mkdir(parents=True, exist_ok=True)
@@ -242,6 +250,28 @@ class Sync:
 
     def store(self, entry):
         return self.stores[entry.get("store", self.default_store)]
+
+    def headroom(self, store):
+        return max(2 * 1024**3, self.reserves.get(store, 0))
+
+    def present(self, store):
+        """A mounted store counts only while its filesystem is mounted, never its empty mount point."""
+        if store not in self.mounted:
+            return store.is_dir()
+        try:
+            os.listdir(store)
+        except OSError:
+            return False
+        return os.path.ismount(store)
+
+    def available(self, store):
+        if store in self.mounted:
+            return self.present(store) and os.access(store, os.W_OK)
+        try:
+            store.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return False
+        return os.access(store, os.W_OK)
 
     def destination(self, file, store=None):
         store = store or self.store({})
@@ -321,7 +351,7 @@ class Sync:
             blob = store / "files" / digest / "imported"
             blob.parent.mkdir(parents=True, exist_ok=True)
             if not self.valid(blob, file):
-                if shutil.disk_usage(store).free < file["size"] + 2 * 1024**3:
+                if shutil.disk_usage(store).free < file["size"] + self.headroom(store):
                     raise OSError("Insufficient space to safely import project weights")
                 temporary = blob.with_suffix(".importing")
                 subprocess.run(["cp", "--reflink=auto", "--", str(source.resolve()), str(temporary)], check=True)
@@ -380,7 +410,7 @@ class Sync:
             raise FileNotFoundError("Packaged asset missing")
         if self.import_file(file, destination, store):
             return destination
-        if shutil.disk_usage(store).free < file["size"] + 2 * 1024**3:
+        if shutil.disk_usage(store).free < file["size"] + self.headroom(store):
             raise OSError("Insufficient free disk space including download headroom")
         # Preserve a damaged cache blob for inspection; let Hub fetch only this file.
         if destination.exists():
@@ -414,7 +444,7 @@ class Sync:
             if entry.get("unresolved"):
                 item.update(status="unresolved", reason=entry["unresolved"])
                 continue
-            if any(not f.get("storePath") for f in entry["files"]) and not available(store):
+            if any(not f.get("storePath") for f in entry["files"]) and not self.available(store):
                 item.update(status="missing", reason=f"Store {item['store']} at {store} is unavailable")
                 print(f"{alias}: store {item['store']} unavailable", file=sys.stderr, flush=True)
                 continue
@@ -541,7 +571,7 @@ class Sync:
         retained = set(self.full["entries"]) - self.wanted
         stores = {}
         for name, path in self.stores.items():
-            if path.is_dir():
+            if self.present(path):
                 stores.setdefault(norm(path), name)
         repos, digests = self.entry_store_paths(self.full["entries"])
         managed = self.managed_repositories()
@@ -725,14 +755,6 @@ class Sync:
             flush=True,
         )
         return not failures
-
-
-def available(store):
-    try:
-        store.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        return False
-    return os.access(store, os.W_OK)
 
 
 def prepare_reference(view, spec):

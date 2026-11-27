@@ -418,7 +418,61 @@ class Stores(unittest.TestCase):
         self.assertEqual(report["voice"]["status"], "missing")
         self.assertIn("unavailable", report["voice"]["reason"])
 
+    def test_unmounted_network_store_reports_missing_and_creates_nothing(self):
+        self.install.mkdir()
+        self.catalog["mountedStores"] = ["install"]
+        with patch("os.path.ismount", return_value=False):
+            self.assertFalse(Sync(self.root, self.catalog, self.downloader).reconcile())
+        report = json.loads((self.root / "readiness.json").read_text())["entries"]
+        self.assertEqual(report["old"]["status"], "ready")
+        self.assertEqual(report["voice"]["status"], "missing")
+        self.assertIn("unavailable", report["voice"]["reason"])
+        self.assertEqual(list(self.install.iterdir()), [])
+        self.assertFalse((self.root / "by-name/voice").exists())
+
+    def test_absent_network_mount_point_is_never_created(self):
+        self.catalog["mountedStores"] = ["install"]
+        self.assertFalse(Sync(self.root, self.catalog, self.downloader).reconcile())
+        self.assertFalse(self.install.exists())
+
+    def test_mounted_network_store_syncs(self):
+        self.install.mkdir()
+        self.catalog["mountedStores"] = ["install"]
+        real = os.path.ismount
+        with patch("os.path.ismount", side_effect=lambda p: Path(p) == self.install or real(p)):
+            self.assertTrue(Sync(self.root, self.catalog, self.downloader).reconcile())
+            self.assertTrue((self.root / "by-name/voice/voice.bin").resolve().is_relative_to(self.install))
+            self.catalog["entries"].pop("voice")
+            self.assertTrue(Sync(self.root, self.catalog, self.downloader).reconcile())
+        self.assertFalse(any((self.install / "huggingface").rglob("voice.bin")))
+
+    def test_unmounted_network_store_is_not_pruned(self):
+        self.install.mkdir()
+        self.catalog["mountedStores"] = ["install"]
+        real = os.path.ismount
+        with patch("os.path.ismount", side_effect=lambda p: Path(p) == self.install or real(p)):
+            self.assertTrue(Sync(self.root, self.catalog, self.downloader).reconcile())
+        voice = self.install / "huggingface/models--fixture--model/snapshots" / ("a" * 40) / "voice.bin"
+        self.catalog["entries"].pop("voice")
+        with patch("os.path.ismount", return_value=False):
+            self.assertTrue(Sync(self.root, self.catalog, self.downloader).reconcile())
+        self.assertTrue(voice.is_file())
+
+    def test_store_reserve_keeps_free_space(self):
+        self.catalog["storeReserves"] = {"install": 1 << 60}
+        self.assertFalse(Sync(self.root, self.catalog, self.downloader).reconcile())
+        report = json.loads((self.root / "readiness.json").read_text())["entries"]
+        self.assertEqual(report["old"]["status"], "ready")
+        self.assertEqual(report["voice"]["status"], "missing")
+        self.assertFalse(any(self.install.rglob("voice.bin")))
+
     def test_unknown_or_invalid_stores_rejected(self):
+        bad = copy.deepcopy(self.catalog)
+        bad["mountedStores"] = ["nowhere"]
+        self.assertRaises(ValueError, validate, bad)
+        bad = copy.deepcopy(self.catalog)
+        bad["storeReserves"] = {"install": -1}
+        self.assertRaises(ValueError, validate, bad)
         bad = copy.deepcopy(self.catalog)
         bad["entries"]["voice"]["store"] = "nowhere"
         self.assertRaises(ValueError, validate, bad)
