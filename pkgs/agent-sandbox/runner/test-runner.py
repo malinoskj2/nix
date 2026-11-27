@@ -450,25 +450,46 @@ class PortTest(unittest.TestCase):
 
 
 class FailureReportTest(unittest.TestCase):
-    def test_a_failed_up_shows_the_failed_services_logs(self):
+    def report(self, services, output="could not resolve postgres\n", hint=True):
         r = object.__new__(runner.Runner)
-        logged = []
+        r.logged = []
 
         def docker(*argv, check=True, timeout=300):
-            logged.append(argv)
-            return unittest.mock.Mock(stdout="could not resolve postgres\n", stderr="")
+            r.logged.append(argv)
+            return unittest.mock.Mock(stdout=output, stderr="")
 
         r.docker = docker
-        services = [
-            {"container": "db", "state": "running", "health": "healthy", "exit_code": 0},
-            {"container": "server", "state": "exited", "health": "unhealthy", "exit_code": 1},
-        ]
         messages = []
-        r.report_failed_services(services, "runsc", lambda _stream, text: messages.append(text))
+        r.report_failed_services(services, "runsc", lambda _stream, text: messages.append(text), hint=hint)
+        return r.logged, messages
+
+    def test_a_failed_up_shows_the_failed_services_logs(self):
+        logged, messages = self.report(
+            [
+                {"container": "db", "state": "running", "health": "healthy", "exit_code": 0},
+                {"container": "server", "state": "exited", "health": "unhealthy", "exit_code": 1},
+            ]
+        )
         self.assertEqual(logged, [("logs", "--tail", "40", "server")])
         self.assertIn("server is unhealthy (exit 1) on runsc", messages[0])
         self.assertIn("could not resolve postgres", messages[0])
         self.assertIn("--runtime runc", messages[1])
+
+    def test_a_container_that_never_started_shows_dockers_error(self):
+        _, messages = self.report(
+            [{"container": "web", "state": "created", "health": None, "exit_code": 128, "error": "runsc: boom"}],
+            output="",
+        )
+        self.assertIn("web is created (exit 128) on runsc; Docker: runsc: boom", messages[0])
+
+    def test_no_hint_without_a_failed_service_and_logs_are_bounded(self):
+        _, messages = self.report([{"container": "db", "state": "running", "health": None, "exit_code": 0}])
+        self.assertEqual(messages, [])
+        _, messages = self.report(
+            [{"container": "web", "state": "exited", "health": None, "exit_code": 1}], output="x" * 100000, hint=False
+        )
+        self.assertEqual(len(messages), 1)
+        self.assertLess(len(messages[0]), 4200)
 
 
 class RuntimeTest(unittest.TestCase):
@@ -522,7 +543,12 @@ class RuntimeTest(unittest.TestCase):
         r.compose_down_locked = lambda *_args, **_kwargs: self.fail("fallback must not run the destructive down")
         r.connect_owner = lambda _project: None
         r.compose_ps_data = lambda _project: []
-        r.report_failed_services = lambda *_: None
+        r.reports = []
+
+        def report(_services, runtime, _emit, hint=True):
+            r.reports.append((runtime, hint, len(r.downed)))
+
+        r.report_failed_services = report
         return r
 
     def test_a_stack_that_fails_under_gvisor_retries_on_runc(self):
@@ -534,6 +560,7 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual([runtime for runtime, _ in r.runs], ["runsc", "runc"])
         self.assertEqual(r.runs[0][1], r.runs[1][1])
         self.assertEqual(r.downed, [["down", "--remove-orphans", "--timeout", "10"]])
+        self.assertEqual(r.reports, [("runsc", False, 0)])
         self.assertTrue(any("retrying on runc" in message for message in messages))
         self.assertIn("p", r.runc_fallback)
 

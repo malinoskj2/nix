@@ -1341,6 +1341,10 @@ class Runner:
                     "retrying on runc, with the host kernel's isolation only. "
                     "Pass --runtime runsc to keep gVisor and see its failure.\n",
                 )
+                try:
+                    self.report_failed_services(self.compose_ps_data(project), "runsc", emit, hint=False)
+                except (Refused, subprocess.TimeoutExpired, json.JSONDecodeError):
+                    pass
                 # Containers only: the volumes and built images carry over to runc.
                 self.compose_run(entry, project, ["down", "--remove-orphans", "--timeout", "10"], emit, 600)
                 self.runc_fallback.add(project)
@@ -1451,18 +1455,23 @@ class Runner:
             shutil.rmtree(entry["dir"], ignore_errors=True)
         return {"exit": code, "project": project, "removed": True}
 
-    def report_failed_services(self, services, runtime, emit):
+    def report_failed_services(self, services, runtime, emit, hint=True):
         """Show why an up failed: Compose reports only that a container exited or is unhealthy."""
-        for service in services:
-            if service["state"] not in ("exited", "dead", "restarting") and service["health"] != "unhealthy":
-                continue
+        failed = [
+            service
+            for service in services
+            if service["state"] in ("created", "exited", "dead", "restarting") or service["health"] == "unhealthy"
+        ]
+        for service in failed:
             logs = self.docker("logs", "--tail", "40", service["container"], check=False)
+            output = (logs.stdout + logs.stderr)[-4000:]
+            error = f"; Docker: {service['error']}" if service.get("error") else ""
             emit(
                 "err",
                 f"sandbox-runner: {service['container']} is {service['health'] or service['state']}"
-                f" (exit {service['exit_code']}) on {runtime}; its last log lines:\n{logs.stdout}{logs.stderr}",
+                f" (exit {service['exit_code']}) on {runtime}{error}; its last log lines:\n{output}\n",
             )
-        if runtime == "runsc" and services:
+        if hint and runtime == "runsc" and failed:
             emit(
                 "err",
                 "sandbox-runner: if a service fails only under gVisor, bring the stack down and up again "
@@ -1492,6 +1501,7 @@ class Runner:
                     "state": state.get("Status"),
                     "health": (state.get("Health") or {}).get("Status"),
                     "exit_code": state.get("ExitCode"),
+                    "error": state.get("Error") or None,
                     "addresses": {name: net.get("IPAddress") for name, net in networks.items()},
                     "ports": {
                         port: [f"{b['HostIp']}:{b['HostPort']}" for b in bindings or []]
