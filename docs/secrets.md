@@ -237,7 +237,7 @@ it too.
 
 ### Reading a value
 
-`secret show <name>` decrypts one secret from the encrypted file, of either
+`secret show <name>` prints one secret from the encrypted file, of either
 kind, deployed or not, and prints exactly its bytes, so
 `token=$(secret show github-token)` and pipes get the stored value. On a
 terminal it adds a newline and warns on stderr that the value may stay in
