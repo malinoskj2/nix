@@ -31,18 +31,29 @@ with the secrets unlocked (you have logged in).
 rclone's shared client is rate-limited across all its users, so use your own.
 
 1. Open the [Google Cloud console](https://console.cloud.google.com/) and
-   create a project, for example `rclone-home`.
+   create a project, for example `rclone-home`. An existing project works too.
 2. Under **APIs & Services → Library**, find **Google Drive API** and enable
-   it.
-3. Under **Google Auth Platform** (OAuth consent screen), fill in **Branding**
-   with an app name and your email, and set **Audience** to **External**.
-4. Still under **Audience**, click **Publish app** so its status is **In
-   production**. This matters: a client left in **Testing** issues refresh
-   tokens that Google expires after seven days, and the mount would stop
-   every week. You don't need Google's verification for your own account.
-5. Under **Clients**, create a client of type **Desktop app**. Copy its
-   **Client ID** and **Client secret** somewhere you can paste from for the
-   next step, such as your password manager. Don't download the JSON file.
+   it, unless it already is.
+3. Under **Google Auth Platform**, fill in **Branding**: an app name, a
+   support email, an application home page and a privacy policy link. Add the
+   links' domain under **Authorized domains**. Without all of these, **Publish
+   app** stays grey. The links only need to be well-formed and on a domain you
+   control: the pages needn't exist, and nothing checks them unless you submit
+   the app for verification, which your own account doesn't need. Don't use
+   someone else's domain.
+4. Set **Audience** to **External**, then click **Publish app** so its status
+   is **In production**. This matters: a client left in **Testing** issues
+   refresh tokens that Google expires after seven days. The yellow **Your app
+   requires verification** banner that appears afterwards can be ignored for
+   personal use.
+5. Under **Clients**, create a client of type **Desktop app**. An existing
+   **Web application** client can't be used. Copy its **Client ID** and
+   **Client secret** somewhere you can paste from for the next step, such as
+   your password manager. Don't download the JSON file.
+
+If you'd rather not publish, leaving the app in **Testing** works too, except
+that the sign-in expires every seven days and you must rerun `gdrive-signin`
+([Signing in again](#signing-in-again)).
 
 ### 2. Put the client in the secret store
 
@@ -50,6 +61,10 @@ rclone's shared client is rate-limited across all its users, so use your own.
 secret add gdrive-client-id       # paste the client ID; prompts twice, without echo
 secret add gdrive-client-secret   # paste the client secret
 ```
+
+`secret add` reminds you to run `secret apply`. You can skip it here:
+`gdrive-signin` reads the client from the encrypted file and runs
+`secret apply` itself at the end.
 
 ### 3. Sign in
 
@@ -61,8 +76,8 @@ gdrive-signin
 ```
 
 It reads the client from the secret store, opens Google's approval page in
-your browser, and waits. Because the client isn't verified, Google first shows
-**Google hasn't verified this app**: choose **Advanced**, then **Go to … 
+your browser, and waits. Google first shows **Google hasn't verified this app**, which is
+expected for your own client: choose **Advanced**, then **Go to … 
 (unsafe)**, and allow access to your Drive. rclone hands the token straight
 back to `gdrive-signin`, which checks it has a refresh token and stores it with
 `secret add gdrive-token` (or `rotate`, when redoing it). The token never goes
