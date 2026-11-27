@@ -1040,6 +1040,7 @@ symlinkJoin {
         }
         ''
           cp ${./agent-sandbox.sh} agent-sandbox.sh
+          cp ${./egress.sh} egress.sh
           cp ${./test-launcher-opencode.py} test-launcher-opencode.py
           python3 -B test-launcher-opencode.py -v
           touch $out
