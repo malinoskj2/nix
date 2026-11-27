@@ -9,7 +9,7 @@
 }:
 
 writeShellApplication {
-  name = "agent-secret";
+  name = "secret";
   runtimeInputs = [
     age
     coreutils
@@ -18,9 +18,9 @@ writeShellApplication {
     systemd
     yq-go
   ];
-  text = builtins.readFile ./agent-secret.sh;
+  text = builtins.readFile ./secret.sh;
   meta = {
-    description = "Manage the host's sops-encrypted agent-broker secrets without printing them";
+    description = "Manage the host's sops-encrypted secrets without printing them";
     platforms = [
       "x86_64-linux"
       "aarch64-linux"

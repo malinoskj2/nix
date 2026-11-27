@@ -135,14 +135,17 @@ That failure is silent too: the activity reaches the tab and shows nowhere.
 ### sops-nix
 
 `sops-nix` follows its default branch with the release's nixpkgs, and moves
-with `nix flake update`. [Agent secrets](agent-secrets.md) depend on its
-`useSystemdActivation` unit, `sops-install-secrets.service`, which
-`hosts/common/optional/agent-broker.nix` gives an `ExecCondition` so a missing
-file skips deployment instead of failing the switch. After an update, build
-`checks.x86_64-linux.agent-broker-vm`: it boots without the file, adds and
-rotates secrets with `agent-secret`, and checks the decrypted files' owner and
-modes and that jesse can't read them. A renamed option or a moved unit fails
-it.
+with `nix flake update`. [Secrets](secrets.md) depend on its
+`useSystemdActivation` unit, `sops-install-secrets.service`, its
+`system.build.sops-nix-manifest` and the manifest's JSON fields:
+`hosts/common/optional/secret-store.nix` gives the unit an `ExecCondition`, so
+a missing file or key withdraws everything instead of failing the switch, and
+replaces its `ExecStart` with a wrapper that deploys only the secrets present
+in the file. After an update, build `checks.x86_64-linux.secrets-vm` and
+`secrets-eval`: they boot without the file, add, rotate and remove secrets
+with `secret`, check the decrypted files' owners and modes, and check that the
+declaration rules fail evaluation. A renamed option, a moved unit or a changed
+manifest fails them.
 
 ## Inputs pinned to a commit
 

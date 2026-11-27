@@ -1,6 +1,5 @@
 {
   config,
-  inputs,
   lib,
   pkgs,
   ...
@@ -11,50 +10,7 @@ let
   socketGroup = "agent-broker-clients";
   socketRoot = "/run/agent-broker";
   unitName = name: "agent-broker-${name}";
-  declaredKeys = lib.mapAttrsToList (_: secret: secret.key) cfg.secrets;
   brokerUnits = map (name: "${unitName name}.service") (lib.attrNames cfg.services);
-
-  # sops keeps key names in plaintext, so presence is checked without decrypting.
-  # When the inputs aren't ready, earlier deployments are withdrawn too, so a
-  # removed file, key or secret fails closed without waiting for a reboot.
-  secretsReady = pkgs.writeShellApplication {
-    name = "agent-secrets-ready";
-    runtimeInputs = [
-      pkgs.coreutils
-      pkgs.yq-go
-      config.systemd.package
-    ];
-    text = ''
-      file=${lib.escapeShellArg cfg.secretsFile}
-      key=${lib.escapeShellArg cfg.keyFile}
-      units=(${lib.escapeShellArgs brokerUnits})
-
-      withdraw() {
-        echo "agent secrets: $1; broker secrets are withdrawn and their services stopped" >&2
-        # --no-block: they're ordered after this unit, whose job is still running.
-        if ((''${#units[@]})); then
-          systemctl stop --no-block "''${units[@]}" || true
-        fi
-        # sops-nix's generations; /run/secrets links to the newest.
-        for name in ${lib.escapeShellArgs (lib.attrNames cfg.secrets)}; do
-          rm -f -- /run/secrets.d/*/"$name"
-        done
-        exit 1
-      }
-
-      [[ -s $key ]] || withdraw "no decryption key at $key"
-      [[ -s $file ]] || withdraw "no encrypted file at $file"
-      missing=()
-      for name in ${lib.escapeShellArgs declaredKeys}; do
-        if ! NAME=$name yq -e 'has(strenv(NAME))' "$file" >/dev/null 2>&1; then
-          missing+=("$name")
-        fi
-      done
-      if ((''${#missing[@]})); then
-        withdraw "$file lacks ''${missing[*]}"
-      fi
-    '';
-  };
 
   hardening = {
     User = user;
@@ -173,19 +129,9 @@ let
   );
 in
 {
-  imports = [ inputs.sops-nix.nixosModules.sops ];
+  imports = [ ./secret-store.nix ];
 
   options.agentBroker = {
-    secretsFile = lib.mkOption {
-      type = lib.types.str;
-      default = "/var/lib/agent-secrets/secrets.yaml";
-      description = "The host's sops-encrypted secrets. It lives outside every repository and the store.";
-    };
-    keyFile = lib.mkOption {
-      type = lib.types.str;
-      default = "/var/lib/sops-nix/key.txt";
-      description = "The host's root-only age identity.";
-    };
     clients = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
@@ -199,6 +145,7 @@ in
     secrets = lib.mkOption {
       type = lib.types.attrsOf secretType;
       default = { };
+      description = "Secrets only agent-broker reads, for the egress proxy and broker services.";
     };
     services = lib.mkOption {
       type = lib.types.attrsOf serviceType;
@@ -229,7 +176,29 @@ in
             assertion = !lib.elem user cfg.clients;
             message = "agentBroker.clients must not include agent-broker itself";
           }
-        ];
+          {
+            assertion =
+              lib.intersectLists (lib.attrNames cfg.secrets) (lib.attrNames config.secrets.host) == [ ];
+            message = "a secret is either secrets.host or agentBroker.secrets, never both: ${lib.concatStringsSep ", " (lib.intersectLists (lib.attrNames cfg.secrets) (lib.attrNames config.secrets.host))}";
+          }
+        ]
+        ++ lib.mapAttrsToList (name: _: {
+          assertion =
+            let
+              s = config.sops.secrets.${name};
+            in
+            s.owner == user
+            && s.group == user
+            && lib.elem s.mode [
+              "0400"
+              "400"
+            ];
+          message = "broker secret ${name} must stay agent-broker:agent-broker 0400";
+        }) cfg.secrets
+        ++ lib.mapAttrsToList (name: s: {
+          assertion = s.owner != user && s.group != user;
+          message = "host secret ${name} can't belong to agent-broker; declare it in agentBroker.secrets instead";
+        }) config.secrets.host;
 
       users.users.${user} = {
         isSystemUser = true;
@@ -241,29 +210,20 @@ in
       users.groups.${user} = { };
       users.groups.${socketGroup}.members = cfg.clients;
 
-      environment.systemPackages = [ pkgs.agent-secret ];
-      environment.etc."agent-secrets/config.json".text = builtins.toJSON {
-        inherit (cfg) secretsFile keyFile;
-        secrets = lib.mapAttrs (_: s: { inherit (s) key path inject; }) cfg.secrets;
-        services = brokerUnits;
-      };
+      secrets.catalog = lib.mapAttrs (_: s: {
+        kind = "broker";
+        inherit (s) key path inject;
+      }) cfg.secrets;
+      secrets.startUnits = brokerUnits;
 
       systemd.tmpfiles.rules = [
-        "d ${dirOf cfg.secretsFile} 0700 root root -"
-        "d ${dirOf cfg.keyFile} 0700 root root -"
         "d ${socketRoot} 0755 root root -"
       ]
       ++ lib.mapAttrsToList (_: svc: "d ${svc.socketDir} 2750 ${user} ${socketGroup} -") cfg.services;
 
       sops = {
-        age.keyFile = cfg.keyFile;
-        age.sshKeyPaths = [ ];
-        gnupg.sshKeyPaths = [ ];
-        # The encrypted file lives on the host, outside the flake and the store.
-        validateSopsFiles = false;
-        useSystemdActivation = true;
         secrets = lib.mapAttrs (name: secret: {
-          sopsFile = cfg.secretsFile;
+          sopsFile = config.secrets.file;
           inherit (secret) key;
           format = "yaml";
           owner = user;
@@ -272,18 +232,10 @@ in
           restartUnits = lib.mapAttrsToList (svc: _: "${unitName svc}.service") (
             lib.filterAttrs (_: svc: lib.elem name svc.secrets) cfg.services
           );
-        }) cfg.secrets;
+          # A name in both kinds fails the assertion above rather than a merge conflict.
+        }) (lib.filterAttrs (name: _: !(config.secrets.host ? ${name})) cfg.secrets);
       };
     }
-
-    (lib.mkIf (cfg.secrets != { }) {
-      # A missing key, file or declared secret skips deployment instead of failing the switch.
-      systemd.services.sops-install-secrets = {
-        serviceConfig.ExecCondition = lib.getExe secretsReady;
-        # agent-secret apply restarts it on demand.
-        unitConfig.StartLimitIntervalSec = 0;
-      };
-    })
 
     {
       systemd.services = lib.mapAttrs' (

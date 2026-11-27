@@ -1,6 +1,6 @@
 { inputs, pkgs }:
 {
-  name = "agent-broker";
+  name = "secret-store";
 
   node.specialArgs = { inherit inputs; };
 
@@ -16,6 +16,18 @@
     users.users = {
       jesse.isNormalUser = true;
       other.isNormalUser = true;
+    };
+
+    secrets.host.user-token = {
+      owner = "jesse";
+      restartUnits = [ "host-consumer.service" ];
+    };
+
+    systemd.services.host-consumer = {
+      wantedBy = [ "multi-user.target" ];
+      after = [ "sops-install-secrets.service" ];
+      unitConfig.ConditionPathExists = "/run/secrets/user-token";
+      serviceConfig.ExecStart = "${pkgs.coreutils}/bin/sleep infinity";
     };
 
     agentBroker = {
@@ -58,12 +70,20 @@
 
     machine.wait_for_unit("multi-user.target")
 
+    def deployed(name):
+        return machine.execute(f"test -e /run/secrets/{name}")[0] == 0
+
+    def gone(name):
+        machine.fail(f"test -e /run/secrets/{name}")
+        machine.fail(f"ls /run/secrets.d/*/{name}")
+
     with subtest("a machine without the encrypted file boots and fails closed"):
         machine.succeed("test -z \"$(systemctl --failed --no-legend)\"")
         machine.fail("systemctl is-active sops-install-secrets.service")
         machine.fail("systemctl is-active agent-broker-echo.service")
-        machine.fail("test -e /run/secrets/test-token")
-        machine.succeed("test \"$(stat -c '%U %a' /var/lib/agent-secrets)\" = 'root 700'")
+        machine.fail("systemctl is-active host-consumer.service")
+        gone("test-token")
+        machine.succeed("test \"$(stat -c '%U %a' /var/lib/secrets)\" = 'root 700'")
 
     with subtest("agent-broker is a separate principal"):
         machine.succeed("id agent-broker")
@@ -73,29 +93,40 @@
         assert "agent-broker-clients" in groups, groups
 
     machine.succeed("age-keygen -o /root/recovery.txt")
-    machine.succeed("agent-secret init \"$(age-keygen -y /root/recovery.txt)\"")
+    machine.succeed("secret init \"$(age-keygen -y /root/recovery.txt)\"")
     machine.succeed("stat -c '%U %a' /var/lib/sops-nix/key.txt | grep -qx 'root 600'")
-    machine.succeed("printf 'fake-test-value' | agent-secret add test-token")
+    machine.succeed("printf 'fake-test-value' | secret add test-token")
 
-    with subtest("a declared secret missing from the file skips deployment"):
-        machine.fail("agent-secret apply")
-        machine.fail("systemctl is-failed sops-install-secrets.service")
-        machine.fail("test -e /run/secrets/test-token")
-        machine.succeed("agent-secret list | grep -E '^later-token +no +yes'")
+    with subtest("secrets missing from the file don't hold back the others"):
+        machine.succeed("secret apply")
+        assert deployed("test-token")
+        gone("later-token")
+        gone("user-token")
+        machine.wait_for_unit("agent-broker-echo.service")
+        machine.fail("systemctl is-active host-consumer.service")
+        listing = machine.succeed("secret list")
+        print(listing)
+        machine.succeed("secret list | grep -E '^later-token +broker +no +no'")
+        machine.succeed("secret list | grep -E '^user-token +host +no +no'")
+        machine.succeed("secret list | grep -E '^test-token +broker +yes +yes'")
 
-    machine.succeed("printf 'fake-later-value' | agent-secret add later-token")
-    machine.succeed("agent-secret apply")
+    machine.succeed("printf 'fake-later-value' | secret add later-token")
+    machine.succeed("printf 'fake-user-value' | secret add user-token")
+    machine.succeed("secret apply")
+    machine.wait_for_unit("host-consumer.service")
 
-    with subtest("secrets decrypt into agent-broker-owned files"):
+    with subtest("broker secrets are agent-broker's, host secrets their owner's"):
         machine.succeed("test \"$(stat -Lc '%U %G %a' /run/secrets/test-token)\" = 'agent-broker agent-broker 400'")
         machine.succeed("test \"$(cat /run/secrets/test-token)\" = fake-test-value")
         machine.fail(as_user("jesse", "cat /run/secrets/test-token"))
         machine.fail(as_user("jesse", "cat /run/secrets.d/*/test-token"))
-        machine.fail(as_user("jesse", "cat /var/lib/agent-secrets/secrets.yaml"))
+        machine.fail(as_user("jesse", "cat /var/lib/secrets/secrets.yaml"))
         machine.fail(as_user("jesse", "cat /var/lib/sops-nix/key.txt"))
-        listing = machine.succeed("agent-secret list")
+        machine.succeed("test \"$(stat -Lc '%U %G %a' /run/secrets/user-token)\" = 'jesse root 400'")
+        machine.succeed(as_user("jesse", "cat /run/secrets/user-token") + " | grep -qx fake-user-value")
+        machine.fail(as_user("other", "cat /run/secrets/user-token"))
+        listing = machine.succeed("secret list")
         assert "fake-" not in listing, listing
-
     with subtest("broker sockets accept clients only"):
         machine.wait_for_unit("agent-broker-echo.service")
         machine.wait_for_file("/run/agent-broker/echo/echo.sock")
@@ -111,49 +142,65 @@
 
     with subtest("rotation redeploys and restarts consumers"):
         before = machine.succeed("systemctl show -P InvocationID agent-broker-echo.service")
-        machine.succeed("printf 'fake-rotated' | agent-secret rotate test-token")
-        machine.succeed("agent-secret apply")
+        machine.succeed("printf 'fake-rotated' | secret rotate test-token")
+        machine.succeed("secret apply")
         machine.succeed("test \"$(cat /run/secrets/test-token)\" = fake-rotated")
         machine.wait_until_succeeds("test \"$(systemctl show -P InvocationID agent-broker-echo.service)\" != '" + before.strip() + "'")
         machine.wait_for_file("/run/agent-broker/echo/echo.sock")
         machine.wait_until_succeeds(as_user("jesse", connect) + " | grep -qx 'ok 12'")
 
-    def assert_withdrawn():
-        machine.wait_until_fails("systemctl is-active agent-broker-echo.service")
-        machine.fail("systemctl is-failed sops-install-secrets.service")
-        machine.fail("test -e /run/secrets/test-token")
-        machine.fail("ls /run/secrets.d/*/test-token")
-        machine.fail(as_user("jesse", connect))
-        machine.succeed("journalctl -u sops-install-secrets -o cat | grep -F 'withdrawn and their services stopped'")
+    with subtest("a secret removed from the file is withdrawn alone"):
+        machine.succeed("secret remove later-token")
+        machine.succeed("secret apply")
+        gone("later-token")
+        assert deployed("test-token") and deployed("user-token")
+        machine.succeed("systemctl is-active agent-broker-echo.service host-consumer.service")
 
-    def assert_redeployed():
-        machine.succeed("agent-secret apply")
+    with subtest("withdrawing a secret stops its consumers only"):
+        machine.succeed("secret remove test-token")
+        machine.succeed("secret apply")
+        gone("test-token")
+        machine.wait_until_fails("systemctl is-active agent-broker-echo.service")
+        machine.fail(as_user("jesse", connect))
+        machine.succeed("systemctl is-active host-consumer.service")
+        assert deployed("user-token")
+        machine.succeed("printf 'fake-rotated' | secret add test-token")
+        machine.succeed("printf 'fake-later-value' | secret add later-token")
+        machine.succeed("secret apply")
         machine.wait_for_unit("agent-broker-echo.service")
         machine.wait_until_succeeds(as_user("jesse", connect) + " | grep -qx 'ok 12'")
 
-    with subtest("removing the encrypted file withdraws deployed secrets"):
-        machine.succeed("mv /var/lib/agent-secrets/secrets.yaml /root/secrets.yaml")
-        machine.fail("agent-secret apply")
-        assert_withdrawn()
-        machine.succeed("mv /root/secrets.yaml /var/lib/agent-secrets/secrets.yaml")
+    def assert_all_withdrawn():
+        machine.wait_until_fails("systemctl is-active agent-broker-echo.service")
+        machine.wait_until_fails("systemctl is-active host-consumer.service")
+        machine.fail("systemctl is-failed sops-install-secrets.service")
+        for name in ["test-token", "later-token", "user-token"]:
+            gone(name)
+        machine.fail(as_user("jesse", connect))
+        machine.succeed("journalctl -u sops-install-secrets -o cat | grep -F 'every secret is withdrawn'")
+
+    def assert_redeployed():
+        machine.succeed("secret apply")
+        machine.wait_for_unit("agent-broker-echo.service")
+        machine.wait_for_unit("host-consumer.service")
+        machine.wait_until_succeeds(as_user("jesse", connect) + " | grep -qx 'ok 12'")
+
+    with subtest("removing the encrypted file withdraws every secret"):
+        machine.succeed("mv /var/lib/secrets/secrets.yaml /root/secrets.yaml")
+        machine.fail("secret apply")
+        assert_all_withdrawn()
+        machine.succeed("mv /root/secrets.yaml /var/lib/secrets/secrets.yaml")
         assert_redeployed()
 
-    with subtest("removing the host key withdraws deployed secrets"):
+    with subtest("removing the host key withdraws every secret"):
         machine.succeed("mv /var/lib/sops-nix/key.txt /root/key.txt")
-        machine.fail("agent-secret apply")
-        assert_withdrawn()
+        machine.fail("secret apply")
+        assert_all_withdrawn()
         machine.succeed("mv /root/key.txt /var/lib/sops-nix/key.txt")
         assert_redeployed()
 
-    with subtest("removing a declared secret withdraws deployed secrets"):
-        machine.succeed("agent-secret remove later-token")
-        machine.fail("agent-secret apply")
-        assert_withdrawn()
-        machine.succeed("printf 'fake-later-value' | agent-secret add later-token")
-        assert_redeployed()
-
     with subtest("the recovery key decrypts the file"):
-        machine.succeed("SOPS_AGE_KEY_FILE=/root/recovery.txt sops decrypt --extract '[\"later-token\"]' /var/lib/agent-secrets/secrets.yaml | grep -qx fake-later-value")
+        machine.succeed("SOPS_AGE_KEY_FILE=/root/recovery.txt sops decrypt --extract '[\"later-token\"]' /var/lib/secrets/secrets.yaml | grep -qx fake-later-value")
 
     with subtest("the secrets survive a reboot"):
         machine.shutdown()

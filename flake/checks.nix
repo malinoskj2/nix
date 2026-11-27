@@ -54,7 +54,7 @@
                 if rg --line-number --glob '*.{sh,py,nix}' \
                   -e '/run/secrets' \
                   -e '/run/agent-broker-' \
-                  -e '/var/lib/(agent-secrets|sops-nix)' \
+                  -e '/var/lib/(secrets|sops-nix)' \
                   -e '(src=|--volume "?|-v "?|mount_readonly "?)/(run|var|var/lib)?[:,"[:space:]]' \
                   ${../pkgs/agent-sandbox}; then
                   echo "the sandbox must never mount decrypted secrets, the encrypted file or the host key" >&2
@@ -70,8 +70,9 @@
           zsh-claude-command = self'.packages.zsh-claude-command.tests.widget;
         }
         // lib.optionalAttrs (system == "x86_64-linux") {
-          agent-broker-vm = pkgs.testers.runNixOSTest (
-            import ../hosts/common/optional/agent-broker-test.nix { inherit inputs pkgs; }
+          secrets-eval = import ../hosts/common/optional/secret-store-eval-test.nix { inherit inputs pkgs; };
+          secrets-vm = pkgs.testers.runNixOSTest (
+            import ../hosts/common/optional/secret-store-test.nix { inherit inputs pkgs; }
           );
           tohru-greeter-vm = pkgs.testers.runNixOSTest (
             import ../hosts/home/greeter-test.nix {

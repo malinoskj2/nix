@@ -122,7 +122,7 @@
           "corecycler"
           "council"
           "agent-sandbox"
-          "agent-secret"
+          "secret"
           "ai-usage"
           "antigravity-cli"
           "ata-devs"
