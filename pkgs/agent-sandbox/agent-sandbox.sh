@@ -49,6 +49,10 @@ model_stores=()
 if [[ -s $HOME/.config/local-models/stores ]]; then
   mapfile -t model_stores <"$HOME/.config/local-models/stores"
 fi
+mounted_model_stores=()
+if [[ -s $HOME/.config/local-models/mounted-stores ]]; then
+  mapfile -t mounted_model_stores <"$HOME/.config/local-models/mounted-stores"
+fi
 steam_common=$HOME/.local/share/Steam/steamapps/common
 shared=(
   "$HOME/projects"
@@ -357,10 +361,23 @@ done
 mkdir -p "$media"
 mkdir -p "$model_root" 2>/dev/null || true
 mount_readonly "$model_root"
-# Entering a store triggers its automount, so an NFS store is bound mounted rather than as
-# an empty autofs point; one that can't be reached is left out.
+# Entering a store triggers its automount. A store that must be a mount is bound only while
+# a filesystem other than autofs is mounted on it, never the directory beneath.
+store_mounted() {
+  local store=$1 mounted
+  for mounted in "${mounted_model_stores[@]}"; do
+    if [[ $mounted == "$store" ]]; then
+      local types
+      types=$(findmnt -rn -M "$store" -o FSTYPE) || return 1
+      grep -qvx autofs <<<"$types"
+      return
+    fi
+  done
+}
 for store in "${model_stores[@]}"; do
-  if [[ -n $store ]] && timeout 15 test -d "$store/."; then mount_readonly "$store"; fi
+  if [[ -n $store ]] && timeout 15 test -d "$store/." && store_mounted "$store"; then
+    mount_readonly "$store"
+  fi
 done
 mkdir -p "$orca_relay_dir" "$orca_relays"
 chmod 700 "$orca_relay_dir" "$orca_relays"

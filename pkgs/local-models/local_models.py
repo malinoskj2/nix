@@ -3,6 +3,7 @@
 
 import argparse
 from contextlib import contextmanager
+import errno
 import fcntl
 import hashlib
 import json
@@ -225,6 +226,7 @@ class Sync:
         self.default_store = catalog.get("defaultStore", "root")
         self.mounted = {self.stores[name] for name in catalog.get("mountedStores", [])}
         self.reserves = {self.stores[name]: size for name, size in catalog.get("storeReserves", {}).items()}
+        self.pinned = {}
         self.state = self.root / ".state"
         if not readonly:
             self.state.mkdir(parents=True, exist_ok=True)
@@ -255,14 +257,30 @@ class Sync:
         return max(2 * 1024**3, self.reserves.get(store, 0))
 
     def present(self, store):
-        """A mounted store counts only while its filesystem is mounted, never its empty mount point."""
+        """A mounted store counts only while its filesystem is mounted, never its empty mount point.
+
+        The filesystem found is pinned; `verify` refuses work once the path leads elsewhere."""
         if store not in self.mounted:
             return store.is_dir()
         try:
             os.listdir(store)
+            if not os.path.ismount(store):
+                return False
+            stat = os.stat(store)
         except OSError:
             return False
-        return os.path.ismount(store)
+        self.pinned[store] = (stat.st_dev, stat.st_ino)
+        return True
+
+    def verify(self, store, path=None):
+        if store not in self.mounted:
+            return
+        stat = os.stat(store)
+        pinned = self.pinned.get(store)
+        if pinned != (stat.st_dev, stat.st_ino) or not os.path.ismount(store):
+            raise OSError(errno.ESTALE, f"Mounted store {store} changed since it was checked")
+        if path is not None and os.stat(path).st_dev != pinned[0]:
+            raise OSError(errno.EXDEV, f"{path} is outside mounted store {store}")
 
     def available(self, store):
         if store in self.mounted:
@@ -340,7 +358,13 @@ class Sync:
             for cache in self.catalog.get("importCaches", []):
                 candidates.append(Path(cache) / repo / "snapshots" / file["revision"] / file["path"])
         for source in candidates:
-            if not self.valid(source, file):
+            try:
+                if not self.valid(source, file):
+                    continue
+            except OSError:
+                if source.is_relative_to(store):
+                    raise
+                print(f"import: skipped unreadable {source}", file=sys.stderr, flush=True)
                 continue
             if any(source.resolve().is_relative_to((store / d).resolve()) for d in ["huggingface", "files"]):
                 # Already managed immutable content in this store: repair a snapshot link without a copy.
@@ -354,7 +378,12 @@ class Sync:
                 if shutil.disk_usage(store).free < file["size"] + self.headroom(store):
                     raise OSError("Insufficient space to safely import project weights")
                 temporary = blob.with_suffix(".importing")
-                subprocess.run(["cp", "--reflink=auto", "--", str(source.resolve()), str(temporary)], check=True)
+                try:
+                    subprocess.run(["cp", "--reflink=auto", "--", str(source.resolve()), str(temporary)], check=True)
+                except subprocess.CalledProcessError:
+                    # A read error in the source is skipped; a write error recurs in the download.
+                    temporary.unlink(missing_ok=True)
+                    continue
                 if not self.valid(temporary, file):
                     temporary.unlink(missing_ok=True)
                     continue
@@ -403,6 +432,13 @@ class Sync:
         )
 
     def obtain(self, file, store):
+        self.verify(store)
+        destination = self.place(file, store)
+        if not file.get("storePath"):
+            self.verify(store, destination)
+        return destination
+
+    def place(self, file, store):
         destination = self.destination(file, store)
         if self.valid(destination, file):
             return destination
@@ -418,6 +454,7 @@ class Sync:
             if blob.is_relative_to(store):
                 blob.rename(blob.with_name(blob.name + f".damaged-{time.time_ns()}"))
             destination.unlink(missing_ok=True)
+        self.verify(store)
         downloaded = self.downloader(file, store)
         if not self.valid(downloaded, file):
             raise ValueError("Downloaded file failed size/hash verification")
@@ -483,6 +520,13 @@ class Sync:
                     + json.dumps(entry.get("referencePreparation"), sort_keys=True).encode()
                     + json.dumps({name: str(path) for name, path in dependency_views.items()}, sort_keys=True).encode()
                 ).hexdigest()
+                try:
+                    for file in entry["files"]:
+                        if not file.get("storePath"):
+                            self.verify(store, self.destination(file, store))
+                except OSError as error:
+                    item.update(status="missing", reason=f"Store changed before publication: {type(error).__name__}")
+                    continue
                 view = self.root / "views" / alias / identity
                 view.mkdir(parents=True, exist_ok=True)
                 for file in entry["files"]:
@@ -718,6 +762,9 @@ class Sync:
                 continue
             if not dry_run:
                 try:
+                    for root in self.mounted:
+                        if path.startswith(norm(root) + os.sep):
+                            self.verify(root)
                     if os.path.isdir(path) and not os.path.islink(path):
                         shutil.rmtree(path)
                     else:

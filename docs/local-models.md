@@ -58,7 +58,13 @@ another filesystem. Sync and activation never create it, and an entry in it
 reads `missing` ("Store media at /mnt/media-models is unavailable") unless
 the share is mounted,
 so nothing is ever written into the empty mount point on the system drive.
-Pruning skips it while unmounted. `services.local-models.storeReserves.media`
+Sync pins the filesystem it found there and checks it again before and after
+each download, before publishing an alias and before each removal; if the
+path now leads to another directory, that work fails instead. Pruning skips
+the store while unmounted. Import candidates in other stores that can't be
+read, such as an unreachable share, are skipped and the file is downloaded
+into its own store; errors in that store still fail the file. Sandboxes bind
+the store only while a filesystem other than autofs is mounted on it. `services.local-models.storeReserves.media`
 keeps 1 TiB free on that drive for the media host's own downloads: a file
 that would leave less is reported missing instead of downloaded.
 

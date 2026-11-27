@@ -121,6 +121,9 @@ in
     ];
     xdg.configFile."local-models/root".text = root;
     xdg.configFile."local-models/stores".text = lib.concatMapStrings (path: "${path}\n") extraStores;
+    xdg.configFile."local-models/mounted-stores".text = lib.concatMapStrings (
+      path: "${path}\n"
+    ) mountedPaths;
     home.file.".config/local-models/voice-compose.yaml".text =
       let
         bind = source: target: {

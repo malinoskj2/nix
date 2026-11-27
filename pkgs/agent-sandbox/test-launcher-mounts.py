@@ -41,7 +41,12 @@ time.sleep(600)
     "systemctl": "#!/bin/sh\nexit 0\n",
     "systemd-inhibit": "#!/bin/sh\nexit 0\n",
     "ip": "#!/bin/sh\nexit 0\n",
-    "findmnt": "#!/bin/sh\nexit 1\n",
+    "findmnt": """#!/bin/sh
+case " $* " in
+  *" -M "*) [ -n "${FINDMNT_TYPES:-}" ] && printf '%b\\n' "$FINDMNT_TYPES" && exit 0 ;;
+esac
+exit 1
+""",
 }
 
 GIT_ENV = {
@@ -219,6 +224,22 @@ class LauncherMounts(unittest.TestCase):
                 result = self.launch("--codex", env={"CODEX_HOME": str(directory)})
                 self.assertEqual(result.returncode, 2)
                 self.assertFalse((self.log / "create").exists())
+
+    def model_stores(self, **env):
+        local, mounted = self.root / "stores/local", self.root / "stores/mounted"
+        local.mkdir(parents=True, exist_ok=True)
+        mounted.mkdir(exist_ok=True)
+        config = self.home / ".config/local-models"
+        config.mkdir(parents=True, exist_ok=True)
+        (config / "stores").write_text(f"{local}\n{mounted}\n")
+        (config / "mounted-stores").write_text(f"{mounted}\n")
+        _, volumes = self.launched(env=env)
+        return str(local) in volumes, str(mounted) in volumes
+
+    def test_mounted_model_store_is_bound_only_while_mounted(self):
+        self.assertEqual(self.model_stores(), (True, False))
+        self.assertEqual(self.model_stores(FINDMNT_TYPES="autofs"), (True, False))
+        self.assertEqual(self.model_stores(FINDMNT_TYPES="autofs\\nnfs4"), (True, True))
 
     def preview_urls(self, identity, **env):
         tool = self.root / "bin/preview-ports"

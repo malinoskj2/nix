@@ -458,6 +458,96 @@ class Stores(unittest.TestCase):
             self.assertTrue(Sync(self.root, self.catalog, self.downloader).reconcile())
         self.assertTrue(voice.is_file())
 
+    def mounted(self):
+        self.install.mkdir(exist_ok=True)
+        self.catalog["mountedStores"] = ["install"]
+        real = os.path.ismount
+        return patch("os.path.ismount", side_effect=lambda p: Path(p) == self.install or real(p))
+
+    def swap_store(self):
+        """Replace the mounted store with an ordinary directory at the same path."""
+        self.install.rename(self.base / "detached")
+        self.install.mkdir()
+
+    def test_store_swapped_during_download_is_not_published(self):
+        def swapping(file, store):
+            self.swap_store()
+            return self.downloader(file, store)
+
+        with self.mounted():
+            self.assertFalse(Sync(self.root, self.catalog, swapping).reconcile())
+        report = json.loads((self.root / "readiness.json").read_text())["entries"]
+        self.assertEqual(report["old"]["status"], "ready")
+        self.assertEqual(report["voice"]["status"], "missing")
+        self.assertFalse((self.root / "by-name/voice").exists())
+
+    def test_store_swapped_after_its_check_is_not_used(self):
+        real = Sync.available
+
+        def available(sync, store):
+            ok = real(sync, store)
+            if store == self.install:
+                self.swap_store()
+            return ok
+
+        with self.mounted(), patch.object(Sync, "available", available):
+            self.assertFalse(Sync(self.root, self.catalog, self.downloader).reconcile())
+        self.assertEqual(
+            json.loads((self.root / "readiness.json").read_text())["entries"]["voice"]["status"], "missing"
+        )
+        self.assertFalse((self.root / "by-name/voice").exists())
+
+    def test_store_swapped_before_pruning_is_left_alone(self):
+        with self.mounted():
+            self.assertTrue(Sync(self.root, self.catalog, self.downloader).reconcile())
+        replacement = self.base / "replacement"
+        subprocess.run(["cp", "-a", str(self.install), str(replacement)], check=True)
+        real = Sync.prune_plan
+
+        def prune_plan(sync):
+            plan = real(sync)
+            self.install.rename(self.base / "detached")
+            replacement.rename(self.install)
+            return plan
+
+        self.catalog["entries"].pop("voice")
+        with self.mounted(), patch.object(Sync, "prune_plan", prune_plan):
+            self.assertFalse(Sync(self.root, self.catalog, self.downloader).reconcile())
+        self.assertTrue(any(self.install.rglob("voice.bin")))
+
+    def test_unreadable_candidate_in_another_store_does_not_stop_a_download(self):
+        real = Sync.valid
+
+        def valid(sync, path, file):
+            if Path(path).is_relative_to(self.install):
+                raise OSError(5, "Input/output error")
+            return real(sync, path, file)
+
+        self.catalog["entries"].pop("voice")
+        calls = []
+
+        def downloader(file, store):
+            calls.append(file["path"])
+            return self.downloader(file, store)
+
+        self.install.mkdir()
+        with patch.object(Sync, "valid", valid):
+            self.assertTrue(Sync(self.root, self.catalog, downloader).reconcile())
+        self.assertEqual(calls, ["old.bin"])
+
+    def test_unreadable_target_store_stays_fatal(self):
+        real = Sync.valid
+
+        def valid(sync, path, file):
+            if Path(path).is_relative_to(self.install):
+                raise OSError(5, "Input/output error")
+            return real(sync, path, file)
+
+        with patch.object(Sync, "valid", valid):
+            self.assertFalse(Sync(self.root, self.catalog, self.downloader).reconcile())
+        report = json.loads((self.root / "readiness.json").read_text())["entries"]
+        self.assertEqual(report["voice"]["status"], "missing")
+
     def test_store_reserve_keeps_free_space(self):
         self.catalog["storeReserves"] = {"install": 1 << 60}
         self.assertFalse(Sync(self.root, self.catalog, self.downloader).reconcile())
