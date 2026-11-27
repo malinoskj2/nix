@@ -125,9 +125,14 @@
           qwen-prompt = self'.packages.qwen-prompt.tests.launchers;
           unreal-sandbox = self'.packages.agent-sandbox.unrealTests;
           agent-sandbox-exec = self'.packages.agent-sandbox.execTests;
+          agent-sandbox-orca = self'.packages.agent-sandbox.orcaTests;
           agent-sandbox-codex = self'.packages.agent-sandbox.codexTests;
           agent-sandbox-launcher-opencode = self'.packages.agent-sandbox.launcherOpencodeTests;
           agent-sandbox-runner = self'.packages.agent-sandbox.runnerTests;
+          agent-sandbox-launcher = self'.packages.agent-sandbox.launcherTests;
+          git-repo-guard = self'.packages.git-repo-guard.tests.guard;
+          nix-land = self'.packages.nix-land.tests.landing;
+          orca-host-git = self'.packages.orca-ade.tests.hostGit;
           agent-sandbox-root-guard = self'.packages.agent-sandbox.rootGuardTests;
           sandbox-display = self'.packages.agent-sandbox.displayTests;
         };

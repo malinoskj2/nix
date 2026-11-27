@@ -2,10 +2,10 @@
 
 You are running inside a Docker sandbox. You may read anything you can find in the container, including the directories mapped from the host:
 
-- `~/projects`, `~/projects-archive`, `~/nix` and `~/orca/workspaces` (Orca's worktrees), read-write, at the same paths as on the host. Missing shared directories are created by the launcher.
-- `~/.orca/bots`, read-write: Orca bots' homes. A bot other than Tohru runs in its own sandbox, started from its home.
+- `~/projects`, `~/projects-archive` and `~/orca/workspaces` (Orca's worktrees), read-write, at the same paths as on the host. Missing shared directories are created by the launcher.
+- `~/nix`, read-only: only Tohru merges to its `main` and switches hosts. Work on the Nix repo in an Orca worktree under `~/orca/workspaces/nix/`, where Git commits, rebases, fetches and creates branches under an existing prefix such as `malinoskj2/`. The main checkout (including its `.tmp/`), `.git/config`, hooks, `packed-refs` and top-level branches such as `main` can't be written. Deleting any ref rewrites `packed-refs`, so `git branch -d`/`-m`, `git fetch --prune`, `git remote prune`, `git stash`, `git gc` and top-level branch names fail there. Instead: fetch without `--prune` (the host prunes on every `nix-land`), name new branches under an existing prefix, set work aside with a WIP commit, and leave branch deletion to Orca's worktree removal or the human.
+- `~/.orca/bots`, read-write: Orca bots' homes. A bot other than Tohru runs in its own sandbox, started from its home. Tohru's home, `~/.orca/bots/tohru`, is read-only.
 - `~/Downloads`, read-write: the host's Downloads directory, at the same path as on the host
-- `/tmp/screenshot`, read-only: the human's screenshots
 - `~/.local/share/unreal-engine`, read-write: Epic's Linux Unreal Engine builds
 - `~/.cache/img2char3d`, read-write: model weights for `~/projects/img2char3d`
 - `~/.local/share/Steam/steamapps/common`, read-write: installed Steam games, at the same path as on the host. Its Proton, Steam Linux Runtime and Steamworks Shared folders are the sandbox's own, so updating them leaves the host's untouched
@@ -22,7 +22,7 @@ The displays below aren't running unless the sandbox was launched with `--displa
 
 A headless sway Wayland session serves `$WAYLAND_DISPLAY` with a single 1280x800 output, `HEADLESS-1`. Xwayland is enabled for X11-only apps. The human can watch and drive it over VNC, or in a browser at `$AGENT_SANDBOX_VNC_URL`, a link that opens on the host. `$XDG_RUNTIME_DIR/renderer` names the renderer sway started with, and its logs are in `$XDG_RUNTIME_DIR/logs`. Audio is virtual; see [Audio](#audio).
 
-Work on this sandbox display unless the human explicitly asks you to use the host display.
+The host's display, clipboard and screenshots aren't available to sandboxes; use this sandbox display.
 
 Save screenshots, recordings and other development images or videos in the current
 repository or worktree root's `.tmp/` directory, which is globally Git-ignored.
@@ -49,12 +49,6 @@ A second headless sway, kept off `$WAYLAND_DISPLAY` and `$SWAYSOCK`, hosts a per
 - Screenshot: `WAYLAND_DISPLAY=hyprland-1 grim -o NESTED-1 "$repo_root/.tmp/hypr.png"`
 - Control it with `hyprctl`, which finds the instance on its own: `hyprctl monitors`, `hyprctl dispatch ...`, `hyprctl plugin load <path>`, `hyprctl reload`
 - Its logs are `hyprland.log`, `nested-sway.log` and `wayvnc-hyprland.log` in `$XDG_RUNTIME_DIR/logs`. If it keeps crashing, `hyprland-restarts.log` there grows.
-
-### Host display
-
-The human's desktop Wayland socket is mounted at `$XDG_RUNTIME_DIR/host-wayland-1` when the sandbox started while the desktop was up. `WAYLAND_DISPLAY=host-wayland-1 <command>` puts windows on the human's actual screen, and `WAYLAND_DISPLAY=host-wayland-1 grim "$repo_root/.tmp/host.png"` screenshots it. Windows and input land in the human's live session next to their own apps, so use it only when explicitly asked. If it stops accepting connections, the desktop compositor restarted since the sandbox started; say so instead of retrying.
-
-Tohru's bot sandbox also mounts the desktop's `$XDG_RUNTIME_DIR/tohru-screens` read-only at the same path. While she is on screen, it holds a recent capture of each monitor (`<output>/latest.jpg`, `index.json`); it is empty otherwise. Read those for questions about the owner's screen, and never copy them anywhere.
 
 Don't delete sockets or lock files in `$XDG_RUNTIME_DIR`: the sway and Hyprland sessions only create them at startup, so removing one cuts off every new client until the sandbox restarts.
 
@@ -89,7 +83,7 @@ then exits and releases its model. It has no background service. Follow the
 
 The sandbox includes the host's Rust toolchain, Clang and LLDB, Nix tooling, media and texture tools (FFmpeg/ffprobe, ImageMagick, MediaInfo, KTX, mpv), document converters, archive utilities, and network and graphics diagnostics. Use commands on `PATH`; there is no need to search `/nix/store` for these executables. `mpvpaper` and `swaybg` are available for testing wallpapers on the sandbox display. GCC remains the default C compiler; invoke `clang` explicitly when needed.
 
-Orca's CLI is `orca-ide`, which forwards to `~/.orca-relay/bin/orca`, the SSH bridge to the running desktop. If an older sandbox lacks `orca-ide`, use `~/.orca-relay/bin/orca` directly. Do not launch an Orca Electron binary from `/nix/store` for CLI commands. Worktree cleanup must target only the requested worktree, including its Orca state when managed by Orca.
+Orca's CLI is `orca-ide` (or `$ORCA_CLI_COMMAND` when Orca set it). It reaches the desktop through a relay on the host, which holds Orca's token; `~/.config/orca` here is the sandbox's own small profile naming that relay, not the desktop's. The relay forwards a reviewed list of methods, always as this sandbox's own Orca session: listings, `worktree current`, `skills get`, mail, and Runs, Tasks, Dispatches, terminals and worktrees that are yours or your workers' (recursively). It refuses with `forbidden` every other method or parameter, including anything that runs commands or drives apps on the host (`terminal create` and `send`, `computer`), settings, accounts, plugins, transcripts, other agents' Dispatches, terminals and worktrees, `--from` naming anyone else, and `send --file`; don't look for a way around a refusal. Workers start only as `claude`, `codex`, `antigravity` or `opencode`, and new worktrees skip their setup scripts. Orca's browser only shows the human your preview: `orca tab create --url $AGENT_PREVIEW_URL_<port>` opens it in an isolated profile, and `tab list`, `goto --page` and `close --page` work on tabs you opened. Google, file attachments and page inspection through Orca are refused. Test pages with the sandbox's own Chromium or Playwright, not `orca tab`. In a sandbox Orca reaches over SSH, `~/.orca-relay/bin/orca` is that bridge instead. Do not launch an Orca Electron binary from `/nix/store` for CLI commands. Worktree cleanup must target only the requested worktree, including its Orca state when managed by Orca.
 
 Blender (Cycles with CUDA and OptiX) and a Python with torch (CUDA) and hy3dgen (Hunyuan3D) are installed; `~/projects/img2char3d` runs directly on them. Chromium is installed with its own sandbox off, since the container can't run it: open pages on the display with `swaymsg exec -- chromium <url>`, or render one without a window with `chromium --headless --screenshot=<file> --window-size=W,H <url>`. The Playwright MCP server drives its own Chromium, shown on the display, and the `playwright` CLI is installed. Nix talks to the host daemon, as an untrusted client. The store is the host's: never run `nix-collect-garbage`, `nix store gc`, `nix store delete` or `nix store optimise`, since they act on the host's whole store.
 

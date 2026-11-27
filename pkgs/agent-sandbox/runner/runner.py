@@ -123,10 +123,15 @@ class Pins:
     worktree through the descriptor held here.
     """
 
-    def __init__(self, worktree, roots):
+    def __init__(self, worktree, roots, denied=()):
         self.fds = []
         self.worktree = worktree
         self.worktree_parts = path_parts(worktree)
+        for path in denied:
+            parts = path_parts(path)
+            shorter = min(len(parts), len(self.worktree_parts))
+            if parts[:shorter] == self.worktree_parts[:shorter]:
+                refuse(f"sandboxes may only read {path}")
         for root in roots:
             root_parts = path_parts(root)
             if self.worktree_parts[: len(root_parts)] == root_parts and len(self.worktree_parts) > len(root_parts):
@@ -909,7 +914,7 @@ class Runner:
         worktree = request.get("worktree")
         if isinstance(worktree, str) and re.search(r'[,"\n]', worktree):
             refuse("the worktree path may not contain commas, quotes or newlines")
-        pins = Pins(worktree, self.args.root)
+        pins = Pins(worktree, self.args.root, self.args.deny)
         with self.lock:
             if len(self.sandboxes) >= MAX_SANDBOXES:
                 pins.close()
@@ -1189,7 +1194,7 @@ class Runner:
         worktree = request.get("worktree")
         if not isinstance(model, dict):
             refuse("model must be the JSON output of docker compose config")
-        pins = Pins(worktree, self.args.root)
+        pins = Pins(worktree, self.args.root, self.args.deny)
         try:
             labels = {**self.base_labels, KIND_LABEL: "compose", PROJECT_LABEL: project}
             directory = self.state / "compose" / project
@@ -1643,6 +1648,7 @@ def parse_args(argv):
     parser.add_argument("--state-dir", required=True)
     parser.add_argument("--image", required=True)
     parser.add_argument("--root", action="append", required=True)
+    parser.add_argument("--deny", action="append", default=[], help="a directory no worktree may be or contain")
     parser.add_argument("--passwd", required=True)
     parser.add_argument("--group", required=True)
     parser.add_argument("--ports-lock", required=True)

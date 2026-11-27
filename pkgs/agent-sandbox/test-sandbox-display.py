@@ -61,19 +61,12 @@ while True:
     server.accept()[0].close()
 """
 
-IDLE = """
-import time
-time.sleep(3600)
-"""
-
 STUBS = {
     "sway": SWAY,
     "swaymsg": SWAYMSG,
     "agent-sandbox-nested-hyprland": HYPRLAND,
     "wayvnc": LISTEN,
     "novnc": LISTEN,
-    "inotifywait": IDLE,
-    "wl-copy": "",
 }
 
 

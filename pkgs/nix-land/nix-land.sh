@@ -3,10 +3,11 @@ usage() {
   cat <<'USAGE'
 Usage: nix-land [--dry-run] [--no-switch] [--no-refresh] <branch>
 
-Merge <branch> into main of the nix repository in a temporary worktree, run
+Merge <branch> into main of the nix repository in a temporary clone, run
 `nix flake check` and rust-lints on any Rust the branch changes, push main
 (through the Betterleaks push gate), move the local main, run host-switch and
-then bot-sandbox-refresh.
+then bot-sandbox-refresh. It prunes stale remote-tracking refs, which sandboxes can't. Local main must equal origin/main, and the repository
+must pass git-repo-guard; git runs without the repository's hooks or fsmonitor.
 
   --dry-run     merge and check only; push, main, switch and refresh are skipped
   --no-switch   stop after pushing and moving main
@@ -55,12 +56,22 @@ fi
 
 # The push gate's bypass belongs to the human; never inherit it.
 unset BETTERLEAKS_PUSH_BYPASS
+export GIT_TERMINAL_PROMPT=0
+
+# Sandboxes write objects, branches and worktree admin directories into the repository, so no
+# hook, fsmonitor or other repository-controlled program runs here. The push gate is a global
+# config hook, which core.hooksPath leaves alone. Housekeeping never starts, since it would run
+# gc.recentObjectsHook.
+git() {
+  command git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.alternateRefsCommand=true \
+    -c gc.auto=0 -c maintenance.auto=false "$@"
+}
 
 wt=''
 cleanup() {
   if [[ -n $wt && -d $wt ]]; then
-    git -C "$wt" merge --abort >/dev/null 2>&1 || true
-    git -C "$repo" worktree remove --force "$wt" >/dev/null 2>&1 || true
+    chmod -R u+w -- "$wt" 2>/dev/null || true
+    rm -rf -- "$wt"
   fi
 }
 trap cleanup EXIT
@@ -77,6 +88,7 @@ fail() {
 
 say() { echo "nix-land: $*" >&2; }
 
+guard_out=$(git-repo-guard "$repo" 2>&1) || fail preflight "${guard_out//$'\n'/; }"
 git -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || fail preflight "$repo is not a git repository"
 log_dir=$repo/.tmp/nix-land
 mkdir -p "$log_dir" || fail preflight "cannot create $log_dir"
@@ -94,11 +106,13 @@ main_old=$(git -C "$repo" rev-parse --verify --quiet 'refs/heads/main^{commit}')
   fail preflight 'no local main'
 
 if [[ -z $dry_run ]]; then
-  say "fetching origin/main"
-  git -C "$repo" fetch --quiet origin main >>"$log" 2>&1 || fail preflight 'git fetch origin main failed'
-  remote_main=$(git -C "$repo" rev-parse FETCH_HEAD)
-  git -C "$repo" merge-base --is-ancestor "$remote_main" "$main_old" ||
-    fail preflight "origin/main has commits local main lacks ($remote_main)"
+  # Sandboxes can't prune: deleting a ref rewrites packed-refs, which they only read.
+  say "fetching origin"
+  git -C "$repo" fetch --quiet --prune origin >>"$log" 2>&1 || fail preflight 'git fetch --prune origin failed'
+  remote_main=$(git -C "$repo" rev-parse refs/remotes/origin/main)
+  # A local main that differs from origin/main holds commits nobody pushed, possibly a sandbox's.
+  [[ $remote_main == "$main_old" ]] ||
+    fail preflight "local main ($main_old) is not origin/main ($remote_main); reconcile them first"
 fi
 
 if git -C "$repo" merge-base --is-ancestor "$branch_sha" "$main_old"; then
@@ -107,10 +121,16 @@ fi
 behind=$(git -C "$repo" rev-list --count "$branch_sha..$main_old")
 say "$branch at ${branch_sha:0:12}, main at ${main_old:0:12}, branch is $behind commit(s) behind main"
 
+# A clone outside every sandbox mount: a linked worktree's admin directory would sit in
+# .git/worktrees, which sandboxes write. Fetching also checks every object's hash.
 wt=$(mktemp -d "${TMPDIR:-/tmp}/nix-land.XXXXXX")
-rmdir "$wt"
-git -C "$repo" worktree add --quiet --detach "$wt" "$main_old" >>"$log" 2>&1 ||
-  fail preflight 'cannot create the temporary worktree'
+{
+  git init --quiet --template= "$wt" &&
+    git -C "$wt" fetch --quiet --no-tags "$repo" "refs/heads/main:refs/land/main" "refs/heads/$branch:refs/land/branch"
+} >>"$log" 2>&1 || fail preflight 'cannot create the temporary clone'
+[[ $(git -C "$wt" rev-parse refs/land/main) == "$main_old" && $(git -C "$wt" rev-parse refs/land/branch) == "$branch_sha" ]] ||
+  fail preflight 'main or the branch moved while cloning; run nix-land again'
+git -C "$wt" switch --quiet --detach "$main_old" >>"$log" 2>&1 || fail preflight 'cannot check out main in the clone'
 cd "$wt" || fail preflight "cannot enter $wt"
 
 say "merging $branch into main"
@@ -132,19 +152,31 @@ for file in "${rust_files[@]}"; do
   dir=$(dirname "$file")
   while [[ $dir != . && ! -f $dir/Cargo.toml ]]; do dir=$(dirname "$dir"); done
   [[ -f $dir/Cargo.toml ]] || continue
-  manifest=$(cargo locate-project --workspace --message-format plain --manifest-path "$dir/Cargo.toml" 2>>"$log") ||
-    fail rust-lints "cannot resolve the Cargo workspace of $file"
-  manifest=${manifest#"$wt"/}
+  # The workspace root is the nearest ancestor manifest with a [workspace] table; cargo itself
+  # doesn't run on the host.
+  manifest=$dir/Cargo.toml
+  up=$dir
+  while [[ $up != . ]]; do
+    up=$(dirname "$up")
+    if [[ -f $up/Cargo.toml ]] && grep -q '^\[workspace\]' "$up/Cargo.toml"; then
+      manifest=$up/Cargo.toml
+    fi
+  done
+  manifest=${manifest#./}
   [[ " ${manifests[*]} " == *" $manifest "* ]] || manifests+=("$manifest")
 done
 for manifest in "${manifests[@]}"; do
-  say "rust-lints on $manifest"
-  lint_status=0
-  rust-lints --manifest-path "$wt/$manifest" >>"$log" 2>&1 || lint_status=$?
+  say "rust-lints on $manifest, in a Nix build"
+  [[ -f $(dirname "$manifest")/Cargo.lock ]] || fail rust-lints "$manifest has no Cargo.lock next to it to vendor its crates from"
+  report=$(nix build --impure --no-link --print-out-paths --print-build-logs -f "$NIX_LAND_LINT" \
+    --argstr src "$wt" --argstr rev "$merged" --argstr manifest "$manifest" 2>>"$log") ||
+    fail rust-lints "could not run rust-lints for $manifest in a Nix build: $(grep -m1 -E '^error' "$log" | cut -c1-200)"
+  cat "$report/log" >>"$log"
+  lint_status=$(<"$report/status")
   case $lint_status in
     0) ;;
-    1) fail rust-lints "lint findings in $manifest" ;;
-    *) fail rust-lints "$manifest failed to build or a lint tool failed: $(grep -m1 -E '^error' "$log" | cut -c1-200)" ;;
+    1) fail rust-lints "lint findings in $manifest (report: $report/report.json)" ;;
+    *) fail rust-lints "$manifest failed to build or a lint tool failed (exit $lint_status): $(grep -m1 -E '^error' "$report/log" | cut -c1-200)" ;;
   esac
 done
 ((${#manifests[@]})) || say 'no changed Rust'
@@ -158,7 +190,13 @@ if [[ -n $dry_run ]]; then
   exit 0
 fi
 
+[[ $(git rev-parse HEAD) == "$merged" ]] || fail flake-check "the clone's HEAD moved during the checks; it is no longer $merged"
+
 main_wt=$(git -C "$repo" worktree list --porcelain | awk '/^worktree /{w=substr($0,10)} $0=="branch refs/heads/main"{print w}')
+# Any other worktree's path comes from an admin file a sandbox can write.
+if [[ -n $main_wt && $main_wt != "$repo" ]]; then
+  fail update-main "main is checked out in $main_wt, not $repo"
+fi
 if [[ -n $main_wt && -n $(git -C "$main_wt" status --porcelain --untracked-files=no) ]]; then
   fail update-main "main is checked out with uncommitted changes in $main_wt"
 fi
@@ -167,9 +205,15 @@ fi
 git -C "$repo" config --get hook.betterleaks-push-gate.event >/dev/null ||
   fail push 'the Betterleaks push gate is not configured for this git'
 
+origin=$(git -C "$repo" remote get-url --push origin) || fail push 'no origin remote'
 say "pushing $merged to origin/main"
-git push origin "$merged:refs/heads/main" >>"$log" 2>&1 ||
+git push "$origin" "$merged:refs/heads/main" >>"$log" 2>&1 ||
   fail push "git push was refused (Betterleaks or the remote); see the log"
+{
+  git -C "$wt" update-ref refs/heads/main "$merged" &&
+    git -C "$repo" fetch --quiet --no-tags "$wt" refs/heads/main &&
+    [[ $(git -C "$repo" rev-parse FETCH_HEAD) == "$merged" ]]
+} >>"$log" 2>&1 || fail update-main "pushed $merged, but cannot fetch it into $repo"
 
 if [[ -n $main_wt ]]; then
   [[ $(git -C "$repo" rev-parse refs/heads/main) == "$main_old" ]] ||

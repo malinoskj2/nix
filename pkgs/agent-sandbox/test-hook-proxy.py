@@ -165,6 +165,22 @@ class TranscriptTest(unittest.TestCase):
                 thread.join(timeout=3)
                 self.assertFalse(thread.is_alive())
 
+    def test_live_endpoint_replaces_port_and_token(self):
+        head = b"POST /hook/claude HTTP/1.1\r\nX-Orca-Agent-Hook-Token: stale\r\nContent-Length: 2"
+        with tempfile.TemporaryDirectory() as directory:
+            endpoint = Path(directory) / "endpoint.env"
+            endpoint.write_text("ORCA_AGENT_HOOK_PORT=4242\nORCA_AGENT_HOOK_TOKEN=fresh-1\nORCA_AGENT_HOOK_ENV=x\n")
+            with proxy.HookServer(str(Path(directory) / "hook.sock"), str(endpoint), 1, ROOTS) as server:
+                port, token = server.current_endpoint()
+                self.assertEqual((port, token), (4242, b"fresh-1"))
+                endpoint.unlink()
+                self.assertEqual(server.current_endpoint(), (1, None))
+        self.assertEqual(
+            proxy.replace_hook_token(head, b"fresh-1"),
+            b"POST /hook/claude HTTP/1.1\r\nX-Orca-Agent-Hook-Token: fresh-1\r\nContent-Length: 2",
+        )
+        self.assertEqual(proxy.replace_hook_token(head, None), head)
+
     def test_incomplete_and_oversized_bodies_are_rejected(self):
         reader, writer = socket.socketpair()
         with reader, writer:

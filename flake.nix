@@ -138,6 +138,7 @@
           "game-workspace-audio"
           "git-commitu"
           "git-open-branch"
+          "git-repo-guard"
           "gpu-scheduler"
           "host-switch"
           "htop-vim-navigation"

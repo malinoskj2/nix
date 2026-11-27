@@ -369,8 +369,8 @@ let
     + builtins.readFile ./codex.sh;
   };
 
-  # The desktop CLI connects to its Unix runtime socket through the read-only
-  # ~/.config/orca mount. The Electron app itself is never started here.
+  # The desktop CLI reaches the runtime through the launcher's Orca relay, which
+  # the sandbox's own Orca profile names. The Electron app itself is never started here.
   orcaCli = writeShellScriptBin "orca-ide" ''
     exec ${lib.getExe orca-ade} "$@"
   '';
@@ -388,6 +388,7 @@ let
     '';
 
   hookProxy = pythonScript "agent-sandbox-hook-proxy" python3 ./hook-proxy.py;
+  orcaRelay = pythonScript "agent-sandbox-orca-relay" python3 ./orca-relay.py;
   prepareOrcaHooks = pythonScript "agent-sandbox-prepare-orca-hooks" python3 ./prepare-orca-hooks.py;
 
   runner = writeShellScriptBin "agent-sandbox-runner" ''
@@ -658,11 +659,6 @@ let
     text = builtins.readFile ./entrypoint.sh;
   };
 
-  clipboardSync = writeShellApplication {
-    name = "agent-sandbox-clipboard-sync";
-    text = builtins.readFile ./clipboard-sync.sh;
-  };
-
   nixConf = writeText "nix.conf" ''
     experimental-features = nix-command flakes
   '';
@@ -802,7 +798,6 @@ let
   launcher = writeShellApplication {
     name = "agent-sandbox";
     runtimeInputs = [
-      clipboardSync
       coreutils
       gnugrep
       gnused
@@ -811,7 +806,6 @@ let
       procps
       systemd
       util-linux
-      wl-clipboard
     ];
     runtimeEnv = imageEnv // {
       # The PATH an agent with an Orca hook bridge runs with: the curl shim leads,
@@ -819,6 +813,7 @@ let
       AGENT_SANDBOX_ORCA_PATH = "${orcaCurl}/bin:${env}/bin:/usr/bin";
       # Claude reads these from the image; agy reads them as its global AGENTS.md.
       AGENT_SANDBOX_INSTRUCTIONS = "${instructions}";
+      AGENT_SANDBOX_ORCA_RELAY = lib.getExe orcaRelay;
       AGENT_SANDBOX_RUNNER = lib.getExe runner;
       AGENT_SANDBOX_SECCOMP = "${seccompProfile}";
     };
@@ -934,6 +929,24 @@ symlinkJoin {
           python3 -B test-runner.py -v
           touch $out
         '';
+    launcherTests =
+      runCommand "agent-sandbox-launcher-tests"
+        {
+          nativeBuildInputs = [
+            bashInteractive
+            git
+            gnused
+            procps
+            python3
+            util-linux
+          ];
+        }
+        ''
+          cp ${./agent-sandbox.sh} agent-sandbox.sh
+          cp ${./test-launcher-mounts.py} test-launcher-mounts.py
+          python3 -B test-launcher-mounts.py -v
+          touch $out
+        '';
     unrealTools = unreal.tools;
     unrealTests = unreal.tests;
     displayTests =
@@ -949,6 +962,20 @@ symlinkJoin {
           cp ${./sandbox-display.sh} sandbox-display.sh
           cp ${./test-sandbox-display.py} test-sandbox-display.py
           python3 -B test-sandbox-display.py -v
+          touch $out
+        '';
+    orcaTests =
+      runCommand "agent-sandbox-orca-tests"
+        {
+          nativeBuildInputs = [ python3 ];
+        }
+        ''
+          cp ${./hook-proxy.py} hook-proxy.py
+          cp ${./orca-relay.py} orca-relay.py
+          cp ${./test-hook-proxy.py} test-hook-proxy.py
+          cp ${./test-orca-relay.py} test-orca-relay.py
+          python3 -B test-hook-proxy.py -v
+          python3 -B test-orca-relay.py -v
           touch $out
         '';
     execTests =

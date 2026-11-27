@@ -26,7 +26,7 @@ if [[ ! -w "$dir" ]]; then
   exit 1
 fi
 
-commit=${expect:-$(git -C "$repo" rev-parse refs/heads/main)}
+commit=${expect:-$(git -c core.hooksPath=/dev/null -c core.fsmonitor=false -C "$repo" rev-parse refs/heads/main)}
 printf '%s\n' "$commit" >"$dir/request"
 echo "host-switch: requested $commit"
 
@@ -44,7 +44,15 @@ while ((SECONDS < deadline)); do
         exit 1
         ;;
       refused)
-        echo "host-switch: refused; only the head of main is switched (exit $code)" >&2
+        case $code in
+          2) echo 'host-switch: refused: the request was not a commit' >&2 ;;
+          3) echo "host-switch: refused: $commit is not the head of main" >&2 ;;
+          4) echo "host-switch: refused: $repo's Git config or hooks would run programs" >&2 ;;
+          5) echo 'host-switch: refused: cannot read main from GitHub' >&2 ;;
+          6) echo "host-switch: refused: $commit is not main on GitHub; push it first" >&2 ;;
+          *) echo "host-switch: refused (exit $code)" >&2 ;;
+        esac
+        [[ -f $dir/$commit.log ]] && tail -n 20 "$dir/$commit.log" >&2
         exit 1
         ;;
     esac

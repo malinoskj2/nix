@@ -52,11 +52,8 @@ done
 pkill -f -- "--state-dir $data/runner/" || true
 rm -rf -- "$runtime"/agent-sandbox-runner/* "$data/runner"
 
-# A launcher that died hard never ran its cleanup trap, and its clipboard
-# watcher would otherwise keep writing into the dirs removed below.
-pkill -f "agent-sandbox-clipboard-sync $runtime/agent-sandbox-clipboard" || true
-rm -rf -- "$runtime"/agent-sandbox-clipboard.*
-rm -rf -- "$runtime"/agent-sandbox-orca/session.*
+pkill -f -- "--data $runtime/agent-sandbox-orca-relay/" || true
+rm -rf -- "$runtime"/agent-sandbox-orca/session.* "$runtime"/agent-sandbox-orca-relay/relay.*
 
 echo "agent-sandbox-kill: removed ${#containers[@]} container(s)"
 

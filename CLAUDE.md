@@ -107,10 +107,12 @@ work to `main` and switches `home` when it judges the switch safe, without askin
 including Orca workers and sandboxed agents, commits on its branch and reports
 instead. To land a branch, Tohru runs `nix-land <branch>` (merge, checks, push,
 `host-switch`, idle bot sandbox restarts; last line `LANDED <sha>` or
-`FAILED <stage> <reason>`). To switch by hand, Tohru commits on `main`, builds the host, then runs
-`host-switch` (or `nix run /home/jesse/nix#host-switch` in a sandbox that predates
-it). Root's `host-switch` service on `home` builds and activates exactly the head
-of `main`, never a working tree or another branch, and refuses anything else.
+`FAILED <stage> <reason>`). To switch by hand, Tohru commits on `main`, pushes it, builds the
+host, then runs `host-switch`. Root's `host-switch` service on `home` builds and activates
+exactly the head of `main`, never a working tree or another branch, and only when that commit
+is also `main` on GitHub and `git-repo-guard ~/nix` passes, since sandboxes can write parts of
+`~/nix/.git` but not push. `nix-land` likewise requires local `main` to equal `origin/main`,
+and both run git without the repository's hooks or fsmonitor.
 The command waits and prints the result; its log is
 `.tmp/host-switch/<commit>.log`. A switch that restarts Docker also restarts the
 sandboxes, including the one that asked.

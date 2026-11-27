@@ -1,0 +1,16 @@
+--- a/src/main/git/command-runner/host-routing/wsl-command-resolution.ts
++++ b/src/main/git/command-runner/host-routing/wsl-command-resolution.ts
+@@ -104,7 +104,12 @@
+   } = {}
+ ): ResolvedCommand {
+   if (process.platform !== 'win32') {
+-    return { binary: command, args, cwd, wsl: null, wslMode: null }
++    // Repositories that sandboxes write must not choose programs for the desktop's own Git,
++    // including the Git that gh and glab run.
++    const tools = process.env.ORCA_HOST_GIT_PATH
++    const guarded = tools && (command === 'git' || command === 'gh' || command === 'glab')
++    const binary = guarded ? `${tools}/${command}` : command
++    return { binary, args, cwd, wsl: null, wslMode: null }
+   }
+ 
+   // Distro hints route global CLI calls that have no cwd to identify a WSL guest.

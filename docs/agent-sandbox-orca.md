@@ -87,23 +87,126 @@ config, start a new sandbox to pick up the mappings.
 
 Orca saves local clipboard image pastes under `/tmp/agent-media`, which is
 shared with the sandbox at the same path. The sandbox's private `/tmp` cannot
-read host files saved directly there. This is separate from the host image
-clipboard mirror, which makes image data available to Wayland clients inside
-the sandbox. After updating Orca, restart the desktop app for the paste path
+read host files saved directly there. Sandboxes get no other view of the
+host's clipboard, display or screenshots. After updating Orca, restart the desktop app for the paste path
 change to take effect; existing sandboxes already mount the media directory.
 
 Agent-generated screenshots, recordings and other development captures go in the
 current repository or worktree root's globally Git-ignored `.tmp/` directory.
 Repository mounts already share these files at the same absolute host paths.
 
-The sandbox image uses the desktop `orca-ide` CLI. A read-only bind of
-`~/.config/orca` gives it the live runtime metadata and Unix socket, so Orca
-commands can reach the desktop without the SSH relay.
+## Orca runtime access
 
-For each agent launch, the command opens a private Unix socket under
-`/run/user/$UID/agent-sandbox-orca`, which is bind mounted into the sandbox.
-The host proxy forwards only to Orca's current `127.0.0.1` hook port; it reads
-the endpoint file for each connection so an Orca restart can change that port.
+The sandbox image uses the desktop `orca-ide` CLI, but a sandbox never sees
+Orca's profile, its runtime token, its session database or its Electron state.
+Each launcher starts `agent-sandbox-orca-relay` on the host, in a private
+directory under `/run/user/$UID/agent-sandbox-orca-relay`. The container gets
+that directory's profile, read-only, at Orca's own path (`$ORCA_USER_DATA_PATH`,
+normally `~/.config/orca`). It holds an `orca-runtime.json` naming the relay's
+socket with a placeholder token, and Orca's CLI shim, both refreshed every
+second from the desktop's, so an Orca restart or update reaches running
+sandboxes. Chat's attachment and paste folders are mounted read-only beside
+them, and a Chat's scratch directory and pinned account home writable at their
+own paths.
+
+The relay reads the desktop's `orca-runtime.json` for each connection and
+streams Orca's answers back, keepalives included. It doesn't pass requests
+through. It builds each request it forwards from scratch:
+
+- the request's ID, method, contract version and invocation IDs;
+- params that match the method's reviewed list, with nothing the list leaves out;
+- the real token;
+- caller evidence naming this sandbox.
+
+That evidence comes from the `ORCA_AGENT_SESSION_ID`, `ORCA_TERMINAL_HANDLE`,
+`ORCA_PANE_KEY` and `ORCA_AGENT_LAUNCH_TOKEN` that Orca's launch gave the
+launcher on the host. A request whose own evidence or caller params (`--from`,
+`--terminal`, the pane key, the caller session) name anyone else is refused,
+and so is any request carrying a paired Orca's Run or another execution host. A
+sandbox started without an Orca session can read listings but can't act as
+anyone.
+
+Every method has its own entry. A method missing from the list, including any
+method a later Orca adds, is refused with a `forbidden` error the CLI prints, and so
+is a known method carrying a parameter its entry doesn't list:
+
+| Allowed | Refused |
+| --- | --- |
+| `status`, repo, worktree, project and bot listings, `worktree current`, `skills get` | Settings, accounts, pairing, plugins, automations, skill installs, SSH hosts and updates |
+| `worktree create`, without a startup command, startup environment or setup script | `terminal create`, `send`, `split`, `list` and `close`; `agent list`; session listings and transcripts |
+| `worktree set`, `activate` and `rm` on the sandbox's own worktree and its descendants | Every other worktree |
+| `terminal show`, `read` and `wait`, and titles, on the sandbox's own terminal and its workers' | Every other terminal |
+| Mail (`check`, `send`, `ask`, `reply`, `inbox`) as the sandbox itself; Runs, Tasks and gates it coordinates | `orchestration dispatch`, `reset` and `run-list`; typing into a worker's terminal; peer methods; `send --file` |
+| `worker-start`, `worker-show`, `read`, `transcript`, `stop`, `release`, `retain` and `abandon` on its own and its workers' Dispatches | Any other Dispatch, active or finished |
+| Opening, navigating, listing and closing its own preview tabs in Orca's browser | Reading, scripting or clicking any page; cookies, profiles, uploads; every other tab |
+| A bot's own chats, items, memory and replies, in that bot's sandbox | Other bots; connector sign-in and keys; Google; file attachments |
+
+Ownership is read from Orca's orchestration database, which the relay opens
+read-only on the host:
+
+- A root coordinator owns every Dispatch in the Runs it coordinates.
+- A worker owns its own Dispatch and the Dispatches it created, and so on
+  through its workers' workers.
+- Owned Tasks and terminals are those Dispatches' Tasks and terminals.
+- Owned worktrees are the sandbox's own worktree, its workers' worktrees, and
+  any worktree whose chain of parents reaches one of them.
+
+`worker-list` and `task-list` answers keep only owned entries, and `inbox` is
+always this sandbox's own. If the database can't be read, every
+ownership-checked call is refused.
+
+Some allowed calls are narrowed on the way:
+
+- Workers and worktree agents start only as Claude, Codex, Antigravity or
+  OpenCode, the agents Orca launches in a sandbox. A `worker-start` without
+  `--agent` starts the sandbox's own agent.
+- New worktrees skip setup scripts, and `worktree rm` skips archive hooks,
+  since a repository's committed `orca.yaml` would otherwise run on the host.
+
+Orca's browser is there for one job: showing the human a sandbox's preview.
+`tab create` and `goto` take only this sandbox's `$AGENT_PREVIEW_URL_*`
+addresses. `goto` and `tab close` must name, with `--page`, a tab the sandbox
+opened; without one Orca would act on the user's current tab. Tabs open in an
+isolated profile, *Agent sandbox previews*, with no sign-ins; the relay creates
+it once with Orca's own profile call. Every command that reads or drives a page
+is refused, since the relay can't hold an open page to its origin. Agents test
+pages with the Chromium and Playwright in their sandbox.
+
+The relay checks only the address a tab opens at. A served preview page can
+still redirect itself, or be clicked through, to any other site; it gets there
+with the isolated profile's empty cookie jar, never the user's.
+
+### What sandboxed agents can't do through Orca
+
+These are deliberate limits, not faults:
+
+- Google: every `google.*` method (Gmail, Calendar, Drive, Docs, Sheets,
+  contacts) is refused, for bots too.
+- Bot and mail attachments: `orchestration send --file`, and files on bot
+  item writes and comments, are refused, since Orca would read those paths on
+  the host. Text-only items, comments and replies work.
+- Browser inspection: snapshots, screenshots, `eval`, clicks, typing, console
+  and network reads, cookies, profiles, uploads and the current tab are all
+  refused. Only the preview tabs above can be opened, navigated, listed and closed.
+- Listings of other agents: `terminal list`, `agent list`, session listings
+  and transcripts, `run-list` and other parties' inboxes.
+
+`settings.get` is refused, so `skills get` leaves out the artifact-publishing
+part of its guides even when artifact sharing is on.
+
+Orca's WebSocket transport (`ws://0.0.0.0:6768`) answers only paired devices'
+tokens, so without the runtime token or a pairing a sandbox can't use it, and
+the launcher no longer forwards `ORCA_PAIRING_CODE` or `ORCA_REMOTE_PAIRING`.
+The relay's log is `relay.log` in its directory; it names each method and every
+refusal, never parameters.
+
+For each agent launch, the command opens a private Unix socket in its own
+directory, `/run/user/$UID/agent-sandbox-orca/session.*`. That directory, and
+no other launch's, is bind-mounted into the sandbox. The launcher refuses a
+socket path outside such a directory.
+The host proxy forwards only to Orca's current `127.0.0.1` hook port and puts
+Orca's current hook token on each event; it reads the endpoint file for each
+connection, since an Orca restart changes both.
 The agent's curl shim sends only Orca hook URLs through this socket. Other
 requests use normal curl. Orca's hook token still authenticates each event.
 The socket and proxy are removed when the agent exits. Each direct launch syncs
@@ -136,6 +239,155 @@ Chat without copying or moving their history. Chat passes that account's
 `CODEX_HOME` through the launcher, which mounts it writable at the same absolute
 host path. Older sessions still reporting the container's `~/.codex` path need
 to be resumed in a terminal with the current launcher first.
+
+### Open risks
+
+These aren't closed yet:
+
+- **SSH workspaces.** A sandbox reached over SSH talks to Orca through the
+  remote's own bridge in `~/.orca-relay`, which this relay doesn't cover.
+  Closing it needs the same scoped relay on the SSH side, or the bridge
+  pinned to one sandbox's identity and method list.
+- **Repository configuration that host agents load.** Orca runs some agents on
+  the host for its own features, such as a bot's tool sign-in with
+  `claude mcp login` in the bot's folder. Those agents load `.claude/` settings,
+  hooks and `.mcp.json` from that folder, and a sandbox can write them in any
+  repository or bot home it mounts read-write. Closing it needs those host
+  runs to ignore project settings (`--setting-sources user` and no project MCP),
+  or to run in a sandbox too.
+- **Ownership by terminal handle.** Orca records who created a Dispatch by
+  terminal handle. A handle reused by a later, unrelated Dispatch would carry
+  the earlier owner's rights over Dispatches it then creates. Orca issues new
+  handles per session, so this needs a reused retained terminal.
+
+## Orca's own Git on the host
+
+Orca runs Git on the desktop, as jesse, in every repository and worktree it
+shows: status and diff polling, commits, worktree creation and removal, pull,
+clone, fetch and push. Sandboxes can write those repositories' `.git/config`,
+`.git/info/attributes`, worktree config and `.gitattributes`, and plain Git
+runs programs they name. Orca's `git`, `gh` and `glab` calls therefore go
+through a wrapper (`pkgs/orca-ade/host-git.sh`, selected by
+`ORCA_HOST_GIT_PATH`). `gh` and `glab` find it as `git` on their PATH, so the
+Git they run is covered too.
+
+The wrapper never reads repository config to decide what to override: a
+sandbox can change it between the wrapper's read and Git's own. Instead every
+call gets the same protections, from system, global and Orca's command-line
+config only.
+
+- **Pinned programs.** `core.fsmonitor=false`, `core.pager=cat`, no
+  `core.alternateRefsCommand`, and the global value or Git's default for
+  `core.askPass`, `core.sshCommand` and every `gpg.*` program. Credential
+  helpers, URL-scoped ones included, are emptied and only the system and
+  global helpers are added back. Editors are `:`, and `diff`, `log` and `show`
+  get `--no-ext-diff`.
+- **Transports.** On the host, Git may only use `https`, `http` and `ssh`
+  (`GIT_ALLOW_PROTOCOL`), so a remote helper the repository selects with
+  `remote.*.vcs` or a `<transport>::<address>` URL, `ext::`, and local
+  transports that would run `uploadpack` are all refused, whatever
+  `protocol.*.allow` says.
+- **Only what needs the network or the credential helpers runs on the host:**
+  fetch, push, ls-remote, credential, `remote update`/`prune`/`show`/`set-head`,
+  `version`, and the host halves of pull, clone, `remote add -f` and
+  `worktree add`. So does `worktree list`, which only reads the
+  administrative files and would show every worktree outside the repository
+  as prunable from the jail. None of them reads attributes, runs a diff
+  driver or formats commits. Help never
+  runs on the host: any `--help`, `--man`, `--web` or `--info` sends the call
+  to the jail, since help starts the repository's `man.<tool>.cmd` or
+  `browser.<tool>.cmd`. Host commands run with every repository hook switched
+  off: `core.hooksPath` is the global value or
+  `/dev/null`, and `hook.<event>.enabled=false` for every event. That needs
+  Git 2.56, so the wrapper uses `pkgs.unstable.git`. No command, on the host
+  or in the jail, starts automatic housekeeping (`gc.auto=0`,
+  `maintenance.auto=false`): on the host gc and prune run
+  `gc.recentObjectsHook`, a list that a command-line value can't empty, and
+  in the jail gc prunes worktrees it can't see. Alternates are listed with `core.alternateRefsCommand=true`.
+- **Pushes** run only the `pre-push` hooks that system and global config
+  name, such as the Betterleaks scan, from a hooks directory in the store,
+  plus the global `core.hooksPath`'s `pre-push` if one is set. The repository
+  can't change, disable or add to them.
+- **Everything else** (status, diff, log, show, reflog, rev-list, rev-parse,
+  config, branch, tag, add, commit, checkout, merge, rebase, stash, prune,
+  repack, `pack-refs`, `multi-pack-index`, worktrees, `cat-file`, help, and any command the wrapper
+  doesn't know) runs in a bubblewrap jail. Outside a repository, a directory
+  that is or contains the home directory isn't bound, so global config still
+  reads there. Filters,
+  diff and merge drivers, fsmonitor and hooks still run there, but with no
+  network, an empty read-only `/home`, `$HOME`, `/run` and `/mnt`, an empty
+  `/tmp`, a cleared environment, and only the repository's work tree and Git
+  directories writable, so they reach nothing a sandbox can't already reach.
+  A write anywhere else fails instead of vanishing with the jail. Global Git
+  config and the global excludes and attributes files are visible read-only.
+- **Pull, clone and `worktree add`** are split: the fetch, or the clone or
+  worktree without a checkout, runs on the host, then the merge
+  (`pull . <fetched ref>`) or the checkout runs in the jail. A new worktree
+  stays locked until its checkout is done, as with Git's own `worktree add`.
+- **`worktree prune` does nothing** and succeeds, with a note on stderr. On
+  the host, Git's prune deletes inside whatever an administrative directory
+  under `worktrees/` links to. In the jail, a worktree outside the repository
+  that moves or is still being added looks deleted. `gc` and `maintenance`,
+  whatever their tasks, do nothing the same way, since both prune worktrees,
+  and in the jail even `gc.worktreePruneExpire=never` doesn't keep a worktree
+  without an index. Orca runs neither. Removing a
+  worktree from Orca still deletes its own entry. `worktree move`, `remove`, `lock` and
+  `unlock` bind the worktree's parent directory, and `repair` binds the
+  worktrees it names.
+- **`init <directory>`** creates the directory and runs from inside it, so the
+  repository lands where Orca asked.
+- **Exposed paths.** The jail only binds the work tree Git finds from Orca's
+  directory without repository config: the nearest directory with a `.git`,
+  or the work tree Orca passes. It also binds a Git directory inside that
+  work tree, inside an enclosing `.git` (submodules), or a linked worktree's
+  directory under the `worktrees/` of a common directory named `.git` or
+  `*.git`. Anything else, such as a `core.worktree` or `gitdir:` pointing
+  elsewhere, is refused, and so is any
+  path that is or contains the home directory or Tohru's home. Each directory
+  is opened and checked once, then bound by its descriptor, so swapping a
+  path for a symlink afterwards changes nothing.
+- **`push --no-verify`** is refused, like the Betterleaks push gate does for
+  the PATH Git.
+
+Terminals and the agents Orca starts aren't affected: their `git` is whatever
+their shell finds. Orca on SSH and WSL hosts runs Git there, not through this
+wrapper. The jail needs unprivileged user namespaces on the desktop; without
+them those calls fail rather than run unconfined.
+
+Limits:
+
+- **Hooks and filters that need the network, the home directory or `/tmp`**
+  fail in the jail: signed commits through a GPG agent, Git LFS downloads,
+  hooks that call a server, alternates under `$HOME`, `commit -F` with a file
+  in `/tmp`. Orca itself passes none of these. Use a terminal for those.
+- **Repository hooks never run on host-side commands**, `pre-push` included,
+  and a `post-checkout` hook sees the jail's checkout of `HEAD` rather than
+  the worktree or clone that created it.
+- **Worktrees directly in the home directory** can't be removed or moved
+  from Orca, since that would expose the home directory.
+- **`worktree repair` without paths** only repairs worktrees inside the
+  repository.
+- **Stale worktree entries** for worktrees deleted outside Orca stay in
+  `.git/worktrees/` and show as `prunable` in `git worktree list`. Nothing
+  prunes them automatically, nix-land included, and neither `gc` nor
+  `maintenance` runs through Orca. Prune by hand in a host terminal, after
+  stopping every sandbox and agent that can write the repository, since a
+  writer could swap an entry for a symlink after the check: check that no
+  entry is a symlink (`find .git/worktrees -maxdepth 1
+  -type l` prints nothing), preview with `git worktree prune -n -v`, then run
+  `git worktree prune`.
+- **Writes outside the repository** fail: `config --global` changes,
+  `init --separate-git-dir`, `init` in the home directory itself, and output
+  files such as `archive -o ~/x.tar`.
+- **Local remotes** (`file://` or a path) can't be fetched, pulled or cloned
+  from Orca.
+- **Remote URLs**, `insteadOf`, proxies and TLS settings in repository config
+  still decide where Orca fetches and pushes, so a sandbox can redirect them,
+  including the credentials a trusted helper sends there. Betterleaks still
+  scans each push.
+- A pull's merge commit names its source as the local repository.
+- **Git you run yourself.** A `git status` you type on the host, in a
+  repository a sandbox can write, gets none of this.
 
 ## Prompt cache in child worktrees
 
@@ -172,9 +424,9 @@ TTY. Sandbox setup writes diagnostics to stderr and reserves stdout for the
 agent protocol. Chat launches pass the sealed Orca session identity and the
 selected `CODEX_HOME` or `CLAUDE_CONFIG_DIR` into the container. That account
 directory is mounted writable at the same absolute path so authentication,
-transcripts and resume stay with the account Orca selected. The rest of Orca's
-state remains read-only, except the per-chat scratch directory used for inline
-artifacts. Claude's selected authentication environment is forwarded only to
+transcripts and resume stay with the account Orca selected, and so is the
+per-chat scratch directory used for inline artifacts. The rest of Orca's state
+is not mounted (see [Orca runtime access](#orca-runtime-access)). Claude's selected authentication environment is forwarded only to
 Claude.
 
 Model/account probes may run outside a Git repository. When they supply an

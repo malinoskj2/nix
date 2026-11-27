@@ -2,7 +2,6 @@
 
 log_dir=$XDG_RUNTIME_DIR/logs
 nested_socket=$XDG_RUNTIME_DIR/nested-sway.sock
-host_clipboard=/run/host-clipboard
 vnc_port=${SANDBOX_DISPLAY_VNC_PORT:-5900}
 novnc_port=${SANDBOX_DISPLAY_NOVNC_PORT:-6080}
 
@@ -70,33 +69,12 @@ hyprland_ready() {
   [[ -S $XDG_RUNTIME_DIR/hyprland-1 ]]
 }
 
-copy_host_clipboard() {
-  local image=$host_clipboard/image mime
-  if [[ -s $image ]] && mime=$(file --brief --mime-type "$image") && [[ $mime == image/* ]]; then
-    wl-copy --type "$mime" <"$image" || true
-  else
-    wl-copy --clear || true
-  fi
-}
-
-sync_host_clipboard() {
-  local changed
-  copy_host_clipboard
-  inotifywait --monitor --quiet --event close_write,moved_to --format '%f' "$host_clipboard" |
-    while IFS= read -r changed; do
-      if [[ $changed == image || $changed == .change ]]; then
-        copy_host_clipboard
-      fi
-    done
-}
-
 start_sway() {
   local renderer
   for renderer in ${AGENT_SANDBOX_RENDERERS:-gles2 pixman}; do
     spawn "sway-$renderer.log" env -u WAYLAND_DISPLAY WLR_RENDERER="$renderer" sway
     if wait_for_server $! sway_ready; then
       echo "$renderer" >"$XDG_RUNTIME_DIR/renderer"
-      spawn clipboard.log "$0" sync-clipboard
       return 0
     fi
   done
@@ -174,6 +152,5 @@ case ${1:-} in
     up "$@"
     ;;
   status) status ;;
-  sync-clipboard) sync_host_clipboard ;;
   *) usage ;;
 esac

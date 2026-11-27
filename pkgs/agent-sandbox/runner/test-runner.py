@@ -74,6 +74,17 @@ class PinsTest(Tree):
         with self.assertRaises(runner.Refused):
             runner.Pins(self.worktree, self.roots)
 
+    def test_refuses_denied_directories(self):
+        os.makedirs(f"{self.root}/projects/bot/.git")
+        os.makedirs(f"{self.root}/projects/bot/repo/.git")
+        denied = [f"{self.root}/projects/bot"]
+        for path in (f"{self.root}/projects/bot", f"{self.root}/projects/bot/repo"):
+            with self.subTest(path=path), self.assertRaises(runner.Refused):
+                runner.Pins(path, self.roots, denied)
+        runner.Pins(self.worktree, self.roots, denied).close()
+        with self.assertRaises(runner.Refused):
+            runner.Pins(self.worktree, self.roots, [self.root])
+
 
 def social_hub(worktree):
     return {

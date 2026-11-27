@@ -5,6 +5,8 @@
   fetchurl,
   dpkg,
   runCommand,
+  bubblewrap,
+  writeShellApplication,
   makeDesktopItem,
   copyDesktopItems,
   autoPatchelfHook,
@@ -92,6 +94,33 @@ let
     rev = "eae3fa08f21323c5679a7dbbeced2a1777a272a1";
     hash = "sha256-U2ptKTryfYbkP8Kbsnm1rEpXA0axxhO9zath37Mt4CU=";
   };
+  hostGitHooks = writeShellApplication {
+    name = "pre-push";
+    text = builtins.readFile ./host-git-pre-push.sh;
+  };
+  # Repository hooks are switched off per event, which Git 2.56 added, and the jail binds by
+  # descriptor, which bubblewrap 0.9 added.
+  hostGit =
+    assert lib.versionAtLeast unstable.git.version "2.56";
+    assert lib.versionAtLeast bubblewrap.version "0.9";
+    writeShellApplication {
+      name = "git";
+      text =
+        builtins.replaceStrings
+          [ "@git@" "@bwrap@" "@prepush@" ]
+          [ (lib.getExe unstable.git) (lib.getExe bubblewrap) "${hostGitHooks}/bin" ]
+          (builtins.readFile ./host-git.sh);
+    };
+  hostTool = writeShellApplication {
+    name = "orca-host-tool";
+    text = builtins.readFile ./host-tool.sh;
+  };
+  hostGitPath = runCommand "orca-host-git" { } ''
+    mkdir $out
+    ln -s ${lib.getExe hostGit} $out/git
+    ln -s ${lib.getExe hostTool} $out/gh
+    ln -s ${lib.getExe hostTool} $out/glab
+  '';
   sourceCommit = "5dc5548b4570b276f231d81fbb51f8f7a066e40d";
   arch = stdenv.hostPlatform.node.arch;
 in
@@ -129,6 +158,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./desktop-voice-completion-observability.patch
     ./desktop-voice-quick.patch
     ./desktop-bot-auto-steer.patch
+    ./host-git-guard.patch
   ];
 
   postPatch = ''
@@ -391,7 +421,8 @@ stdenv.mkDerivation (finalAttrs: {
     wrapProgram $out/libexec/orca-ade/orca-ide \
       --set ORCA_DESKTOP_ASSISTANT_COMMAND ${lib.escapeShellArg desktopAssistantCommand} \
       --prefix XDG_DATA_DIRS : ${glib.getSchemaDataDirPath gsettings-desktop-schemas}:${glib.getSchemaDataDirPath gtk3} \
-      --set CHROME_DEVEL_SANDBOX ${electron}/libexec/electron/chrome-sandbox
+      --set CHROME_DEVEL_SANDBOX ${electron}/libexec/electron/chrome-sandbox \
+      --set ORCA_HOST_GIT_PATH ${hostGitPath}
     ln -s $out/libexec/orca-ade/resources/bin/orca-ide $out/bin/orca-ide
     # The skills call bare `orca`, which upstream reserves on Linux for the GNOME screen reader.
     ln -s $out/libexec/orca-ade/resources/bin/orca-ide $out/bin/orca
@@ -412,6 +443,16 @@ stdenv.mkDerivation (finalAttrs: {
   '';
 
   passthru.computerUsePython = computerUsePython;
+  passthru.hostGitPath = hostGitPath;
+  passthru.tests.hostGit =
+    runCommand "orca-host-git-test"
+      {
+        nativeBuildInputs = [ git ];
+      }
+      ''
+        bash ${./test-host-git.sh} ${hostGitPath} ${lib.getExe unstable.git} ${lib.getExe bubblewrap}
+        touch $out
+      '';
 
   # SSH and WSL hosts run orcad from this template. Its prebuilt addons cover every remote
   # target, which only upstream's release pipeline builds, and its manifest pins their hashes.

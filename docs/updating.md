@@ -334,7 +334,26 @@ Treat a bump as a hardware change and test it on the device.
   which puts a workspace being created below its project's main worktree
   instead of above it,
   and [`approved-plugins.patch`](../pkgs/orca-ade/approved-plugins.patch), which
-  treats the plugins in `approvedPlugins` as consented. Native per-repository
+  treats the plugins in `approvedPlugins` as consented. Rebase
+  [`host-git-guard.patch`](../pkgs/orca-ade/host-git-guard.patch), which sends
+  Orca's `git`, `gh` and `glab` through the
+  [host Git wrapper](agent-sandbox-orca.md#orcas-own-git-on-the-host), and check
+  that no new code spawns them without `resolveCommand` in
+  `wsl-command-resolution.ts`:
+  `rg -n "(spawn|execFile)(Sync)?\(\s*'(git|gh|glab)'" src --glob '!*.test*' --glob '!*.spec.ts' --glob '!*-ssh-shim.cjs'`
+  should list nothing. A new Git option that runs a program goes in
+  `host-git.sh` and its test. The wrapper runs `pkgs.unstable.git`, since it
+  switches hooks off per event, which needs Git 2.56; after a Git update,
+  compare its `events` list with githooks(5) and check new
+  commands against its host list, which must only hold commands that need the
+  network or the credential helpers and never read attributes, format commits
+  or start help. The jail hides worktrees outside the repository, so also
+  check that no newly jailed command prunes or repairs other worktrees; the
+  wrapper skips `worktree prune`, `gc` and `maintenance`, and turns off
+  automatic housekeeping everywhere. A new subcommand that starts gc or
+  maintenance needs the same treatment. The jail is bubblewrap, at least
+  0.9 for `--bind-fd`, so
+  `checks.orca-host-git` runs it in the build. Native per-repository
   `orca repo set-base-ref` replaces the automatic local-default fallback patch:
   `orca.localBaseRefs` seeds `main` only for an existing local `/home/jesse/nix`
   repo with no persisted choice and an existing local branch. Custom choices,

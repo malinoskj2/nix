@@ -53,7 +53,6 @@ steam_common=$HOME/.local/share/Steam/steamapps/common
 shared=(
   "$HOME/projects"
   "$HOME/projects-archive"
-  "$HOME/nix"
   "$HOME/Downloads"
   "$HOME/orca/workspaces"
   "$HOME/.orca/bots"
@@ -61,11 +60,20 @@ shared=(
   "$steam_common"
   "$HOME/.local/share/unreal-engine"
 )
-screenshots=/tmp/screenshot
+# Only Tohru merges to main and switches hosts, and her home holds her instructions and memory.
+nix_repo=$HOME/nix
+tohru_home=$HOME/.orca/bots/tohru
 media=/tmp/agent-media
 media_share=/mnt/media3/agent-sandbox
 asset_archive=/mnt/media3/agent
 orca_relay_dir=$runtime/agent-sandbox-orca
+# Never under the shared hook directory above: a sandbox reaches only its own relay.
+orca_relays=$runtime/agent-sandbox-orca-relay
+orca_data=${ORCA_USER_DATA_PATH:-$HOME/.config/orca}
+if [[ $orca_data != /* || $orca_data == *:* ]]; then
+  echo 'agent-sandbox: invalid ORCA_USER_DATA_PATH' >&2
+  exit 2
+fi
 codex_socket_dir=$runtime/agent-sandbox-codex
 gpu_lease_dir=$runtime/gpu-scheduler
 gallery_registry=$HOME/.local/state/media-gallery
@@ -73,18 +81,10 @@ gallery_registry=$HOME/.local/state/media-gallery
 tmp_root=$data/tmp
 container_tmp=$tmp_root/$$
 ssh_dir=$data/ssh
-host_wayland=
-for sock in "$runtime"/wayland-*; do
-  if [[ -S $sock ]]; then
-    host_wayland=$sock
-    break
-  fi
-done
 image_ref="agent-sandbox:${AGENT_SANDBOX_TAG#hash-}"
-clipboard_dir=$(mktemp --directory "$runtime/agent-sandbox-clipboard.XXXXXX")
 
 workdir=$HOME/projects
-for dir in "${shared[@]}"; do
+for dir in "${shared[@]}" "$nix_repo"; do
   if [[ $PWD == "$dir" || $PWD == "$dir"/* ]]; then
     workdir=$PWD
   fi
@@ -109,6 +109,47 @@ mount_readonly() {
     return 0
   fi
   mounts+=(--volume "$src:$dst:ro")
+}
+
+# A path with no symlink in it, so neither Docker nor the container can be pointed elsewhere.
+plain_dir() {
+  [[ -d $1 && $(realpath -e -- "$1") == "$1" ]]
+}
+
+# Whether a path is, or is inside, a directory sandboxes may only read.
+protected_path() {
+  local path dir
+  path=$(realpath -m -- "$1")
+  for dir in "$nix_repo" "$tohru_home"; do
+    dir=$(realpath -m -- "$dir")
+    if [[ $path == "$dir" || $path == "$dir"/* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# ~/nix is read-only. A sandbox still commits, branches, rebases and fetches in its own worktree,
+# whose admin directory, objects, reflogs and remote-tracking refs live in ~/nix/.git. The main
+# checkout, .git/config, hooks, info, HEAD, packed-refs and every top-level branch, main among
+# them, stay read-only. Git replaces a file by renaming its lock over it, and a host-side rename
+# detaches a file bind in every other mount namespace, so each writable part is a directory.
+nix_repo_mounts() {
+  local git=$nix_repo/.git dir prefix
+  args+=(--volume "$nix_repo:$nix_repo:ro")
+  plain_dir "$git/refs/heads" || return 0
+  # Branches under a prefix that only packed-refs holds have no directory to mount yet.
+  while read -r prefix; do
+    if [[ $prefix =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && ! -e $git/refs/heads/$prefix ]]; then
+      mkdir "$git/refs/heads/$prefix"
+    fi
+  done < <(sed -nE 's|^[0-9a-f]{40} refs/heads/([^/]+)/.*|\1|p' "$git/packed-refs" 2>/dev/null | sort -u)
+  for dir in "$git/objects" "$git/logs" "$git/worktrees" "$git/refs/remotes" "$git/refs/tags" "$git"/refs/heads/*/; do
+    dir=${dir%/}
+    if plain_dir "$dir"; then
+      args+=(--volume "$dir:$dir")
+    fi
+  done
 }
 
 copy_if_newer() {
@@ -287,12 +328,13 @@ cleanup() {
     rm -f -- "$runner_dir/runner.sock" "$runner_dir/runner.log"
     rmdir -- "$runner_dir" 2>/dev/null || true
   fi
-  if [[ -n ${clipboard_watcher_pid:-} ]]; then
-    kill "$clipboard_watcher_pid" 2>/dev/null || true
-    wait "$clipboard_watcher_pid" 2>/dev/null || true
+  if [[ -n ${orca_relay_pid:-} ]]; then
+    kill "$orca_relay_pid" 2>/dev/null || true
+    wait "$orca_relay_pid" 2>/dev/null || true
   fi
-  rm -f -- "$clipboard_dir/image" "$clipboard_dir/.change" "$clipboard_dir/watcher.log"
-  rmdir -- "$clipboard_dir"
+  if [[ -n ${orca_relay:-} ]]; then
+    rm -rf -- "$orca_relay"
+  fi
   remove_tmp "$container_tmp"
 }
 
@@ -304,29 +346,29 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' HUP TERM
 
-# Mirror the host image clipboard through an isolated bind mount. A host-side
-# watcher is required because the sandbox has its own headless Wayland session.
-# It requests the generic image type so browser copies choose an image
-# representation instead of the text/html representation they often offer first.
-CLIPBOARD_STATE=data agent-sandbox-clipboard-sync "$clipboard_dir" \
-  < <(wl-paste --type image 2>/dev/null)
-wl-paste --type image --watch agent-sandbox-clipboard-sync "$clipboard_dir" \
-  >/dev/null 2>"$clipboard_dir/watcher.log" &
-clipboard_watcher_pid=$!
-
 mkdir -p "$sandbox_home/.claude" "$sandbox_home/.codex" "$sandbox_home/.config/git" \
   "$sandbox_home/.gemini/antigravity-cli" "$sandbox_home/.gemini/config"
-for dir in "${shared[@]}"; do
+for dir in "${shared[@]}" "$nix_repo"; do
   mkdir -p "$dir" "$sandbox_home${dir#"$HOME"}"
 done
-mkdir -p "$screenshots" "$media"
+mkdir -p "$media"
 mkdir -p "$model_root" 2>/dev/null || true
 mount_readonly "$model_root"
 for store in "${model_stores[@]}"; do
   if [[ -n $store ]]; then mount_readonly "$store"; fi
 done
-mkdir -p "$orca_relay_dir"
-chmod 700 "$orca_relay_dir"
+mkdir -p "$orca_relay_dir" "$orca_relays"
+chmod 700 "$orca_relay_dir" "$orca_relays"
+for dir in "$orca_relays"/relay.*/; do
+  dir=${dir%/}
+  pid=${dir##*/relay.}
+  if [[ -d $dir && (! $pid =~ ^[0-9]+$ || ! -d /proc/$pid) ]]; then
+    rm -rf -- "$dir"
+  fi
+done
+orca_relay=$orca_relays/relay.$$
+rm -rf -- "$orca_relay"
+mkdir -m 700 "$orca_relay" "$orca_relay/data"
 mkdir -p "$gpu_lease_dir"
 chmod 700 "$gpu_lease_dir"
 mkdir -p "$gallery_registry"
@@ -375,9 +417,10 @@ mkdir -p "$runtime/agent-sandbox-runner"
 chmod 700 "$runtime/agent-sandbox-runner"
 runner_dir=$(mktemp -d "$runtime/agent-sandbox-runner/XXXXXXXX")
 runner_roots=()
-for dir in "$HOME/projects" "$HOME/projects-archive" "$HOME/nix" "$HOME/orca/workspaces" "$HOME/.orca/bots"; do
+for dir in "$HOME/projects" "$HOME/projects-archive" "$HOME/orca/workspaces" "$HOME/.orca/bots"; do
   runner_roots+=(--root "$dir")
 done
+runner_roots+=(--deny "$tohru_home")
 "$AGENT_SANDBOX_RUNNER" --owner "$sandbox_instance" --socket "$runner_dir/runner.sock" \
   --state-dir "$data/runner/$(sha256sum <<<"$sandbox_instance" | cut -c1-16)" \
   --image "$image_ref" "${runner_roots[@]}" --passwd "$data/passwd" --group "$data/group" \
@@ -386,6 +429,40 @@ done
   --preview-address "$preview_address" \
   --docker-socket "$docker_socket" >"$runner_dir/runner.log" 2>&1 &
 runner_pid=$!
+
+# Sandboxes reach Orca only through this relay, which holds the desktop's token
+# on the host and forwards the runtime methods agents need. The container sees
+# a profile of its own at Orca's path, naming the relay's socket and no token.
+# It names this sandbox to Orca from the launch's own ORCA_* variables in its environment.
+orca_relay_args=(--agent "$agent")
+if [[ $workdir == "$HOME/.orca/bots"/* ]]; then
+  orca_relay_args+=(--bot)
+fi
+"$AGENT_SANDBOX_ORCA_RELAY" --host-data "$orca_data" --data "$orca_relay/data" --container-data "$orca_data" \
+  --preview-file "$orca_relay/preview-origins" "${orca_relay_args[@]}" >"$orca_relay/relay.log" 2>&1 &
+orca_relay_pid=$!
+for _ in {1..100}; do
+  [[ -S $orca_relay/data/relay.sock ]] && break
+  if ! kill -0 "$orca_relay_pid" 2>/dev/null; then
+    echo "agent-sandbox: Orca relay failed" >&2
+    cat "$orca_relay/relay.log" >&2
+    exit 1
+  fi
+  sleep 0.02
+done
+
+# Docker can't create a mount point inside the read-only profile, so make each one there first.
+orca_mount_point() {
+  local path=$1 rel
+  [[ $path == "$orca_data"/* ]] || return 0
+  rel=${path#"$orca_data"/}
+  if [[ -d $path ]]; then
+    mkdir -p "$orca_relay/data/$rel"
+  else
+    mkdir -p "$orca_relay/data/${rel%/*}"
+    touch "$orca_relay/data/$rel"
+  fi
+}
 args=(
   --rm
   --init
@@ -458,7 +535,7 @@ for name in \
   ORCA_AGENT_HOOK_PORT ORCA_AGENT_HOOK_TOKEN ORCA_AGENT_HOOK_ENV \
   ORCA_AGENT_HOOK_VERSION ORCA_AGENT_HOOK_TRANSPORT \
   ORCA_STRUCTURED_SESSION ORCA_AGENT_SESSION_ID ORCA_AGENT_SESSION_SPAWN_TOKEN \
-  ORCA_USER_DATA_PATH ORCA_CLI_COMMAND ORCA_ENVIRONMENT ORCA_PAIRING_CODE ORCA_REMOTE_PAIRING \
+  ORCA_USER_DATA_PATH ORCA_CLI_COMMAND ORCA_ENVIRONMENT \
   ORCA_CHAT_SCRATCH_DIR; do
   if [[ -v $name ]]; then
     args+=(--env "$name=${!name}")
@@ -476,8 +553,16 @@ if [[ $agent == claude ]]; then
     fi
   done
 fi
+# Each launch's hook bridge has its own directory; a sandbox sees only its own.
 if [[ -n ${ORCA_AGENT_HOOK_SOCKET:-} ]]; then
+  hook_dir=${ORCA_AGENT_HOOK_SOCKET%/hook.sock}
+  if [[ $hook_dir != "$orca_relay_dir"/session.* || ${hook_dir#"$orca_relay_dir"/} == */* ||
+    $ORCA_AGENT_HOOK_SOCKET != "$hook_dir/hook.sock" ]] || ! plain_dir "$hook_dir"; then
+    echo "agent-sandbox: refusing Orca hook socket outside $orca_relay_dir" >&2
+    exit 2
+  fi
   args+=(--env "PATH=$AGENT_SANDBOX_ORCA_PATH" --env "ORCA_AGENT_HOOK_SOCKET=$ORCA_AGENT_HOOK_SOCKET")
+  args+=(--volume "$hook_dir:$hook_dir")
 fi
 
 for dir in "${shared[@]}"; do
@@ -490,12 +575,16 @@ for dir in "$steam_common"/*/; do
     args+=(--volume "$data/steam-tools/${dir##*/}:$dir")
   fi
 done
+nix_repo_mounts
+if [[ -L $tohru_home ]] || { [[ -e $tohru_home ]] && ! plain_dir "$tohru_home"; }; then
+  echo "agent-sandbox: refusing to start: $tohru_home is not a plain directory" >&2
+  exit 2
+elif [[ -d $tohru_home ]]; then
+  args+=(--volume "$tohru_home:$tohru_home:ro")
+fi
 args+=(
-  --volume "$screenshots:$screenshots:ro"
   --volume "$media:$media"
-  --volume "$orca_relay_dir:$orca_relay_dir"
   --volume "$codex_socket_dir:/run/agent-sandbox-codex:ro"
-  --volume "$clipboard_dir:/run/host-clipboard:ro"
   --volume "$ssh_dir/host_ed25519:/run/agent-sandbox-ssh/host_ed25519:ro"
   --volume "$ssh_dir/authorized_keys:/run/agent-sandbox-ssh/authorized_keys:ro"
 )
@@ -513,29 +602,22 @@ fi
 if [[ -e /run/opengl-driver-32 ]]; then
   args+=(--volume /run/opengl-driver-32:/run/opengl-driver-32:ro)
 fi
-# Clients connect() to the socket rather than opening the file, so read-only mounts work.
-if [[ -n $host_wayland ]]; then
-  args+=(--volume "$host_wayland:$runtime/host-wayland-1:ro")
-fi
-# Tohru's desktop keeps rolling monitor captures here only while she is on screen, and empties
-# the folder (never removes it) when she goes, so this bind follows them. Only her bot sees them.
-tohru_screens=$runtime/tohru-screens
-if [[ $workdir == "$HOME/.orca/bots/tohru" || $workdir == "$HOME/.orca/bots/tohru"/* ]] &&
-  { [[ -d $tohru_screens ]] || mkdir -m 700 "$tohru_screens"; } && [[ -d $tohru_screens && ! -L $tohru_screens ]]; then
-  args+=(--volume "$tohru_screens:$tohru_screens:ro")
-fi
 
 mount_readonly "$HOME/.config/git"
 # Home Manager writes the image tag it installs here, so a session can tell it runs a stale image.
 mount_readonly "$HOME/.config/agent-sandbox" /run/agent-sandbox-host
 mount_readonly "$HOME/.config/last30days/.env"
-# Orca's CLI reads its runtime metadata and connects to the desktop's Unix
-# socket from this directory. Keep Orca's mutable workspace state host-owned.
-mount_readonly "$HOME/.config/orca"
+mount_readonly "$orca_relay/data" "$orca_data"
+# Chat hands agents the files people attach or paste by their path in Orca's profile.
+for dir in agent-session-attachments native-chat-pastes; do
+  if [[ -d $orca_data/$dir ]]; then
+    orca_mount_point "$orca_data/$dir"
+    args+=(--volume "$orca_data/$dir:$orca_data/$dir:ro")
+  fi
+done
 
 # Chat pins an account directory before spawning the provider. Preserve that
-# identity and its writable transcripts/config, overriding only that subtree of
-# Orca's read-only mount. The rest of Orca's desktop state stays read-only.
+# identity and its writable transcripts/config.
 account_variable=
 case $agent in
   codex) account_variable=CODEX_HOME ;;
@@ -543,10 +625,11 @@ case $agent in
 esac
 if [[ -n $account_variable && -n ${!account_variable:-} ]]; then
   account_home=${!account_variable}
-  if [[ $account_home != /* || ! -d $account_home || $account_home == *:* ]]; then
+  if [[ $account_home != /* || ! -d $account_home || $account_home == *:* ]] || protected_path "$account_home"; then
     echo "agent-sandbox: invalid $account_variable directory" >&2
     exit 2
   fi
+  orca_mount_point "$account_home"
   args+=(--env "$account_variable=$account_home" --volume "$account_home:$account_home")
   if [[ $PWD == "$account_home" || $PWD == "$account_home"/* ]]; then
     args+=(--workdir "$PWD")
@@ -555,10 +638,12 @@ fi
 
 # Inline Chat artifacts have a dedicated per-session directory under Orca state.
 if [[ -n ${ORCA_CHAT_SCRATCH_DIR:-} ]]; then
-  if [[ $ORCA_CHAT_SCRATCH_DIR != /* || ! -d $ORCA_CHAT_SCRATCH_DIR || $ORCA_CHAT_SCRATCH_DIR == *:* ]]; then
+  if [[ $ORCA_CHAT_SCRATCH_DIR != /* || ! -d $ORCA_CHAT_SCRATCH_DIR || $ORCA_CHAT_SCRATCH_DIR == *:* ]] ||
+    protected_path "$ORCA_CHAT_SCRATCH_DIR"; then
     echo 'agent-sandbox: invalid ORCA_CHAT_SCRATCH_DIR directory' >&2
     exit 2
   fi
+  orca_mount_point "$ORCA_CHAT_SCRATCH_DIR"
   args+=(--volume "$ORCA_CHAT_SCRATCH_DIR:$ORCA_CHAT_SCRATCH_DIR")
 fi
 
@@ -619,6 +704,7 @@ for _ in {1..5}; do
     --env 'AGENT_PREVIEW_PORTS=8080 8081 8082 8083 8084'
   )
   preview_host_port=18080
+  preview_origins=()
   for preview_port in {8080..8084}; do
     preview_host_port=$(free_port "$preview_host_port")
     while [[ $preview_host_port == "$vnc_port" || $preview_host_port == "$hyprland_vnc_port" || $preview_host_port == "$novnc_port" ]]; do
@@ -628,6 +714,7 @@ for _ in {1..5}; do
       --publish "$preview_host_port:$preview_port"
       --env "AGENT_PREVIEW_URL_$preview_port=http://$preview_address:$preview_host_port"
     )
+    preview_origins+=("http://$preview_address:$preview_host_port")
     preview_host_port=$((preview_host_port + 1))
   done
   if cid=$(docker create "${args[@]}" "${publish_args[@]}" "$image_ref" "$@"); then
@@ -640,14 +727,13 @@ if [[ -z $cid ]]; then
   echo "agent-sandbox: could not create the sandbox container" >&2
   exit 1
 fi
+# The relay lets Orca's browser open only this sandbox's own preview addresses.
+printf '%s\n' "${preview_origins[@]}" >"$orca_relay/preview-origins"
 
 echo "agent-sandbox: VNC on 127.0.0.1:$vnc_port, nested Hyprland on 127.0.0.1:$hyprland_vnc_port" >&2
 echo "agent-sandbox: VNC in the browser at $novnc_url" >&2
 if [[ -z $display ]]; then
   echo "agent-sandbox: displays start when an agent runs sandbox-display up; launch with --display to start them now" >&2
-fi
-if [[ -n $host_wayland ]]; then
-  echo "agent-sandbox: host display on $runtime/host-wayland-1" >&2
 fi
 
 # A named sandbox is the long-lived SSH host that agent-sandbox@.service runs;

@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -22,8 +23,13 @@ while [ $# -gt 0 ]; do
   shift
 done
 """,
-    "wl-paste": "#!/bin/sh\nexit 1\n",
-    "agent-sandbox-clipboard-sync": "#!/bin/sh\nexit 0\n",
+    "orca-relay": f"""#!{sys.executable}
+import socket, sys, time
+data = sys.argv[sys.argv.index("--data") + 1]
+listener = socket.socket(socket.AF_UNIX)
+listener.bind(data + "/relay.sock")
+time.sleep(600)
+""",
     "systemctl": "#!/bin/sh\nexit 0\n",
     "systemd-inhibit": "#!/bin/sh\nexit 0\n",
     "ip": "#!/bin/sh\nexit 0\n",
@@ -63,6 +69,7 @@ class LauncherOpenCode(unittest.TestCase):
             "AGENT_SANDBOX_SECCOMP": "/dev/null",
             "AGENT_SANDBOX_INSTRUCTIONS": "/dev/null",
             "AGENT_SANDBOX_ORCA_PATH": "/usr/bin",
+            "AGENT_SANDBOX_ORCA_RELAY": str(bin_dir / "orca-relay"),
         }
 
     def launched(self, *args):

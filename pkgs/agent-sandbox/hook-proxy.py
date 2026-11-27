@@ -217,16 +217,31 @@ class HookServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
         finally:
             self.slots.release()
 
-    def current_port(self) -> int:
+    def current_endpoint(self) -> tuple[int, bytes | None]:
+        """The desktop's live hook port and token, which change when Orca restarts."""
+        port, token = self.fallback_port, None
         try:
             with open(self.endpoint_path, encoding="ascii") as endpoint:
                 for line in endpoint:
-                    match = re.fullmatch(r"ORCA_AGENT_HOOK_PORT=([0-9]{1,5})\n?", line)
-                    if match and 0 < int(match[1]) <= 65535:
-                        return int(match[1])
-        except OSError:
+                    if match := re.fullmatch(r"ORCA_AGENT_HOOK_PORT=([0-9]{1,5})\n?", line):
+                        if 0 < int(match[1]) <= 65535:
+                            port = int(match[1])
+                    elif match := re.fullmatch(r"ORCA_AGENT_HOOK_TOKEN=([A-Za-z0-9._~+/=-]+)\n?", line):
+                        token = match[1].encode()
+        except (OSError, UnicodeError):
             pass
-        return self.fallback_port
+        return port, token
+
+
+def replace_hook_token(head: bytes, token: bytes | None) -> bytes:
+    if token is None:
+        return head
+    lines = head.split(b"\r\n")
+    for index, line in enumerate(lines):
+        name, sep, _ = line.partition(b":")
+        if sep and name.strip().lower() == b"x-orca-agent-hook-token":
+            lines[index] = b"X-Orca-Agent-Hook-Token: " + token
+    return b"\r\n".join(lines)
 
 
 class HookHandler(socketserver.BaseRequestHandler):
@@ -240,9 +255,11 @@ class HookHandler(socketserver.BaseRequestHandler):
             head, _, body = data.partition(b"\r\n\r\n")
             peer = peer_pid(self.request)
             head = translate_agent_process(head, peer)
+            port, token = server.current_endpoint()
+            head = replace_hook_token(head, token)
             data = translate_request(self.request, head, body, server.roots, peer)
             self.request.settimeout(None)
-            upstream = socket.create_connection(("127.0.0.1", server.current_port()), timeout=CONNECT_TIMEOUT)
+            upstream = socket.create_connection(("127.0.0.1", port), timeout=CONNECT_TIMEOUT)
         except (OSError, ValueError):
             return
         with upstream:
