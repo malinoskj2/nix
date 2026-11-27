@@ -82,6 +82,9 @@
           agent-egress-vm = pkgs.testers.runNixOSTest (
             import ../hosts/common/optional/agent-egress-test.nix { inherit inputs pkgs; }
           );
+          crash-core-vm = pkgs.testers.runNixOSTest (
+            import ../hosts/home/crash-core-test.nix { inherit pkgs; }
+          );
           tohru-greeter-vm = pkgs.testers.runNixOSTest (
             import ../hosts/home/greeter-test.nix {
               inherit (inputs) tohru;

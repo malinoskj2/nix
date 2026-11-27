@@ -1,0 +1,26 @@
+// Fields are tab-separated; comm comes last because it may contain anything.
+let @handled = lruhash(4096);
+
+tracepoint:signal:signal_generate
+/(args->sig == 4 || args->sig == 6 || args->sig == 7 || args->sig == 8 || args->sig == 11)
+  && args->result != 1
+  && (args->pid == tid || args->pid == pid)/
+{
+  $handler = (uint64)curtask->sighand->action[(uint64)(args->sig - 1)].sa.sa_handler;
+  if ($handler == 0) {
+    let $prior = ((uint64)0, (int32)-1, (int32)0);
+    if (find(@handled, tid, $prior)) {
+      $deleted = delete(@handled, tid);
+    }
+    printf("%s\t%d\t%d\t%d\t%d\t%d\t%llu\t%d\t%d\t%s\t%s\n",
+      strftime("%Y-%m-%dT%H:%M:%S.%f%z", nsecs), args->sig, args->code, pid, tid, cpu,
+      $prior.0 == 0 ? (uint64)0 : nsecs - $prior.0, $prior.1, $prior.2,
+      cgroup_path(cgroup), args->comm);
+  } else {
+    @handled[tid] = (nsecs, (int32)cpu, (int32)args->sig);
+  }
+}
+
+END {
+  clear(@handled);
+}

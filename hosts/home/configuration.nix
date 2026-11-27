@@ -36,6 +36,7 @@ in
     ./hardware-configuration.nix
     ./boot.nix
     ./corecycler.nix
+    ./crash-core.nix
     ./gaming.nix
     ./greeter.nix
     ./host-switch.nix
