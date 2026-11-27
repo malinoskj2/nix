@@ -1,3 +1,4 @@
+import os
 import secrets
 import sqlite3
 import string
@@ -90,6 +91,68 @@ class ScrubTest(unittest.TestCase):
         self.assert_no_leak(result)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("refusing", result.stderr)
+
+    def test_temp_symlink_not_followed(self):
+        victim = self.dir / "victim.txt"
+        victim.write_text("keep")
+        (self.rollout.parent / f".{self.rollout.name}.scrub").symlink_to(victim)
+        result = self.run_scrub("--redact")
+        self.assert_no_leak(result)
+        self.assertEqual(victim.read_text(), "keep")
+        self.assertFalse(self.rollout.is_symlink())
+
+    def test_overflow_pages_and_nul_blobs(self):
+        db = self.dir / "small.db"
+        con = sqlite3.connect(db)
+        con.execute("PRAGMA page_size=512")
+        con.execute("CREATE TABLE t (body TEXT, raw BLOB)")
+        con.execute(
+            "INSERT INTO t VALUES (?, ?)",
+            (" " * 512 + self.token + " " * 1000, b"prefix\0" + self.token.encode()),
+        )
+        con.commit()
+        con.close()
+        result = self.run_scrub()
+        self.assert_no_leak(result)
+        self.assertIn("small.db", result.stdout)
+        result = self.run_scrub("--redact")
+        self.assert_no_leak(result)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        con = sqlite3.connect(db)
+        body, raw = con.execute("SELECT body, raw FROM t").fetchone()
+        con.close()
+        self.assertNotIn(self.token, body)
+        self.assertNotIn(self.token.encode(), raw)
+
+    def test_error_messages_hide_token(self):
+        con = sqlite3.connect(self.db)
+        con.execute(
+            f"CREATE TRIGGER no_update BEFORE UPDATE ON events BEGIN SELECT RAISE(ABORT, 'blocked {self.token}'); END"
+        )
+        con.commit()
+        con.close()
+        result = self.run_scrub("--redact")
+        self.assert_no_leak(result)
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_unreadable_file_is_not_clean(self):
+        for p in [self.rollout, self.db]:
+            p.unlink()
+        for p in self.dir.rglob("*"):
+            if p.is_file():
+                p.unlink()
+        hidden = self.dir / "locked.jsonl"
+        hidden.write_text(self.token)
+        hidden.chmod(0)
+        try:
+            if os.access(hidden, os.R_OK):
+                self.skipTest("running as root")
+            result = self.run_scrub()
+        finally:
+            hidden.chmod(0o600)
+        self.assert_no_leak(result)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("no matches", result.stdout)
 
 
 if __name__ == "__main__":
