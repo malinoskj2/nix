@@ -417,29 +417,36 @@ class PortTest(unittest.TestCase):
 
         self.assertEqual(self.runner(docker).reserved_ports(), {5900})
 
-    def test_a_bind_conflict_at_start_retries_with_other_ports(self):
+    def retrying_runner(self, failures):
         calls = []
 
         def docker(*argv, check=True, timeout=300):
             calls.append(argv)
             if argv[0] == "ps":
-                return unittest.mock.Mock(stdout="")
-            if argv[0] == "start" and sum(call[0] == "start" for call in calls) == 1:
-                raise runner.Refused("docker start failed: Bind for 127.0.0.1:5900 failed: port is already allocated")
+                return unittest.mock.Mock(stdout="x\n")
+            if argv[0] == "container":
+                # The ports before 5914 are taken, and the conflict stays invisible to inspection.
+                bindings = {f"{p}/tcp": [{"HostPort": str(p)}] for p in range(5900, 5914)}
+                return unittest.mock.Mock(stdout=json.dumps(bindings) + "\n")
+            if argv[0] == "start" and sum(call[0] == "start" for call in calls) <= failures:
+                raise runner.Refused("docker start failed: Bind for 127.0.0.1:5914 failed: port is already allocated")
             return unittest.mock.Mock(stdout="", returncode=0)
 
-        r = self.runner(docker)
-        ports = []
-        for attempt in range(2):
-            try:
-                ports.append(r.publish_and_start("n", "img", [], attempt))
-            except runner.Refused:
-                docker("rm", "--force", "n")
+        return self.runner(docker), calls
+
+    def test_a_bind_conflict_at_start_retries_without_the_failed_ports(self):
+        r, calls = self.retrying_runner(failures=2)
+        r.start_with_free_ports("n", "img", [])
         creates = [call for call in calls if call[0] == "create"]
-        self.assertEqual(len(creates), 2)
-        self.assertIn("127.0.0.1:5900:5900", creates[0])
-        self.assertNotIn("127.0.0.1:5900:5900", creates[1])
-        self.assertEqual(len(ports), 1)
+        vnc = [next(arg for arg in create if arg.endswith(":5900")) for create in creates]
+        self.assertEqual(vnc, ["127.0.0.1:5914:5900", "127.0.0.1:5916:5900", "127.0.0.1:5918:5900"])
+        self.assertEqual(sum(call[:2] == ("rm", "--force") for call in calls), 2)
+
+    def test_retries_give_up_after_three_starts(self):
+        r, calls = self.retrying_runner(failures=3)
+        with self.assertRaises(runner.Refused):
+            r.start_with_free_ports("n", "img", [])
+        self.assertEqual(sum(call[0] == "create" for call in calls), 3)
 
 
 class RuntimeTest(unittest.TestCase):

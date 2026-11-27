@@ -935,13 +935,27 @@ class Runner:
             return ["--security-opt", f"seccomp={self.args.seccomp_profile}"]
         return []
 
-    def publish_and_start(self, name, image, args, attempt):
-        """Create and start the sandbox with free host ports; the caller holds the ports lock."""
-        taken = self.reserved_ports()
-        # A retry skips past the ports the failed attempt chose.
-        vnc = self.free_port(5900 + 3 * attempt, taken)
+    def start_with_free_ports(self, name, image, args):
+        """Create and start the sandbox on free host ports; the caller holds the ports lock.
+
+        Another engine client can still take a port between the probe and the start, so a start
+        that loses a bind retries without every port the failed attempts chose.
+        """
+        excluded = set()
+        for attempt in range(3):
+            try:
+                return self.publish_and_start(name, image, args, excluded)
+            except Refused as error:
+                if "port is already allocated" not in str(error) or attempt == 2:
+                    raise
+                self.docker("rm", "--force", name, check=False)
+        raise AssertionError("unreachable")
+
+    def publish_and_start(self, name, image, args, excluded):
+        taken = self.reserved_ports() | excluded
+        vnc = self.free_port(5900, taken)
         hyprland_vnc = self.free_port(vnc + 1, taken)
-        novnc = self.free_port(6080 + attempt, taken)
+        novnc = self.free_port(6080, taken)
         publish = [
             "--publish",
             f"127.0.0.1:{vnc}:5900",
@@ -953,12 +967,13 @@ class Runner:
             f"AGENT_SANDBOX_VNC_URL=http://127.0.0.1:{novnc}/vnc.html?autoconnect=1&resize=scale",
         ]
         ports = {}
-        host_port = 18080 + 5 * attempt
+        host_port = 18080
         for port in PREVIEW_PORTS:
             host_port = self.free_port(host_port, taken)
             url = f"http://{self.args.preview_address}:{host_port}"
             ports[port] = url
             publish += ["--publish", f"{host_port}:{port}", "--env", f"AGENT_PREVIEW_URL_{port}={url}"]
+        excluded.update(taken)
         self.docker("create", *args, *publish, image, "sleep", "infinity", timeout=120)
         self.docker("start", name, timeout=120)
         return ports, novnc
@@ -1047,15 +1062,7 @@ class Runner:
             args += ["--volume", "/run/opengl-driver-32:/run/opengl-driver-32:ro"]
         with open(self.args.ports_lock, "a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
-            # Another engine client can still take a port between the probe and the start.
-            for attempt in range(3):
-                try:
-                    ports, novnc = self.publish_and_start(name, image, args, attempt)
-                    break
-                except Refused as error:
-                    if "port is already allocated" not in str(error) or attempt == 2:
-                        raise
-                    self.docker("rm", "--force", name, check=False)
+            ports, novnc = self.start_with_free_ports(name, image, args)
         emit("err", f"started {name}\n")
         for _ in range(300):
             if self.docker("exec", name, "test", "-s", f"{runtime}/sshd_config", check=False).returncode == 0:
