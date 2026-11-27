@@ -861,10 +861,18 @@ symlinkJoin {
     imageRef = "agent-sandbox:${image.imageTag}";
     inherit image seccompProfile;
     smoke = sandboxSmoke;
-    rootGuardTests = runCommand "agent-sandbox-root-guard-tests" { nativeBuildInputs = [ python3 ]; } ''
-      python3 -B ${./test-root-guard.py} ${./.}
-      touch $out
-    '';
+    rootGuardTests =
+      runCommand "agent-sandbox-root-guard-tests"
+        {
+          nativeBuildInputs = [
+            bashInteractive
+            python3
+          ];
+        }
+        ''
+          python3 -B ${./test-root-guard.py} ${./.} -v
+          touch $out
+        '';
     runnerTests =
       runCommand "agent-sandbox-runner-tests"
         {

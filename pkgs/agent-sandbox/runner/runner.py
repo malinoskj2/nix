@@ -1144,6 +1144,8 @@ class Runner:
             return "runc"
         if self.has_runsc():
             return "runsc"
+        if requested == "runsc":
+            refuse("the host engine has no gVisor runtime")
         emit("err", "sandbox-runner: warning: the host engine has no gVisor runtime; running the stack on runc\n")
         return "runc"
 
@@ -1284,6 +1286,9 @@ class Runner:
     def compose_up(self, request, emit):
         project = self.project_name(request)
         with self.compose_lock(project):
+            # Only a stack that wasn't running falls back: its volumes and images hold nothing yet
+            # that a failed update of a running stack could lose.
+            fresh = not self.owned("ps", f"label={PROJECT_LABEL}={project}")
             entry = self.compose_submit(project, request, emit)
             argv = ["up", "--detach", "--remove-orphans"]
             if request.get("build"):
@@ -1292,7 +1297,7 @@ class Runner:
                 argv += ["--wait", "--wait-timeout", str(self.timeout(request))]
             argv += self.services(request, entry)
             code = self.compose_run(entry, project, argv, emit, self.timeout(request) + 60)
-            if code != 0 and entry["runtime"] == "runsc" and request.get("runtime") is None:
+            if code != 0 and fresh and entry["runtime"] == "runsc" and request.get("runtime") is None:
                 # Some images need syscalls or filesystem behaviour gVisor lacks. The stack keeps
                 # runc until it comes down, so each later up doesn't fail first.
                 emit(
@@ -1301,12 +1306,10 @@ class Runner:
                     "retrying on runc, with the host kernel's isolation only. "
                     "Pass --runtime runsc to keep gVisor and see its failure.\n",
                 )
-                self.compose_down_locked(project, emit=emit)
+                # Containers only: the volumes and built images carry over to runc.
+                self.compose_run(entry, project, ["down", "--remove-orphans", "--timeout", "10"], emit, 600)
                 self.runc_fallback.add(project)
                 entry = self.compose_submit(project, request, emit, runtime="runc")
-                # The teardown removed the stack's built images too.
-                if "--build" not in argv and any("build" in svc for svc in entry["model"]["services"].values()):
-                    argv.insert(argv.index("--remove-orphans") + 1, "--build")
                 code = self.compose_run(entry, project, argv, emit, self.timeout(request) + 60)
             self.connect_owner(project)
             return {

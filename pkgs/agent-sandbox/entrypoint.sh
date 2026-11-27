@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# The host's nix-daemon trusts root, so root must never hold its socket.
-if [[ $(id -u) == 0 && -e /nix/var/nix/daemon-socket ]]; then
-  echo "agent-sandbox: refusing to start as root with the nix-daemon socket mounted" >&2
+# Every sandbox holds the host nix-daemon's socket, and the daemon trusts root.
+if [[ $(id -u) == 0 ]]; then
+  echo "agent-sandbox: refusing to start as root, which nix-daemon would trust" >&2
   exit 1
 fi
 

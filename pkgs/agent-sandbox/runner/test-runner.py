@@ -422,9 +422,12 @@ class RuntimeTest(unittest.TestCase):
         r.runc_fallback.add("p")
         self.assertEqual(r.compose_runtime("p", {}, emit), "runc")
         self.assertEqual(r.compose_runtime("p", {"runtime": "runsc"}, emit), "runsc")
+        with self.assertRaises(runner.Refused):
+            self.runner(runsc=False).compose_runtime("p", {"runtime": "runsc"}, emit)
 
-    def fallback_runner(self, codes):
+    def fallback_runner(self, codes, running=()):
         r = self.runner()
+        r.owned = lambda *_: list(running)
         r.project_locks = {}
         r.lock = threading.Lock()
         r.downed = []
@@ -437,12 +440,15 @@ class RuntimeTest(unittest.TestCase):
             return {"runtime": runtime, "model": {"services": {"web": {"build": {}}}}}
 
         def run(entry, project, argv, emit, timeout):
+            if argv[0] == "down":
+                r.downed.append(list(argv))
+                return 0
             r.runs.append((entry["runtime"], list(argv)))
             return codes.pop(0)
 
         r.compose_submit = submit
         r.compose_run = run
-        r.compose_down_locked = lambda project, emit=None: r.downed.append(project)
+        r.compose_down_locked = lambda *_args, **_kwargs: self.fail("fallback must not run the destructive down")
         r.connect_owner = lambda _project: None
         r.compose_ps_data = lambda _project: []
         return r
@@ -454,10 +460,17 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(result["exit"], 0)
         self.assertEqual(result["runtime"], "runc")
         self.assertEqual([runtime for runtime, _ in r.runs], ["runsc", "runc"])
-        self.assertIn("--build", r.runs[1][1])
-        self.assertEqual(r.downed, ["p"])
+        self.assertEqual(r.runs[0][1], r.runs[1][1])
+        self.assertEqual(r.downed, [["down", "--remove-orphans", "--timeout", "10"]])
         self.assertTrue(any("retrying on runc" in message for message in messages))
         self.assertIn("p", r.runc_fallback)
+
+    def test_a_failed_update_of_a_running_stack_never_falls_back(self):
+        r = self.fallback_runner([1], running=["c1"])
+        result = r.compose_up({}, lambda *_: None)
+        self.assertEqual((result["exit"], result["runtime"]), (1, "runsc"))
+        self.assertEqual(r.downed, [])
+        self.assertNotIn("p", r.runc_fallback)
 
     def test_an_explicit_runtime_never_falls_back(self):
         r = self.fallback_runner([1])
