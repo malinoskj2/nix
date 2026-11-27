@@ -41,9 +41,10 @@ plus host facts. Shared modules are imported explicitly by relative path from
 - `users/jesse/interactive.nix`: for machines jesse sits at. It adds hardware
   and journal groups, imports Home Manager, and uses
   `users/jesse/profiles/<hostName>.nix` as his profile.
-- `optional/`: one concern per file: `agent-broker` (sops-nix secrets for
-  the `agent-broker` user, `docs/agent-secrets.md`), `docker`, `fail2ban`, `fonts`, `gvisor`, `hyprland`,
+- `optional/`: one concern per file: `agent-broker` (broker secrets and
+  services, on top of `secret-store`), `docker`, `fail2ban`, `fonts`, `gvisor`, `hyprland`,
   `nh`, `openssh-hardening`, `pipewire`, `server-tools`,
+  `secret-store` (the host's sops-nix secrets, `docs/secrets.md`),
   `sysctl-hardening`, `systemd-boot`, `workstation`.
 
 Host-only policy, such as media's sudo and `mutableUsers`, stays in the host.

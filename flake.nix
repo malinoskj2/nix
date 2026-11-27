@@ -82,7 +82,7 @@
       type = "github";
       owner = "malinoskj2";
       repo = "tohru";
-      rev = "197f15b424c096670c95eb433e067177e178db31";
+      rev = "a31c4623f2022b2663305484343b2a4fbf3e8fc4";
       # Its plugin must build against the same Hyprland as the desktop.
       inputs.hyprland-nixpkgs.follows = "nixpkgs-hyprland";
     };
@@ -122,7 +122,7 @@
           "corecycler"
           "council"
           "agent-sandbox"
-          "agent-secret"
+          "secret"
           "ai-usage"
           "antigravity-cli"
           "ata-devs"

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 usage() {
   cat <<'EOF'
-Usage: agent-secret <command> [args]
+Usage: secret <command> [args]
 
   init <recovery-recipient>  Create the host key and .sops.yaml for this host
-  list                       Show secret names: in the file, declared, deployed
+  list                       Show each name, its consumer kind, and whether it's
+                             in the file and deployed
   add <name> [--file PATH]   Add a secret, read from PATH, stdin or a prompt
   rotate <name> [--file PATH]
                              Replace an existing secret's value
@@ -24,7 +25,7 @@ EOF
 }
 
 die() {
-  echo "agent-secret: $*" >&2
+  echo "secret: $*" >&2
   exit 1
 }
 
@@ -34,12 +35,12 @@ if [[ ${1-} == -h || ${1-} == --help || $# -eq 0 ]]; then
 fi
 
 umask 077
-config=${AGENT_SECRETS_CONFIG:-/etc/agent-secrets/config.json}
+config=${SECRETS_CONFIG:-/etc/secrets/config.json}
 if [[ -r $config ]]; then
-  file=$(jq -r .secretsFile "$config")
+  file=$(jq -r .file "$config")
   key=$(jq -r .keyFile "$config")
 else
-  file=/var/lib/agent-secrets/secrets.yaml
+  file=/var/lib/secrets/secrets.yaml
   key=/var/lib/sops-nix/key.txt
 fi
 dir=$(dirname "$file")
@@ -61,7 +62,7 @@ has_key() {
 }
 
 need_rules() {
-  [[ -s $rules ]] || die "no $rules yet; run agent-secret init first"
+  [[ -s $rules ]] || die "no $rules yet; run secret init first"
 }
 
 run_sops() {
@@ -123,14 +124,14 @@ parse_source() {
 }
 
 remind_apply() {
-  echo "Run 'agent-secret apply' to deploy it; services that use it restart." >&2
+  echo "Run 'secret apply' to deploy it; services that use it restart." >&2
 }
 
 cmd=$1
 shift
 case $cmd in
   init)
-    recovery=${1:?usage: agent-secret init <recovery-recipient>}
+    recovery=${1:?usage: secret init <recovery-recipient>}
     [[ $recovery =~ $recipient_pattern ]] || die "not an age public key: $recovery"
     [[ -e $rules ]] && die "$rules exists; use recipient-add"
     mkdir -p "$dir" "$(dirname "$key")"
@@ -147,30 +148,29 @@ case $cmd in
   list)
     declared=()
     if [[ -r $config ]]; then
-      mapfile -t declared < <(jq -r '.secrets | to_entries[] | "\(.value.key) \(.value.path)"' "$config")
+      mapfile -t declared < <(jq -r '.secrets | to_entries[] | "\(.value.key) \(.value.kind) \(.value.path)"' "$config")
     fi
     present=()
     if [[ -s $file ]]; then
       mapfile -t present < <(yq -r 'keys | .[] | select(. != "sops")' "$file")
     fi
-    printf '%-32s %-8s %-9s %s\n' NAME IN-FILE DECLARED DEPLOYED
+    printf '%-32s %-7s %-8s %s\n' NAME KIND IN-FILE DEPLOYED
     declare -A seen=()
     for entry in "${declared[@]}"; do
-      name=${entry%% *}
-      path=${entry#* }
+      read -r name kind path <<<"$entry"
       seen[$name]=1
       in_file=no
       has_key "$name" && in_file=yes
       deployed=no
       [[ -e $path ]] && deployed=yes
-      printf '%-32s %-8s %-9s %s\n' "$name" "$in_file" yes "$deployed"
+      printf '%-32s %-7s %-8s %s\n' "$name" "$kind" "$in_file" "$deployed"
     done
     for name in "${present[@]}"; do
-      [[ -n ${seen[$name]-} ]] || printf '%-32s %-8s %-9s %s\n' "$name" yes no -
+      [[ -n ${seen[$name]-} ]] || printf '%-32s %-7s %-8s %s\n' "$name" - yes -
     done
     ;;
   add)
-    name=${1:?usage: agent-secret add <name> [--file PATH]}
+    name=${1:?usage: secret add <name> [--file PATH]}
     shift
     valid_name "$name"
     parse_source "$@"
@@ -180,7 +180,7 @@ case $cmd in
     remind_apply
     ;;
   rotate)
-    name=${1:?usage: agent-secret rotate <name> [--file PATH]}
+    name=${1:?usage: secret rotate <name> [--file PATH]}
     shift
     valid_name "$name"
     parse_source "$@"
@@ -190,7 +190,7 @@ case $cmd in
     remind_apply
     ;;
   remove)
-    name=${1:?usage: agent-secret remove <name>}
+    name=${1:?usage: secret remove <name>}
     valid_name "$name"
     has_key "$name" || die "$name isn't in $file"
     need_rules
@@ -209,7 +209,7 @@ case $cmd in
     yq -r '.creation_rules[0].age' "$rules" | tr ',' '\n'
     ;;
   recipient-add)
-    recipient=${1:?usage: agent-secret recipient-add <recipient>}
+    recipient=${1:?usage: secret recipient-add <recipient>}
     [[ $recipient =~ $recipient_pattern ]] || die "not an age public key: $recipient"
     need_rules
     if yq -r '.creation_rules[0].age' "$rules" | tr ',' '\n' | grep -qxF "$recipient"; then
@@ -232,15 +232,20 @@ case $cmd in
       die "skipped: $(journalctl -u sops-install-secrets -n 1 -o cat --no-pager)"
     echo "Deployed to /run/secrets" >&2
     if [[ -r $config ]]; then
+      while read -r name path; do
+        [[ -e $path ]] || echo "secret: $name isn't in $file, so it stays undeployed" >&2
+      done < <(jq -r '.secrets | to_entries[] | "\(.value.key) \(.value.path)"' "$config")
+    fi
+    if [[ -r $config ]]; then
       # Services skipped while their secrets were missing don't start on their own.
-      mapfile -t units < <(jq -r '.services[]' "$config")
+      mapfile -t units < <(jq -r '.units[]' "$config")
       for unit in "${units[@]}"; do
-        systemctl start "$unit" || echo "agent-secret: $unit didn't start; see journalctl -u $unit" >&2
+        systemctl start "$unit" || echo "secret: $unit didn't start; see journalctl -u $unit" >&2
       done
     fi
     ;;
   backup)
-    dest=${1:?usage: agent-secret backup <dir>}
+    dest=${1:?usage: secret backup <dir>}
     [[ -d $dest ]] || die "$dest isn't a directory"
     [[ -s $file ]] || die "no $file yet"
     stamp=$(date +%Y%m%d-%H%M%S)
@@ -250,7 +255,7 @@ case $cmd in
     echo "Copied the encrypted file to $dest/secrets-$host-$stamp.yaml" >&2
     ;;
   restore)
-    src=${1:?usage: agent-secret restore <file> [--identity PATH]}
+    src=${1:?usage: secret restore <file> [--identity PATH]}
     shift
     parse_source "$@"
     [[ -n $identity ]] && export SOPS_AGE_KEY_FILE=$identity

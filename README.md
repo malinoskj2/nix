@@ -43,4 +43,4 @@ Unreal Engine and agent MCP setup: [`docs/unreal-sandbox.md`](docs/unreal-sandbo
 
 GPU reservations for models, renders and games: [`docs/gpu-scheduler.md`](docs/gpu-scheduler.md).
 
-Secrets for agent-broker services: [`docs/agent-secrets.md`](docs/agent-secrets.md).
+Host and agent-broker secrets: [`docs/secrets.md`](docs/secrets.md).
