@@ -32,6 +32,7 @@ elif [[ $bot_status == 0 ]]; then
 fi
 
 if repo_root=$(git rev-parse --show-toplevel 2>/dev/null); then
+  identity=$repo_root
   # Linked worktrees use the main repository's name, regardless of their directory.
   git_common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
   if [[ $(basename "$git_common_dir") == .git ]]; then
@@ -42,11 +43,13 @@ elif [[ $bot_status == 0 ]]; then
   # Orca bots chat from their home, outside Git, and each keeps its own sandbox.
   # This wins over the chat account path, which every Codex chat sets.
   alias=sandbox-bot-${bot_home%%$'\n'*}
+  identity=bot:${bot_home%%$'\n'*}
 elif [[ $agent == codex && -n ${CODEX_HOME:-} ]] ||
   [[ $agent == claude && -n ${CLAUDE_CONFIG_DIR:-} ]]; then
   # Chat's model/account probes run from its account directory, outside Git.
   # They still need the sandbox and the selected account, never a host fallback.
   alias=sandbox-$agent-chat
+  identity=$alias
 else
   echo 'agent-sandbox-exec: run this command inside a Git repository' >&2
   exit 2
@@ -128,4 +131,5 @@ if [[ -n ${ORCA_PANE_KEY:-} && -n ${ORCA_AGENT_HOOK_PORT:-} && -n ${ORCA_AGENT_H
   start_hook_bridge
 fi
 
-AGENT_SANDBOX_NAME=$instance "$AGENT_SANDBOX_LAUNCHER" "${launcher_args[@]}" "--$agent" "$@"
+# Each worktree, bot and chat keeps its own preview ports across restarts.
+AGENT_SANDBOX_NAME=$instance AGENT_SANDBOX_IDENTITY=$identity "$AGENT_SANDBOX_LAUNCHER" "${launcher_args[@]}" "--$agent" "$@"

@@ -135,6 +135,7 @@
           agent-sandbox-launcher-opencode = self'.packages.agent-sandbox.launcherOpencodeTests;
           agent-sandbox-runner = self'.packages.agent-sandbox.runnerTests;
           agent-sandbox-launcher = self'.packages.agent-sandbox.launcherTests;
+          agent-sandbox-preview-ports = self'.packages.agent-sandbox.previewPortsTests;
           git-repo-guard = self'.packages.git-repo-guard.tests.guard;
           nix-land = self'.packages.nix-land.tests.landing;
           orca-host-git = self'.packages.orca-ade.tests.hostGit;

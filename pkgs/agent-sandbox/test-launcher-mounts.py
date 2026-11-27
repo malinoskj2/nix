@@ -7,6 +7,7 @@ then made unwritable by permissions, which stand in for the mounts, and Git runs
 
 import os
 from pathlib import Path
+from socket import create_server
 import stat
 import subprocess
 import sys
@@ -218,6 +219,38 @@ class LauncherMounts(unittest.TestCase):
                 result = self.launch("--codex", env={"CODEX_HOME": str(directory)})
                 self.assertEqual(result.returncode, 2)
                 self.assertFalse((self.log / "create").exists())
+
+    def preview_urls(self, identity, **env):
+        tool = self.root / "bin/preview-ports"
+        tool.write_text(f'#!/bin/sh\nexec bash {HERE / "agent-sandbox-preview-ports.sh"} "$@"\n')
+        tool.chmod(0o755)
+        env = {
+            "AGENT_SANDBOX_PREVIEW_PORTS_TOOL": str(tool),
+            "AGENT_SANDBOX_PREVIEW_BASE": "47100",
+            "AGENT_SANDBOX_IDENTITY": identity,
+            **env,
+        }
+        argv, _ = self.launched(env=env)
+        return [value.split("=", 1)[1] for value in argv if value.startswith("AGENT_PREVIEW_URL_")]
+
+    def test_preview_ports_stay_with_the_identity(self):
+        first = self.preview_urls("bot:elma")
+        ports = [int(url.rsplit(":", 1)[1]) for url in first]
+        self.assertEqual(ports, list(range(ports[0], ports[0] + 5)))
+        self.assertTrue(47100 <= ports[0] < 49100)
+        other = self.preview_urls("bot:kanna")
+        self.assertEqual(self.preview_urls("bot:elma"), first)
+        self.assertFalse(set(first) & set(other))
+
+    def test_preview_ports_in_use_fall_back_to_a_search(self):
+        first = self.preview_urls("bot:elma")
+        held = create_server(("127.0.0.1", int(first[2].rsplit(":", 1)[1])))
+        self.addCleanup(held.close)
+        fallback = self.preview_urls("bot:elma")
+        self.assertNotEqual(fallback, first)
+        self.assertTrue(all(18080 <= int(url.rsplit(":", 1)[1]) < 47100 for url in fallback))
+        held.close()
+        self.assertEqual(self.preview_urls("bot:elma"), first)
 
     def test_git_within_the_mounts(self):
         _, volumes = self.launched()

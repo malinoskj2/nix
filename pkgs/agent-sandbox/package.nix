@@ -834,6 +834,15 @@ let
     AGENT_SANDBOX_TAG = "hash-${image.imageTag}";
   };
 
+  previewPorts = writeShellApplication {
+    name = "agent-sandbox-preview-ports";
+    runtimeInputs = [
+      coreutils
+      util-linux
+    ];
+    text = builtins.readFile ./agent-sandbox-preview-ports.sh;
+  };
+
   launcher = writeShellApplication {
     name = "agent-sandbox";
     runtimeInputs = [
@@ -858,6 +867,7 @@ let
       # Claude reads these from the image; agy reads them as its global AGENTS.md.
       AGENT_SANDBOX_INSTRUCTIONS = "${instructions}";
       AGENT_SANDBOX_ORCA_RELAY = lib.getExe orcaRelay;
+      AGENT_SANDBOX_PREVIEW_PORTS_TOOL = lib.getExe previewPorts;
       AGENT_SANDBOX_RUNNER = lib.getExe runner;
       AGENT_SANDBOX_SECCOMP = "${seccompProfile}";
     };
@@ -950,7 +960,7 @@ symlinkJoin {
   name = "agent-sandbox";
   passthru = {
     imageRef = "agent-sandbox:${image.imageTag}";
-    inherit image seccompProfile;
+    inherit image previewPorts seccompProfile;
     smoke = sandboxSmoke;
     rootGuardTests =
       runCommand "agent-sandbox-root-guard-tests"
@@ -1001,8 +1011,25 @@ symlinkJoin {
         ''
           cp ${./agent-sandbox.sh} agent-sandbox.sh
           cp ${./egress.sh} egress.sh
+          cp ${./agent-sandbox-preview-ports.sh} agent-sandbox-preview-ports.sh
           cp ${./test-launcher-mounts.py} test-launcher-mounts.py
           python3 -B test-launcher-mounts.py -v
+          touch $out
+        '';
+    previewPortsTests =
+      runCommand "agent-sandbox-preview-ports-tests"
+        {
+          nativeBuildInputs = [
+            bashInteractive
+            coreutils
+            python3
+            util-linux
+          ];
+        }
+        ''
+          cp ${./agent-sandbox-preview-ports.sh} agent-sandbox-preview-ports.sh
+          cp ${./test-preview-ports.py} test-preview-ports.py
+          python3 -B test-preview-ports.py -v
           touch $out
         '';
     unrealTools = unreal.tools;
@@ -1089,6 +1116,7 @@ symlinkJoin {
   };
   paths = [
     launcher
+    previewPorts
     codexServer
     execAgent
     resumeAgent

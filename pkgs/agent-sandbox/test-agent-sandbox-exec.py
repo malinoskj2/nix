@@ -108,6 +108,25 @@ class SandboxAliasTest(Harness):
         alias, _, _ = self.alias(self.launch(account, CLAUDE_CONFIG_DIR=str(account)))
         self.assertEqual(alias, "sandbox-claude-chat")
 
+    def test_preview_identity_is_the_bot_chat_or_worktree(self):
+        self.script("launcher", 'echo "$AGENT_SANDBOX_IDENTITY"')
+        repo = git_init(self.home / "projects/app")
+        worktree = self.home / "orca/workspaces/app/feature"
+        git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t"]
+        subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "base"], check=True)
+        subprocess.run([*git, "worktree", "add", "-q", "-b", "feature", str(worktree)], check=True)
+        account = self.home / ".claude"
+        for cwd, extra, identity in (
+            (self.bot("elma"), {}, "bot:elma"),
+            (repo, {}, str(repo)),
+            (worktree, {}, str(worktree)),
+            (account, {"CLAUDE_CONFIG_DIR": str(account)}, "sandbox-claude-chat"),
+        ):
+            with self.subTest(identity=identity):
+                result = self.launch(cwd, **extra)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), identity)
+
     def test_bots_root_and_other_folders_still_need_git(self):
         for cwd in (self.bots, self.home / "elsewhere"):
             with self.subTest(cwd=cwd):

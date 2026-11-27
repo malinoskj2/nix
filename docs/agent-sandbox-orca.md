@@ -72,7 +72,15 @@ environment travels with the agent process. Further arguments go to the
 selected agent.
 
 Each container also publishes sandbox ports `8080` through `8084` on five
-available host ports, starting the search at `18080`. They are published on
+host ports that stay with the sandbox's identity across restarts: the bot for
+a bot's sandbox, the worktree for one started in a Git repository, the chat
+account sandbox, or the instance name. `agent-sandbox-preview-ports` gives each
+identity a block from `19000` to `20999`, picked from its hash and moved to the
+next free block on a collision, and records it in
+`~/.local/share/agent-sandbox/preview-ports`; a removed worktree gives its
+block back. When the block is in use, such as by a second sandbox of the same
+worktree, that launch searches for free ports from `18080` instead, as
+disposable siblings always do. They are published on
 every interface, so any device on the LAN can open a running preview without
 signing in. Agents choose an unused port from `$AGENT_PREVIEW_PORTS` and bind
 the server to `0.0.0.0`. `AGENT_PREVIEW_URL_8080` through
@@ -83,7 +91,9 @@ the sandbox's browser and on other devices. For the loopback fallback, the
 entrypoint forwards each host port to its sandbox port on the container's
 loopback with `socat`. These links work only
 while the preview server and its container are running. After rebuilding the
-config, start a new sandbox to pick up the mappings.
+config, start a new sandbox to pick up the mappings. When
+`bot-sandbox-refresh` restarts a bot's sandbox, it mails the bot an Orca status
+message saying its running servers and `/tmp` are gone, with its preview URLs.
 
 Orca saves local clipboard image pastes under `/tmp/agent-media`, which is
 shared with the sandbox at the same path. The sandbox's private `/tmp` cannot

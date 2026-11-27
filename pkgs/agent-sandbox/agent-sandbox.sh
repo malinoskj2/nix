@@ -693,6 +693,28 @@ case $agent in
   opencode) set -- opencode "$@" ;;
 esac
 
+# The identity's own preview ports, kept across restarts. A sandbox stopping for a restart
+# can still hold them for a moment; another live one of the same identity keeps them.
+preview_base=
+if [[ -n ${AGENT_SANDBOX_PREVIEW_PORTS_TOOL:-} ]]; then
+  preview_identity=${AGENT_SANDBOX_IDENTITY:-${AGENT_SANDBOX_NAME:-$workdir}}
+  preview_base=$("$AGENT_SANDBOX_PREVIEW_PORTS_TOOL" "$preview_identity") || preview_base=
+fi
+preview_ports_free() {
+  local port
+  for ((port = preview_base; port < preview_base + 5; port++)); do
+    if [[ $reserved_ports == *" $port "* ]] || (: <"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+      return 1
+    fi
+  done
+}
+if [[ -n $preview_base ]]; then
+  for _ in {1..12}; do
+    preview_ports_free && break
+    sleep 0.25
+  done
+fi
+
 # Serialize port selection with container creation across concurrent
 # launches. A created container binds its ports only when it starts, so the
 # probe also skips every port an existing container publishes.
@@ -713,10 +735,21 @@ for _ in {1..5}; do
     --env 'AGENT_PREVIEW_PORTS=8080 8081 8082 8083 8084'
   )
   preview_host_port=18080
+  stable_preview=
+  if [[ -n $preview_base ]]; then
+    if preview_ports_free; then
+      stable_preview=1
+      preview_host_port=$preview_base
+    else
+      echo "agent-sandbox: preview ports $preview_base-$((preview_base + 4)) are in use, so this launch takes others" >&2
+    fi
+    # A failed attempt may have lost them, so a retry searches.
+    preview_base=
+  fi
   preview_origins=()
   for preview_port in {8080..8084}; do
-    preview_host_port=$(free_port "$preview_host_port")
-    while [[ $preview_host_port == "$vnc_port" || $preview_host_port == "$hyprland_vnc_port" || $preview_host_port == "$novnc_port" ]]; do
+    [[ -n $stable_preview ]] || preview_host_port=$(free_port "$preview_host_port")
+    while [[ -z $stable_preview ]] && [[ $preview_host_port == "$vnc_port" || $preview_host_port == "$hyprland_vnc_port" || $preview_host_port == "$novnc_port" ]]; do
       preview_host_port=$(free_port $((preview_host_port + 1)))
     done
     publish_args+=(
