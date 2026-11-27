@@ -33,6 +33,35 @@
           local-models = self'.packages.local-models.tests.sync;
           media-web = self'.packages.media-web.tests.stubs;
           devshell = self'.devShells.default;
+          # Secrets stay on each host; the repository is public, so not even ciphertext goes in.
+          no-committed-secrets =
+            pkgs.runCommand "no-committed-secrets" { nativeBuildInputs = [ pkgs.ripgrep ]; }
+              ''
+                if rg --files-with-matches --hidden --text \
+                  -e 'ENC\[AES256_GCM,' \
+                  -e '^age-encryption\.org/v1$' \
+                  -e '-{5}BEGIN AGE ENCRYPTED FILE-{5}' \
+                  -e 'AGE-SECRET-KEY-1[0-9A-Z]{58}' \
+                  ${self}; then
+                  echo "these tracked files hold sops or age ciphertext or keys; keep them on the host instead" >&2
+                  exit 1
+                fi
+                touch "$out"
+              '';
+          agent-sandbox-no-secret-mounts =
+            pkgs.runCommand "agent-sandbox-no-secret-mounts" { nativeBuildInputs = [ pkgs.ripgrep ]; }
+              ''
+                if rg --line-number --glob '*.{sh,py,nix}' \
+                  -e '/run/secrets' \
+                  -e '/run/agent-broker-' \
+                  -e '/var/lib/(agent-secrets|sops-nix)' \
+                  -e '(src=|--volume "?|-v "?|mount_readonly "?)/(run|var|var/lib)?[:,"[:space:]]' \
+                  ${../pkgs/agent-sandbox}; then
+                  echo "the sandbox must never mount decrypted secrets, the encrypted file or the host key" >&2
+                  exit 1
+                fi
+                touch "$out"
+              '';
           gpu-scheduler = self'.packages.gpu-scheduler.tests.scheduler;
           cargo-preferences = self'.packages.cargo-preferences;
           rust-lints-library = self'.packages.rust-lints.lintLibrary;
@@ -41,6 +70,9 @@
           zsh-claude-command = self'.packages.zsh-claude-command.tests.widget;
         }
         // lib.optionalAttrs (system == "x86_64-linux") {
+          agent-broker-vm = pkgs.testers.runNixOSTest (
+            import ../hosts/common/optional/agent-broker-test.nix { inherit inputs pkgs; }
+          );
           tohru-greeter-vm = pkgs.testers.runNixOSTest (
             import ../hosts/home/greeter-test.nix {
               inherit (inputs) tohru;
