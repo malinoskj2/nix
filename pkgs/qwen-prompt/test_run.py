@@ -129,7 +129,8 @@ http.server.HTTPServer(('127.0.0.1', int(sys.argv[sys.argv.index('--port') + 1])
                     self.assertEqual(args[args.index("--max-context") + 1], "16384")
                     self.assertEqual(args[args.index("--kv") + 1], "int8")
                     self.assertIn("--resident-experts", args)
-                    self.assertEqual(args[args.index("--resident-budget-gib") + 1], "24")
+                    self.assertEqual(args[args.index("--expert-cache") + 1], "5200")
+                    self.assertEqual(args[args.index("--resident-budget-gib") + 1], "32")
                     self.assertEqual(args[args.index("--conversation-cache-mib") + 1], "4096")
                     self.assertEqual(args[args.index("--ple-io") + 1], "direct")
                     self.assertEqual(config["arch"], "qwen4exp")
@@ -141,10 +142,10 @@ http.server.HTTPServer(('127.0.0.1', int(sys.argv[sys.argv.index('--port') + 1])
 
 
 class BookingTest(unittest.TestCase):
-    def test_dense_books_26gib_and_moe_the_whole_gpu(self):
+    def test_dense_books_26gib_and_moe_its_default_profile(self):
         for mode, booking in (
             ("dense", ["--vram", "26GiB"]),
-            ("moe", ["--exclusive"]),
+            ("moe", ["--vram", "23GiB"]),
         ):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)

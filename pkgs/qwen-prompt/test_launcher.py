@@ -1,3 +1,4 @@
+import fcntl
 import json
 import os
 import signal
@@ -17,9 +18,11 @@ from pathlib import Path
 args = sys.argv[1:]
 if os.environ['EXPECT_VRAM'] == 'exclusive':
     assert '--exclusive' in args and '--vram' not in args, args
-else:
+elif os.environ['EXPECT_VRAM'] != 'any':
     assert args[args.index('--vram') + 1] == os.environ['EXPECT_VRAM'], args
     assert '--exclusive' not in args
+with Path(os.environ['BOOKINGS']).open('a') as f:
+    f.write(args[args.index('--vram') + 1] + '\\n')
 command = args[args.index('--') + 1:]
 log = Path(os.environ['GPU_LOG'])
 def interrupted(signum, _frame):
@@ -55,7 +58,9 @@ if 'strata' in argv[0]:
     args = config['args']
     assert argv[argv.index('--engine') + 1] == 'strata' and '--offline' in argv, argv
     assert args[args.index('--native') + 1].endswith(os.environ['EXPECT_MODEL']), args
-    assert args[args.index('--max-context') + 1] == os.environ['EXPECT_CONTEXT'], args
+    assert os.environ['EXPECT_CONTEXT'] in ('any', args[args.index('--max-context') + 1]), args
+    with Path(os.environ['CONTEXTS']).open('a') as f:
+        f.write(args[args.index('--max-context') + 1] + ' ' + args[args.index('--expert-cache') + 1] + '\\n')
     assert args[args.index('--kv') + 1] == 'int8' and config['arch'] == 'qwen4exp', config
     assert '--resident-experts' in args and '--ple-gguf' in args, args
     assert Path(config['exe']).is_absolute(), config
@@ -127,8 +132,11 @@ if '--version' in sys.argv:
     sys.exit()
 assert sys.argv[1:] == ['--standalone', 'project-dir', '--prompt', '-h', '--uncensored', '--moe'], sys.argv
 config = json.loads(os.environ['OPENCODE_CONFIG_CONTENT'])
-assert config['model'] == 'local-qwen/qwen'
-assert config['providers']['local-qwen']['models']['qwen']['limit']['context'] == int(os.environ['EXPECT_CONTEXT'])
+default = os.environ['EXPECT_DEFAULT']
+models = config['providers']['local-qwen']['models']
+assert config['model'] == f'local-qwen/{default}' and config['small_model'] == 'local-qwen/qwen', config
+if os.environ['EXPECT_CONTEXT'] != 'any':
+    assert models[default]['limit']['context'] == int(os.environ['EXPECT_CONTEXT']), models
 base = config['providers']['local-qwen']['settings']['baseURL']
 key = os.environ['QWEN_LOCAL_API_KEY']
 log = Path(os.environ['GPU_LOG'])
@@ -142,8 +150,8 @@ def call(path, payload=None):
     with urllib.request.urlopen(request, timeout=30) as response:
         return response.read().decode()
 
-def chat(text, stream=True):
-    return call('/chat/completions', {'model': 'qwen', 'stream': stream, 'messages': [{'role': 'user', 'content': text}]})
+def chat(text, stream=True, model=default):
+    return call('/chat/completions', {'model': model, 'stream': stream, 'messages': [{'role': 'user', 'content': text}]})
 
 def wait_for(predicate):
     deadline = time.monotonic() + 15
@@ -158,7 +166,7 @@ except urllib.error.HTTPError as error:
     assert error.code == 401
 
 scenario = os.environ['SCENARIO']
-assert json.loads(call('/models'))['data'][0]['id'] == 'qwen'
+assert sorted(m['id'] for m in json.loads(call('/models'))['data']) == sorted(models), call('/models')
 assert 'acquire' not in events(), 'listing models must not load Qwen'
 if scenario == 'cycle':
     body = chat('hello idle world')
@@ -168,6 +176,13 @@ if scenario == 'cycle':
     assert json.loads(chat('again', stream=False))['choices'][0]['message']['content'] == 'AGAIN'
     assert events().count('acquire') == 2
     sys.exit(int(os.environ['EXIT_CODE']))
+if scenario == 'switch':
+    assert 'HELLO' in chat('hello', model='flash-next-12g')
+    assert 'TITLE' in chat('title', model='qwen')
+    assert 'BACK' in chat('back', stream=False)
+    assert 'SMALL' in chat('small', model='qwen')
+    assert events().count('acquire') == 2 and events().count('release') == 1, events()
+    sys.exit(0)
 chat('hold the model')
 Path(os.environ['READY']).write_text('')
 time.sleep(60)
@@ -213,6 +228,9 @@ class LauncherTest(unittest.TestCase):
             "EXPECT_VRAM": "26GiB",
             "EXPECT_CONTEXT": "65536",
             "EXPECT_MODEL": MODELS["uncensored"][1],
+            "EXPECT_DEFAULT": "qwen",
+            "BOOKINGS": str(self.root / "bookings"),
+            "CONTEXTS": str(self.root / "contexts"),
         }
 
     def tearDown(self):
@@ -260,11 +278,12 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual(events.count("acquire"), 2)
         self.assertEqual(len((self.root / "servers").read_text().split()), 2)
 
-    def test_moe_serves_flash_next_through_strata_on_the_whole_gpu_and_caches_its_pack(self):
+    def test_moe_serves_flash_next_in_its_default_profile_and_caches_its_pack(self):
         self.env |= {
-            "EXPECT_VRAM": "exclusive",
+            "EXPECT_VRAM": "23GiB",
             "EXPECT_CONTEXT": "262144",
             "EXPECT_MODEL": MOE_MODELS["uncensored"][1],
+            "EXPECT_DEFAULT": "flash-next-20g",
         }
         for _ in range(2):
             for name in ("gpu.log", "servers"):
@@ -275,6 +294,40 @@ class LauncherTest(unittest.TestCase):
             self.assertIn(MOE_MODELS["uncensored"][0], stderr)
             self.assertEqual(self.assert_released().count("acquire"), 2)
         self.assertEqual((self.root / "pack.log").read_text().split(), ["built"])
+        self.assertEqual((self.root / "contexts").read_text().split()[:2], ["262144", "5200"])
+
+    def test_picking_another_profile_reloads_strata_under_its_booking(self):
+        self.env |= {
+            "EXPECT_VRAM": "any",
+            "EXPECT_CONTEXT": "any",
+            "EXPECT_MODEL": MOE_MODELS["uncensored"][1],
+            "EXPECT_DEFAULT": "flash-next-20g",
+        }
+        process = self.launch("switch", "moe")
+        _, stderr = process.communicate(timeout=60)
+        self.assertEqual(process.returncode, 0, stderr)
+        self.assert_released()
+        self.assertEqual((self.root / "bookings").read_text().split(), ["13GiB", "23GiB"])
+        self.assertEqual((self.root / "contexts").read_text().split(), ["131072", "1650", "262144", "5200"])
+        log = next((self.root / "state" / "qwen-opencode").glob("*.log"), None)
+        self.assertIsNone(log, "the log is kept only after an error")
+
+    def test_one_flash_next_runs_at_a_time(self):
+        lock = self.root / "cache" / "qwen-prompt" / "strata" / "serve.lock"
+        lock.parent.mkdir(parents=True)
+        with open(lock, "w") as held:
+            fcntl.flock(held, fcntl.LOCK_EX)
+            waiter = subprocess.Popen(
+                [sys.executable, str(LAUNCHER.with_name("qwen_local.py")), "--strata-lock", "true"],
+                env=self.env,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            time.sleep(1)
+            self.assertIsNone(waiter.poll())
+        _, stderr = waiter.communicate(timeout=15)
+        self.assertEqual(waiter.returncode, 0, stderr)
+        self.assertIn("Waiting for another Flash-Next to unload", stderr)
 
     def test_strata_flag_is_refused(self):
         process = self.launch("cycle", "strata")
@@ -340,6 +393,29 @@ class LauncherTest(unittest.TestCase):
         _, stderr = process.communicate(timeout=30)
         self.assertEqual(process.returncode, 1)
         self.assertIn("Already inside a GPU reservation", stderr)
+
+
+class QueueTest(unittest.TestCase):
+    def test_the_small_model_follows_a_pending_switch(self):
+        from opencode import Backend
+
+        with tempfile.TemporaryDirectory() as directory, open(Path(directory) / "log", "w") as log:
+            backend = Backend(Path(directory) / "model", "test", 60, log, directory, "moe")
+            backend.profile, backend.ready = "flash-next-12g", True
+            selected, ready, _ = backend.acquire("flash-next-20g", 0)
+            self.assertFalse(ready)
+            title, ready, _ = backend.acquire("qwen", 0)
+            self.assertFalse(ready, "a title must not jump ahead of the pending switch")
+            self.assertEqual([backend.wants(0), backend.wants(1)], ["flash-next-20g", "flash-next-20g"])
+            backend.profile = "flash-next-20g"
+            self.assertEqual(backend.wait(selected, 0), (True, None))
+            self.assertEqual(backend.wait(title, 0), (True, None))
+            self.assertEqual(backend.waiting, [])
+            later, ready, _ = backend.acquire("qwen", 0)
+            self.assertTrue(ready)
+            for ticket in (selected, title, later):
+                backend.release(ticket)
+            self.assertEqual(backend.serving, 0)
 
 
 if __name__ == "__main__":
