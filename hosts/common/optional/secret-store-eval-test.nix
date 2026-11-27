@@ -90,6 +90,16 @@ let
         sops.secrets.zhost.path = "/run/secrets/token";
       }
     ];
+    traversal-host = fails "secret names may use only" [
+      {
+        agentBroker.secrets.token = { };
+        secrets.host."z/../token" = {
+          owner = "jesse";
+          key = "other";
+        };
+      }
+    ];
+    traversal-broker = fails "secret names may use only" [ { agentBroker.secrets."../token" = { }; } ];
     host-consumer-not-service = evalFails [
       {
         secrets.host.token = {

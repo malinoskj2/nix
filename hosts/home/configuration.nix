@@ -51,6 +51,7 @@ in
     clients = [ "jesse" ];
     egress.enable = true;
   };
+  secrets.host.venice-api-key.owner = "jesse";
 
   networking = {
     hostName = "home";
