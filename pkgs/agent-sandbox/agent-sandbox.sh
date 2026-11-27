@@ -357,8 +357,10 @@ done
 mkdir -p "$media"
 mkdir -p "$model_root" 2>/dev/null || true
 mount_readonly "$model_root"
+# Entering a store triggers its automount, so an NFS store is bound mounted rather than as
+# an empty autofs point; one that can't be reached is left out.
 for store in "${model_stores[@]}"; do
-  if [[ -n $store ]]; then mount_readonly "$store"; fi
+  if [[ -n $store ]] && timeout 15 test -d "$store/."; then mount_readonly "$store"; fi
 done
 mkdir -p "$orca_relay_dir" "$orca_relays"
 chmod 700 "$orca_relay_dir" "$orca_relays"
