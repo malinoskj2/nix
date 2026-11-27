@@ -143,8 +143,17 @@ def split(catalog):
     validate(catalog)
     wanted = wanted_aliases(catalog["entries"])
     entries = catalog["entries"].items()
-    consumer = {**catalog, "entries": {a: {**e, "enabled": True} for a, e in entries if a in wanted}}
-    retained = {"entries": {a: {**e, "enabled": False} for a, e in entries if a not in wanted}}
+    # Activation links the two files separately; pruning needs both from one generation.
+    generation = fingerprint(catalog)
+    consumer = {
+        **catalog,
+        "generation": generation,
+        "entries": {a: {**e, "enabled": True} for a, e in entries if a in wanted},
+    }
+    retained = {
+        "generation": generation,
+        "entries": {a: {**e, "enabled": False} for a, e in entries if a not in wanted},
+    }
     return consumer, retained
 
 
@@ -760,6 +769,13 @@ def load(catalog_path, retained_path):
     retained = json.loads(retained_path.read_text())
     if not isinstance(retained.get("entries"), dict):
         raise ValueError("Retained entries are malformed")
+    if not retained.get("generation") or retained["generation"] != catalog.get("generation"):
+        print(
+            f"{retained_path} is from another deployment than the catalog; pruning is disabled until both match",
+            file=sys.stderr,
+            flush=True,
+        )
+        return catalog, None
     return catalog, retained
 
 

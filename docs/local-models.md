@@ -140,8 +140,10 @@ local-models prune             # prune now, without syncing
 ```
 
 Pruning fails closed. A catalog that is missing, truncated, invalid or empty
-stops the run before anything is synchronized or deleted, and while
-`.state/retained.json` is absent or malformed nothing is pruned.
+stops the run before anything is synchronized or deleted. While
+`.state/retained.json` is absent or malformed, or comes from another deployment
+than `catalog.json` (both carry the build's `generation`, and activation links
+them one after the other), nothing is pruned.
 
 See [systemd.path](https://www.freedesktop.org/software/systemd/man/latest/systemd.path.html)
 for its post-exit check and

@@ -619,6 +619,28 @@ class Pruning(unittest.TestCase):
         after = sorted(str(p) for p in self.root.rglob("*") if "/.state" not in str(p) and p.name != "readiness.json")
         self.assertEqual(after, files)
 
+    def test_catalog_and_retained_from_different_deployments_prune_nothing(self):
+        self.deploy(self.catalog)
+        self.assertEqual(self.run_main("sync")[0], 0)
+        blob = (self.root / "by-name/other/other.bin").resolve()
+        disabled = copy.deepcopy(self.catalog)
+        disabled["entries"]["other"]["enabled"] = False
+        consumer, retained = split(disabled)
+        # Activation has linked the new catalog but not yet its retained entries.
+        (self.root / "catalog.json").write_text(json.dumps(consumer))
+        code, output = self.run_main("sync")
+        self.assertEqual(code, 0)
+        self.assertIn("pruning is disabled until both match", output)
+        self.assertTrue(blob.is_file())
+        self.assertTrue(os.path.lexists(self.root / "by-name/other"))
+        (self.root / ".state/retained.json").write_text(json.dumps({**retained, "generation": None}))
+        self.assertIn("pruning is disabled", self.run_main("sync")[1])
+        self.assertTrue(blob.is_file())
+        (self.root / ".state/retained.json").write_text(json.dumps(retained))
+        self.assertEqual(self.run_main("sync")[0], 0)
+        self.assertTrue(blob.is_file())
+        self.assertFalse(os.path.lexists(self.root / "by-name/other"))
+
     def test_dry_run_lists_without_removing(self):
         self.deploy(self.catalog)
         self.assertEqual(self.run_main("sync")[0], 0)
