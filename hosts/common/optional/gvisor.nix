@@ -1,38 +1,13 @@
-{
-  config,
-  lib,
-  pkgs,
-  ...
-}:
-let
-  # --reproduce-nftables copies the netns's nftables NAT rules through iptables-nft-save and
-  # iptables-legacy-restore, so runsc needs both on PATH; without them it falls back to reading the
-  # legacy tables, and when those don't exist every container fails to start.
-  runsc = pkgs.writeShellScript "runsc" ''
-    PATH=${lib.makeBinPath [ config.networking.firewall.package ]}:$PATH
-    exec ${pkgs.gvisor}/bin/runsc "$@"
-  '';
-in
+{ pkgs, ... }:
 {
   # gVisor's user-space kernel, for review Compose stacks the agent sandboxes' runner starts. They
   # never get the GPU, so this doesn't need a runsc whose nvproxy knows the host driver.
   virtualisation.docker.daemon.settings.runtimes.runsc = {
-    path = "${runsc}";
-    # Docker's embedded DNS answers at 127.0.0.11 through NAT rules in the container's netns, which
-    # iptables-nft writes as nftables; gVisor's own network stack sees them only when it copies them.
-    runtimeArgs = [ "--reproduce-nftables" ];
-  };
-
-  # The copy goes through the legacy NAT table of each container's netns. A unit rather than
-  # boot.kernelModules, so a switch loads them too; iptables-legacy doesn't load them from runsc.
-  systemd.services.gvisor-nat-modules = {
-    description = "Load the legacy NAT table gVisor copies Docker's DNS rules through";
-    wantedBy = [ "multi-user.target" ];
-    before = [ "docker.service" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStart = "${pkgs.kmod}/bin/modprobe -a ip_tables iptable_nat";
-    };
+    path = "${pkgs.gvisor}/bin/runsc";
+    # Docker's embedded DNS listens on the host kernel's loopback in each container's netns, which
+    # gVisor's own network stack can't reach, so services couldn't resolve each other. With host
+    # networking the sandbox makes its sockets in that netns (never the host's: the runner only
+    # allows networks that give the container its own), and every other syscall stays in gVisor.
+    runtimeArgs = [ "--network=host" ];
   };
 }
