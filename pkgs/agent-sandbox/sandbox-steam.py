@@ -43,7 +43,21 @@ def steam_running() -> bool:
     return subprocess.run(["pgrep", "-x", "steam"], stdout=subprocess.DEVNULL).returncode == 0
 
 
+def seccomp_filtered() -> bool:
+    for line in Path("/proc/self/status").read_text().splitlines():
+        if line.startswith("Seccomp:"):
+            return line.split()[1] != "0"
+    return False
+
+
 def main() -> None:
+    # Steam's bubblewrap needs user namespaces, which Docker's default seccomp profile refuses.
+    if seccomp_filtered():
+        log(
+            "this sandbox runs Docker's default seccomp profile, which refuses the user namespaces "
+            "Steam's bubblewrap needs; start a Steam sandbox with `sandbox --steam <agent>` on the host"
+        )
+        sys.exit(1)
     args = sys.argv[1:]
     online = args[:1] == ["--online"]
     if online:

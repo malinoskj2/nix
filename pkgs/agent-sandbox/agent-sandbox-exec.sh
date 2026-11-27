@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
 launcher_args=()
-if [[ ${1:-} == --display ]]; then
-  launcher_args+=(--display)
+while [[ ${1:-} == --display || ${1:-} == --steam ]]; do
+  launcher_args+=("$1")
   shift
-fi
+done
 
 if [[ $# -lt 1 ]]; then
-  echo 'usage: agent-sandbox-exec [--display] <claude|codex|antigravity|opencode> [agent arguments...]' >&2
+  echo 'usage: agent-sandbox-exec [--display] [--steam] <claude|codex|antigravity|opencode> [agent arguments...]' >&2
   exit 2
 fi
 

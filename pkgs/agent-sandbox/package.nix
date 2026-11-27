@@ -29,6 +29,7 @@
   dejavu_fonts,
   diffutils,
   dig,
+  docker,
   docker-buildx,
   docker-client,
   docker-compose,
@@ -638,6 +639,13 @@ let
 
   caBundle = "${cacert}/etc/ssl/certs/ca-bundle.crt";
 
+  # Docker's own default profile, from the engine the host runs, with the additions that tools in
+  # the image were shown to need. Only Steam sandboxes run without seccomp.
+  seccompProfile = runCommand "agent-sandbox-seccomp.json" { nativeBuildInputs = [ jq ]; } ''
+    jq --slurpfile additions ${./seccomp-additions.json} '.syscalls += $additions[0]' \
+      ${docker.moby-src}/vendor/github.com/moby/profiles/seccomp/default.json >$out
+  '';
+
   # The image carries no store paths: the launcher mounts the host store read-only,
   # which also resolves the /run/opengl-driver symlinks that the NVIDIA CDI spec mounts.
   image = dockerTools.streamLayeredImage {
@@ -765,6 +773,7 @@ let
       # Claude reads these from the image; agy reads them as its global AGENTS.md.
       AGENT_SANDBOX_INSTRUCTIONS = "${instructions}";
       AGENT_SANDBOX_RUNNER = lib.getExe runner;
+      AGENT_SANDBOX_SECCOMP = "${seccompProfile}";
     };
     text = builtins.readFile ./agent-sandbox.sh;
   };
@@ -850,8 +859,12 @@ symlinkJoin {
   name = "agent-sandbox";
   passthru = {
     imageRef = "agent-sandbox:${image.imageTag}";
-    inherit image;
+    inherit image seccompProfile;
     smoke = sandboxSmoke;
+    rootGuardTests = runCommand "agent-sandbox-root-guard-tests" { nativeBuildInputs = [ python3 ]; } ''
+      python3 -B ${./test-root-guard.py} ${./.}
+      touch $out
+    '';
     runnerTests =
       runCommand "agent-sandbox-runner-tests"
         {

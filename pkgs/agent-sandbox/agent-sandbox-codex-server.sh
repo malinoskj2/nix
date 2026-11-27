@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
 uid=$(id -u)
+if [[ $uid == 0 ]]; then
+  echo "agent-sandbox-codex-server: refusing to run as root" >&2
+  exit 2
+fi
 gid=$(id -g)
 data=${XDG_DATA_HOME:-$HOME/.local/share}/agent-sandbox
 sandbox_home=$data/home

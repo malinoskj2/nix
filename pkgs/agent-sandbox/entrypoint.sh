@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# The host's nix-daemon trusts root, so root must never hold its socket.
+if [[ $(id -u) == 0 && -e /nix/var/nix/daemon-socket ]]; then
+  echo "agent-sandbox: refusing to start as root with the nix-daemon socket mounted" >&2
+  exit 1
+fi
+
 log_dir=$XDG_RUNTIME_DIR/logs
 mkdir -p "$log_dir"
 

@@ -1,0 +1,14 @@
+[
+  {
+    "names": ["personality"],
+    "action": "SCMP_ACT_ALLOW",
+    "args": [{ "index": 0, "value": 262144, "op": "SCMP_CMP_EQ" }],
+    "comment": "ADDR_NO_RANDOMIZE: LLDB and GDB launch debuggees with ASLR off; LLDB refuses to launch without it"
+  },
+  {
+    "names": ["personality"],
+    "action": "SCMP_ACT_ALLOW",
+    "args": [{ "index": 0, "value": 262152, "op": "SCMP_CMP_EQ" }],
+    "comment": "PER_LINUX32 | ADDR_NO_RANDOMIZE: the same for 32-bit debuggees"
+  }
+]

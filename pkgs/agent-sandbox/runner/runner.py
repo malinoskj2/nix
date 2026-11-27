@@ -43,6 +43,8 @@ PREVIEW_PORTS = range(8080, 8085)
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,23}$")
 ENV_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 TRUSTED_IMAGE_RE = re.compile(r"^agent-sandbox:[a-z0-9]{32}$")
+# gVisor runs review stacks by default; they never get the GPU, which runsc's nvproxy would need.
+RUNTIMES = ("runsc", "runc")
 SANDBOX_IMAGE_RE = re.compile(r"^(docker\.io/)?(library/)?agent-sandbox(-candidate)?(:|@|$)")
 
 
@@ -288,8 +290,9 @@ def add_labels(entry, labels):
 
 
 class ComposeModel:
-    def __init__(self, model, project, pins, labels, root_volume="asr-root", files=None):
+    def __init__(self, model, project, pins, labels, root_volume="asr-root", files=None, runtime="runc"):
         self.model = copy.deepcopy(model)
+        self.runtime = runtime
         self.project = project
         self.pins = pins
         self.labels = labels
@@ -471,6 +474,7 @@ class ComposeModel:
         service["oom_score_adj"] = max(500, int(service.get("oom_score_adj", 500)))
         service["restart"] = "no"
         service["cgroup_parent"] = "agent-sandbox.slice"
+        service["runtime"] = self.runtime
         add_labels(service, self.labels)
 
     def build(self, where, build):
@@ -556,6 +560,8 @@ class Runner:
         self.images = []
         self.project_locks = {}
         self.base_labels = {OWNER_LABEL: self.owner}
+        self.runc_fallback = set()
+        self.runsc_available = None
 
     # Docker helpers
 
@@ -906,6 +912,15 @@ class Runner:
             shutil.rmtree(self.state / name, ignore_errors=True)
             raise
 
+    def sandbox_security(self, request):
+        if request.get("steam"):
+            # Steam's FHS wrapper and Proton's pressure-vessel run bubblewrap, which needs
+            # unprivileged user namespaces and an unmasked /proc to mount a fresh one.
+            return ["--security-opt", "seccomp=unconfined", "--security-opt", "systempaths=unconfined"]
+        if self.args.seccomp_profile:
+            return ["--security-opt", f"seccomp={self.args.seccomp_profile}"]
+        return []
+
     def create_sandbox(self, name, image, pins, worktree, request, emit):
         uid, gid = os.getuid(), os.getgid()
         runtime = f"/run/user/{uid}"
@@ -925,10 +940,7 @@ class Runner:
             "ALL",
             "--security-opt",
             "no-new-privileges",
-            "--security-opt",
-            "seccomp=unconfined",
-            "--security-opt",
-            "systempaths=unconfined",
+            *self.sandbox_security(request),
             "--pids-limit",
             "8192",
             "--cgroup-parent",
@@ -979,6 +991,8 @@ class Runner:
             f"AGENT_SANDBOX_INSTANCE={name}",
             "--env",
             f"AGENT_SANDBOX_DISPLAY={'1' if request.get('display') else ''}",
+            "--env",
+            f"AGENT_SANDBOX_STEAM={'1' if request.get('steam') else ''}",
             "--env",
             "AGENT_PREVIEW_PORTS=8080 8081 8082 8083 8084",
             "--interactive",
@@ -1113,7 +1127,27 @@ class Runner:
         with self.lock:
             return self.project_locks.setdefault(project, threading.Lock())
 
-    def compose_submit(self, project, request, emit):
+    def has_runsc(self):
+        if self.runsc_available is None:
+            result = self.docker("info", "--format", "{{json .Runtimes}}", check=False, timeout=60)
+            try:
+                self.runsc_available = "runsc" in json.loads(result.stdout or "{}")
+            except ValueError:
+                self.runsc_available = False
+        return self.runsc_available
+
+    def compose_runtime(self, project, request, emit):
+        requested = request.get("runtime")
+        if requested not in (None, *RUNTIMES):
+            refuse(f"runtime must be one of {', '.join(RUNTIMES)}")
+        if requested == "runc" or (requested is None and project in self.runc_fallback):
+            return "runc"
+        if self.has_runsc():
+            return "runsc"
+        emit("err", "sandbox-runner: warning: the host engine has no gVisor runtime; running the stack on runc\n")
+        return "runc"
+
+    def compose_submit(self, project, request, emit, runtime=None):
         model = request.get("model")
         worktree = request.get("worktree")
         if not isinstance(model, dict):
@@ -1123,7 +1157,8 @@ class Runner:
             labels = {**self.base_labels, KIND_LABEL: "compose", PROJECT_LABEL: project}
             directory = self.state / "compose" / project
             directory.mkdir(parents=True, exist_ok=True)
-            checker = ComposeModel(model, project, pins, labels, self.root_volume(pins.root), directory)
+            runtime = runtime or self.compose_runtime(project, request, emit)
+            checker = ComposeModel(model, project, pins, labels, self.root_volume(pins.root), directory, runtime)
             validated = checker.validate()
         except BaseException:
             pins.close()
@@ -1141,6 +1176,7 @@ class Runner:
                 "worktree": worktree,
                 "dir": directory,
                 "model": validated,
+                "runtime": runtime,
                 "touched": time.monotonic(),
             }
         if previous is not None:
@@ -1256,8 +1292,29 @@ class Runner:
                 argv += ["--wait", "--wait-timeout", str(self.timeout(request))]
             argv += self.services(request, entry)
             code = self.compose_run(entry, project, argv, emit, self.timeout(request) + 60)
+            if code != 0 and entry["runtime"] == "runsc" and request.get("runtime") is None:
+                # Some images need syscalls or filesystem behaviour gVisor lacks. The stack keeps
+                # runc until it comes down, so each later up doesn't fail first.
+                emit(
+                    "err",
+                    f"sandbox-runner: warning: {project} failed under gVisor (exit {code}); "
+                    "retrying on runc, with the host kernel's isolation only. "
+                    "Pass --runtime runsc to keep gVisor and see its failure.\n",
+                )
+                self.compose_down_locked(project, emit=emit)
+                self.runc_fallback.add(project)
+                entry = self.compose_submit(project, request, emit, runtime="runc")
+                # The teardown removed the stack's built images too.
+                if "--build" not in argv and any("build" in svc for svc in entry["model"]["services"].values()):
+                    argv.insert(argv.index("--remove-orphans") + 1, "--build")
+                code = self.compose_run(entry, project, argv, emit, self.timeout(request) + 60)
             self.connect_owner(project)
-            return {"exit": code, "project": project, "services": self.compose_ps_data(project)}
+            return {
+                "exit": code,
+                "project": project,
+                "runtime": entry["runtime"],
+                "services": self.compose_ps_data(project),
+            }
 
     def compose_build(self, request, emit):
         project = self.project_name(request)
@@ -1352,6 +1409,7 @@ class Runner:
         self.remove_owned(f"label={PROJECT_LABEL}={project}")
         with self.lock:
             entry = self.projects.pop(project, None)
+            self.runc_fallback.discard(project)
         if entry is not None:
             entry["pins"].close()
             shutil.rmtree(entry["dir"], ignore_errors=True)
@@ -1526,6 +1584,7 @@ def parse_args(argv):
     parser.add_argument("--ports-lock", required=True)
     parser.add_argument("--preview-address", default="127.0.0.1")
     parser.add_argument("--gpu-lease-dir")
+    parser.add_argument("--seccomp-profile", help="the seccomp profile for disposable sandboxes that don't run Steam")
     parser.add_argument("--docker", default="docker")
     parser.add_argument("--compose", default="docker-compose")
     parser.add_argument("--buildx", default="/usr/libexec/docker/cli-plugins/docker-buildx")
@@ -1536,6 +1595,9 @@ def parse_args(argv):
 
 def main(argv):
     args = parse_args(argv)
+    # The sandboxes it starts share the host's nix-daemon socket, and the daemon trusts root.
+    if os.getuid() == 0:
+        sys.exit("agent-sandbox-runner: refusing to run as root")
     runner = Runner(args)
     runner.sweep_orphans()
     runner.state.mkdir(parents=True, exist_ok=True)

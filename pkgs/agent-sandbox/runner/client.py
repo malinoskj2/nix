@@ -106,10 +106,10 @@ def compose(args):
             "timeout": args.timeout,
         }
         if args.action == "up":
-            request.update(build=args.build, wait=args.wait)
+            request.update(build=args.build, wait=args.wait, runtime=args.runtime)
         result = call(request)
         if args.action == "up":
-            show({"project": result["project"], "services": result["services"]})
+            show({"project": result["project"], "runtime": result.get("runtime"), "services": result["services"]})
         finish(result)
     if args.action == "ps":
         show(call({**base, "op": "compose.ps"}))
@@ -158,6 +158,7 @@ def sandbox(args):
                     "worktree": worktree,
                     "display": args.display,
                     "gpu": not args.no_gpu,
+                    "steam": args.steam,
                 }
             )
         )
@@ -206,6 +207,9 @@ def main():
     launch.add_argument("--worktree", help="Git worktree to share read-write; default: the current one")
     launch.add_argument("--display", action="store_true", help="start the displays at launch")
     launch.add_argument("--no-gpu", action="store_true")
+    launch.add_argument(
+        "--steam", action="store_true", help="loosen seccomp and /proc for Steam and Proton's bubblewrap"
+    )
     for action in ("exec", "logs", "rm"):
         command = sb.add_parser(action)
         command.add_argument("id")
@@ -231,6 +235,11 @@ def main():
         if action == "up":
             command.add_argument("--build", action="store_true")
             command.add_argument("--wait", action="store_true", help="wait until services are healthy")
+            command.add_argument(
+                "--runtime",
+                choices=("runsc", "runc"),
+                help="gVisor (runsc) by default, retrying on runc if the stack fails under it",
+            )
         if action == "logs":
             command.add_argument("--tail", type=int)
         if action == "exec":

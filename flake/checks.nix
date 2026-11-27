@@ -94,6 +94,7 @@
           agent-sandbox-exec = self'.packages.agent-sandbox.execTests;
           agent-sandbox-codex = self'.packages.agent-sandbox.codexTests;
           agent-sandbox-runner = self'.packages.agent-sandbox.runnerTests;
+          agent-sandbox-root-guard = self'.packages.agent-sandbox.rootGuardTests;
           sandbox-display = self'.packages.agent-sandbox.displayTests;
         };
     };

@@ -1,3 +1,4 @@
+import argparse
 import io
 import json
 import os
@@ -141,6 +142,10 @@ class ComposeTest(Tree):
             self.assertEqual(service["restart"], "no")
             self.assertLessEqual(service["pids_limit"], runner.MAX_PIDS)
             self.assertEqual(service["labels"][runner.OWNER_LABEL], "agent-sandbox-test")
+            self.assertEqual(service["runtime"], "runc")
+        gvisor = runner.ComposeModel(social_hub(self.worktree), PROJECT, self.pins(), LABELS, runtime="runsc")
+        for service in gvisor.validate()["services"].values():
+            self.assertEqual(service["runtime"], "runsc")
         mount = model["services"]["wiremock"]["volumes"][0]
         self.assertEqual(
             mount,
@@ -167,6 +172,7 @@ class ComposeTest(Tree):
         services = lambda m: m["services"]  # noqa: E731
         cases = {
             "privileged": lambda m: services(m)["postgres"].update(privileged=True),
+            "runtime chosen in the file": lambda m: services(m)["postgres"].update(runtime="runc"),
             "privileged post_start hook": lambda m: services(m)["postgres"].update(
                 post_start=[{"command": ["id"], "user": "root", "privileged": True}]
             ),
@@ -355,6 +361,7 @@ class TeardownTest(unittest.TestCase):
         r = object.__new__(runner.Runner)
         r.lock = threading.Lock()
         r.projects = {}
+        r.runc_fallback = set()
         r.removed = []
         for project in projects:
             directory = Path(tempfile.mkdtemp())
@@ -391,6 +398,80 @@ class TeardownTest(unittest.TestCase):
         self.assertIn("p1", r.projects)
         self.assertNotIn("p2", r.projects)
         self.assertEqual(len(downed), 2)
+
+
+class RuntimeTest(unittest.TestCase):
+    def runner(self, runsc=True, seccomp=None):
+        r = object.__new__(runner.Runner)
+        r.args = argparse.Namespace(seccomp_profile=seccomp)
+        r.runc_fallback = set()
+        r.runsc_available = runsc
+        return r
+
+    def test_review_stacks_default_to_gvisor(self):
+        warnings = []
+        emit = lambda _stream, text: warnings.append(text)  # noqa: E731
+        self.assertEqual(self.runner().compose_runtime("p", {}, emit), "runsc")
+        self.assertEqual(self.runner().compose_runtime("p", {"runtime": "runc"}, emit), "runc")
+        self.assertEqual(warnings, [])
+        self.assertEqual(self.runner(runsc=False).compose_runtime("p", {}, emit), "runc")
+        self.assertIn("no gVisor runtime", warnings[0])
+        with self.assertRaises(runner.Refused):
+            self.runner().compose_runtime("p", {"runtime": "kata"}, emit)
+        r = self.runner()
+        r.runc_fallback.add("p")
+        self.assertEqual(r.compose_runtime("p", {}, emit), "runc")
+        self.assertEqual(r.compose_runtime("p", {"runtime": "runsc"}, emit), "runsc")
+
+    def fallback_runner(self, codes):
+        r = self.runner()
+        r.project_locks = {}
+        r.lock = threading.Lock()
+        r.downed = []
+        r.runs = []
+        r.project_name = lambda _request: "p"
+        r.timeout = lambda _request: 60
+
+        def submit(project, request, emit, runtime=None):
+            runtime = runtime or r.compose_runtime(project, request, emit)
+            return {"runtime": runtime, "model": {"services": {"web": {"build": {}}}}}
+
+        def run(entry, project, argv, emit, timeout):
+            r.runs.append((entry["runtime"], list(argv)))
+            return codes.pop(0)
+
+        r.compose_submit = submit
+        r.compose_run = run
+        r.compose_down_locked = lambda project, emit=None: r.downed.append(project)
+        r.connect_owner = lambda _project: None
+        r.compose_ps_data = lambda _project: []
+        return r
+
+    def test_a_stack_that_fails_under_gvisor_retries_on_runc(self):
+        r = self.fallback_runner([1, 0])
+        messages = []
+        result = r.compose_up({}, lambda _stream, text: messages.append(text))
+        self.assertEqual(result["exit"], 0)
+        self.assertEqual(result["runtime"], "runc")
+        self.assertEqual([runtime for runtime, _ in r.runs], ["runsc", "runc"])
+        self.assertIn("--build", r.runs[1][1])
+        self.assertEqual(r.downed, ["p"])
+        self.assertTrue(any("retrying on runc" in message for message in messages))
+        self.assertIn("p", r.runc_fallback)
+
+    def test_an_explicit_runtime_never_falls_back(self):
+        r = self.fallback_runner([1])
+        result = r.compose_up({"runtime": "runsc"}, lambda *_: None)
+        self.assertEqual((result["exit"], result["runtime"]), (1, "runsc"))
+        self.assertEqual(r.downed, [])
+
+    def test_only_steam_sandboxes_run_without_seccomp(self):
+        r = self.runner(seccomp="/nix/store/x-seccomp.json")
+        self.assertEqual(r.sandbox_security({}), ["--security-opt", "seccomp=/nix/store/x-seccomp.json"])
+        self.assertEqual(
+            r.sandbox_security({"steam": True}),
+            ["--security-opt", "seccomp=unconfined", "--security-opt", "systempaths=unconfined"],
+        )
 
 
 if __name__ == "__main__":

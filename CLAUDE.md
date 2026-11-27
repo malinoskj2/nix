@@ -41,7 +41,7 @@ plus host facts. Shared modules are imported explicitly by relative path from
 - `users/jesse/interactive.nix`: for machines jesse sits at. It adds hardware
   and journal groups, imports Home Manager, and uses
   `users/jesse/profiles/<hostName>.nix` as his profile.
-- `optional/`: one concern per file: `docker`, `fail2ban`, `fonts`, `hyprland`,
+- `optional/`: one concern per file: `docker`, `fail2ban`, `fonts`, `gvisor`, `hyprland`,
   `nh`, `openssh-hardening`, `pipewire`, `server-tools`,
   `sysctl-hardening`, `systemd-boot`, `workstation`.
 

@@ -23,6 +23,7 @@ in
     ../common/global.nix
     ../common/optional/docker.nix
     ../common/optional/fonts.nix
+    ../common/optional/gvisor.nix
     ../common/optional/hyprland.nix
     ../common/optional/nh.nix
     ../common/optional/pipewire.nix
@@ -66,6 +67,15 @@ in
     max-jobs = 4;
     cores = 8;
   };
+
+  # Every agent sandbox holds nix-daemon's socket as jesse. A trusted client can turn off the build
+  # sandbox or set hooks the daemon runs as root, so the daemon trusts root only.
+  assertions = [
+    {
+      assertion = config.nix.settings.trusted-users == [ "root" ];
+      message = "agent sandboxes share nix-daemon's socket, so nix.settings.trusted-users must stay [ \"root\" ]";
+    }
+  ];
 
   security.sudo.extraRules = [
     {

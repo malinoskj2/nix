@@ -1,19 +1,33 @@
 #!/usr/bin/env bash
 
 uid=$(id -u)
+# The host's nix-daemon trusts root, and the container would share the daemon socket.
+if [[ $uid == 0 ]]; then
+  echo "agent-sandbox: refusing to run as root" >&2
+  exit 2
+fi
 gid=$(id -g)
 user=$(id -un)
 group=$(id -gn)
 runtime=/run/user/$uid
 
 # --display brings up the headless displays at startup; without it, agents start them with
-# sandbox-display. Without an agent flag, the arguments are the container's command, Claude by default.
+# sandbox-display. --steam (or AGENT_SANDBOX_STEAM=1) loosens seccomp and /proc for Steam and
+# Proton. Without an agent flag, the arguments are the container's command, Claude by default.
 display=
+steam=
+if [[ ${AGENT_SANDBOX_STEAM:-} == 1 ]]; then
+  steam=1
+fi
 agent=
 while [[ $# -gt 0 ]]; do
   case $1 in
     --display)
       display=1
+      shift
+      ;;
+    --steam)
+      steam=1
       shift
       ;;
     --claude | --codex | --antigravity | --opencode)
@@ -345,6 +359,7 @@ done
   --state-dir "$data/runner/$(sha256sum <<<"$sandbox_instance" | cut -c1-16)" \
   --image "$image_ref" "${runner_roots[@]}" --passwd "$data/passwd" --group "$data/group" \
   --ports-lock "$runtime/agent-sandbox-ports.lock" --gpu-lease-dir "$gpu_lease_dir" \
+  --seccomp-profile "$AGENT_SANDBOX_SECCOMP" \
   --preview-address "$preview_address" \
   --docker-socket "$docker_socket" >"$runner_dir/runner.log" 2>&1 &
 runner_pid=$!
@@ -356,10 +371,6 @@ args=(
   --user "$uid:$gid"
   --cap-drop ALL
   --security-opt no-new-privileges
-  # Steam's FHS wrapper and Proton's pressure-vessel run bubblewrap, which needs
-  # unprivileged user namespaces and an unmasked /proc to mount a fresh one.
-  --security-opt seccomp=unconfined
-  --security-opt systempaths=unconfined
   # Steam's crash reporter would upload sandbox client dumps to Valve.
   --add-host crash.steampowered.com:0.0.0.0
   --add-host crash.steampowered.com:::
@@ -402,10 +413,18 @@ args=(
   --volume "$runner_dir:/run/agent-sandbox-runner:ro"
   --env AGENT_SANDBOX_RENDERERS
   --env AGENT_SANDBOX_DISPLAY="$display"
+  --env AGENT_SANDBOX_STEAM="$steam"
   --env XDG_RUNTIME_DIR="$runtime"
   --env DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"
   --env SWAYSOCK="$runtime/sway.sock"
 )
+if [[ -n $steam ]]; then
+  # Steam's FHS wrapper and Proton's pressure-vessel run bubblewrap, which needs
+  # unprivileged user namespaces and an unmasked /proc to mount a fresh one.
+  args+=(--security-opt seccomp=unconfined --security-opt systempaths=unconfined)
+else
+  args+=(--security-opt "seccomp=$AGENT_SANDBOX_SECCOMP")
+fi
 
 # Forward only the specific Orca fields agents and hook scripts use, not the
 # host environment. With a hook bridge socket, PATH switches to the Orca curl
