@@ -23,9 +23,16 @@ in
     runtimeArgs = [ "--reproduce-nftables" ];
   };
 
-  # The copy goes through the legacy NAT table of each container's netns.
-  boot.kernelModules = [
-    "ip_tables"
-    "iptable_nat"
-  ];
+  # The copy goes through the legacy NAT table of each container's netns. A unit rather than
+  # boot.kernelModules, so a switch loads them too; iptables-legacy doesn't load them from runsc.
+  systemd.services.gvisor-nat-modules = {
+    description = "Load the legacy NAT table gVisor copies Docker's DNS rules through";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "docker.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${pkgs.kmod}/bin/modprobe -a ip_tables iptable_nat";
+    };
+  };
 }
