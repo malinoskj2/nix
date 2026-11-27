@@ -251,6 +251,23 @@ tool needs no credential, or any placeholder it insists on.
 - Bind credentials only to APIs that never echo request headers back, since
   whatever the API returns, the sandbox reads.
 
+Decrypting needs the proxy to run without `MemoryDenyWriteExecute`, the one
+hardening option the other broker services keep and it drops. mitmproxy's
+TLS layer gives every intercepted connection a pyOpenSSL ALPN-selection
+callback, and cffi builds each
+`ffi.callback()` in a page that is writable and executable at once. On Linux
+cffi deliberately doesn't use libffi's W^X trampolines, so there is no build
+that avoids it short of patching cffi against its author's advice or
+rewriting pyOpenSSL's callbacks. With the option on, every bound or inspected
+host fails right after the ClientHello and the journal shows `Cannot allocate
+write+execute memory for ffi.callback()`; hosts the proxy passes through
+untouched still work, which is why it can go unnoticed. The cost is that code
+injected into the proxy, say through a parser bug in mitmproxy, can map
+executable memory directly instead of needing a return-oriented chain. The
+proxy still runs as `agent-broker` with no capabilities, `NoNewPrivileges`,
+a read-only system, the `@system-service` syscall filter and only `AF_UNIX`
+and IP sockets, and it holds only the bound secrets and the egress CA's key.
+
 ## Steam sandboxes
 
 `sandbox --steam` keeps Docker's default bridge, because Steam's client

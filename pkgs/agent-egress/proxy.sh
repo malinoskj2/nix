@@ -23,6 +23,6 @@ exec mitmdump --quiet \
   --listen-host 127.0.0.1 --listen-port "${AGENT_EGRESS_PORT:-3128}" \
   --set confdir="$conf" \
   --set connection_strategy=eager \
-  --set ssl_verify_upstream_trusted_ca="$AGENT_EGRESS_UPSTREAM_CA" \
+  --set ssl_verify_upstream_trusted_ca="${AGENT_EGRESS_UPSTREAM_CA:?}" \
   --set termlog_verbosity=error \
   --scripts "$AGENT_EGRESS_ADDON"

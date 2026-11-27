@@ -118,12 +118,18 @@ in
       egress-proxy = {
         description = "Agent sandbox egress proxy";
         path = [ pkgs.agent-egress ];
-        environment.AGENT_EGRESS_PORT = toString proxyPort;
+        environment = {
+          AGENT_EGRESS_PORT = toString proxyPort;
+          AGENT_EGRESS_UPSTREAM_CA = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+        };
         script = "exec agent-egress-proxy";
         socketDirMode = "2755";
         serviceConfig = {
           StateDirectory = "agent-broker-egress";
           StateDirectoryMode = "0711";
+          # cffi's ffi.callback() needs W+X pages on Linux, and mitmproxy's TLS interception
+          # always installs pyOpenSSL callbacks.
+          MemoryDenyWriteExecute = false;
           Restart = "always";
           RestartSec = 2;
         };

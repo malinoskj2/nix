@@ -12,6 +12,36 @@ let
       ];
     };
   };
+
+  # A credential-bound host the proxy has to decrypt, trusted through the unit's upstream bundle.
+  tls = pkgs.runCommand "egress-test-tls" { nativeBuildInputs = [ pkgs.openssl ]; } ''
+    mkdir $out
+    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 3650 \
+      -subj /CN=egress-test-ca -keyout ca.key -out $out/ca.pem
+    openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+      -subj /CN=api.test -addext subjectAltName=DNS:api.test -keyout $out/key.pem -out leaf.csr
+    openssl x509 -req -in leaf.csr -CA $out/ca.pem -CAkey ca.key -days 3650 -copy_extensions copy -out $out/cert.pem
+    cat ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt $out/ca.pem > $out/bundle.pem
+  '';
+
+  echoAuth = pkgs.writeText "echo-auth.py" ''
+    import http.server, json, ssl
+
+    class Echo(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = json.dumps({"authorization": self.headers.get("Authorization")}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = http.server.HTTPServer(("0.0.0.0", 8443), Echo)
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain("${tls}/cert.pem", "${tls}/key.pem")
+    server.socket = ctx.wrap_socket(server.socket, server_side=True)
+    server.serve_forever()
+  '';
 in
 {
   name = "agent-egress";
@@ -28,55 +58,64 @@ in
       wantedBy = [ "multi-user.target" ];
       script = "exec ${pkgs.python3}/bin/python3 -m http.server 8001 --bind 0.0.0.0 --directory /etc";
     };
+    systemd.services.api = {
+      wantedBy = [ "multi-user.target" ];
+      script = "exec ${pkgs.python3}/bin/python3 ${echoAuth}";
+    };
   };
 
-  nodes.machine = {
-    imports = [
-      ./agent-broker.nix
-      ./agent-egress.nix
-      ./docker.nix
-    ];
-
-    virtualisation.memorySize = 2048;
-
-    environment.systemPackages = [
-      pkgs.curl
-      pkgs.jq
-      pkgs.nftables
-      pkgs.openssl
-      pkgs.python3
-      pkgs.socat
-    ];
-
-    users.users = {
-      jesse = {
-        isNormalUser = true;
-        extraGroups = [ "docker" ];
-      };
-      other.isNormalUser = true;
-    };
-
-    agentBroker = {
-      clients = [ "jesse" ];
-      egress = {
-        enable = true;
-        allow = [ "allowed.test:8000" ];
-        allowPrivate = [
-          "192.168.1.2:8000"
-          "lan.test:8001"
-        ];
-      };
-    };
-
-    networking.hosts = {
-      "192.168.1.2" = [
-        "allowed.test"
-        "unlisted.test"
-        "lan.test"
+  nodes.machine =
+    { lib, ... }:
+    {
+      imports = [
+        ./agent-broker.nix
+        ./agent-egress.nix
+        ./docker.nix
       ];
-      "::ffff:192.168.1.1" = [ "mapped.test" ];
+
+      virtualisation.memorySize = 2048;
+
+      environment.systemPackages = [
+        pkgs.curl
+        pkgs.jq
+        pkgs.nftables
+        pkgs.openssl
+        pkgs.python3
+        pkgs.socat
+      ];
+
+      users.users = {
+        jesse = {
+          isNormalUser = true;
+          extraGroups = [ "docker" ];
+        };
+        other.isNormalUser = true;
+      };
+
+      agentBroker = {
+        clients = [ "jesse" ];
+        egress = {
+          enable = true;
+          allow = [ "allowed.test:8000" ];
+          allowPrivate = [
+            "192.168.1.2:8000"
+            "lan.test:8001"
+            "api.test:8443"
+          ];
+        };
+        services.egress-proxy.environment.AGENT_EGRESS_UPSTREAM_CA = lib.mkForce "${tls}/bundle.pem";
+      };
+
+      networking.hosts = {
+        "192.168.1.2" = [
+          "allowed.test"
+          "unlisted.test"
+          "lan.test"
+          "api.test"
+        ];
+        "::ffff:192.168.1.1" = [ "mapped.test" ];
+      };
     };
-  };
 
   testScript = ''
     import json
@@ -106,6 +145,7 @@ in
 
     outside.wait_for_open_port(8000)
     outside.wait_for_open_port(8001)
+    outside.wait_for_open_port(8443)
     machine.wait_for_unit("multi-user.target")
     machine.wait_for_unit("agent-broker-egress-proxy.service")
     machine.wait_for_unit("agent-broker-egress-gate.service")
@@ -219,6 +259,25 @@ in
         assert machine.succeed(via_sandbox + "http://unlisted.test:8000/hostname") == "200"
         machine.succeed("agent-egress revoke unlisted.test:8000")
         assert machine.succeed(via_sandbox + "http://unlisted.test:8000/hostname") == "403"
+        machine.succeed(f"ln -sfn {original} /etc/agent-broker/egress.json")
+
+    with subtest("a credential-bound host is decrypted under the unit's hardening and gets the header"):
+        show = machine.succeed("systemctl show -p NoNewPrivileges -p ProtectSystem -p SystemCallFilter agent-broker-egress-proxy.service")
+        assert "NoNewPrivileges=yes" in show and "ProtectSystem=strict" in show, show
+        machine.succeed("install -d -m 0700 -o agent-broker -g agent-broker /var/lib/egress-test")
+        machine.succeed("echo venice-key > /var/lib/egress-test/venice && chown agent-broker: /var/lib/egress-test/venice && chmod 0400 /var/lib/egress-test/venice")
+        original = machine.succeed("readlink /etc/agent-broker/egress.json").strip()
+        binding = {"name": "venice", "hosts": ["api.test:8443"], "header": "Authorization", "format": "Bearer {}", "file": "/var/lib/egress-test/venice"}
+        machine.succeed(f"jq --argjson b {shlex.quote(json.dumps(binding))} '.inject += [$b]' /etc/agent-broker/egress.json > /var/lib/egress-inject.json")
+        machine.succeed("ln -sfn /var/lib/egress-inject.json /etc/agent-broker/egress.json")
+        machine.succeed("printf 'Authorization: Bearer %s\\n' placeholder > /tmp/placeholder-headers")
+        fetch = "curl -sS --cacert /run/agent-broker/egress-proxy/ca.pem -x http://127.0.0.1:13128 -H @/tmp/placeholder-headers https://api.test:8443/"
+        body = json.loads(machine.succeed(fetch))
+        assert body == {"authorization": "Bearer venice-key"}, body
+        issuer = machine.succeed(f"{fetch.replace('-sS', '-sSv')} -o /dev/null 2>&1 | grep -i 'issuer:'")
+        assert "agent-broker egress CA" in issuer, issuer
+        assert ("sbx-test", "api.test", "venice") in {(r.get("sandbox"), r.get("host"), r.get("injected")) for r in records()}
+        assert "Addon error" not in machine.succeed("journalctl -u agent-broker-egress-proxy.service -o cat")
         machine.succeed(f"ln -sfn {original} /etc/agent-broker/egress.json")
 
     with subtest("a container on the sandbox network gets out only through its socket"):

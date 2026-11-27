@@ -1,5 +1,4 @@
 {
-  cacert,
   coreutils,
   lib,
   libpsl,
@@ -23,7 +22,6 @@ let
     ];
     runtimeEnv = {
       AGENT_EGRESS_ADDON = "${./addon.py}";
-      AGENT_EGRESS_UPSTREAM_CA = "${cacert}/etc/ssl/certs/ca-bundle.crt";
     };
     text = builtins.readFile ./proxy.sh;
   };
