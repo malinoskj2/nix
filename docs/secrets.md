@@ -211,7 +211,8 @@ sudo rm /run/secrets-key/recovery.txt
 
 Every `secret` command elevates with `sudo`, and those that read or change
 values need the secrets unlocked. None of them prints a
-value except `edit`, which opens the decrypted file in `$EDITOR`.
+value except `show`, which prints one, and `edit`, which opens the decrypted
+file in `$EDITOR`.
 
 ```sh
 secret list                            # names, kinds, in the file, deployed
@@ -220,6 +221,7 @@ secret add gh-app-key --file key.pem
 printf %s "$value" | secret add name   # or read from stdin
 secret rotate github-token
 secret remove github-token
+secret show github-token               # prints this value
 secret edit                            # shows every value
 secret apply                           # deploy the file's current values now
 secret unlock                          # unlock without logging in again
@@ -232,6 +234,15 @@ switch doesn't redeploy it. `secret apply` decrypts it into
 `/run/secrets` straight away, restarts the services that use a changed
 secret, and starts any that were waiting for one. Unlocking at login deploys
 it too.
+
+### Reading a value
+
+`secret show <name>` decrypts one secret from the encrypted file, of either
+kind, deployed or not, and prints exactly its bytes, so
+`token=$(secret show github-token)` and pipes get the stored value. On a
+terminal it adds a newline and warns on stderr that the value may stay in
+your scrollback. It needs the secrets unlocked, reads nothing from
+`/run/secrets` and writes nothing to disk.
 
 ### Adding a secret
 
