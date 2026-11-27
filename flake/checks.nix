@@ -63,7 +63,6 @@
                 touch "$out"
               '';
           gpu-scheduler = self'.packages.gpu-scheduler.tests.scheduler;
-          secret-scrub = self'.packages.secret-scrub.tests.scrub;
           agent-egress = self'.packages.agent-egress.tests.egress;
           agent-push = self'.packages.agent-push.tests.push;
           cargo-preferences = self'.packages.cargo-preferences;

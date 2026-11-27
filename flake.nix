@@ -163,7 +163,6 @@
           "qwen-prompt"
           "qwen3-tts-python"
           "rust-lints"
-          "secret-scrub"
           "ts-lints"
           "strata"
           "switch-and-reset-sandboxes"
