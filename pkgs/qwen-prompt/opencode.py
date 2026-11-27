@@ -1,10 +1,12 @@
 """Interactive OpenCode on local Qwen, loading the model on demand and unloading it when idle."""
 
 import argparse
+import fcntl
 import http.client
 import http.server
 import json
 import os
+import re
 import secrets
 import signal
 import socket
@@ -13,6 +15,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -46,6 +49,13 @@ BOOKING = ("--vram", "26GiB")
 # context, since it can land on any of them.
 ANY_PROFILE = "qwen"
 KEEPALIVE = 15
+LOG_LIMIT = 8 * 1024 * 1024
+READ_CHUNK = 65536
+LOGS_KEPT = 10
+# How long shutdown waits for children's output; a leftover descendant can hold a pipe open.
+DRAIN_TIMEOUT = 5
+# OpenCode closing an idle keep-alive connection, or going away mid-stream.
+DISCONNECTS = (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, TimeoutError)
 
 
 @dataclass(frozen=True)
@@ -71,6 +81,127 @@ def listed_models(served):
     if ANY_PROFILE not in served:
         models[ANY_PROFILE] = ("Flash-Next, loaded profile", min(profile.context for profile in served.values()))
     return models
+
+
+class Log:
+    """The session's log file, which takes everything the proxy and servers would print instead of OpenCode's TTY.
+
+    Each session has its own, which moves to a single .1 backup once it
+    reaches LOG_LIMIT, so it never holds more than twice that.
+    """
+
+    def __init__(self, path, limit=LOG_LIMIT, session_lock=None):
+        self.name = str(path)
+        self.session_lock = session_lock
+        self.limit = limit
+        self.lock = threading.Lock()
+        self.failed = False
+        self.readers = []
+        self.closed = False
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self.file = open(path, "ab", buffering=0)
+        self.size = self.file.seek(0, os.SEEK_END)
+
+    def write(self, text):
+        self.write_bytes(text.encode("utf-8", "replace"))
+
+    def write_bytes(self, data):
+        """Append data, splitting it at the size limit so neither file grows past it."""
+        with self.lock:
+            while data and not self.closed:
+                if self.size >= self.limit:
+                    self.file.close()
+                    os.replace(self.name, self.name + ".1")
+                    self.file = open(self.name, "ab", buffering=0)
+                    self.size = 0
+                piece = data[: self.limit - self.size]
+                self.file.write(piece)
+                self.size += len(piece)
+                data = data[len(piece) :]
+
+    def flush(self):
+        pass
+
+    def line(self, text):
+        self.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} [{os.getpid()}] {text}\n")
+
+    def error(self, text):
+        self.failed = True
+        self.line(text)
+
+    def follow(self, stream):
+        """Copy a child's output into the log until it closes."""
+
+        def copy():
+            with stream:
+                while data := stream.read1(READ_CHUNK):
+                    self.write_bytes(data)
+
+        thread = threading.Thread(target=copy, daemon=True)
+        thread.start()
+        self.readers = [reader for reader in self.readers if reader.is_alive()] + [thread]
+
+    def close(self, timeout=DRAIN_TIMEOUT):
+        """Wait up to timeout for the children's output to end, then close; anything later is dropped."""
+        deadline = time.monotonic() + timeout
+        for reader in self.readers:
+            reader.join(max(deadline - time.monotonic(), 0))
+        with self.lock:
+            self.closed = True
+            self.file.close()
+        if self.session_lock is not None:
+            os.close(self.session_lock)
+
+
+def held(lock):
+    """Whether a live session holds the flock on lock, a session's .lock file."""
+    try:
+        fd = os.open(lock, os.O_RDWR)
+    except FileNotFoundError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return False
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
+
+
+def session_log(state, launcher, kept=LOGS_KEPT):
+    """Create this session's log, returning its path and the descriptor holding its lock for the session's life.
+
+    The name has a random part, so sessions in other PID namespaces sharing
+    this directory never collide. All but the newest kept - 1 earlier logs of
+    the same launcher are removed, except those a running session still holds.
+    """
+    state.mkdir(parents=True, exist_ok=True)
+    pattern = re.compile(re.escape(launcher) + r"-\d{8}-\d{6}-[A-Za-z0-9_]+\.log")
+    earlier = []
+    for path in state.iterdir():
+        if pattern.fullmatch(path.name):
+            try:
+                earlier.append((path.stat().st_mtime, path))
+            except FileNotFoundError:
+                pass
+    earlier.sort()
+    for _, old in earlier[: max(len(earlier) - kept + 1, 0)]:
+        lock = old.with_suffix(".lock")
+        if held(lock):
+            continue
+        old.unlink(missing_ok=True)
+        Path(f"{old}.1").unlink(missing_ok=True)
+        lock.unlink(missing_ok=True)
+    while True:
+        fd, lock = tempfile.mkstemp(prefix=f"{launcher}-{time.strftime('%Y%m%d-%H%M%S')}-", suffix=".lock", dir=state)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        path = Path(lock).with_suffix(".log")
+        try:
+            os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+            return path, fd
+        except FileExistsError:
+            os.close(fd)
+            os.unlink(lock)
 
 
 class Ticket:
@@ -171,7 +302,7 @@ class Backend:
             self.port = probe.getsockname()[1]
         self.generation += 1
         label = self.label if self.mode == "dense" else f"{self.label}, {profile.title}"
-        print(f"qwen-opencode: requesting a GPU reservation for {label}", file=self.log, flush=True)
+        self.log.line(f"requesting a GPU reservation for {label}")
         command = server_command(
             self.model, self.port, self.key, profile.context, self.mode, self.directory, profile.moe
         )
@@ -186,15 +317,16 @@ class Backend:
                 *guarded(*command),
             ),
             stdin=subprocess.DEVNULL,
-            stdout=self.log,
-            stderr=self.log,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             start_new_session=True,
         )
+        self.log.follow(self.process.stdout)
         with self.condition:
             self.profile = name
 
     def unload(self, reason):
-        print(f"qwen-opencode: unloading Qwen ({reason})", file=self.log, flush=True)
+        self.log.line(f"unloading Qwen ({reason})")
         with self.condition:
             self.ready = False
         stop(self.process, grace=30)
@@ -221,7 +353,7 @@ class Backend:
                 self.wanted = False
                 self.error = f"the Qwen server under gpu-run exited with code {code}; see {self.log.name}"
                 self.condition.notify_all()
-            print(f"qwen-opencode: {self.error}", file=self.log, flush=True)
+            self.log.error(self.error)
             return
         if target is not None and target != self.profile and serving == 0:
             with self.condition:
@@ -237,7 +369,7 @@ class Backend:
                     self.ready = True
                     self.last = time.monotonic()
                     self.condition.notify_all()
-                print(f"qwen-opencode: Qwen is loaded ({self.profile})", file=self.log, flush=True)
+                self.log.line(f"Qwen is loaded ({self.profile})")
             return
         if target is None and serving == 0 and time.monotonic() - last >= self.idle:
             with self.condition:
@@ -262,8 +394,8 @@ def handler_for(backend, key):
     class Handler(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
-        def log_message(self, *args):
-            pass
+        def log_message(self, format, *args):
+            backend.log.line(f"{self.address_string()} {format % args}")
 
         def reply(self, status, payload):
             body = json.dumps(payload).encode()
@@ -336,10 +468,11 @@ def handler_for(backend, key):
                 if not ready:
                     raise ConnectionError(error)
                 self.relay(body, started)
-            except (BrokenPipeError, ConnectionResetError):
+            except DISCONNECTS:
                 pass
             except (OSError, http.client.HTTPException) as failure:
                 message = str(failure) or "the Qwen server is unavailable"
+                backend.log.error(f"{self.command} {self.path}: {message}")
                 if started:
                     payload = {"error": {"message": message, "type": "server_error"}}
                     self.chunk(b"data: " + json.dumps(payload).encode() + b"\n\n")
@@ -378,7 +511,21 @@ def handler_for(backend, key):
 
 
 class Proxy(http.server.ThreadingHTTPServer):
+    """Logs failures to the session log, since socketserver would print them over OpenCode's TUI."""
+
     daemon_threads = True
+
+    def __init__(self, address, handler, log):
+        self.log = log
+        super().__init__(address, handler)
+
+    def handle_error(self, request, client_address):
+        error = sys.exc_info()[1]
+        if isinstance(error, DISCONNECTS):
+            return
+        self.log.error(
+            f"request from {client_address[0]}:{client_address[1]} failed\n" + traceback.format_exc().rstrip()
+        )
 
 
 def main():
@@ -425,8 +572,7 @@ def main():
     alias = model_alias(name, mode)
     if mode == "moe":
         strata_pack(model)
-    state = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "qwen-opencode"
-    state.mkdir(parents=True, exist_ok=True)
+    state = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "qwen-prompt"
     # OpenCode shares the terminal's foreground group and decides what Ctrl-C means;
     # cleanup follows its exit. A handler, unlike SIG_IGN, is not inherited.
     signal.signal(signal.SIGINT, lambda _signum, _frame: None)
@@ -442,19 +588,21 @@ def main():
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, interrupted)
     key = secrets.token_hex(24)
-    with (
-        tempfile.TemporaryDirectory(prefix="qwen-opencode-") as directory,
-        open(state / f"{os.getpid()}.log", "w", buffering=1) as log,
-    ):
+    path, session_lock = session_log(state, f"qwen-opencode-{name}{'' if mode == 'dense' else '-' + mode}")
+    log = Log(path, session_lock=session_lock)
+    threading.excepthook = lambda hook: log.error(
+        "".join(traceback.format_exception(hook.exc_type, hook.exc_value, hook.exc_traceback)).rstrip()
+    )
+    print(
+        f"qwen-opencode: {alias} loads on demand and unloads after {args.idle_minutes:g} min idle",
+        file=sys.stderr,
+        flush=True,
+    )
+    with tempfile.TemporaryDirectory(prefix="qwen-opencode-") as directory:
         label = f"Qwen OpenCode ({name}{'' if mode == 'dense' else ', ' + mode})"
         backend = Backend(model, label, args.idle_minutes * 60, log, directory, mode)
-        proxy = Proxy(("127.0.0.1", 0), handler_for(backend, key))
+        proxy = Proxy(("127.0.0.1", 0), handler_for(backend, key), log)
         threading.Thread(target=proxy.serve_forever, daemon=True).start()
-        print(
-            f"qwen-opencode: {alias} loads on demand and unloads after {args.idle_minutes:g} min idle; log {log.name}",
-            file=sys.stderr,
-            flush=True,
-        )
         models = listed_models(backend.profiles)
         env = opencode_environment(configuration(proxy.server_port, major, models, backend.default), key, directory)
         try:
@@ -475,8 +623,9 @@ def main():
                 except subprocess.TimeoutExpired:
                     harness.kill()
                     harness.wait()
-            if backend.error is None:
-                Path(log.name).unlink(missing_ok=True)
+            log.close()
+            if log.failed:
+                print(f"qwen-opencode: errors were logged to {log.name}", file=sys.stderr, flush=True)
 
 
 if __name__ == "__main__":

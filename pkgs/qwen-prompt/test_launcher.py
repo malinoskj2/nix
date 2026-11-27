@@ -5,6 +5,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -125,7 +126,7 @@ for name in ('vocab.json', 'tokenizer.json'):
 (out / 'native_experts.txt').write_text('0\\n')
 """
 
-OPENCODE = """import json, os, sys, time, urllib.error, urllib.request
+OPENCODE = """import json, os, socket, struct, sys, time, urllib.error, urllib.parse, urllib.request
 from pathlib import Path
 if '--version' in sys.argv:
     print('opencode v2.3.0')
@@ -176,6 +177,17 @@ if scenario == 'cycle':
     assert json.loads(chat('again', stream=False))['choices'][0]['message']['content'] == 'AGAIN'
     assert events().count('acquire') == 2
     sys.exit(int(os.environ['EXIT_CODE']))
+if scenario == 'reset':
+    url = urllib.parse.urlsplit(base)
+    for _ in range(3):
+        client = socket.create_connection((url.hostname, url.port), timeout=5)
+        client.sendall(f'GET /v1/models HTTP/1.1\\r\\nHost: x\\r\\nAuthorization: Bearer {key}\\r\\n\\r\\n'.encode())
+        assert client.recv(65536).startswith(b'HTTP/1.1 200'), 'keep-alive listing failed'
+        client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
+        client.close()
+    time.sleep(0.5)
+    assert 'HELLO' in chat('hello', stream=False)
+    sys.exit(0)
 if scenario == 'switch':
     assert 'HELLO' in chat('hello', model='flash-next-12g')
     assert 'TITLE' in chat('title', model='qwen')
@@ -309,8 +321,18 @@ class LauncherTest(unittest.TestCase):
         self.assert_released()
         self.assertEqual((self.root / "bookings").read_text().split(), ["13GiB", "23GiB"])
         self.assertEqual((self.root / "contexts").read_text().split(), ["131072", "1650", "262144", "5200"])
-        log = next((self.root / "state" / "qwen-opencode").glob("*.log"), None)
-        self.assertIsNone(log, "the log is kept only after an error")
+        self.assertNotIn("errors were logged", stderr)
+
+    def test_a_client_resetting_its_connection_prints_nothing(self):
+        process = self.launch("reset")
+        _, stderr = process.communicate(timeout=60)
+        self.assertEqual(process.returncode, 0, stderr)
+        self.assertEqual(len(stderr.splitlines()), 1, stderr)
+        self.assertIn("loads on demand", stderr)
+        (log,) = (self.root / "state" / "qwen-prompt").glob("qwen-opencode-uncensored-*.log")
+        log = log.read_text()
+        self.assertIn("GET /v1/models", log)
+        self.assertNotIn("Traceback", log)
 
     def test_one_flash_next_runs_at_a_time(self):
         lock = self.root / "cache" / "qwen-prompt" / "strata" / "serve.lock"
@@ -393,6 +415,184 @@ class LauncherTest(unittest.TestCase):
         _, stderr = process.communicate(timeout=30)
         self.assertEqual(process.returncode, 1)
         self.assertIn("Already inside a GPU reservation", stderr)
+
+
+class LogTest(unittest.TestCase):
+    def test_a_handler_failure_is_logged_not_printed_and_the_log_rotates(self):
+        from opencode import Log, Proxy
+
+        with tempfile.TemporaryDirectory() as directory:
+            log = Log(Path(directory) / "proxy.log", limit=256)
+            proxy = Proxy(("127.0.0.1", 0), None, log)
+            try:
+                try:
+                    raise ConnectionResetError(104, "Connection reset by peer")
+                except ConnectionResetError:
+                    proxy.handle_error(None, ("127.0.0.1", 1))
+                self.assertFalse(log.failed)
+                try:
+                    raise ValueError("boom")
+                except ValueError:
+                    proxy.handle_error(None, ("127.0.0.1", 1))
+            finally:
+                proxy.server_close()
+            self.assertTrue(log.failed)
+            self.assertIn("ValueError: boom", Path(log.name).read_text())
+            for _ in range(20):
+                log.line("x" * 64)
+            log.close()
+            self.assertLess(Path(log.name).stat().st_size, 512)
+            self.assertTrue(Path(log.name + ".1").exists())
+
+
+class BoundedLogTest(unittest.TestCase):
+    def test_a_line_longer_than_the_limit_is_split_across_the_backup(self):
+        from opencode import Log
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "large.log"
+            log = Log(path, limit=256)
+            log.write("x" * 4096 + "\n")
+            log.close()
+            self.assertEqual(path.stat().st_size, 1)
+            self.assertEqual(Path(f"{path}.1").stat().st_size, 256)
+
+    def test_child_output_without_newlines_is_copied_in_bounded_chunks(self):
+        import opencode
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "progress.log"
+            log = opencode.Log(path, limit=1024)
+            reader, writer = os.pipe()
+            sizes = []
+            original = log.write_bytes
+            log.write_bytes = lambda data: (sizes.append(len(data)), original(data))
+            log.follow(os.fdopen(reader, "rb"))
+            progress = "".join(f"\rloading λ {n}%" for n in range(100)).encode() * 100
+            os.write(writer, progress)
+            os.close(writer)
+            for thread in log.readers:
+                thread.join(5)
+            log.close()
+            self.assertTrue(sizes and max(sizes) <= opencode.READ_CHUNK, sizes[:5])
+            self.assertTrue(progress.endswith(path.read_bytes()))
+
+
+class LogShutdownTest(unittest.TestCase):
+    def test_close_waits_for_the_last_output_of_a_slow_reader(self):
+        from opencode import Log
+
+        with tempfile.TemporaryDirectory() as directory:
+            log = Log(Path(directory) / "tail.log")
+            reader, writer = os.pipe()
+            os.write(writer, b"FINAL ERROR\n")
+            os.close(writer)
+            log.lock.acquire()
+            log.follow(os.fdopen(reader, "rb"))
+            threading.Timer(0.3, log.lock.release).start()
+            log.close()
+            self.assertEqual(Path(log.name).read_text(), "FINAL ERROR\n")
+
+    def test_close_gives_up_on_a_pipe_a_descendant_keeps_open(self):
+        from opencode import Log
+
+        with tempfile.TemporaryDirectory() as directory:
+            log = Log(Path(directory) / "held.log")
+            reader, writer = os.pipe()
+            os.write(writer, b"before\n")
+            log.follow(os.fdopen(reader, "rb"))
+            started = time.monotonic()
+            log.close(timeout=0.5)
+            self.assertLess(time.monotonic() - started, 3)
+            os.write(writer, b"after\n")
+            os.close(writer)
+            log.readers[0].join(5)
+            self.assertFalse(log.readers[0].is_alive())
+            self.assertEqual(Path(log.name).read_text(), "before\n")
+
+
+class SessionLogTest(unittest.TestCase):
+    def old_sessions(self, state, count):
+        sessions = []
+        for n in range(count):
+            old = state / f"qwen-opencode-regular-20260101-0000{n:02}-old{n}.log"
+            old.write_text("old")
+            Path(f"{old}.1").write_text("old")
+            os.utime(old, (n, n))
+            sessions.append(old)
+        return sessions
+
+    def test_only_the_newest_logs_of_the_launcher_are_kept(self):
+        from opencode import session_log
+
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            sessions = self.old_sessions(state, 12)
+            other = state / "qwen-opencode-regular-moe-20260101-000000-abc.log"
+            other.write_text("other launcher")
+            os.utime(other, (0, 0))
+            path, lock = session_log(state, "qwen-opencode-regular", kept=4)
+            os.close(lock)
+            self.assertEqual(path.read_bytes(), b"")
+            left = sorted(state.glob("qwen-opencode-regular-2*.log"))
+            self.assertEqual(left, sorted([*sessions[9:], path]))
+            self.assertEqual(len(list(state.glob("qwen-opencode-regular-2*.log.1"))), 3)
+            self.assertTrue(other.exists())
+
+    def test_a_running_session_keeps_its_log_however_old_and_can_still_rotate(self):
+        from opencode import Log, session_log
+
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            path, lock = session_log(state, "qwen-opencode-regular")
+            running = Log(path, limit=64, session_lock=lock)
+            os.utime(path, (0, 0))
+            for _ in range(12):
+                _, newer = session_log(state, "qwen-opencode-regular", kept=4)
+                os.close(newer)
+            self.assertTrue(path.exists())
+            self.assertEqual(len(list(state.glob("qwen-opencode-regular-*.log"))), 5)
+            running.write("x" * 200)
+            running.close()
+            self.assertEqual(path.stat().st_size, 200 - 3 * 64)
+            for _ in range(4):
+                _, newer = session_log(state, "qwen-opencode-regular", kept=4)
+                os.close(newer)
+            self.assertFalse(path.exists(), "a finished session's log is pruned like any other")
+            self.assertFalse(path.with_suffix(".lock").exists())
+
+    def test_sessions_with_the_same_time_and_pid_get_distinct_logs(self):
+        from unittest import mock
+
+        import opencode
+
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            with mock.patch.object(opencode.time, "strftime", return_value="20260101-000000"):
+                sessions = [opencode.session_log(state, "qwen-opencode-regular") for _ in range(5)]
+            self.assertEqual(len({path for path, _ in sessions}), 5)
+            for _, lock in sessions:
+                os.close(lock)
+
+    def test_pruning_tolerates_logs_vanishing_underneath_it(self):
+        from unittest import mock
+
+        import opencode
+
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            sessions = self.old_sessions(state, 6)
+            original = Path.stat
+
+            def racing(path, *args, **kwargs):
+                if path == sessions[0]:
+                    path.unlink(missing_ok=True)
+                return original(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "stat", racing):
+                path, lock = opencode.session_log(state, "qwen-opencode-regular", kept=2)
+            os.close(lock)
+            self.assertEqual(sorted(state.glob("qwen-opencode-regular-*.log")), sorted([sessions[5], path]))
 
 
 class QueueTest(unittest.TestCase):
