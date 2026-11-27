@@ -120,8 +120,12 @@ llama-server, which frees the VRAM and ends the reservation; OpenCode stays
 open and the next request books the GPU again. Quitting OpenCode, a signal or
 a crash of either process stops llama-server and releases the reservation:
 gpu-run and OpenCode are started with a parent-death signal, and llama-server
-gets one from gpu-run. Server output goes to
-`~/.local/state/qwen-opencode/<pid>.log`, which is kept only after a failure.
+gets one from gpu-run. Nothing but the opening line reaches OpenCode's
+terminal: server output, the proxy's access log and its errors go to
+`~/.local/state/qwen-prompt/qwen-opencode-<variant>.log` (such as
+`qwen-opencode-regular-moe.log`), which moves to a single `.1` backup past
+8 MiB. A client closing its connection logs nothing. When something failed,
+one line naming the log is printed after OpenCode exits.
 
 The context is 64k tokens with an f16 KV cache, one slot and full offload.
 Qwen3.8 27B is hybrid: only 16 of its 65 layers use attention, with 4 KV heads

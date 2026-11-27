@@ -125,7 +125,7 @@ for name in ('vocab.json', 'tokenizer.json'):
 (out / 'native_experts.txt').write_text('0\\n')
 """
 
-OPENCODE = """import json, os, sys, time, urllib.error, urllib.request
+OPENCODE = """import json, os, socket, struct, sys, time, urllib.error, urllib.parse, urllib.request
 from pathlib import Path
 if '--version' in sys.argv:
     print('opencode v2.3.0')
@@ -176,6 +176,17 @@ if scenario == 'cycle':
     assert json.loads(chat('again', stream=False))['choices'][0]['message']['content'] == 'AGAIN'
     assert events().count('acquire') == 2
     sys.exit(int(os.environ['EXIT_CODE']))
+if scenario == 'reset':
+    url = urllib.parse.urlsplit(base)
+    for _ in range(3):
+        client = socket.create_connection((url.hostname, url.port), timeout=5)
+        client.sendall(f'GET /v1/models HTTP/1.1\\r\\nHost: x\\r\\nAuthorization: Bearer {key}\\r\\n\\r\\n'.encode())
+        assert client.recv(65536).startswith(b'HTTP/1.1 200'), 'keep-alive listing failed'
+        client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
+        client.close()
+    time.sleep(0.5)
+    assert 'HELLO' in chat('hello', stream=False)
+    sys.exit(0)
 if scenario == 'switch':
     assert 'HELLO' in chat('hello', model='flash-next-12g')
     assert 'TITLE' in chat('title', model='qwen')
@@ -309,8 +320,17 @@ class LauncherTest(unittest.TestCase):
         self.assert_released()
         self.assertEqual((self.root / "bookings").read_text().split(), ["13GiB", "23GiB"])
         self.assertEqual((self.root / "contexts").read_text().split(), ["131072", "1650", "262144", "5200"])
-        log = next((self.root / "state" / "qwen-opencode").glob("*.log"), None)
-        self.assertIsNone(log, "the log is kept only after an error")
+        self.assertNotIn("errors were logged", stderr)
+
+    def test_a_client_resetting_its_connection_prints_nothing(self):
+        process = self.launch("reset")
+        _, stderr = process.communicate(timeout=60)
+        self.assertEqual(process.returncode, 0, stderr)
+        self.assertEqual(len(stderr.splitlines()), 1, stderr)
+        self.assertIn("loads on demand", stderr)
+        log = (self.root / "state" / "qwen-prompt" / "qwen-opencode-uncensored.log").read_text()
+        self.assertIn("GET /v1/models", log)
+        self.assertNotIn("Traceback", log)
 
     def test_one_flash_next_runs_at_a_time(self):
         lock = self.root / "cache" / "qwen-prompt" / "strata" / "serve.lock"
@@ -393,6 +413,34 @@ class LauncherTest(unittest.TestCase):
         _, stderr = process.communicate(timeout=30)
         self.assertEqual(process.returncode, 1)
         self.assertIn("Already inside a GPU reservation", stderr)
+
+
+class LogTest(unittest.TestCase):
+    def test_a_handler_failure_is_logged_not_printed_and_the_log_rotates(self):
+        from opencode import Log, Proxy
+
+        with tempfile.TemporaryDirectory() as directory:
+            log = Log(Path(directory) / "proxy.log", limit=256)
+            proxy = Proxy(("127.0.0.1", 0), None, log)
+            try:
+                try:
+                    raise ConnectionResetError(104, "Connection reset by peer")
+                except ConnectionResetError:
+                    proxy.handle_error(None, ("127.0.0.1", 1))
+                self.assertFalse(log.failed)
+                try:
+                    raise ValueError("boom")
+                except ValueError:
+                    proxy.handle_error(None, ("127.0.0.1", 1))
+            finally:
+                proxy.server_close()
+            self.assertTrue(log.failed)
+            self.assertIn("ValueError: boom", Path(log.name).read_text())
+            for _ in range(20):
+                log.line("x" * 64)
+            log.close()
+            self.assertLess(Path(log.name).stat().st_size, 512)
+            self.assertTrue(Path(log.name + ".1").exists())
 
 
 class QueueTest(unittest.TestCase):

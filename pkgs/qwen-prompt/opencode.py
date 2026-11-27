@@ -13,6 +13,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -46,6 +47,9 @@ BOOKING = ("--vram", "26GiB")
 # context, since it can land on any of them.
 ANY_PROFILE = "qwen"
 KEEPALIVE = 15
+LOG_LIMIT = 8 * 1024 * 1024
+# OpenCode closing an idle keep-alive connection, or going away mid-stream.
+DISCONNECTS = (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, TimeoutError)
 
 
 @dataclass(frozen=True)
@@ -71,6 +75,54 @@ def listed_models(served):
     if ANY_PROFILE not in served:
         models[ANY_PROFILE] = ("Flash-Next, loaded profile", min(profile.context for profile in served.values()))
     return models
+
+
+class Log:
+    """The session's log file, which takes everything the proxy and servers would print instead of OpenCode's TTY.
+
+    It is appended to across sessions and moves to a single .1 backup once it
+    passes LOG_LIMIT, so it never holds much more than twice that.
+    """
+
+    def __init__(self, path, limit=LOG_LIMIT):
+        self.name = str(path)
+        self.limit = limit
+        self.lock = threading.Lock()
+        self.failed = False
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self.file = open(path, "a", buffering=1, errors="replace")
+
+    def write(self, text):
+        with self.lock:
+            if self.file.tell() >= self.limit:
+                self.file.close()
+                os.replace(self.name, self.name + ".1")
+                self.file = open(self.name, "a", buffering=1, errors="replace")
+            self.file.write(text)
+
+    def flush(self):
+        pass
+
+    def line(self, text):
+        self.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} [{os.getpid()}] {text}\n")
+
+    def error(self, text):
+        self.failed = True
+        self.line(text)
+
+    def follow(self, stream):
+        """Copy a child's output into the log until it closes."""
+
+        def copy():
+            with stream:
+                for data in iter(stream.readline, b""):
+                    self.write(data.decode("utf-8", "replace"))
+
+        threading.Thread(target=copy, daemon=True).start()
+
+    def close(self):
+        with self.lock:
+            self.file.close()
 
 
 class Ticket:
@@ -171,7 +223,7 @@ class Backend:
             self.port = probe.getsockname()[1]
         self.generation += 1
         label = self.label if self.mode == "dense" else f"{self.label}, {profile.title}"
-        print(f"qwen-opencode: requesting a GPU reservation for {label}", file=self.log, flush=True)
+        self.log.line(f"requesting a GPU reservation for {label}")
         command = server_command(
             self.model, self.port, self.key, profile.context, self.mode, self.directory, profile.moe
         )
@@ -186,15 +238,16 @@ class Backend:
                 *guarded(*command),
             ),
             stdin=subprocess.DEVNULL,
-            stdout=self.log,
-            stderr=self.log,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             start_new_session=True,
         )
+        self.log.follow(self.process.stdout)
         with self.condition:
             self.profile = name
 
     def unload(self, reason):
-        print(f"qwen-opencode: unloading Qwen ({reason})", file=self.log, flush=True)
+        self.log.line(f"unloading Qwen ({reason})")
         with self.condition:
             self.ready = False
         stop(self.process, grace=30)
@@ -221,7 +274,7 @@ class Backend:
                 self.wanted = False
                 self.error = f"the Qwen server under gpu-run exited with code {code}; see {self.log.name}"
                 self.condition.notify_all()
-            print(f"qwen-opencode: {self.error}", file=self.log, flush=True)
+            self.log.error(self.error)
             return
         if target is not None and target != self.profile and serving == 0:
             with self.condition:
@@ -237,7 +290,7 @@ class Backend:
                     self.ready = True
                     self.last = time.monotonic()
                     self.condition.notify_all()
-                print(f"qwen-opencode: Qwen is loaded ({self.profile})", file=self.log, flush=True)
+                self.log.line(f"Qwen is loaded ({self.profile})")
             return
         if target is None and serving == 0 and time.monotonic() - last >= self.idle:
             with self.condition:
@@ -262,8 +315,8 @@ def handler_for(backend, key):
     class Handler(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
-        def log_message(self, *args):
-            pass
+        def log_message(self, format, *args):
+            backend.log.line(f"{self.address_string()} {format % args}")
 
         def reply(self, status, payload):
             body = json.dumps(payload).encode()
@@ -336,10 +389,11 @@ def handler_for(backend, key):
                 if not ready:
                     raise ConnectionError(error)
                 self.relay(body, started)
-            except (BrokenPipeError, ConnectionResetError):
+            except DISCONNECTS:
                 pass
             except (OSError, http.client.HTTPException) as failure:
                 message = str(failure) or "the Qwen server is unavailable"
+                backend.log.error(f"{self.command} {self.path}: {message}")
                 if started:
                     payload = {"error": {"message": message, "type": "server_error"}}
                     self.chunk(b"data: " + json.dumps(payload).encode() + b"\n\n")
@@ -378,7 +432,21 @@ def handler_for(backend, key):
 
 
 class Proxy(http.server.ThreadingHTTPServer):
+    """Logs failures to the session log, since socketserver would print them over OpenCode's TUI."""
+
     daemon_threads = True
+
+    def __init__(self, address, handler, log):
+        self.log = log
+        super().__init__(address, handler)
+
+    def handle_error(self, request, client_address):
+        error = sys.exc_info()[1]
+        if isinstance(error, DISCONNECTS):
+            return
+        self.log.error(
+            f"request from {client_address[0]}:{client_address[1]} failed\n" + traceback.format_exc().rstrip()
+        )
 
 
 def main():
@@ -425,8 +493,7 @@ def main():
     alias = model_alias(name, mode)
     if mode == "moe":
         strata_pack(model)
-    state = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "qwen-opencode"
-    state.mkdir(parents=True, exist_ok=True)
+    state = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "qwen-prompt"
     # OpenCode shares the terminal's foreground group and decides what Ctrl-C means;
     # cleanup follows its exit. A handler, unlike SIG_IGN, is not inherited.
     signal.signal(signal.SIGINT, lambda _signum, _frame: None)
@@ -442,19 +509,20 @@ def main():
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, interrupted)
     key = secrets.token_hex(24)
-    with (
-        tempfile.TemporaryDirectory(prefix="qwen-opencode-") as directory,
-        open(state / f"{os.getpid()}.log", "w", buffering=1) as log,
-    ):
+    log = Log(state / f"qwen-opencode-{name}{'' if mode == 'dense' else '-' + mode}.log")
+    threading.excepthook = lambda hook: log.error(
+        "".join(traceback.format_exception(hook.exc_type, hook.exc_value, hook.exc_traceback)).rstrip()
+    )
+    print(
+        f"qwen-opencode: {alias} loads on demand and unloads after {args.idle_minutes:g} min idle",
+        file=sys.stderr,
+        flush=True,
+    )
+    with tempfile.TemporaryDirectory(prefix="qwen-opencode-") as directory:
         label = f"Qwen OpenCode ({name}{'' if mode == 'dense' else ', ' + mode})"
         backend = Backend(model, label, args.idle_minutes * 60, log, directory, mode)
-        proxy = Proxy(("127.0.0.1", 0), handler_for(backend, key))
+        proxy = Proxy(("127.0.0.1", 0), handler_for(backend, key), log)
         threading.Thread(target=proxy.serve_forever, daemon=True).start()
-        print(
-            f"qwen-opencode: {alias} loads on demand and unloads after {args.idle_minutes:g} min idle; log {log.name}",
-            file=sys.stderr,
-            flush=True,
-        )
         models = listed_models(backend.profiles)
         env = opencode_environment(configuration(proxy.server_port, major, models, backend.default), key, directory)
         try:
@@ -475,8 +543,8 @@ def main():
                 except subprocess.TimeoutExpired:
                     harness.kill()
                     harness.wait()
-            if backend.error is None:
-                Path(log.name).unlink(missing_ok=True)
+            if log.failed:
+                print(f"qwen-opencode: errors were logged to {log.name}", file=sys.stderr, flush=True)
 
 
 if __name__ == "__main__":
