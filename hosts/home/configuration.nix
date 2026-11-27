@@ -21,6 +21,7 @@ in
     inputs.nix-index-database.nixosModules.nix-index
 
     ../common/global.nix
+    ../common/optional/agent-broker.nix
     ../common/optional/docker.nix
     ../common/optional/fonts.nix
     ../common/optional/gvisor.nix
@@ -44,6 +45,8 @@ in
     ./obs.nix
     ./scheduler.nix
   ];
+
+  agentBroker.clients = [ "jesse" ];
 
   networking = {
     hostName = "home";
