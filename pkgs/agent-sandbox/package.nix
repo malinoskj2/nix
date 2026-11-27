@@ -1,4 +1,5 @@
 {
+  agent-push,
   antigravity-cli,
   at-spi2-core,
   bacon,
@@ -45,6 +46,7 @@
   gawk,
   gcc,
   ghidra,
+  getent,
   git,
   git-commitu,
   git-open-branch,
@@ -345,9 +347,39 @@ let
   hookProxy = pythonScript "agent-sandbox-hook-proxy" python3 ./hook-proxy.py;
   prepareOrcaHooks = pythonScript "agent-sandbox-prepare-orca-hooks" python3 ./prepare-orca-hooks.py;
 
+  egressProxy = "http://127.0.0.1:3128";
+  egressEnv = writeText "agent-sandbox-egress.env" (
+    lib.concatStrings (
+      lib.mapAttrsToList (name: value: "${name}=${value}\n") (
+        lib.genAttrs [ "HTTP_PROXY" "HTTPS_PROXY" "ALL_PROXY" "http_proxy" "https_proxy" "all_proxy" ] (
+          _: egressProxy
+        )
+        // lib.genAttrs [ "NO_PROXY" "no_proxy" ] (_: "localhost,127.0.0.1,::1")
+        # Tools differ in which variable they read, and NIX_SSL_CERT_FILE overrides SSL_CERT_FILE.
+        // lib.genAttrs [
+          "SSL_CERT_FILE"
+          "NIX_SSL_CERT_FILE"
+          "CURL_CA_BUNDLE"
+          "REQUESTS_CA_BUNDLE"
+          "GIT_SSL_CAINFO"
+          "CARGO_HTTP_CAINFO"
+          "PIP_CERT"
+          "CODEX_CA_CERTIFICATE"
+        ] (_: "/run/agent-egress/ca-bundle.crt")
+        // {
+          NODE_EXTRA_CA_CERTS = "/run/agent-egress/ca.pem";
+          NODE_USE_ENV_PROXY = "1";
+          AGENT_SANDBOX_EGRESS = "1";
+          AGENT_PUSH_SOCKET = "/run/agent-push/push.sock";
+        }
+      )
+    )
+  );
+
   runner = writeShellScriptBin "agent-sandbox-runner" ''
     exec ${lib.getExe python3} ${./runner/runner.py} \
       --docker ${lib.getExe docker-client} \
+      --socat ${lib.getExe socat} \
       --compose ${lib.getExe docker-compose} \
       --buildx ${docker-buildx}/libexec/docker/cli-plugins/docker-buildx "$@"
   '';
@@ -555,6 +587,7 @@ let
       ]))
       redis
       ripgrep
+      agent-push.client
       runnerClient
       rust-analyzer
       rust-lints
@@ -672,6 +705,8 @@ let
       # Steam's bundled libcurl ignores SSL_CERT_FILE and reads Debian's bundle path.
       ln -s ${caBundle} etc/ssl/certs/ca-bundle.crt
       ln -s ${caBundle} etc/ssl/certs/ca-certificates.crt
+      mkdir -p etc/ssh
+      ln -s ${./ssh_config} etc/ssh/ssh_config
       ln -s ${./sway.conf} etc/sway/config
       ln -s ${./nested-sway.conf} etc/sway/nested
       ln -s ${./pipewire.conf} etc/pipewire/pipewire.conf.d/50-agent-sandbox.conf
@@ -757,16 +792,21 @@ let
     runtimeInputs = [
       clipboardSync
       coreutils
+      getent
       gnugrep
       gnused
       iproute2
+      jq
       openssh
       procps
+      socat
       systemd
       util-linux
       wl-clipboard
     ];
     runtimeEnv = imageEnv // {
+      AGENT_SANDBOX_EGRESS_LIB = "${./egress.sh}";
+      AGENT_SANDBOX_EGRESS_ENV = egressEnv;
       # The PATH an agent with an Orca hook bridge runs with: the curl shim leads,
       # so hook URLs route through the private relay socket.
       AGENT_SANDBOX_ORCA_PATH = "${orcaCurl}/bin:${env}/bin:/usr/bin";
@@ -879,6 +919,7 @@ symlinkJoin {
           nativeBuildInputs = [
             git
             python3
+            socat
           ];
         }
         ''

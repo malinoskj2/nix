@@ -22,6 +22,7 @@ in
 
     ../common/global.nix
     ../common/optional/agent-broker.nix
+    ../common/optional/agent-egress.nix
     ../common/optional/docker.nix
     ../common/optional/fonts.nix
     ../common/optional/gvisor.nix
@@ -46,7 +47,10 @@ in
     ./scheduler.nix
   ];
 
-  agentBroker.clients = [ "jesse" ];
+  agentBroker = {
+    clients = [ "jesse" ];
+    egress.enable = true;
+  };
 
   networking = {
     hostName = "home";

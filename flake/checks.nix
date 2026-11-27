@@ -64,6 +64,8 @@
               '';
           gpu-scheduler = self'.packages.gpu-scheduler.tests.scheduler;
           secret-scrub = self'.packages.secret-scrub.tests.scrub;
+          agent-egress = self'.packages.agent-egress.tests.egress;
+          agent-push = self'.packages.agent-push.tests.push;
           cargo-preferences = self'.packages.cargo-preferences;
           rust-lints-library = self'.packages.rust-lints.lintLibrary;
           rust-lints-fixture = self'.packages.rust-lints.tests.fixture;
@@ -74,6 +76,9 @@
           secrets-eval = import ../hosts/common/optional/secret-store-eval-test.nix { inherit inputs pkgs; };
           secrets-vm = pkgs.testers.runNixOSTest (
             import ../hosts/common/optional/secret-store-test.nix { inherit inputs pkgs; }
+          );
+          agent-egress-vm = pkgs.testers.runNixOSTest (
+            import ../hosts/common/optional/agent-egress-test.nix { inherit inputs pkgs; }
           );
           tohru-greeter-vm = pkgs.testers.runNixOSTest (
             import ../hosts/home/greeter-test.nix {

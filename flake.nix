@@ -122,6 +122,8 @@
           "corecycler"
           "council"
           "agent-sandbox"
+          "agent-egress"
+          "agent-push"
           "secret"
           "ai-usage"
           "antigravity-cli"
