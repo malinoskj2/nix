@@ -47,6 +47,7 @@ in
   ];
 
   agentBroker.clients = [ "jesse" ];
+  secrets.host.venice-api-key.owner = "jesse";
 
   networking = {
     hostName = "home";
