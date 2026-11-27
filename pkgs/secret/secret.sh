@@ -10,6 +10,7 @@ Usage: secret <command> [args]
   rotate <name> [--file PATH]
                              Replace an existing secret's value
   remove <name>              Delete a secret from the file
+  show <name>                Print one secret's value (shows the value)
   edit                       Open the decrypted file in $EDITOR (shows values)
   recipients                 Print the public keys the file is encrypted to
   recipient-add <recipient>  Add an age public key, then re-encrypt
@@ -27,7 +28,7 @@ Usage: secret <command> [args]
                              Install a backed-up encrypted file and re-encrypt it
                              for this host
 
-Values are never printed, except by edit.
+Values are never printed, except by show and edit.
 EOF
 }
 
@@ -275,6 +276,19 @@ case $cmd in
     run_sops unset "$file" "[\"$name\"]"
     echo "Removed $name. Remove its declaration from the flake too, or its services stay stopped." >&2
     remind_apply
+    ;;
+  show)
+    name=${1:?usage: secret show <name>}
+    valid_name "$name"
+    has_key "$name" || die "$name isn't in $file"
+    need_unlocked
+    if [[ -t 1 ]]; then
+      echo "secret: value shown; it may stay in your scrollback" >&2
+    fi
+    sops decrypt --extract "[\"$name\"]" "$file" || die "couldn't decrypt $name"
+    if [[ -t 1 ]]; then
+      echo
+    fi
     ;;
   edit)
     need_unlocked

@@ -138,6 +138,39 @@
         machine.fail(as_user("other", "cat /run/secrets/user-token"))
         listing = machine.succeed("secret list")
         assert "fake-" not in listing, listing
+
+    with subtest("show prints one value from the file, exactly"):
+        assert machine.succeed("secret show user-token") == "fake-user-value"
+        assert machine.succeed("secret show test-token") == "fake-test-value"
+        machine.succeed("printf 'line one\\n  line two\\n\\n' >/root/multi.txt")
+        machine.succeed("secret add multi-line --file /root/multi.txt")
+        gone("multi-line")
+        machine.succeed("secret show multi-line | cmp - /root/multi.txt")
+        machine.succeed("test \"$(secret show multi-line | wc -c)\" = \"$(wc -c </root/multi.txt)\"")
+        machine.succeed("secret remove multi-line")
+
+    with subtest("show on a terminal adds a newline and warns"):
+        out = machine.succeed("script -qec 'secret show user-token 2>/dev/null' /dev/null").replace("\r", "")
+        assert out == "fake-user-value\n", repr(out)
+        both = machine.succeed("script -qec 'secret show user-token' /dev/null").replace("\r", "")
+        assert "secret: value shown; it may stay in your scrollback\n" in both, repr(both)
+        machine.succeed("secret show user-token 2>/root/show.err >/dev/null")
+        machine.succeed("test ! -s /root/show.err")
+
+    with subtest("show refuses an unknown name without printing a value"):
+        status, out = machine.execute("secret show missing-token 2>/root/show.err")
+        assert status != 0 and out == "", (status, out)
+        machine.succeed("grep -F \"missing-token isn't in\" /root/show.err")
+        machine.fail("grep -F fake- /root/show.err")
+
+    with subtest("show refuses while locked and suggests unlock"):
+        machine.succeed("mv /var/lib/sops-nix/key.txt /root/key.txt")
+        status, out = machine.execute("secret show user-token 2>/root/show.err")
+        machine.succeed("mv /root/key.txt /var/lib/sops-nix/key.txt")
+        assert status != 0 and out == "", (status, out)
+        machine.succeed("grep -F 'secret unlock' /root/show.err")
+        machine.fail("grep -F fake- /root/show.err")
+
     with subtest("broker sockets accept clients only"):
         machine.wait_for_unit("agent-broker-echo.service")
         machine.wait_for_file("/run/agent-broker/echo/echo.sock")

@@ -44,7 +44,7 @@ symlinkJoin {
     unlock
   ];
   meta = {
-    description = "Manage the host's sops-encrypted secrets without printing them";
+    description = "Manage the host's sops-encrypted secrets";
     mainProgram = "secret";
     platforms = [
       "x86_64-linux"
