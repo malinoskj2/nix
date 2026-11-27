@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Host-only, pinned model reconciliation. No inference and no automatic pruning."""
+"""Host-only, pinned model reconciliation and pruning. No inference."""
 
 import argparse
 from contextlib import contextmanager
@@ -14,6 +14,8 @@ import subprocess
 import sys
 import tempfile
 import time
+
+DIGEST = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 
 
 @contextmanager
@@ -125,15 +127,90 @@ def validate(catalog):
     return order
 
 
+def wanted_aliases(entries):
+    wanted = {alias for alias, entry in entries.items() if entry.get("enabled", True)}
+    pending = list(wanted)
+    while pending:
+        for dependency in entries[pending.pop()].get("dependencies", []):
+            if dependency not in wanted:
+                wanted.add(dependency)
+                pending.append(dependency)
+    return wanted
+
+
+def split(catalog):
+    """Consumer catalog of enabled entries and their dependencies; disabled entries are only retained."""
+    validate(catalog)
+    wanted = wanted_aliases(catalog["entries"])
+    entries = catalog["entries"].items()
+    consumer = {**catalog, "entries": {a: {**e, "enabled": True} for a, e in entries if a in wanted}}
+    retained = {"entries": {a: {**e, "enabled": False} for a, e in entries if a not in wanted}}
+    return consumer, retained
+
+
+def norm(path):
+    path = os.path.abspath(path)
+    return os.path.join(os.path.realpath(os.path.dirname(path)), os.path.basename(path))
+
+
+def human(size):
+    for unit in ["B", "KiB", "MiB", "GiB"]:
+        if size < 1024 or unit == "GiB":
+            return f"{size:.1f} {unit}" if unit != "B" else f"{size} B"
+        size /= 1024
+
+
+def open_files():
+    """Inodes held open or mapped by processes this user can inspect."""
+    handles, mapped = {}, {}
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            for fd in os.listdir(f"/proc/{pid}/fd"):
+                try:
+                    stat = os.stat(f"/proc/{pid}/fd/{fd}")
+                except OSError:
+                    continue
+                handles.setdefault((stat.st_dev, stat.st_ino), pid)
+        except OSError:
+            pass
+        try:
+            with open(f"/proc/{pid}/maps") as maps:
+                for line in maps:
+                    fields = line.split(maxsplit=5)
+                    if len(fields) == 6 and fields[4] != "0":
+                        mapped.setdefault(int(fields[4]), pid)
+        except (OSError, ValueError):
+            pass
+
+    def holder(stat):
+        # Mapped inodes are matched without the device, which errs towards deferring.
+        return handles.get((stat.st_dev, stat.st_ino)) or mapped.get(stat.st_ino)
+
+    return holder
+
+
 class Sync:
-    def __init__(self, root, catalog, downloader=None):
+    def __init__(self, root, catalog, downloader=None, retained=None, prune=True, readonly=False, holders=None):
         self.root, self.catalog = Path(root), catalog
         self.downloader = downloader or self.download
-        self.order = validate(catalog)
+        retained = (retained or {}).get("entries", {})
+        if set(retained) & set(catalog["entries"]):
+            raise ValueError("Retained entries must not also be in the catalog")
+        self.full = {
+            **catalog,
+            "entries": {**catalog["entries"], **{a: {**e, "enabled": False} for a, e in retained.items()}},
+        }
+        self.order = validate(self.full)
+        self.wanted = wanted_aliases(self.full["entries"])
+        self.prune_after = prune
+        self.holders = holders or open_files
         self.stores = {name: Path(path) for name, path in catalog.get("stores", {"root": str(self.root)}).items()}
         self.default_store = catalog.get("defaultStore", "root")
         self.state = self.root / ".state"
-        self.state.mkdir(parents=True, exist_ok=True)
+        if not readonly:
+            self.state.mkdir(parents=True, exist_ok=True)
         self.stamps_path = self.state / "verified.json"
         self.stamps = json.loads(self.stamps_path.read_text()) if self.stamps_path.exists() else {}
         self.token = False
@@ -311,18 +388,10 @@ class Sync:
 
     def reconcile(self):
         report = {}
-        enabled = {a for a, e in self.catalog["entries"].items() if e["enabled"]}
-
-        def enable_dependencies(alias):
-            for dep in self.catalog["entries"][alias].get("dependencies", []):
-                if dep not in enabled:
-                    enabled.add(dep)
-                    enable_dependencies(dep)
-
-        for alias in list(enabled):
-            enable_dependencies(alias)
         for alias in self.order:
-            entry = self.catalog["entries"][alias]
+            if alias not in self.wanted:
+                continue
+            entry = self.full["entries"][alias]
             store = self.store(entry)
             item = {
                 "path": str(self.root / "by-name" / alias),
@@ -333,9 +402,6 @@ class Sync:
                 "consumerReady": False,
             }
             report[alias] = item
-            if alias not in enabled:
-                item["status"] = "historical-disabled"
-                continue
             if entry.get("unresolved"):
                 item.update(status="unresolved", reason=entry["unresolved"])
                 continue
@@ -406,10 +472,10 @@ class Sync:
                     "complete": False,
                 },
             )
-        complete = all(v["status"] in ["ready", "historical-disabled"] for v in report.values())
+        complete = all(v["status"] == "ready" for v in report.values())
         failed = []
         for alias, item in report.items():
-            if item["status"] in ["ready", "historical-disabled"]:
+            if item["status"] == "ready":
                 continue
             if item["status"] != "unresolved":
                 failed.append(alias)
@@ -425,7 +491,231 @@ class Sync:
                 "complete": complete,
             },
         )
-        return not failed
+        pruned = self.prune() if self.prune_after else True
+        return not failed and pruned
+
+    def entry_store_paths(self, aliases):
+        """Per store directory: Hub repository folder to revisions, and content digests."""
+        repos, digests = {}, {}
+        for alias in aliases:
+            entry = self.full["entries"][alias]
+            store = norm(self.store(entry))
+            for file in entry["files"]:
+                if file.get("storePath"):
+                    continue
+                digests.setdefault(store, set()).add(file.get("sha256") or file["gitSha1"])
+                if not file.get("url"):
+                    repo = "models--" + file["repository"].replace("/", "--")
+                    repos.setdefault(store, {}).setdefault(repo, set()).add(file["revision"])
+        return repos, digests
+
+    def managed_repositories(self):
+        """Hub folders this store has ever been responsible for; other tools may share HF_HUB_CACHE."""
+        path = self.state / "managed.json"
+        if path.exists():
+            managed = set(json.loads(path.read_text())["repositories"])
+        else:
+            managed = set()
+            for key in self.stamps:
+                parts = Path(key).parts
+                if "huggingface" in parts and parts.index("huggingface") + 1 < len(parts):
+                    candidate = parts[parts.index("huggingface") + 1]
+                    if candidate.startswith("models--"):
+                        managed.add(candidate)
+        for entry in self.full["entries"].values():
+            for file in entry["files"]:
+                if file.get("repository") and not file.get("url") and not file.get("storePath"):
+                    managed.add("models--" + file["repository"].replace("/", "--"))
+        return managed
+
+    def prune_plan(self):
+        retained = set(self.full["entries"]) - self.wanted
+        stores = {}
+        for name, path in self.stores.items():
+            if path.is_dir():
+                stores.setdefault(norm(path), name)
+        repos, digests = self.entry_store_paths(self.full["entries"])
+        managed = self.managed_repositories()
+        views, by_name = norm(self.root / "views"), norm(self.root / "by-name")
+        areas = [views, by_name] + [os.path.join(s, d) for s in stores for d in ["huggingface", "files"]]
+
+        def inside(path, area):
+            return path == area or path.startswith(area + os.sep)
+
+        live = set()
+
+        def mark(path):
+            path = norm(path)
+            while path not in live:
+                live.add(path)
+                if not any(inside(path, area) for area in areas):
+                    return
+                if os.path.islink(path):
+                    path = norm(os.path.join(os.path.dirname(path), os.readlink(path)))
+                elif os.path.isdir(path):
+                    for child in os.scandir(path):
+                        mark(child.path)
+                    return
+                else:
+                    return
+
+        for alias in self.wanted:
+            if os.path.lexists(os.path.join(by_name, alias)):
+                mark(os.path.join(by_name, alias))
+        for alias in retained:
+            if os.path.isdir(os.path.join(views, alias)):
+                for view in os.scandir(os.path.join(views, alias)):
+                    mark(view.path)
+        for alias in self.wanted | retained:
+            entry = self.full["entries"][alias]
+            for file in entry["files"]:
+                if not file.get("storePath"):
+                    mark(self.destination(file, self.store(entry)))
+
+        plan = []
+
+        def tree_size(path):
+            if os.path.islink(path) or not os.path.isdir(path):
+                return os.lstat(path).st_size if not os.path.islink(path) else 0
+            return sum(
+                os.lstat(os.path.join(d, f)).st_size
+                for d, _, files in os.walk(path)
+                for f in files
+                if not os.path.islink(os.path.join(d, f))
+            )
+
+        def add(path, reason):
+            plan.append((path, tree_size(path), reason))
+
+        def files_below(path):
+            for directory, dirnames, filenames in os.walk(path):
+                for name in filenames + [d for d in dirnames if os.path.islink(os.path.join(directory, d))]:
+                    yield norm(os.path.join(directory, name))
+
+        if os.path.isdir(by_name):
+            for link_entry in os.scandir(by_name):
+                if link_entry.is_symlink() and link_entry.name not in self.wanted:
+                    reason = "alias disabled" if link_entry.name in retained else "alias no longer in catalog"
+                    add(norm(link_entry.path), reason)
+        if os.path.isdir(views):
+            for alias_dir in os.scandir(views):
+                if alias_dir.name in retained or not alias_dir.is_dir(follow_symlinks=False):
+                    continue
+                for view in os.scandir(alias_dir.path):
+                    if norm(view.path) not in live:
+                        reason = "superseded view" if alias_dir.name in self.wanted else "alias no longer in catalog"
+                        add(norm(view.path), reason)
+
+        def moved(store, key, table):
+            other = [stores[s] for s in stores if s != store and key in table.get(s, {})]
+            return f"entry moved to store {other[0]}" if other else None
+
+        for store in stores:
+            hub = os.path.join(store, "huggingface")
+            for repo in sorted(os.listdir(hub)) if os.path.isdir(hub) else []:
+                if repo not in managed or os.path.islink(os.path.join(hub, repo)):
+                    continue
+                folder = os.path.join(hub, repo)
+                wanted_revisions = repos.get(store, {}).get(repo)
+                if wanted_revisions is None:
+                    reason = moved(store, repo, repos) or "repository no longer in catalog"
+                    for path in files_below(folder):
+                        if path not in live:
+                            add(path, reason)
+                    continue
+                for path in files_below(os.path.join(folder, "snapshots")):
+                    if path in live or ".damaged-" in os.path.basename(path):
+                        # Damaged copies of wanted files stay for inspection until their repository goes.
+                        continue
+                    revision = Path(path).relative_to(Path(folder) / "snapshots").parts[0]
+                    add(
+                        path,
+                        "file no longer in catalog"
+                        if revision in wanted_revisions
+                        else f"superseded revision {revision[:12]}",
+                    )
+                blobs = os.path.join(folder, "blobs")
+                for blob in os.listdir(blobs) if os.path.isdir(blobs) else []:
+                    path = norm(os.path.join(blobs, blob))
+                    if DIGEST.fullmatch(blob) and path not in live:
+                        add(path, "blob no longer referenced")
+            standalone = os.path.join(store, "files")
+            for digest in sorted(os.listdir(standalone)) if os.path.isdir(standalone) else []:
+                if not DIGEST.fullmatch(digest) or digest in digests.get(store, set()):
+                    continue
+                reason = moved(store, digest, digests) or "standalone file no longer in catalog"
+                for path in files_below(os.path.join(standalone, digest)):
+                    if path not in live:
+                        add(path, reason)
+        return plan, stores, managed, repos, areas
+
+    def prune(self, dry_run=False):
+        out = sys.stdout if dry_run else sys.stderr
+        if not self.wanted:
+            print("prune: refusing to prune: the catalog has no enabled entries", file=out, flush=True)
+            return False
+        plan, stores, managed, repos, areas = self.prune_plan()
+        if not dry_run:
+            atomic_json(self.state / "managed.json", {"repositories": sorted(managed)})
+        holder = self.holders()
+        verb = "would remove" if dry_run else "removed"
+        removed, deferred, freed, failures = set(), 0, 0, 0
+        for path, size, reason in plan:
+            if not any(path == area or path.startswith(area + os.sep) for area in areas):
+                raise AssertionError(f"Refusing to remove {path} outside managed storage")
+            files = (
+                [path]
+                if not os.path.isdir(path) or os.path.islink(path)
+                else [os.path.join(d, f) for d, _, names in os.walk(path) for f in names]
+            )
+            pids = {holder(os.stat(f)) for f in files if not os.path.islink(f) and os.path.isfile(f)} - {None}
+            if pids:
+                deferred += 1
+                print(
+                    f"prune: deferred {path} ({human(size)}): open by pid {', '.join(sorted(pids))}; retried next run",
+                    file=out,
+                    flush=True,
+                )
+                continue
+            if not dry_run:
+                try:
+                    if os.path.isdir(path) and not os.path.islink(path):
+                        shutil.rmtree(path)
+                    else:
+                        os.unlink(path)
+                except OSError as error:
+                    failures += 1
+                    print(f"prune: failed to remove {path}: {type(error).__name__}", file=out, flush=True)
+                    continue
+            removed.add(path)
+            freed += size
+            print(f"prune: {verb} {path} ({human(size)}, {size} bytes): {reason}", file=out, flush=True)
+        if not dry_run:
+            for path in sorted(removed, key=len, reverse=True):
+                directory = os.path.dirname(path)
+                while any(directory.startswith(area + os.sep) for area in areas):
+                    try:
+                        os.rmdir(directory)
+                    except OSError:
+                        break
+                    directory = os.path.dirname(directory)
+            if len(stores) == len({norm(p) for p in self.stores.values()}):
+                gone = {
+                    repo
+                    for repo in managed
+                    if not any(os.path.lexists(os.path.join(s, "huggingface", repo)) for s in stores)
+                    and not any(repo in repos.get(s, {}) for s in stores)
+                }
+                atomic_json(self.state / "managed.json", {"repositories": sorted(managed - gone)})
+            self.stamps = {k: v for k, v in self.stamps.items() if norm(k) not in removed}
+            atomic_json(self.stamps_path, self.stamps)
+        summary = "would free" if dry_run else "freed"
+        print(
+            f"prune: {len(removed)} paths {verb}, {summary} {human(freed)} ({freed} bytes); {deferred} deferred",
+            file=out,
+            flush=True,
+        )
+        return not failures
 
 
 def available(store):
@@ -459,15 +749,40 @@ def fingerprint(catalog):
     return hashlib.sha256(json.dumps(catalog, sort_keys=True).encode()).hexdigest()
 
 
+def load(catalog_path, retained_path):
+    """Read the deployed catalog and retained entries; any damage stops sync and pruning."""
+    catalog = json.loads(catalog_path.read_text())
+    if not isinstance(catalog.get("entries"), dict) or not catalog["entries"]:
+        raise ValueError("Catalog has no entries")
+    if not retained_path.exists():
+        print(f"{retained_path} is absent; pruning is disabled until it is deployed", file=sys.stderr, flush=True)
+        return catalog, None
+    retained = json.loads(retained_path.read_text())
+    if not isinstance(retained.get("entries"), dict):
+        raise ValueError("Retained entries are malformed")
+    return catalog, retained
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["sync", "request", "status", "validate"])
+    parser.add_argument("command", choices=["sync", "request", "status", "validate", "prune", "split"])
+    parser.add_argument("paths", nargs="*", type=Path, help="split: SOURCE OUTPUT-DIRECTORY")
     parser.add_argument(
         "--root", type=Path, default=Path(os.environ.get("MODEL_ROOT", Path.home() / ".local/share/models"))
     )
     parser.add_argument("--catalog", type=Path)
+    parser.add_argument("--retained", type=Path)
+    parser.add_argument("--dry-run", action="store_true", help="prune: list what would go without removing it")
     args = parser.parse_args()
     catalog_path = args.catalog or args.root / "catalog.json"
+    retained_path = args.retained or args.root / ".state/retained.json"
+    if args.command == "split":
+        source, output = args.paths
+        consumer, retained = split(json.loads(source.read_text()))
+        output.mkdir(parents=True)
+        (output / "catalog.json").write_text(json.dumps(consumer, indent=2) + "\n")
+        (output / "retained.json").write_text(json.dumps(retained, indent=2) + "\n")
+        return 0
     if args.command == "request":
         with locked(args.root / ".state/request.lock"):
             (args.root / ".state/pending").touch()
@@ -486,16 +801,40 @@ def main():
             print(f"{alias:32} {item.get('status', 'pending'):20} {item.get('reason', '')}")
         print("Report:", args.root / "readiness.json")
         return 0 if current and report["complete"] else 1
-    catalog = json.loads(catalog_path.read_text())
-    validate(catalog)
+    try:
+        catalog, retained = load(catalog_path, retained_path)
+        Sync(args.root, catalog, retained=retained, readonly=True)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        print(
+            f"Catalog unreadable or invalid ({type(error).__name__}: {error}); nothing synchronized or pruned",
+            file=sys.stderr,
+        )
+        return 2
     if args.command == "validate":
         return 0
+    if args.command == "prune" and args.dry_run:
+        if retained is None:
+            print("Retained entries are not deployed; a real run would refuse to prune")
+        return 0 if Sync(args.root, catalog, retained=retained, readonly=True).prune(dry_run=True) else 1
     with locked(args.root / ".state/sync.lock"):
         with locked(args.root / ".state/request.lock"):
-            (args.root / ".state/pending").unlink(missing_ok=True)
-            catalog = json.loads(catalog_path.read_text())
+            if args.command == "sync":
+                (args.root / ".state/pending").unlink(missing_ok=True)
+            try:
+                catalog, retained = load(catalog_path, retained_path)
+                sync = Sync(args.root, catalog, retained=retained, prune=retained is not None)
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                print(
+                    f"Catalog unreadable or invalid ({type(error).__name__}); nothing synchronized or pruned",
+                    file=sys.stderr,
+                )
+                return 2
+        if args.command == "prune":
+            if retained is None:
+                return 1
+            return 0 if sync.prune() else 1
         # systemd.path rechecks pending after exit, including requests arriving at exit.
-        return 0 if Sync(args.root, catalog).reconcile() else 1
+        return 0 if sync.reconcile() else 1
 
 
 if __name__ == "__main__":

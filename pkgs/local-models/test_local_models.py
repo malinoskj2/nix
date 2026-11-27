@@ -14,12 +14,12 @@ import time
 import unittest
 from unittest.mock import patch
 
-from local_models import Sync, locked, main, validate, prepare_reference
+from local_models import Sync, locked, main, validate, prepare_reference, split
 
 
-def file_spec(name="model.bin", content=b"model", revision="a" * 40):
+def file_spec(name="model.bin", content=b"model", revision="a" * 40, repository="fixture/model"):
     return {
-        "repository": "fixture/model",
+        "repository": repository,
         "revision": revision,
         "path": name,
         "target": name,
@@ -251,7 +251,7 @@ class Synchronization(unittest.TestCase):
         self.catalog["entries"]["unknown"] = entry(unresolved="No provenance")
         self.assertTrue(self.sync())
         self.assertEqual(self.calls, [])
-        self.assertEqual(self.report()["base"]["status"], "historical-disabled")
+        self.assertNotIn("base", self.report())
         self.assertEqual(self.report()["unknown"]["status"], "unresolved")
 
     def test_declared_unresolved_entries_report_but_do_not_fail_sync(self):
@@ -393,9 +393,20 @@ class Stores(unittest.TestCase):
         self.assertTrue(Sync(self.root, self.catalog, lambda *_: self.fail("Download attempted")).reconcile())
         voice = (self.root / "by-name/voice/voice.bin").resolve()
         self.assertTrue(voice.is_relative_to(self.install))
-        self.assertTrue(
-            (self.root / "huggingface/models--fixture--model/snapshots/" / ("a" * 40) / "voice.bin").is_file()
-        )
+        self.assertEqual(voice.read_bytes(), b"model")
+        old = self.root / "huggingface/models--fixture--model/snapshots/" / ("a" * 40)
+        self.assertFalse((old / "voice.bin").exists(), "the published move prunes the old store's copy")
+        self.assertTrue((old / "old.bin").is_file())
+
+    def test_unavailable_store_is_not_pruned(self):
+        self.assertTrue(Sync(self.root, self.catalog, self.downloader).reconcile())
+        voice = self.install / "huggingface/models--fixture--model/snapshots" / ("a" * 40) / "voice.bin"
+        moved = self.base / "unplugged"
+        self.install.rename(moved)
+        self.catalog["entries"].pop("voice")
+        self.assertTrue(Sync(self.root, self.catalog, self.downloader).reconcile())
+        moved.rename(self.install)
+        self.assertTrue(voice.is_file())
 
     def test_unavailable_store_reports_missing_without_touching_others(self):
         blocker = self.base / "absent"
@@ -417,6 +428,252 @@ class Stores(unittest.TestCase):
         bad = copy.deepcopy(self.catalog)
         bad["stores"]["install"] = "relative/path"
         self.assertRaises(ValueError, validate, bad)
+
+
+class Pruning(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.contents = {}
+        self.calls = []
+        self.catalog = {
+            "entries": {
+                "base": entry([self.spec("model.bin", b"model")]),
+                "other": entry([self.spec("other.bin", b"other-weights", repository="fixture/other")]),
+            }
+        }
+
+    def spec(self, name, content, **kwargs):
+        self.contents[hashlib.sha256(content).hexdigest()] = content
+        return file_spec(name, content, **kwargs)
+
+    def hub(self, file, store):
+        """Lay files out as huggingface_hub does: a content-addressed blob and a relative snapshot link."""
+        self.calls.append(file["path"])
+        sync = Sync(self.root, self.catalog)
+        destination = sync.destination(file, store)
+        blob = destination.parents[len(Path(file["path"]).parts) + 1] / "blobs" / file["sha256"]
+        blob.parent.mkdir(parents=True, exist_ok=True)
+        blob.write_bytes(self.contents[file["sha256"]])
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.symlink_to(os.path.relpath(blob, destination.parent))
+        return destination
+
+    def offline(self, *_):
+        raise ConnectionError("offline")
+
+    def sync(self, catalog=None, downloader=None):
+        with patch("sys.stderr", new_callable=io.StringIO) as stderr:
+            result = Sync(self.root, catalog or self.catalog, downloader or self.hub).reconcile()
+        self.log = stderr.getvalue()
+        return result
+
+    def repo(self, name="other"):
+        return self.root / "huggingface" / f"models--fixture--{name}"
+
+    def report(self):
+        return json.loads((self.root / "readiness.json").read_text())["entries"]
+
+    def deploy(self, catalog):
+        consumer, retained = split(catalog)
+        (self.root / "catalog.json").write_text(json.dumps(consumer))
+        (self.root / ".state").mkdir(exist_ok=True)
+        (self.root / ".state/retained.json").write_text(json.dumps(retained))
+
+    def run_main(self, *arguments):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with (
+            patch.object(sys, "argv", ["local-models", *arguments, "--root", str(self.root)]),
+            patch.object(Sync, "download", side_effect=self.hub),
+            patch("sys.stdout", stdout),
+            patch("sys.stderr", stderr),
+        ):
+            code = main()
+        return code, stdout.getvalue() + stderr.getvalue()
+
+    def test_removed_entry_files_go(self):
+        self.assertTrue(self.sync())
+        blob = (self.root / "by-name/other/other.bin").resolve()
+        self.catalog["entries"].pop("other")
+        self.assertTrue(self.sync(downloader=self.offline))
+        self.assertFalse(self.repo().exists())
+        self.assertFalse(os.path.lexists(self.root / "by-name/other"))
+        self.assertFalse((self.root / "views/other").exists())
+        self.assertEqual((self.root / "by-name/base/model.bin").read_bytes(), b"model")
+        self.assertIn(f"prune: removed {blob} (13 B, 13 bytes): repository no longer in catalog", self.log)
+        self.assertIn("alias no longer in catalog", self.log)
+
+    def test_disabled_entry_stays_on_disk_invisibly_and_reenables_instantly(self):
+        self.assertTrue(self.sync())
+        self.catalog["entries"]["other"]["enabled"] = False
+        consumer, retained = split(self.catalog)
+        self.assertNotIn("other", consumer["entries"])
+        self.assertIn("other", retained["entries"])
+        self.deploy(self.catalog)
+        self.assertEqual(self.run_main("sync")[0], 0)
+        self.assertNotIn("other", self.report())
+        self.assertTrue(json.loads((self.root / "readiness.json").read_text())["complete"])
+        self.assertFalse(os.path.lexists(self.root / "by-name/other"))
+        self.assertTrue((self.repo() / "blobs" / file_spec("x", b"other-weights")["sha256"]).is_file())
+        self.catalog["entries"]["other"]["enabled"] = True
+        self.calls.clear()
+        with patch("socket.socket", side_effect=AssertionError("Network forbidden")):
+            self.assertTrue(self.sync(downloader=lambda *_: self.fail("Download attempted")))
+        self.assertEqual(self.report()["other"]["status"], "ready")
+        self.assertEqual((self.root / "by-name/other/other.bin").read_bytes(), b"other-weights")
+
+    def test_disabled_dependency_of_an_enabled_entry_stays_visible(self):
+        self.catalog["entries"]["base"]["enabled"] = False
+        self.catalog["entries"]["pipeline"] = entry(kind="pipeline", dependencies=["base"], views={"b": "base"})
+        consumer, retained = split(self.catalog)
+        self.assertIn("base", consumer["entries"])
+        self.assertNotIn("other", retained["entries"])
+
+    def test_old_revision_goes_only_after_the_new_one_publishes(self):
+        self.assertTrue(self.sync())
+        old = self.repo("model") / "snapshots" / ("a" * 40) / "model.bin"
+        old_blob = old.resolve()
+        updated = copy.deepcopy(self.catalog)
+        updated["entries"]["base"]["files"] = [self.spec("model.bin", b"model-v2", revision="b" * 40)]
+        partial = self.repo("model") / "blobs" / (updated["entries"]["base"]["files"][0]["sha256"] + ".incomplete")
+
+        def interrupted(*_):
+            partial.write_bytes(b"mod")
+            raise ConnectionError("interrupted")
+
+        self.assertFalse(self.sync(updated, interrupted))
+        self.assertTrue(old.is_file() and old_blob.is_file())
+        self.assertEqual((self.root / "by-name/base/model.bin").read_bytes(), b"model")
+        self.assertTrue(partial.exists())
+        self.assertNotIn("superseded", self.log)
+        partial.unlink()
+        self.catalog = updated
+        self.assertTrue(self.sync(updated))
+        self.assertEqual((self.root / "by-name/base/model.bin").read_bytes(), b"model-v2")
+        self.assertFalse(os.path.lexists(old))
+        self.assertFalse(old_blob.exists())
+        self.assertIn(f"superseded revision {'a' * 12}", self.log)
+        self.assertIn("blob no longer referenced", self.log)
+        self.assertEqual(len(list((self.root / "views/base").iterdir())), 1)
+
+    def test_blob_shared_with_a_wanted_revision_survives(self):
+        self.catalog["entries"]["pinned"] = entry([self.spec("model.bin", b"model", revision="c" * 40)])
+        self.assertTrue(self.sync())
+        shared = (self.root / "by-name/base/model.bin").resolve()
+        self.assertEqual((self.root / "by-name/pinned/model.bin").resolve(), shared)
+        self.catalog["entries"].pop("base")
+        self.assertTrue(self.sync(downloader=self.offline))
+        self.assertFalse(os.path.lexists(self.repo("model") / "snapshots" / ("a" * 40)))
+        self.assertTrue(shared.is_file())
+        self.assertEqual((self.root / "by-name/pinned/model.bin").read_bytes(), b"model")
+
+    def test_open_file_is_deferred_to_the_next_run(self):
+        self.assertTrue(self.sync())
+        blob = (self.root / "by-name/other/other.bin").resolve()
+        self.catalog["entries"].pop("other")
+        with blob.open("rb"):
+            self.assertTrue(self.sync(downloader=self.offline))
+            self.assertTrue(blob.is_file())
+            self.assertIn(f"prune: deferred {blob}", self.log)
+            self.assertIn(f"open by pid {os.getpid()}", self.log)
+        self.assertTrue(self.sync(downloader=self.offline))
+        self.assertFalse(blob.exists())
+        self.assertFalse(self.repo().exists())
+
+    def test_mapped_file_is_deferred(self):
+        import mmap
+
+        self.assertTrue(self.sync())
+        blob = (self.root / "by-name/other/other.bin").resolve()
+        self.catalog["entries"].pop("other")
+        with blob.open("rb") as handle:
+            mapping = mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ)
+        try:
+            self.assertTrue(self.sync(downloader=self.offline))
+            self.assertTrue(blob.is_file())
+        finally:
+            mapping.close()
+
+    def test_broken_or_partial_catalog_deletes_nothing(self):
+        self.deploy(self.catalog)
+        self.assertEqual(self.run_main("sync")[0], 0)
+        files = sorted(str(p) for p in self.root.rglob("*") if "/.state" not in str(p) and p.name != "readiness.json")
+        text = (self.root / "catalog.json").read_text()
+        updated = copy.deepcopy(self.catalog)
+        updated["entries"].pop("other")
+        consumer, _ = split(updated)
+        for damaged in [text[: len(text) // 2], "", json.dumps({"entries": {}}), json.dumps({"schemaVersion": 1})]:
+            with self.subTest(catalog=damaged[:30]):
+                (self.root / "catalog.json").write_text(damaged)
+                code, output = self.run_main("sync")
+                self.assertEqual(code, 2)
+                self.assertIn("nothing synchronized or pruned", output)
+        (self.root / "catalog.json").write_text(json.dumps(consumer))
+        (self.root / ".state/retained.json").write_text("{")
+        self.assertEqual(self.run_main("sync")[0], 2)
+        (self.root / ".state/retained.json").unlink()
+        code, output = self.run_main("sync")
+        self.assertIn("pruning is disabled", output)
+        self.assertFalse(any("prune: removed" in line for line in output.splitlines()))
+        after = sorted(str(p) for p in self.root.rglob("*") if "/.state" not in str(p) and p.name != "readiness.json")
+        self.assertEqual(after, files)
+
+    def test_dry_run_lists_without_removing(self):
+        self.deploy(self.catalog)
+        self.assertEqual(self.run_main("sync")[0], 0)
+        updated = copy.deepcopy(self.catalog)
+        updated["entries"].pop("other")
+        self.deploy(updated)
+        before = sorted(self.root.rglob("*"))
+        code, output = self.run_main("prune", "--dry-run")
+        self.assertEqual(code, 0)
+        self.assertIn("would remove", output)
+        self.assertIn("would free 13 B (13 bytes)", output)
+        self.assertEqual(sorted(self.root.rglob("*")), before)
+        code, output = self.run_main("prune")
+        self.assertEqual(code, 0)
+        self.assertFalse(self.repo().exists())
+
+    def test_unmanaged_cache_folders_and_files_outside_stores_are_untouched(self):
+        foreign = self.root / "huggingface/models--someone--else/snapshots" / ("d" * 40) / "weights.bin"
+        foreign.parent.mkdir(parents=True)
+        foreign.write_bytes(b"theirs")
+        outside = self.root / "project/model.bin"
+        outside.parent.mkdir()
+        outside.write_bytes(b"model")
+        self.assertTrue(self.sync())
+        self.catalog["entries"].pop("other")
+        self.catalog["entries"].pop("base")
+        self.catalog["entries"]["kept"] = entry([self.spec("k.bin", b"k", repository="fixture/kept")])
+        self.assertTrue(self.sync())
+        self.assertTrue(foreign.is_file() and outside.is_file())
+        self.assertFalse(self.repo("model").exists())
+
+    def test_removed_standalone_file_goes(self):
+        content = b"standalone"
+        standalone = {
+            "url": "https://example.invalid/file.bin",
+            "path": "file.bin",
+            "target": "file.bin",
+            "size": len(content),
+            "sha256": hashlib.sha256(content).hexdigest(),
+        }
+        self.catalog["entries"]["plain"] = entry([standalone])
+
+        def download(file, store):
+            if file.get("url"):
+                target = Sync(self.root, self.catalog).destination(file, store)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+                return target
+            return self.hub(file, store)
+
+        self.assertTrue(self.sync(downloader=download))
+        self.catalog["entries"].pop("plain")
+        self.assertTrue(self.sync(downloader=self.offline))
+        self.assertFalse((self.root / "files" / standalone["sha256"]).exists())
+        self.assertIn("standalone file no longer in catalog", self.log)
 
 
 class HubIntegration(unittest.TestCase):

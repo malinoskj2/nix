@@ -28,7 +28,7 @@ let
           "param"
         ];
   };
-  catalog = pkgs.writeText "local-models-catalog.json" (
+  sourceCatalog = pkgs.writeText "local-models-source.json" (
     builtins.toJSON (
       source
       // {
@@ -53,6 +53,10 @@ let
       }
     )
   );
+  # Disabled entries leave the consumer catalog; their files are only retained.
+  catalog = pkgs.runCommand "local-models-catalog" { } ''
+    ${executable} split ${sourceCatalog} "$out"
+  '';
 in
 {
   options.services.local-models = {
@@ -167,7 +171,8 @@ in
         for store in ${lib.escapeShellArgs extraStores}; do
           run mkdir -p "$store" 2>/dev/null || echo "Model store $store is unavailable; its entries stay missing"
         done
-        run ln -sfn ${catalog} ${root}/catalog.json
+        run ln -sfn ${catalog}/catalog.json ${root}/catalog.json
+        run ln -sfn ${catalog}/retained.json ${root}/.state/retained.json
         run ln -sfn ${../../../docs/local-models.md} ${root}/README.md
         run ${executable} request --root ${root}
         # Units have been linked and the user manager reloaded. No boot/timer job.

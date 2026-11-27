@@ -36,15 +36,17 @@ Consumers still see one root: `catalog.json`, `readiness.json`, `views/` and
 point into its entry's store. Sync downloads, imports and repairs each entry in
 its own store, and readiness verifies that store's files and records it as the
 entry's `store`. Moving an entry to another store copies its verified files
-there, offline, and leaves the old copy in place. An entry whose store can't be
+there, offline; pruning removes the old copy once the entry is published from
+the new store. An entry whose store can't be
 created or written reports `missing` without affecting other stores.
 Activation creates every store directory. `HF_HUB_CACHE` points only at the
 root's cache, so reach entries in other stores through `by-name`.
 The root stays on the external drive, so while it is unplugged the aliases
 for `install` entries are unreachable too, though their weights remain.
 
-`catalog.json` is the deployed source of truth. `readiness.json` reports each
-entry as ready, missing, blocked, unresolved, or historical-disabled.
+`catalog.json` is the deployed source of truth. It lists only enabled entries
+and the dependencies they need. `readiness.json` reports each of them as ready,
+missing, blocked or unresolved.
 `compatibility` and `consumerReady` describe a separate runtime validation state;
 `consumer-evidenced` records an existing loader, not validation after migration.
 An unresolved or missing dependency prevents its pipeline/adapter becoming ready.
@@ -53,6 +55,18 @@ an entry is missing or blocked; entries the catalog marks unresolved, and those
 waiting on them, are reported but don't fail it.
 The historical TikTok group is disabled by default; enable
 `services.local-models.historical = true` after reviewing its catalog.
+
+## Disabling an entry
+
+Set `"enabled": false` on an entry in `pkgs/local-models/catalog.json`. After the
+next switch it behaves as if it weren't in the catalog: it is left out of the
+deployed `catalog.json` and `readiness.json`, its `by-name` alias goes, and
+nothing downloads for it. Its files stay, and so do its views. The build splits
+the catalog: disabled entries go to `.state/retained.json`, which only the
+synchronizer reads, and pruning keeps everything they reference. Set it back to
+`true` to re-enable it: the next sync verifies the retained files against their
+stamps, publishes the alias and reports it ready without downloading. A
+disabled entry that an enabled entry depends on stays enabled.
 Heretical Qwen remains excluded; its old safetensors consumers need migration.
 
 ## Synchronization and integrity
@@ -67,7 +81,8 @@ Complete files are verified locally before any network request. Verification
 stamps are keyed by content identity and filesystem identity, size, mtime and
 ctime; changed files are hashed again. Alias, formatting and executable changes
 do not invalidate weights. Missing/damaged files are repaired individually.
-Existing complete revisions and damaged files are retained; nothing prunes models.
+Damaged copies of wanted files are kept for inspection until their repository
+is pruned.
 New aliases publish only after all required files and dependencies are ready;
 a failed update retains the previous working alias but reports the new entry's
 failure. Views contain links, not duplicated checkpoints.
@@ -91,6 +106,42 @@ including requests arriving as the process exits. No RemainAfterExit or restart
 loop is used. A failure is visible in readiness and journal; retry is manual or
 at the next switch. A later run reads rotated credentials. Activation failures
 to reach the user manager do not fail deployment; pending is retained.
+
+## Pruning
+
+Every sync ends by pruning what no enabled or retained entry references:
+
+- entries removed from the catalog: their Hub snapshots and blobs, standalone
+  `files/<digest>/` folders, views and `by-name` aliases;
+- old revisions and old store copies, but only once the entry has published
+  its new revision or store; while the new one is downloading or has failed,
+  the previous working alias and everything it links to stay;
+- views no alias reaches any more, and aliases of disabled entries.
+
+Live files are found by following each enabled entry's alias, every enabled and
+retained entry's declared files, and the views of disabled entries. A blob
+shared with anything still live survives. Pruning works only inside each
+store's `huggingface/` and `files/` and the root's `views/` and `by-name/`, and
+within `huggingface/` only in repository folders the store has managed
+(`.state/managed.json`, seeded from the catalog and the verification stamps), so
+other tools' downloads into `HF_HUB_CACHE` are left alone. Inside a managed
+repository folder, though, the store owns every snapshot. A store that is
+absent is skipped.
+
+A file some process holds open or maps, such as a model loaded under a GPU
+reservation, is deferred to the next run. Only processes the service can
+inspect count, which on the host includes sandboxed agents running as Jesse.
+Every removal and deferral is logged with its path, size and reason:
+
+```sh
+journalctl --user -u local-models-sync.service | grep prune:
+local-models prune --dry-run   # what would go and how much space it frees
+local-models prune             # prune now, without syncing
+```
+
+Pruning fails closed. A catalog that is missing, truncated, invalid or empty
+stops the run before anything is synchronized or deleted, and while
+`.state/retained.json` is absent or malformed nothing is pruned.
 
 See [systemd.path](https://www.freedesktop.org/software/systemd/man/latest/systemd.path.html)
 for its post-exit check and
@@ -169,7 +220,10 @@ Qwen's generative parallax extraction or establish production alpha matting.
 `nix build .#checks.x86_64-linux.local-models .#checks.x86_64-linux.local-models-activation`
 runs small fixture tests without
 fetching weights. They cover offline repetition, repairs, imports, partial
-failures, adapters, layouts, request retention and process serialization.
+failures, adapters, layouts, request retention, process serialization,
+disabling and re-enabling, and pruning: removed entries, revision bumps,
+shared blobs, open and mapped files, store moves, absent stores and broken
+catalogs.
 `nix fmt` formats/lints the code. Evaluate/build the affected host before an
 authorized switch. No evaluation/build/test should request the bulk catalog.
 

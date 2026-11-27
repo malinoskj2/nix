@@ -38,6 +38,11 @@ with tempfile.TemporaryDirectory() as directory:
     for _ in range(2):
         subprocess.run([os.environ["TEST_BASH"], "-c", script], env=environment, check=True)
         assert (root / ".state/pending").is_file()
+        consumer = json.loads((root / "catalog.json").read_text())
+        retained = json.loads((root / ".state/retained.json").read_text())
+        assert all(entry["enabled"] for entry in consumer["entries"].values())
+        assert not set(consumer["entries"]) & set(retained["entries"])
+        assert "h3-taomate-lora" in retained["entries"], "Disabled entries are retained, not published"
         assert store.is_dir(), "Activation must create every store"
         assert not (root / "readiness.json").exists(), "Activation must not run downloads inline"
     requests = log.read_text().splitlines()
