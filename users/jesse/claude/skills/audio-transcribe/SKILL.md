@@ -27,10 +27,17 @@ peak needs it. On a host without a supported GPU, use `--device cpu` (int8)
 without a GPU reservation. CUDA execution is built for this setup's Blackwell
 GPU; CPU execution also works on the other hosts.
 
-The default model is `large-v3-turbo`. `--model` accepts another faster-whisper
-model name or a local CTranslate2 model directory. Weights download on first
-use and are cached under `${XDG_CACHE_HOME:-~/.cache}/faster-whisper`; cached
-weights are files, not a resident model. Use `--language en` or another code
+The default model is the shared catalog's `whisper-large-v3-turbo` alias
+(`$MODEL_ROOT/by-name/whisper-large-v3-turbo`, faster-whisper large-v3-turbo
+pinned to one Hub revision), loaded offline with `local_files_only`. Only when
+`MODEL_ROOT` is unset or `readiness.json` doesn't report that alias ready does
+the command fall back to `large-v3-turbo` from
+`${XDG_CACHE_HOME:-~/.cache}/faster-whisper`, downloading it on first use, and
+it says so on stderr. Report that fallback rather than letting the cache
+become a second copy: ask for `systemctl --user start local-models-sync.service`
+on the host. `--model` accepts another faster-whisper model name or a local
+CTranslate2 model directory, which skips the catalog. Cached weights are files,
+not a resident model. Use `--language en` or another code
 when known, otherwise allow automatic detection. No transcription API key is
 needed and audio stays local.
 
