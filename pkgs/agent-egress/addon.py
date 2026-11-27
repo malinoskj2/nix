@@ -75,10 +75,7 @@ def split_authority(value):
 
 
 def literal_ip(host):
-    try:
-        return ipaddress.ip_address(norm_host(host).split("%", 1)[0])
-    except ValueError:
-        return None
+    return parse_ip(norm_host(host))
 
 
 def local_addresses():
@@ -105,15 +102,35 @@ def local_addresses():
     return found
 
 
+NAT64 = ipaddress.ip_network("64:ff9b::/96")
+COMPATIBLE = ipaddress.ip_network("::/96")
+
+
+def parse_ip(ip):
+    try:
+        return ipaddress.ip_address(str(ip).split("%", 1)[0].strip("[]"))
+    except ValueError:
+        return None
+
+
+def forms(address):
+    """The address and every IPv4 address an IPv6 form of it carries, which may reach the same host."""
+    found = {address}
+    if isinstance(address, ipaddress.IPv6Address):
+        found.update(a for a in (address.ipv4_mapped, address.sixtofour) if a)
+        if address.teredo:
+            found.update(address.teredo)
+        if address in NAT64 or (address in COMPATIBLE and int(address) > 1):
+            found.add(ipaddress.IPv4Address(int(address) & 0xFFFFFFFF))
+    return found
+
+
 def internal_address(ip):
     """Addresses that reach the host itself or cloud metadata, which no sandbox may reach through the proxy."""
-    try:
-        address = ipaddress.ip_address(ip.split("%", 1)[0])
-    except ValueError:
+    address = parse_ip(ip)
+    if address is None:
         return False
-    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
-        address = address.ipv4_mapped
-    return address.is_loopback or address.is_link_local or address.is_unspecified or address.is_multicast
+    return any(a.is_loopback or a.is_link_local or a.is_unspecified or a.is_multicast for a in forms(address))
 
 
 def socket_owner(peer, local):
@@ -269,12 +286,15 @@ class Broker:
         return self.local_cache
 
     def refused(self, sandbox, ip, port):
-        if internal_address(ip):
+        address = parse_ip(ip)
+        if address is None or internal_address(ip):
             return True
-        if ip not in self.local():
+        local = {a for text in self.local() if (p := parse_ip(text)) for a in forms(p)}
+        if not forms(address) & local:
             return False
         preview = self.policy.preview(sandbox)
-        return not (ip == preview.get("address") and port in preview.get("ports", []))
+        own = parse_ip(preview.get("address") or "")
+        return not (own is not None and address == own and port in preview.get("ports", []))
 
     async def resolve(self, host, port):
         infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)

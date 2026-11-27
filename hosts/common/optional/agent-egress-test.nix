@@ -60,10 +60,13 @@ in
       };
     };
 
-    networking.hosts."192.168.1.2" = [
-      "allowed.test"
-      "unlisted.test"
-    ];
+    networking.hosts = {
+      "192.168.1.2" = [
+        "allowed.test"
+        "unlisted.test"
+      ];
+      "::ffff:192.168.1.1" = [ "mapped.test" ];
+    };
   };
 
   testScript = ''
@@ -145,7 +148,21 @@ in
         assert machine.succeed(via_sandbox + "http://localhost:8000/hostname") == "502"
         assert machine.succeed(via_sandbox + "http://192.168.1.1:8000/hostname") == "502"
         assert machine.succeed(via_sandbox + f"http://{gateway}:8000/hostname") == "502"
+        for target in ("[::ffff:192.168.1.1]", "[::ffff:c0a8:101]", "[::192.168.1.1]", "[::ffff:127.0.0.1]", "mapped.test", "3232235777"):
+            assert machine.succeed(via_sandbox + f"http://{target}:8000/hostname") == "502", target
         assert ("sbx-test", "192.168.1.1", "deny-internal") in {(r.get("sandbox"), r.get("host"), r.get("decision")) for r in records()}
+
+    with subtest("a sandbox reaches its own preview port on the host, and no other sandbox's"):
+        machine.succeed("sleep infinity >/dev/null 2>&1 & echo $! > /tmp/preview-launcher.pid")
+        reply = control("jesse", {"op": "register", "name": "sbx-preview", "pid": int(machine.succeed("cat /tmp/preview-launcher.pid")), "preview": {"address": "192.168.1.1", "ports": [8000]}})
+        assert reply["ok"], reply
+        machine.succeed(as_user("jesse", "socat TCP-LISTEN:13129,bind=127.0.0.1,fork,reuseaddr UNIX-CONNECT:/run/agent-broker/egress-gate/sandbox/sbx-preview/proxy.sock >/dev/null 2>&1 &"))
+        machine.wait_for_open_port(13129, "127.0.0.1")
+        own = "curl -s -o /dev/null -w '%{http_code}' -x http://127.0.0.1:13129 "
+        assert machine.succeed(own + "http://192.168.1.1:8000/hostname") == "200"
+        assert machine.succeed(own + "http://[::ffff:192.168.1.1]:8000/hostname") == "502"
+        assert machine.succeed(via_sandbox + "http://192.168.1.1:8000/hostname") == "502"
+        control("jesse", {"op": "unregister", "name": "sbx-preview"})
 
     with subtest("the Host header can't redirect a request past the allowlist"):
         assert machine.succeed(via_sandbox + "-H 'Host: allowed.test:8000' http://unlisted.test:8000/hostname") == "421"

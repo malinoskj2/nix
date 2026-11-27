@@ -25,12 +25,15 @@ bridge and published ports, as before.
   else passes through as an opaque tunnel, so sandboxes see the real
   certificates. Every decision is made on the address the proxy actually
   connects to: HTTPS has to come through `CONNECT`, a request's `Host` header
-  has to name its connection's target (`421` otherwise), and a TLS
-  connection's SNI has to match the `CONNECT` target. The proxy resolves each
-  name once and connects to the address it checked. It refuses the host's own
-  addresses (loopback, its LAN addresses, Docker bridge gateways) and
-  link-local addresses such as cloud metadata in every mode, except a
-  sandbox's own preview ports.
+  has to name its connection's target (`421` otherwise), and on connections
+  the proxy reads as TLS (web ports, and hosts it decrypts) the SNI has to
+  match the `CONNECT` target; other ports pass as opaque TCP, unparsed. The
+  proxy resolves each name once and connects to the address it checked. It
+  refuses every address of the host itself (loopback, its LAN addresses,
+  Docker bridge gateways, in any IPv4 or IPv6 spelling, including
+  IPv4-mapped, IPv4-compatible, NAT64 and 6to4 forms) and link-local
+  addresses such as cloud metadata in every mode, except a sandbox's own
+  preview ports.
 - **Gate.** `agent-broker-egress-gate` gives each sandbox its own Unix socket,
   `/run/agent-broker/egress-gate/sandbox/<name>/proxy.sock`, mounted in the
   sandbox at `/run/agent-egress`. The gate forwards each socket to the proxy
@@ -45,7 +48,11 @@ bridge and published ports, as before.
   `NO_PROXY=localhost,127.0.0.1,::1,172.16.0.0/12`. The last is Docker's
   bridge pool, so siblings and stack services are reached directly on their
   internal networks; reach them by the address `sandbox-runner` prints, since
-  a container name sent to the proxy doesn't resolve on the host.
+  a container name sent to the proxy doesn't resolve on the host. Clients
+  differ in whether they understand a CIDR range in `NO_PROXY`: curl, Go,
+  Python's `requests` and Chromium do, Python's `urllib` and some Node
+  clients don't and send those addresses to the proxy, which refuses them in
+  enforce mode.
   `/etc/ssh/ssh_config` sends SSH through the proxy with `socat`, so
   `ssh media` and `git@github.com:` keep working. DNS for outside names
   doesn't resolve in the sandbox, which is expected: clients hand the name to

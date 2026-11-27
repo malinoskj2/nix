@@ -514,6 +514,36 @@ class Internal(unittest.TestCase):
             server = self.connect(broker, host, port, sandbox)
             self.assertEqual(server.error is not None, refused, (host, port, sandbox))
 
+    def test_ipv6_forms_of_host_addresses_are_refused(self):
+        local = {"192.168.1.10", "172.17.0.23"}
+        for host in (
+            "::ffff:172.17.0.23",
+            "[::ffff:172.17.0.23]",
+            "::ffff:ac11:17",
+            "::172.17.0.23",
+            "64:ff9b::ac11:17",
+            "2002:c0a8:010a::1",
+            "::ffff:127.0.0.1",
+            "::ffff:169.254.169.254",
+            "::ffff:192.168.1.10",
+        ):
+            server = self.connect(self.broker([], local), host, 18080)
+            self.assertIsNotNone(server.error, host)
+        for answer in (["::ffff:172.17.0.23"], ["140.82.112.3", "::ffff:192.168.1.10"], ["64:ff9b::7f00:1"]):
+            server = self.connect(self.broker([answer], local), "mapped.example", 443)
+            self.assertIsNotNone(server.error, answer)
+        server = self.connect(self.broker([], local), "::ffff:140.82.112.3", 443)
+        self.assertIsNone(server.error)
+
+    def test_decimal_and_octal_names_resolve_before_the_check(self):
+        addon = load_addon()
+        broker = addon.addons[0]
+        broker.allow_internal = False
+        broker.emit = lambda record: None
+        broker.local = lambda: set()
+        for host in ("2130706433", "0177.0.0.1", "0x7f.1"):
+            self.assertIsNotNone(self.connect(broker, host).error, host)
+
     def test_local_addresses_reads_this_host(self):
         local = load_addon().local_addresses()
         self.assertIn("127.0.0.1", local)
