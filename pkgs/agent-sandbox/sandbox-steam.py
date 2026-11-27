@@ -65,7 +65,7 @@ def main() -> None:
 
     # A running client keeps its mode and rewrites the file when it exits.
     if steam_running():
-        log("Steam is already running and keeps its mode; quit it with `steam -shutdown` to change it")
+        log("Steam is already running and keeps its mode; quit it with `sandbox-steam -shutdown` to change it")
     else:
         # Offline, the client never signs in to Steam's servers, so a game it launches doesn't take
         # the account's single game session from the human playing on the host.
@@ -78,7 +78,7 @@ def main() -> None:
             url = os.environ.get("AGENT_SANDBOX_VNC_URL", "the sandbox VNC")
             log(
                 f"no saved Steam login, so Steam starts online; ask the human to sign in at {url} with "
-                "Remember me checked, then restart it with `steam -shutdown` and sandbox-steam to go offline"
+                "Remember me checked, then restart it with `sandbox-steam -shutdown` and sandbox-steam to go offline"
             )
 
     os.execvpe(
