@@ -5,6 +5,7 @@ import http.client
 import http.server
 import json
 import os
+import re
 import secrets
 import signal
 import socket
@@ -49,6 +50,7 @@ ANY_PROFILE = "qwen"
 KEEPALIVE = 15
 LOG_LIMIT = 8 * 1024 * 1024
 READ_CHUNK = 65536
+LOGS_KEPT = 10
 # OpenCode closing an idle keep-alive connection, or going away mid-stream.
 DISCONNECTS = (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, TimeoutError)
 
@@ -81,8 +83,8 @@ def listed_models(served):
 class Log:
     """The session's log file, which takes everything the proxy and servers would print instead of OpenCode's TTY.
 
-    It is appended to across sessions and moves to a single .1 backup once it
-    passes LOG_LIMIT, so it never holds much more than twice that.
+    Each session has its own, which moves to a single .1 backup once it
+    reaches LOG_LIMIT, so it never holds more than twice that.
     """
 
     def __init__(self, path, limit=LOG_LIMIT):
@@ -137,6 +139,19 @@ class Log:
     def close(self):
         with self.lock:
             self.file.close()
+
+
+def session_log(state, launcher, kept=LOGS_KEPT):
+    """A new log path for this session, removing all but the newest kept - 1 earlier ones of the same launcher."""
+    state.mkdir(parents=True, exist_ok=True)
+    pattern = re.compile(re.escape(launcher) + r"-\d{8}-\d{6}-\d+\.log")
+    earlier = sorted(
+        (path for path in state.iterdir() if pattern.fullmatch(path.name)), key=lambda path: path.stat().st_mtime
+    )
+    for old in earlier[: max(len(earlier) - kept + 1, 0)]:
+        old.unlink(missing_ok=True)
+        Path(f"{old}.1").unlink(missing_ok=True)
+    return state / f"{launcher}-{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}.log"
 
 
 class Ticket:
@@ -523,7 +538,7 @@ def main():
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, interrupted)
     key = secrets.token_hex(24)
-    log = Log(state / f"qwen-opencode-{name}{'' if mode == 'dense' else '-' + mode}.log")
+    log = Log(session_log(state, f"qwen-opencode-{name}{'' if mode == 'dense' else '-' + mode}"))
     threading.excepthook = lambda hook: log.error(
         "".join(traceback.format_exception(hook.exc_type, hook.exc_value, hook.exc_traceback)).rstrip()
     )

@@ -328,7 +328,8 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual(process.returncode, 0, stderr)
         self.assertEqual(len(stderr.splitlines()), 1, stderr)
         self.assertIn("loads on demand", stderr)
-        log = (self.root / "state" / "qwen-prompt" / "qwen-opencode-uncensored.log").read_text()
+        (log,) = (self.root / "state" / "qwen-prompt").glob("qwen-opencode-uncensored-*.log")
+        log = log.read_text()
         self.assertIn("GET /v1/models", log)
         self.assertNotIn("Traceback", log)
 
@@ -474,6 +475,29 @@ class BoundedLogTest(unittest.TestCase):
             log.close()
             self.assertTrue(sizes and max(sizes) <= opencode.READ_CHUNK, sizes[:5])
             self.assertTrue(progress.endswith(path.read_bytes()))
+
+
+class SessionLogTest(unittest.TestCase):
+    def test_each_session_has_its_own_log_and_only_the_newest_are_kept(self):
+        from opencode import session_log
+
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            for n in range(12):
+                old = state / f"qwen-opencode-regular-20260101-0000{n:02}-{n}.log"
+                old.write_text("old")
+                Path(f"{old}.1").write_text("old")
+                os.utime(old, (n, n))
+            other = state / "qwen-opencode-regular-moe-20260101-000000-1.log"
+            other.write_text("other launcher")
+            os.utime(other, (0, 0))
+            path = session_log(state, "qwen-opencode-regular", kept=4)
+            self.assertFalse(path.exists())
+            self.assertTrue(path.name.endswith(f"-{os.getpid()}.log"))
+            left = sorted(p.name for p in state.glob("qwen-opencode-regular-2*.log"))
+            self.assertEqual(left, [f"qwen-opencode-regular-20260101-0000{n:02}-{n}.log" for n in (9, 10, 11)])
+            self.assertEqual(len(list(state.glob("qwen-opencode-regular-2*.log.1"))), 3)
+            self.assertTrue(other.exists())
 
 
 class QueueTest(unittest.TestCase):
