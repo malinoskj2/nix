@@ -49,7 +49,11 @@ in
 
   agentBroker = {
     clients = [ "jesse" ];
-    egress.enable = true;
+    egress = {
+      enable = true;
+      # OpenCode's model catalogue; api.venice.ai is allowed by its credential binding.
+      allow = [ "models.opencode.ai" ];
+    };
     # Sandboxed OpenCode holds a placeholder; the egress proxy adds this one for Venice.
     secrets.venice-api-key-agent.inject.hosts = [ "api.venice.ai" ];
   };
