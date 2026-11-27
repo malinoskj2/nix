@@ -588,6 +588,8 @@ class Runner:
         self.project_locks = {}
         self.base_labels = {OWNER_LABEL: self.owner}
         self.runc_fallback = set()
+        # Every publication replaces the owner's whole set of stack networks, so they take turns.
+        self.stack_grants = threading.Lock()
         self.runsc_available = None
         self.egress = None
         if getattr(args, "egress_config", None) and os.path.exists(args.egress_config):
@@ -709,6 +711,9 @@ class Runner:
     def cleanup(self):
         for project in list(self.projects):
             attempt(f"compose down {project}", self.compose_down_locked, project)
+        # A project the gate couldn't be told about goes too: the runner exits with its launcher,
+        # whose registration, and every network grant with it, the gate drops once that pid is gone.
+        attempt("withdrawing stack networks", self.revoke_all_stack_networks)
         attempt("removing owned resources", self.remove_owned)
         for name, sandbox in self.sandboxes.items():
             self.release_egress(name, sandbox)
@@ -1122,13 +1127,35 @@ class Runner:
                 continue
         return subnets
 
+    def publish_stack_networks(self, excluding=None):
+        """Give the gate the owner's stack networks, leaving out a project being removed. Hold stack_grants."""
+        networks = self.owned("network", f"label={PROJECT_LABEL}")
+        if excluding is not None:
+            leaving = set(self.owned("network", f"label={PROJECT_LABEL}={excluding}"))
+            networks = [n for n in networks if n not in leaving]
+        self.gate({"op": "networks", "name": self.owner, "networks": self.network_subnets(*networks)})
+
+    def revoke_stack_networks(self, project):
+        """Withdraw a stack's networks before Docker may hand their subnets to another sandbox. Hold stack_grants."""
+        if self.egress is None:
+            return
+        try:
+            self.publish_stack_networks(excluding=project)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise Refused(f"the egress gate isn't answering ({error})") from error
+
+    def revoke_all_stack_networks(self):
+        if self.egress is not None:
+            with self.stack_grants:
+                self.gate({"op": "networks", "name": self.owner, "networks": []})
+
     def sync_stack_networks(self, emit=None):
         """Tell the egress proxy which stack networks the owner may reach, for clients that send them to it."""
         if self.egress is None:
             return
         try:
-            subnets = self.network_subnets(*self.owned("network", f"label={PROJECT_LABEL}"))
-            self.gate({"op": "networks", "name": self.owner, "networks": subnets})
+            with self.stack_grants:
+                self.publish_stack_networks()
         except (Refused, OSError, subprocess.TimeoutExpired) as error:
             log(f"stack networks not registered with the egress gate: {error}")
             if emit is not None:
@@ -1608,9 +1635,15 @@ class Runner:
     def compose_down_locked(self, project, emit=None):
         """Bring a project down; its labelled leftovers are removed even if Compose fails.
 
-        The record stays when that removal fails, so the next down, the reaper or the exit
-        cleanup retries it.
+        The record stays when that removal fails, or when the proxy can't be told to stop letting
+        the owner reach the stack's networks, so the next down, the reaper or the exit cleanup
+        retries it.
         """
+        with self.stack_grants:
+            self.revoke_stack_networks(project)
+            return self.compose_down_revoked(project, emit)
+
+    def compose_down_revoked(self, project, emit):
         with self.lock:
             entry = self.projects.get(project)
         code = 0
@@ -1633,7 +1666,6 @@ class Runner:
                 log(f"compose down {project} failed, removing its resources directly: {error}")
                 code = 1
         self.remove_owned(f"label={PROJECT_LABEL}={project}")
-        self.sync_stack_networks()
         with self.lock:
             entry = self.projects.pop(project, None)
             self.runc_fallback.discard(project)

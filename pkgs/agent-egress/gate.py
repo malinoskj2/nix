@@ -188,6 +188,10 @@ class Gate:
         for w in self.tunnels.pop(name, set()):
             w.close()
         self.entries.pop(name, None)
+        # A later sandbox under the same name isn't the owner these siblings were registered to.
+        for entry in self.entries.values():
+            if entry.get("owner") == name:
+                entry["owner"] = None
         shutil.rmtree(self.directory(name), ignore_errors=True)
 
     async def control(self, reader, writer):
@@ -253,7 +257,8 @@ class Gate:
                 # The sandbox's runner replaces the set of its Compose stacks' networks.
                 entry = self.entries.get(name)
                 if entry is None:
-                    raise ValueError(f"{name} isn't registered")
+                    # Nothing to grant to, and nothing left to revoke.
+                    return {"ok": True, "registered": False}
                 if uid != 0 and uid != entry["uid"]:
                     raise PermissionError("only the user who registered a sandbox may change its networks")
                 entry["stacks"] = private_networks(request.get("networks"), limit=64)

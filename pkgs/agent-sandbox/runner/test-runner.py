@@ -393,6 +393,7 @@ class TeardownTest(unittest.TestCase):
         r.projects = {}
         r.runc_fallback = set()
         r.egress = None
+        r.stack_grants = threading.Lock()
         r.removed = []
         for project in projects:
             directory = Path(tempfile.mkdtemp())
@@ -533,6 +534,7 @@ class StackNetworksTest(unittest.TestCase):
         r = object.__new__(runner.Runner)
         r.owner = "owner"
         r.egress = {"gate": "/gate", "network": "agent-sandbox"}
+        r.stack_grants = threading.Lock()
         r.requests = []
         r.gate = lambda request: r.requests.append(request) or {"ok": True}
         r.owned = lambda kind, *filters: list(networks) if kind == "network" else []
@@ -560,6 +562,46 @@ class StackNetworksTest(unittest.TestCase):
         warnings = []
         r.sync_stack_networks(lambda _stream, text: warnings.append(text))
         self.assertIn("won't reach this stack", warnings[0])
+
+    def test_a_stack_loses_its_grant_before_its_network_is_removed(self):
+        r = self.runner(["n1", "n2"])
+        r.lock = threading.Lock()
+        r.runc_fallback = set()
+        r.projects = {"p2": {"pins": unittest.mock.Mock(), "dir": Path(tempfile.mkdtemp())}}
+        listing = r.owned
+        r.owned = lambda kind, *filters: ["n2"] if filters and filters[0].endswith("=p2") else listing(kind, *filters)
+        r.compose_run = lambda *_: 0
+        events = []
+        r.gate = lambda request: events.append(("gate", request["networks"])) or {"ok": True}
+
+        def remove_owned(*filters):
+            self.assertTrue(r.stack_grants.locked(), "no sync may republish the stack while it goes")
+            events.append(("remove", filters))
+
+        r.remove_owned = remove_owned
+        r.docker = lambda *argv, **_: argparse.Namespace(
+            stdout="".join(json.dumps([{"Subnet": f"172.{20 + int(n[1])}.0.0/16"}]) + "\n" for n in argv[2:-2]),
+            stderr="",
+            returncode=0,
+        )
+        r.compose_down_locked("p2")
+        self.assertEqual(events[0], ("gate", ["172.21.0.0/16"]))
+        self.assertEqual(events[1][0], "remove")
+        self.assertNotIn("p2", r.projects)
+
+    def test_a_stack_whose_grant_cant_be_revoked_stays(self):
+        r = self.runner(["n1"])
+        r.lock = threading.Lock()
+        r.projects = {"p1": {"pins": unittest.mock.Mock(), "dir": Path(tempfile.mkdtemp())}}
+        r.remove_owned = lambda *_: self.fail("removed a stack the proxy still lets its owner reach")
+
+        def down(_):
+            raise OSError("gate down")
+
+        r.gate = down
+        with self.assertRaises(runner.Refused):
+            r.compose_down_locked("p1")
+        self.assertIn("p1", r.projects)
 
     def test_without_egress_nothing_is_registered(self):
         r = self.runner(["n1"])
@@ -618,6 +660,7 @@ class RuntimeTest(unittest.TestCase):
         r.runc_fallback = set()
         r.runsc_available = runsc
         r.egress = None
+        r.stack_grants = threading.Lock()
         return r
 
     def test_review_stacks_default_to_gvisor(self):
