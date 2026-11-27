@@ -1094,13 +1094,15 @@ class Runner:
             bind, host_port, port = parts if len(parts) == 3 else ["0.0.0.0", *parts]
             if len(parts) == 2:
                 previews.append(int(host_port))
-            # Relative to the ingress directory: its full path can pass the 108-byte socket path limit.
+            # Relative to the ingress directory: its full path can pass the 108-byte socket path
+            # limit. argv[0] names the forwarder for agent-sandbox-kill.
             forwarder = subprocess.Popen(
                 [
-                    self.args.socat,
+                    f"agent-sandbox-ingress {state['ingress']}",
                     f"TCP-LISTEN:{host_port},bind={bind},fork,reuseaddr",
                     f"UNIX-CONNECT:{port}.sock",
                 ],
+                executable=self.args.socat,
                 cwd=state["ingress"],
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,

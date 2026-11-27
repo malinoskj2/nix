@@ -968,15 +968,22 @@ symlinkJoin {
       runCommand "agent-sandbox-runner-tests"
         {
           nativeBuildInputs = [
+            bashInteractive
             git
+            procps
             python3
             socat
           ];
         }
         ''
-          cp ${./runner/runner.py} runner.py
-          cp ${./runner/test-runner.py} test-runner.py
-          python3 -B test-runner.py -v
+          mkdir runner
+          cp ${./runner/runner.py} runner/runner.py
+          cp ${./runner/test-runner.py} runner/test-runner.py
+          cp ${./egress.sh} egress.sh
+          cp ${./agent-sandbox-kill.sh} agent-sandbox-kill.sh
+          cp ${./test-ingress.py} test-ingress.py
+          (cd runner && python3 -B test-runner.py -v)
+          python3 -B test-ingress.py -v
           touch $out
         '';
     launcherTests =

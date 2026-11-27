@@ -69,6 +69,14 @@ egress_init() {
 # Swaps the --publish entries for host-side forwarders into the sandbox's ingress sockets, as
 # published ports don't reach an internal network, and registers the sandbox with the gate,
 # which allows it its own preview URLs. Binding here also holds the ports until it starts.
+# Connecting by name from the ingress directory keeps the socket path under its 108-byte limit, and
+# argv[0] names the forwarder for agent-sandbox-kill.
+ingress_forward() {
+  local bind=$1 host_port=$2 dir=$3 port=$4
+  (cd "$dir" && exec -a "agent-sandbox-ingress $dir" socat \
+    "TCP-LISTEN:$host_port,bind=$bind,fork,reuseaddr" "UNIX-CONNECT:$port.sock") >/dev/null 2>&1 &
+}
+
 egress_publish() {
   local -a kept=() previews=()
   local spec bind host_port port pid reply subnets
@@ -85,8 +93,7 @@ egress_publish() {
       else
         previews+=("$host_port")
       fi
-      socat "TCP-LISTEN:$host_port,bind=$bind,fork,reuseaddr" "UNIX-CONNECT:$ingress_dir/$port.sock" \
-        >/dev/null 2>&1 &
+      ingress_forward "$bind" "$host_port" "$ingress_dir" "$port"
       ingress_pids+=($!)
       shift 2
     else

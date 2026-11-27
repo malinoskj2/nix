@@ -52,6 +52,9 @@ done
 pkill -f -- "--state-dir $data/runner/" || true
 # Ingress forwarders on the host ports, left by a launcher or runner that died hard; the egress
 # gate drops their registrations once the launcher's pid is gone.
+pkill -f -- "^agent-sandbox-ingress $data/runner/" || true
+pkill -f -- "^agent-sandbox-ingress $runtime/agent-sandbox-ingress/" || true
+# Forwarders started before they were named connected by absolute path.
 pkill -f -- "UNIX-CONNECT:$data/runner/" || true
 pkill -f -- "UNIX-CONNECT:$runtime/agent-sandbox-ingress/" || true
 rm -rf -- "$runtime"/agent-sandbox-runner/* "$data/runner" "$runtime/agent-sandbox-ingress"
