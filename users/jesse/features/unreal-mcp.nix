@@ -13,6 +13,13 @@ in
     startup_timeout_sec = 30;
     tool_timeout_sec = 120;
   };
+  programs.opencode.settings.mcp.servers.unreal-mcp = {
+    type = "remote";
+    disabled = true;
+    inherit (unrealMcp) url;
+    oauth = false;
+    timeout.execution = 120000;
+  };
   programs.antigravity.mcpServers.unreal-mcp = {
     disabled = true;
     serverUrl = unrealMcp.url;

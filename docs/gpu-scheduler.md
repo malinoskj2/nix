@@ -186,12 +186,12 @@ The first `--moe` launch for a model builds Strata's pack in
 index, the tokenizer and a 43 GB `experts.bin` the resident mode copies from.
 A build runs once at a time and only publishes a complete pack.
 
-In Orca's agent picker, OpenCode on `home` runs
-`orca-sandbox-launch orca-sandbox opencode`, which `agent-sandbox-exec` turns
-into `qwen-opencode --uncensored` in the repository's sandbox, where the
-scheduler directory and `$MODEL_ROOT` are mounted. Orca's OpenCode status
-plugin posts to Orca's loopback port with `fetch`, which the container can't
-reach, so sandboxed OpenCode panes show no working or done status.
+In Orca's agent picker, OpenCode on `home` runs plain `opencode` in the
+repository's sandbox, with the host's Venice models; run `qwen-opencode` there
+yourself for local Qwen, since the scheduler directory and `$MODEL_ROOT` are
+mounted. Orca's OpenCode status plugin posts to Orca's loopback port with
+`fetch`, which the container can't reach, so sandboxed OpenCode panes show no
+working or done status.
 
 ## Shared leases and lifecycle
 

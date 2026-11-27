@@ -172,6 +172,15 @@ configure_antigravity() {
   mount_readonly "$AGENT_SANDBOX_INSTRUCTIONS" "$HOME/.gemini/config/AGENTS.md"
 }
 
+configure_opencode() {
+  # The image's /etc/opencode config outranks these, swapping in the sandbox's MCP servers and a
+  # placeholder Venice key that the egress proxy replaces.
+  local name
+  for name in opencode.json AGENTS.md skills; do
+    mount_readonly "$HOME/.config/opencode/$name"
+  done
+}
+
 # Proton and the Steam Linux Runtimes a sandbox client installs before launching a game, which
 # the sandbox keeps its own copies of so that it never rewrites the host's.
 is_steam_tool() {
@@ -346,6 +355,7 @@ mount_readonly "$HOME/.agents/skills"
 configure_claude
 configure_codex
 configure_antigravity
+configure_opencode
 configure_steam
 
 sandbox_instance=${AGENT_SANDBOX_NAME:-agent-sandbox-$(basename "$workdir")-$$}
@@ -586,8 +596,7 @@ case $agent in
   claude) set -- claude --dangerously-skip-permissions "$@" ;;
   codex) set -- codex --dangerously-bypass-approvals-and-sandbox "$@" ;;
   antigravity) set -- agy --dangerously-skip-permissions "$@" ;;
-  # OpenCode runs on local uncensored Qwen, booking the GPU only while it serves.
-  opencode) set -- qwen-opencode --uncensored "$@" ;;
+  opencode) set -- opencode "$@" ;;
 esac
 
 # Serialize port selection with container creation across concurrent

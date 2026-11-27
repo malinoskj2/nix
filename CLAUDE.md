@@ -73,7 +73,7 @@ set their outputs in `desktop.monitors`.
 Each `pkgs/<name>/package.nix` is a local package. `pkgs/default.nix` picks up
 directories containing `package.nix`, and the `additions` overlay exposes them
 as `pkgs.<name>`. A new package also goes in the `exportedPackages` list in `flake.nix`.
-Its `callPackage` supplies claude-code and codex from `pkgs.unstable`. Install
+Its `callPackage` supplies claude-code, codex and opencode from `pkgs.unstable`. Install
 local packages by name. Linux-only packages set `meta.platforms`. `git-open-branch` installs the
 `git-open` command.
 

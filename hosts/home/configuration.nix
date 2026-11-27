@@ -46,7 +46,11 @@ in
     ./scheduler.nix
   ];
 
-  agentBroker.clients = [ "jesse" ];
+  agentBroker = {
+    clients = [ "jesse" ];
+    # Sandboxed OpenCode holds a placeholder; the egress proxy adds this one for Venice.
+    secrets.venice-api-key-agent.inject.hosts = [ "api.venice.ai" ];
+  };
   secrets.host.venice-api-key.owner = "jesse";
 
   networking = {

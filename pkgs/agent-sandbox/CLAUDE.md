@@ -164,10 +164,10 @@ starts MCP on `http://127.0.0.1:8000/mcp`, and keeps shader cache and temporary 
 files under `~/.cache/unreal-engine`. The bundled SDK/toolchain is used for C++;
 GCC is not a replacement for Unreal's Linux toolchain.
 
-Claude Code, Codex and Antigravity (`agy`) have an `unreal-mcp` connection configured.
-Codex and `agy` disable it by default. For Unreal work, start the editor, then launch
-`codex -c mcp_servers.unreal-mcp.enabled=true` to enable it for that session, or run
-`agy mcp enable unreal-mcp` before starting `agy`.
+Claude Code, Codex, Antigravity (`agy`) and OpenCode have an `unreal-mcp` connection configured.
+Codex, `agy` and OpenCode disable it by default. For Unreal work, start the editor, then launch
+`codex -c mcp_servers.unreal-mcp.enabled=true` to enable it for that session, run
+`agy mcp enable unreal-mcp` before starting `agy`, or enable it in OpenCode's `/mcps`.
 Start the editor before starting the agent, or reconnect MCP after editor startup
 or restart. A configured connection alone does not prove the engine is available:
 require `mcp-check` or a successful read-only `list_toolsets` call. Discover toolsets
