@@ -123,8 +123,9 @@ gpu-run and OpenCode are started with a parent-death signal, and llama-server
 gets one from gpu-run. Nothing but the opening line reaches OpenCode's
 terminal: server output, the proxy's access log and its errors go to
 a log of the session's own under `~/.local/state/qwen-prompt/`, such as
-`qwen-opencode-regular-moe-<date>-<time>-<pid>.log`, which moves to a single
-`.1` backup at 8 MiB. Each launcher keeps its 10 newest session logs. A client closing its connection logs nothing. When something failed,
+`qwen-opencode-regular-moe-<date>-<time>-<random>.log`, which moves to a
+single `.1` backup at 8 MiB. Each launcher keeps its 10 newest session logs,
+plus any older one a running session still holds. A client closing its connection logs nothing. When something failed,
 one line naming the log is printed after OpenCode exits.
 
 The context is 64k tokens with an f16 KV cache, one slot and full offload.

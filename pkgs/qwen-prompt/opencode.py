@@ -1,6 +1,7 @@
 """Interactive OpenCode on local Qwen, loading the model on demand and unloading it when idle."""
 
 import argparse
+import fcntl
 import http.client
 import http.server
 import json
@@ -89,8 +90,9 @@ class Log:
     reaches LOG_LIMIT, so it never holds more than twice that.
     """
 
-    def __init__(self, path, limit=LOG_LIMIT):
+    def __init__(self, path, limit=LOG_LIMIT, session_lock=None):
         self.name = str(path)
+        self.session_lock = session_lock
         self.limit = limit
         self.lock = threading.Lock()
         self.failed = False
@@ -147,19 +149,59 @@ class Log:
         with self.lock:
             self.closed = True
             self.file.close()
+        if self.session_lock is not None:
+            os.close(self.session_lock)
+
+
+def held(lock):
+    """Whether a live session holds the flock on lock, a session's .lock file."""
+    try:
+        fd = os.open(lock, os.O_RDWR)
+    except FileNotFoundError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return False
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
 
 
 def session_log(state, launcher, kept=LOGS_KEPT):
-    """A new log path for this session, removing all but the newest kept - 1 earlier ones of the same launcher."""
+    """Create this session's log, returning its path and the descriptor holding its lock for the session's life.
+
+    The name has a random part, so sessions in other PID namespaces sharing
+    this directory never collide. All but the newest kept - 1 earlier logs of
+    the same launcher are removed, except those a running session still holds.
+    """
     state.mkdir(parents=True, exist_ok=True)
-    pattern = re.compile(re.escape(launcher) + r"-\d{8}-\d{6}-\d+\.log")
-    earlier = sorted(
-        (path for path in state.iterdir() if pattern.fullmatch(path.name)), key=lambda path: path.stat().st_mtime
-    )
-    for old in earlier[: max(len(earlier) - kept + 1, 0)]:
+    pattern = re.compile(re.escape(launcher) + r"-\d{8}-\d{6}-[A-Za-z0-9_]+\.log")
+    earlier = []
+    for path in state.iterdir():
+        if pattern.fullmatch(path.name):
+            try:
+                earlier.append((path.stat().st_mtime, path))
+            except FileNotFoundError:
+                pass
+    earlier.sort()
+    for _, old in earlier[: max(len(earlier) - kept + 1, 0)]:
+        lock = old.with_suffix(".lock")
+        if held(lock):
+            continue
         old.unlink(missing_ok=True)
         Path(f"{old}.1").unlink(missing_ok=True)
-    return state / f"{launcher}-{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}.log"
+        lock.unlink(missing_ok=True)
+    while True:
+        fd, lock = tempfile.mkstemp(prefix=f"{launcher}-{time.strftime('%Y%m%d-%H%M%S')}-", suffix=".lock", dir=state)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        path = Path(lock).with_suffix(".log")
+        try:
+            os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+            return path, fd
+        except FileExistsError:
+            os.close(fd)
+            os.unlink(lock)
 
 
 class Ticket:
@@ -546,7 +588,8 @@ def main():
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, interrupted)
     key = secrets.token_hex(24)
-    log = Log(session_log(state, f"qwen-opencode-{name}{'' if mode == 'dense' else '-' + mode}"))
+    path, session_lock = session_log(state, f"qwen-opencode-{name}{'' if mode == 'dense' else '-' + mode}")
+    log = Log(path, session_lock=session_lock)
     threading.excepthook = lambda hook: log.error(
         "".join(traceback.format_exception(hook.exc_type, hook.exc_value, hook.exc_traceback)).rstrip()
     )

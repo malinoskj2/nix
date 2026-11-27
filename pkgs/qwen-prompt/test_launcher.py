@@ -512,26 +512,87 @@ class LogShutdownTest(unittest.TestCase):
 
 
 class SessionLogTest(unittest.TestCase):
-    def test_each_session_has_its_own_log_and_only_the_newest_are_kept(self):
+    def old_sessions(self, state, count):
+        sessions = []
+        for n in range(count):
+            old = state / f"qwen-opencode-regular-20260101-0000{n:02}-old{n}.log"
+            old.write_text("old")
+            Path(f"{old}.1").write_text("old")
+            os.utime(old, (n, n))
+            sessions.append(old)
+        return sessions
+
+    def test_only_the_newest_logs_of_the_launcher_are_kept(self):
         from opencode import session_log
 
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)
-            for n in range(12):
-                old = state / f"qwen-opencode-regular-20260101-0000{n:02}-{n}.log"
-                old.write_text("old")
-                Path(f"{old}.1").write_text("old")
-                os.utime(old, (n, n))
-            other = state / "qwen-opencode-regular-moe-20260101-000000-1.log"
+            sessions = self.old_sessions(state, 12)
+            other = state / "qwen-opencode-regular-moe-20260101-000000-abc.log"
             other.write_text("other launcher")
             os.utime(other, (0, 0))
-            path = session_log(state, "qwen-opencode-regular", kept=4)
-            self.assertFalse(path.exists())
-            self.assertTrue(path.name.endswith(f"-{os.getpid()}.log"))
-            left = sorted(p.name for p in state.glob("qwen-opencode-regular-2*.log"))
-            self.assertEqual(left, [f"qwen-opencode-regular-20260101-0000{n:02}-{n}.log" for n in (9, 10, 11)])
+            path, lock = session_log(state, "qwen-opencode-regular", kept=4)
+            os.close(lock)
+            self.assertEqual(path.read_bytes(), b"")
+            left = sorted(state.glob("qwen-opencode-regular-2*.log"))
+            self.assertEqual(left, sorted([*sessions[9:], path]))
             self.assertEqual(len(list(state.glob("qwen-opencode-regular-2*.log.1"))), 3)
             self.assertTrue(other.exists())
+
+    def test_a_running_session_keeps_its_log_however_old_and_can_still_rotate(self):
+        from opencode import Log, session_log
+
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            path, lock = session_log(state, "qwen-opencode-regular")
+            running = Log(path, limit=64, session_lock=lock)
+            os.utime(path, (0, 0))
+            for _ in range(12):
+                _, newer = session_log(state, "qwen-opencode-regular", kept=4)
+                os.close(newer)
+            self.assertTrue(path.exists())
+            self.assertEqual(len(list(state.glob("qwen-opencode-regular-*.log"))), 5)
+            running.write("x" * 200)
+            running.close()
+            self.assertEqual(path.stat().st_size, 200 - 3 * 64)
+            for _ in range(4):
+                _, newer = session_log(state, "qwen-opencode-regular", kept=4)
+                os.close(newer)
+            self.assertFalse(path.exists(), "a finished session's log is pruned like any other")
+            self.assertFalse(path.with_suffix(".lock").exists())
+
+    def test_sessions_with_the_same_time_and_pid_get_distinct_logs(self):
+        from unittest import mock
+
+        import opencode
+
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            with mock.patch.object(opencode.time, "strftime", return_value="20260101-000000"):
+                sessions = [opencode.session_log(state, "qwen-opencode-regular") for _ in range(5)]
+            self.assertEqual(len({path for path, _ in sessions}), 5)
+            for _, lock in sessions:
+                os.close(lock)
+
+    def test_pruning_tolerates_logs_vanishing_underneath_it(self):
+        from unittest import mock
+
+        import opencode
+
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            sessions = self.old_sessions(state, 6)
+            original = Path.stat
+
+            def racing(path, *args, **kwargs):
+                if path == sessions[0]:
+                    path.unlink(missing_ok=True)
+                return original(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "stat", racing):
+                path, lock = opencode.session_log(state, "qwen-opencode-regular", kept=2)
+            os.close(lock)
+            self.assertEqual(sorted(state.glob("qwen-opencode-regular-*.log")), sorted([sessions[5], path]))
 
 
 class QueueTest(unittest.TestCase):
