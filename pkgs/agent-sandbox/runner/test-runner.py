@@ -603,6 +603,56 @@ class StackNetworksTest(unittest.TestCase):
             r.compose_down_locked("p1")
         self.assertIn("p1", r.projects)
 
+    def test_exit_cleanup_keeps_stack_networks_it_couldnt_revoke(self):
+        r = self.runner(["n1"])
+        r.projects, r.sandboxes, r.oid = {}, {}, "o"
+        r.state = Path(tempfile.mkdtemp())
+        r.remove_candidate_images = lambda _: None
+        removed = []
+        r.remove_owned = lambda *filters, keep_stack_networks=False: removed.append(keep_stack_networks)
+
+        def down(_):
+            raise runner.Refused("gate down")
+
+        r.gate = down
+        r.cleanup()
+        self.assertEqual(removed, [True])
+        r = self.runner(["n1"])
+        r.projects, r.sandboxes, r.oid = {}, {}, "o"
+        r.state = Path(tempfile.mkdtemp())
+        r.remove_candidate_images = lambda _: None
+        removed = []
+        r.remove_owned = lambda *filters, keep_stack_networks=False: removed.append(keep_stack_networks)
+        r.cleanup()
+        self.assertEqual(removed, [False])
+        self.assertEqual(r.requests, [{"op": "networks", "name": "owner", "networks": []}])
+
+    def test_remove_owned_can_leave_stack_networks(self):
+        r = self.runner([])
+        calls = []
+        r.owned = lambda kind, *filters: (
+            ["stack"]
+            if kind == "network" and filters == (f"label={runner.PROJECT_LABEL}",)
+            else ["stack", "sibling"]
+            if kind == "network"
+            else []
+        )
+        r.docker = lambda *argv, **_: calls.append(argv) or argparse.Namespace(stdout="", stderr="", returncode=0)
+        r.remove_owned(keep_stack_networks=True)
+        self.assertIn(("network", "rm", "sibling"), calls)
+        self.assertNotIn(("network", "rm", "stack"), calls)
+
+    def test_an_unreadable_peer_list_counts_every_owner_as_registered(self):
+        r = self.runner([])
+        r.egress = {"gate": "/nonexistent/control.sock"}
+        self.assertIn("anyone", r.gate_peers())
+        directory = Path(tempfile.mkdtemp())
+        (directory / "peers.json").write_text(json.dumps({"a": {}}))
+        r.egress = {"gate": str(directory / "control.sock")}
+        self.assertEqual(r.gate_peers(), {"a"})
+        r.egress = None
+        self.assertNotIn("a", r.gate_peers())
+
     def test_without_egress_nothing_is_registered(self):
         r = self.runner(["n1"])
         r.egress = None

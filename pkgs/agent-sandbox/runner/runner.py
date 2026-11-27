@@ -61,6 +61,11 @@ def log(message):
     print(f"agent-sandbox-runner: {message}", file=sys.stderr, flush=True)
 
 
+class AllNames:
+    def __contains__(self, _name):
+        return True
+
+
 def attempt(what, action, *args):
     """Run one cleanup step, so a failure in it doesn't skip the steps after it."""
     try:
@@ -618,11 +623,16 @@ class Runner:
             args += ["--filter", item]
         return self.docker(*args, check=False).stdout.split()
 
-    def remove_owned(self, *filters):
+    def remove_owned(self, *filters, keep_stack_networks=False):
+        """Remove the owner's resources; keep_stack_networks leaves stack networks the proxy may still grant."""
         containers = self.owned("ps", *filters)
         if containers:
             self.docker("rm", "--force", "--volumes", *containers, check=False)
-        for network in self.owned("network", *filters):
+        networks = self.owned("network", *filters)
+        if keep_stack_networks:
+            kept = set(self.owned("network", f"label={PROJECT_LABEL}", *filters))
+            networks = [n for n in networks if n not in kept]
+        for network in networks:
             self.disconnect_owner(network)
             self.docker("network", "rm", network, check=False)
         # Never --force: a root volume binds a shared directory, and Docker must refuse to remove one
@@ -668,7 +678,12 @@ class Runner:
                 continue
             sweeper = Runner.__new__(Runner)
             sweeper.args, sweeper.owner = self.args, owner
-            sweeper.remove_owned()
+            sweeper.egress, sweeper.stack_grants = self.egress, threading.Lock()
+            # Docker may reuse a stack network's subnet only once the proxy has stopped granting it.
+            released = owner not in self.gate_peers() or attempt(
+                f"withdrawing {owner}'s stack networks", sweeper.revoke_all_stack_networks
+            )
+            sweeper.remove_owned(keep_stack_networks=not released)
         for directory in self.state.parent.glob("*/"):
             try:
                 owner = (directory / "owner").read_text().strip()
@@ -711,10 +726,10 @@ class Runner:
     def cleanup(self):
         for project in list(self.projects):
             attempt(f"compose down {project}", self.compose_down_locked, project)
-        # A project the gate couldn't be told about goes too: the runner exits with its launcher,
-        # whose registration, and every network grant with it, the gate drops once that pid is gone.
-        attempt("withdrawing stack networks", self.revoke_all_stack_networks)
-        attempt("removing owned resources", self.remove_owned)
+        # Stack networks the proxy may still grant stay until a later runner's sweep finds the
+        # grant gone, so Docker can't hand their subnets to another sandbox meanwhile.
+        released = attempt("withdrawing stack networks", self.revoke_all_stack_networks)
+        attempt("removing owned resources", lambda: self.remove_owned(keep_stack_networks=not released))
         for name, sandbox in self.sandboxes.items():
             self.release_egress(name, sandbox)
             sandbox["pins"].close()
@@ -1143,6 +1158,16 @@ class Runner:
             self.publish_stack_networks(excluding=project)
         except (OSError, subprocess.TimeoutExpired) as error:
             raise Refused(f"the egress gate isn't answering ({error})") from error
+
+    def gate_peers(self):
+        """The sandboxes the gate lists; when that can't be read, assume every one is."""
+        if self.egress is None:
+            return set()
+        try:
+            with open(os.path.join(os.path.dirname(self.egress["gate"]), "peers.json")) as f:
+                return set(json.load(f))
+        except (OSError, ValueError, TypeError):
+            return AllNames()
 
     def revoke_all_stack_networks(self):
         if self.egress is not None:
