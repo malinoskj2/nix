@@ -25,6 +25,7 @@ in
     ../common/optional/agent-egress.nix
     ../common/optional/docker.nix
     ../common/optional/fonts.nix
+    ../common/optional/gdrive.nix
     ../common/optional/gvisor.nix
     ../common/optional/hyprland.nix
     ../common/optional/nh.nix
@@ -58,6 +59,10 @@ in
     secrets.venice-api-key-agent.inject.hosts = [ "api.venice.ai" ];
   };
   secrets.host.venice-api-key.owner = "jesse";
+  gdrive = {
+    enable = true;
+    user = "jesse";
+  };
   secrets.unlock = {
     enable = true;
     user = "jesse";

@@ -313,6 +313,15 @@ but the secret missing, the proxy answers them itself with a missing-secret
 error. Local Qwen through `qwen-opencode` and everything else keeps working
 either way.
 
+### Google Drive
+
+`home` mounts Google Drive at `/mnt/gdrive` from three host secrets owned by
+the `gdrive` system user: `gdrive-client-id`, `gdrive-client-secret` and
+`gdrive-token`. The mount stays down until all three are deployed and stops
+when one is withdrawn or the secrets are locked. `gdrive-signin` adds or
+replaces the token straight from Google's approval, without it touching a
+file. Setup, daily behaviour and limits are in [gdrive.md](gdrive.md).
+
 ### Rotating a secret
 
 1. Create the new credential at the provider, leaving the old one valid.

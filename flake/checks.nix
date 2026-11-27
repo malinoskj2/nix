@@ -55,9 +55,11 @@
                   -e '/run/secrets' \
                   -e '/run/agent-broker-' \
                   -e '/var/lib/(secrets|sops-nix)' \
+                  -e '/mnt/gdrive' \
+                  -e '/var/cache/gdrive' \
                   -e '(src=|--volume "?|-v "?|mount_readonly "?)/(run|var|var/lib)?[:,"[:space:]]' \
                   ${../pkgs/agent-sandbox}; then
-                  echo "the sandbox must never mount decrypted secrets, the encrypted file or the host key" >&2
+                  echo "the sandbox must never mount decrypted secrets, the encrypted file, the host key or Google Drive" >&2
                   exit 1
                 fi
                 touch "$out"
@@ -78,6 +80,13 @@
           );
           secrets-vm = pkgs.testers.runNixOSTest (
             import ../hosts/common/optional/secret-store-test.nix { inherit inputs pkgs; }
+          );
+          gdrive-eval = import ../hosts/common/optional/gdrive-eval-test.nix {
+            inherit pkgs;
+            inherit (self.nixosConfigurations.home) config;
+          };
+          gdrive-vm = pkgs.testers.runNixOSTest (
+            import ../hosts/common/optional/gdrive-test.nix { inherit inputs pkgs; }
           );
           agent-egress-vm = pkgs.testers.runNixOSTest (
             import ../hosts/common/optional/agent-egress-test.nix { inherit inputs pkgs; }
