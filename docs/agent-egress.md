@@ -108,6 +108,10 @@ Measured in a sandbox, fetching an outside host by name and a sibling's
 | Bun 1.4 | yes | honoured |
 | Chromium via `sandbox-playwright` | given the proxy explicitly, with `NO_PROXY` as its bypass list | honoured |
 
+Node's proxy support tunnels plain `http://` requests through `CONNECT` too,
+so a destination the proxy refuses shows up in Node as a cancelled request
+or a closed socket rather than a `502`.
+
 Clients that open raw sockets, `ws` and older `websockets` releases, gRPC
 without `grpc_proxy`, and anything that resolves the name itself before
 connecting fail with a DNS error for outside names. Give them the proxy

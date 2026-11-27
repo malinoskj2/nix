@@ -493,7 +493,10 @@ class EgressIngressTest(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         r = object.__new__(runner.Runner)
         r.args = argparse.Namespace(socat=socat, preview_address="192.0.2.7")
-        state = {"ingress": Path(tmp.name), "forwarders": []}
+        # Longer than a socket path may be, as the real state directory's can be.
+        ingress = Path(tmp.name) / ("i" * 100)
+        ingress.mkdir()
+        state = {"ingress": ingress, "forwarders": []}
         r.sandboxes = {"n": {"egress": state}}
         r.egress_subnets = lambda: ["172.19.0.0/16"]
         r.owner = "owner"
@@ -505,8 +508,14 @@ class EgressIngressTest(unittest.TestCase):
                 probe.bind(("127.0.0.1", 0))
                 ports.append(probe.getsockname()[1])
         backend = socket.socket(socket.AF_UNIX)
-        backend.bind(f"{tmp.name}/8080.sock")
+        here = os.getcwd()
+        os.chdir(ingress)
+        try:
+            backend.bind("8080.sock")
+        finally:
+            os.chdir(here)
         backend.listen()
+        backend.settimeout(5)
         publish = ["--publish", f"127.0.0.1:{ports[0]}:5900", "--publish", f"{ports[1]}:8080", "--env", "X=1"]
         args = r.ingress("n", publish)
         self.assertEqual(args, ["--env", "X=1", "--volume", "/gate/sandbox/n:/run/agent-egress:ro"])
