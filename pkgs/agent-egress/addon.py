@@ -210,8 +210,22 @@ class Policy:
             entry_matches(p, host, port) for p in self.config.get("inspect", [])
         )
 
-    def preview(self, sandbox):
-        return (self.peers.get(sandbox) or {}).get("preview") or {}
+    def previews(self, sandbox):
+        """Its own preview address and ports, then those of the siblings it started."""
+        found = []
+        for name, peer in self.peers.items():
+            if name == sandbox or (peer.get("owner") == sandbox and sandbox in self.peers):
+                preview = peer.get("preview") or {}
+                if isinstance(preview.get("address"), str):
+                    found.append((preview["address"], preview.get("ports") or []))
+        return found
+
+    def is_preview(self, sandbox, address, port):
+        """Whether address (a str or ip_address) and port are a preview this sandbox may reach."""
+        for own, ports in self.previews(sandbox):
+            if port in ports and (address == own if isinstance(address, str) else address == parse_ip(own)):
+                return True
+        return False
 
     def networks(self, sandbox):
         found = []
@@ -231,8 +245,7 @@ class Policy:
         for e in self.runtime:
             if (e.get("expires") is None or e["expires"] > now) and entry_matches(e["pattern"], host, port):
                 return True
-        preview = self.preview(sandbox)
-        return host == preview.get("address") and port in preview.get("ports", [])
+        return self.is_preview(sandbox, host, port)
 
     def secret(self, binding):
         path = binding["file"]
@@ -325,9 +338,7 @@ class Broker:
             return "deny-internal"
         local = {a for text in self.local() if (p := parse_ip(text)) for a in forms(p)}
         if forms(address) & local:
-            preview = self.policy.preview(sandbox)
-            own = parse_ip(preview.get("address") or "")
-            if own is not None and address == own and port in preview.get("ports", []):
+            if self.policy.is_preview(sandbox, address, port):
                 return None
             return "deny-internal"
         if not private_address(address):

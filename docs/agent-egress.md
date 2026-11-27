@@ -71,8 +71,9 @@ bridge and published ports, as before.
   launcher listens on the same host ports itself (VNC and noVNC on
   `127.0.0.1`, previews on every interface) and forwards each connection to a
   Unix socket the sandbox's entrypoint serves in `/run/agent-ingress`. VNC and
-  preview URLs are unchanged. A sandbox reaching its own preview URL goes
-  through the proxy, which always allows a sandbox its own preview ports.
+  preview URLs are unchanged. A sandbox reaching its own preview URL, or that
+  of a disposable sandbox it started, goes through the proxy, which allows a
+  sandbox those preview ports and no others on the host's addresses.
 - **Browsers.** `sandbox-playwright` and the Playwright MCP pass the proxy to
   Chromium explicitly.
 - **Media galleries.** `media-gallery` trusts the host hub's `hub.json` while
@@ -105,7 +106,7 @@ Measured in a sandbox, fetching an outside host by name and a sibling's
 | Node 24 `fetch`, `http`/`https` | only with `NODE_USE_ENV_PROXY=1`, which the sandbox sets | ignored |
 | Deno 2 | yes | honoured |
 | Bun 1.4 | yes | honoured |
-| Chromium via `sandbox-playwright` | given the proxy explicitly | honoured |
+| Chromium via `sandbox-playwright` | given the proxy explicitly, with `NO_PROXY` as its bypass list | honoured |
 
 Clients that open raw sockets, `ws` and older `websockets` releases, gRPC
 without `grpc_proxy`, and anything that resolves the name itself before
@@ -197,12 +198,12 @@ and log `deny-private` or `deny-internal`.
 Two things open a private address:
 
 - **The sandbox's own networks.** The launcher and `sandbox-runner` register
-  the subnets of the Docker network a sandbox is on, and the proxy lets that
+  the subnets of the Docker network a sandbox is on, and `sandbox-runner`
+  adds each Compose stack's networks (`br-asb-*`) for the sandbox that
+  brought it up, dropping them when it comes down. The proxy lets that
   sandbox reach them. It could reach them directly anyway; this only covers
   clients that send them to the proxy despite `NO_PROXY`. Another sandbox's
-  networks stay refused. Compose stack networks (`br-asb-*`) aren't
-  registered: reach them with a client that honours `NO_PROXY`, or add the
-  service's address to `NO_PROXY` for Node and Python's `urllib`.
+  networks stay refused.
 - **`agentBroker.egress.allowPrivate`**, which starts empty:
 
   | Entry | Matches |
@@ -219,7 +220,7 @@ None of Phase 3's own paths needs an entry: a sandbox's preview URL is the
 host's address, which the proxy allows a sandbox for its own preview ports;
 ingress, VNC and the Orca relay come in through the launcher's sockets;
 `media-gallery` reads the hub's `hub.json` instead of calling it; siblings
-are on the sandbox's own network.
+are on the sandbox's own network, and stacks on networks registered for it.
 
 ## Credential injection
 

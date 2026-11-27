@@ -392,6 +392,7 @@ class TeardownTest(unittest.TestCase):
         r.lock = threading.Lock()
         r.projects = {}
         r.runc_fallback = set()
+        r.egress = None
         r.removed = []
         for project in projects:
             directory = Path(tempfile.mkdtemp())
@@ -494,6 +495,7 @@ class EgressIngressTest(unittest.TestCase):
         state = {"ingress": Path(tmp.name), "forwarders": []}
         r.sandboxes = {"n": {"egress": state}}
         r.egress_subnets = lambda: ["172.19.0.0/16"]
+        r.owner = "owner"
         requests = []
         r.gate = lambda request: requests.append(request) or {"ok": True, "dir": "/gate/sandbox/n"}
         ports = []
@@ -509,6 +511,7 @@ class EgressIngressTest(unittest.TestCase):
         self.assertEqual(args, ["--env", "X=1", "--volume", "/gate/sandbox/n:/run/agent-egress:ro"])
         self.assertEqual(requests[0]["preview"], {"address": "192.0.2.7", "ports": [ports[1]]})
         self.assertEqual(requests[0]["networks"], ["172.19.0.0/16"])
+        self.assertEqual(requests[0]["owner"], "owner")
         client = socket.create_connection(("127.0.0.1", ports[1]), timeout=5)
         conn, _ = backend.accept()
         client.sendall(b"ping")
@@ -523,6 +526,46 @@ class EgressIngressTest(unittest.TestCase):
         with self.assertRaises(OSError):
             socket.create_connection(("127.0.0.1", ports[1]), timeout=1)
         backend.close()
+
+
+class StackNetworksTest(unittest.TestCase):
+    def runner(self, networks):
+        r = object.__new__(runner.Runner)
+        r.owner = "owner"
+        r.egress = {"gate": "/gate", "network": "agent-sandbox"}
+        r.requests = []
+        r.gate = lambda request: r.requests.append(request) or {"ok": True}
+        r.owned = lambda kind, *filters: list(networks) if kind == "network" else []
+        inspect = "\n".join(json.dumps([{"Subnet": f"172.{20 + i}.0.0/16"}]) for i, _ in enumerate(networks))
+        r.docker = lambda *argv, **_: argparse.Namespace(stdout=inspect + "\n[]\nnull\n", stderr="", returncode=0)
+        return r
+
+    def test_the_owner_is_given_every_stack_network(self):
+        r = self.runner(["n1", "n2"])
+        r.sync_stack_networks()
+        self.assertEqual(
+            r.requests, [{"op": "networks", "name": "owner", "networks": ["172.20.0.0/16", "172.21.0.0/16"]}]
+        )
+        r = self.runner([])
+        r.sync_stack_networks()
+        self.assertEqual(r.requests, [{"op": "networks", "name": "owner", "networks": []}])
+
+    def test_a_gate_refusal_only_warns(self):
+        r = self.runner(["n1"])
+
+        def refused(_):
+            raise runner.Refused("no")
+
+        r.gate = refused
+        warnings = []
+        r.sync_stack_networks(lambda _stream, text: warnings.append(text))
+        self.assertIn("won't reach this stack", warnings[0])
+
+    def test_without_egress_nothing_is_registered(self):
+        r = self.runner(["n1"])
+        r.egress = None
+        r.sync_stack_networks()
+        self.assertEqual(r.requests, [])
 
 
 class FailureReportTest(unittest.TestCase):
@@ -574,6 +617,7 @@ class RuntimeTest(unittest.TestCase):
         r.args = argparse.Namespace(seccomp_profile=seccomp)
         r.runc_fallback = set()
         r.runsc_available = runsc
+        r.egress = None
         return r
 
     def test_review_stacks_default_to_gvisor(self):

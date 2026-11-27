@@ -38,6 +38,21 @@ def pid_alive(pid):
     return True
 
 
+def private_networks(texts, limit=16):
+    """Docker subnets a sandbox is on. Only their shape is checked: launchers and runners are trusted."""
+    if not isinstance(texts, (list, type(None))):
+        raise ValueError("networks must be a list")
+    networks = []
+    for text in texts or []:
+        network = ipaddress.ip_network(text, strict=False) if isinstance(text, str) else None
+        if network is None or not network.is_private or network.prefixlen < 8:
+            raise ValueError(f"not a private Docker network: {text!r}")
+        networks.append(str(network))
+    if len(networks) > limit:
+        raise ValueError(f"at most {limit} networks")
+    return networks
+
+
 def make_dir(path):
     # The group and setgid come from the broker's socket directory; RestrictSUIDSGID refuses a
     # chmod that would keep them.
@@ -95,7 +110,12 @@ class Gate:
     def save(self):
         atomic_json(self.registry_path, self.entries, 0o600)
         peers = {
-            name: {"address": e["address"], "preview": e.get("preview") or {}, "networks": e.get("networks") or []}
+            name: {
+                "address": e["address"],
+                "preview": e.get("preview") or {},
+                "networks": [*(e.get("networks") or []), *(e.get("stacks") or [])],
+                "owner": e.get("owner"),
+            }
             for name, e in self.entries.items()
         }
         atomic_json(self.peers_path, peers)
@@ -204,12 +224,15 @@ class Gate:
                 preview = request.get("preview") or {}
                 ports = [p for p in preview.get("ports", []) if type(p) is int and 0 < p < 65536]
                 address = preview.get("address") if isinstance(preview.get("address"), str) else None
-                networks = []
-                for text in request.get("networks") or []:
-                    network = ipaddress.ip_network(text, strict=False) if isinstance(text, str) else None
-                    if network is None or not network.is_private or network.prefixlen < 8:
-                        raise ValueError(f"not a private Docker network: {text!r}")
-                    networks.append(str(network))
+                networks = private_networks(request.get("networks"))
+                # A sibling's owner may reach the sibling's preview ports through the proxy.
+                owner = request.get("owner")
+                if owner is not None:
+                    parent = self.entries.get(owner) if isinstance(owner, str) else None
+                    if parent is None or owner == name:
+                        raise ValueError(f"owner {owner!r} isn't a registered sandbox")
+                    if uid != 0 and uid != parent["uid"]:
+                        raise PermissionError("a sandbox's owner must be registered by the same user")
                 if name in self.entries:
                     await self.drop(name)
                 self.entries[name] = {
@@ -219,12 +242,24 @@ class Gate:
                     "uid": uid,
                     "preview": {"address": address, "ports": ports[:32]} if address else {},
                     "networks": networks[:16],
+                    "owner": owner,
                     "since": int(time.time()),
                 }
                 await self.listen(name)
                 self.save()
                 log(event="register", sandbox=name, address=self.entries[name]["address"], uid=uid)
                 return {"ok": True, "dir": self.directory(name), "address": self.entries[name]["address"]}
+            if op == "networks":
+                # The sandbox's runner replaces the set of its Compose stacks' networks.
+                entry = self.entries.get(name)
+                if entry is None:
+                    raise ValueError(f"{name} isn't registered")
+                if uid != 0 and uid != entry["uid"]:
+                    raise PermissionError("only the user who registered a sandbox may change its networks")
+                entry["stacks"] = private_networks(request.get("networks"), limit=64)
+                self.save()
+                log(event="networks", sandbox=name, networks=entry["stacks"], uid=uid)
+                return {"ok": True}
             if op == "unregister":
                 if name in self.entries:
                     await self.drop(name)

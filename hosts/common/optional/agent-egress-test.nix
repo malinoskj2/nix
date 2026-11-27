@@ -175,7 +175,7 @@ in
         assert ("sbx-test", "10.20.30.40", "deny-private") in decisions, decisions
         assert ("sbx-test", "169.254.169.254", "deny-internal") in decisions, decisions
 
-    with subtest("a sandbox reaches its own preview port on the host, and no other sandbox's"):
+    with subtest("a sandbox reaches its own and its siblings' preview ports on the host, and no other sandbox's"):
         machine.succeed("sleep infinity >/dev/null 2>&1 & echo $! > /tmp/preview-launcher.pid")
         reply = control("jesse", {"op": "register", "name": "sbx-preview", "pid": int(machine.succeed("cat /tmp/preview-launcher.pid")), "preview": {"address": "192.168.1.1", "ports": [8000]}})
         assert reply["ok"], reply
@@ -186,6 +186,12 @@ in
         assert machine.succeed(own + "http://[::ffff:192.168.1.1]:8000/hostname") == "502"
         assert machine.succeed(via_sandbox + "http://192.168.1.1:8000/hostname") == "502"
         control("jesse", {"op": "unregister", "name": "sbx-preview"})
+        child = {"op": "register", "name": "sbx-child", "pid": pid, "owner": "sbx-test", "preview": {"address": "192.168.1.1", "ports": [8000]}}
+        assert control("jesse", child)["ok"]
+        assert machine.succeed(via_sandbox + "http://192.168.1.1:8000/hostname") == "200"
+        assert machine.succeed(via_sandbox + "http://192.168.1.1:8001/hostname") == "502"
+        control("jesse", {"op": "unregister", "name": "sbx-child"})
+        assert machine.succeed(via_sandbox + "http://192.168.1.1:8000/hostname") == "502"
 
     with subtest("the Host header can't redirect a request past the allowlist"):
         assert machine.succeed(via_sandbox + "-H 'Host: allowed.test:8000' http://unlisted.test:8000/hostname") == "421"
@@ -246,6 +252,22 @@ in
         assert machine.succeed(via_sandbox + f"http://{sibling}:8081/") == "502"
         assert ("sbx-test", sibling, "deny-private") in {(r.get("sandbox"), r.get("host"), r.get("decision")) for r in records()}
         machine.succeed("docker rm -f sibling")
+
+    with subtest("a stack's networks are reachable through the proxy for their owner only, until it comes down"):
+        machine.succeed("docker network create --internal --opt com.docker.network.bridge.name=br-asb-test stack-net")
+        stack_subnet = json.loads(machine.succeed("docker network inspect stack-net"))[0]["IPAM"]["Config"][0]["Subnet"]
+        machine.succeed("docker run -d --name service --network stack-net egress-probe:latest sh -c 'mkdir -p /srv && echo service > /srv/index.html && exec httpd -f -p 8082 -h /srv'")
+        machine.succeed("docker network connect stack-net ctr")
+        service = machine.succeed("docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' service").strip()
+        machine.wait_until_succeeds(f"docker exec ctr nc -z {service} 8082")
+        assert machine.succeed(f"docker exec ctr curl -s -o /dev/null -w '%{{http_code}}' -x http://127.0.0.1:3128 http://{service}:8082/") == "502"
+        assert not control("other", {"op": "networks", "name": "sbx-ctr", "networks": [stack_subnet]})["ok"]
+        assert control("jesse", {"op": "networks", "name": "sbx-ctr", "networks": [stack_subnet]})["ok"]
+        assert machine.succeed(f"docker exec ctr curl -s -x http://127.0.0.1:3128 http://{service}:8082/").strip() == "service"
+        assert machine.succeed(via_sandbox + f"http://{service}:8082/") == "502"
+        assert control("jesse", {"op": "networks", "name": "sbx-ctr", "networks": []})["ok"]
+        assert machine.succeed(f"docker exec ctr curl -s -o /dev/null -w '%{{http_code}}' -x http://127.0.0.1:3128 http://{service}:8082/") == "502"
+        machine.succeed("docker rm -f service && docker network disconnect stack-net ctr && docker network rm stack-net")
 
     with subtest("published ports reach the container through its ingress socket"):
         machine.wait_for_file("/tmp/ingress/8080.sock")

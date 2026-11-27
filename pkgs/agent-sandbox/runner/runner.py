@@ -1101,19 +1101,38 @@ class Runner:
                 "pid": os.getpid(),
                 "preview": {"address": self.args.preview_address, "ports": previews},
                 "networks": self.egress_subnets(),
+                "owner": self.owner,
             }
         )
         state["registered"] = True
         return [*kept, "--volume", f"{reply['dir']}:/run/agent-egress:ro"]
 
     def egress_subnets(self):
-        result = self.docker(
-            "network", "inspect", self.egress["network"], "--format", "{{json .IPAM.Config}}", check=False
-        )
-        try:
-            return [c["Subnet"] for c in json.loads(result.stdout or "[]") if c.get("Subnet")]
-        except (ValueError, TypeError, AttributeError):
+        return self.network_subnets(self.egress["network"])
+
+    def network_subnets(self, *networks):
+        if not networks:
             return []
+        result = self.docker("network", "inspect", *networks, "--format", "{{json .IPAM.Config}}", check=False)
+        subnets = []
+        for line in result.stdout.splitlines():
+            try:
+                subnets += [c["Subnet"] for c in json.loads(line) or [] if c.get("Subnet")]
+            except (ValueError, TypeError, AttributeError, KeyError):
+                continue
+        return subnets
+
+    def sync_stack_networks(self, emit=None):
+        """Tell the egress proxy which stack networks the owner may reach, for clients that send them to it."""
+        if self.egress is None:
+            return
+        try:
+            subnets = self.network_subnets(*self.owned("network", f"label={PROJECT_LABEL}"))
+            self.gate({"op": "networks", "name": self.owner, "networks": subnets})
+        except (Refused, OSError, subprocess.TimeoutExpired) as error:
+            log(f"stack networks not registered with the egress gate: {error}")
+            if emit is not None:
+                emit("err", f"sandbox-runner: warning: the proxy won't reach this stack's services: {error}\n")
 
     @staticmethod
     def stop_forwarders(state):
@@ -1517,6 +1536,7 @@ class Runner:
                 entry = self.compose_submit(project, request, emit, runtime="runc")
                 code = self.compose_run(entry, project, argv, emit, self.timeout(request) + 60)
             self.connect_owner(project)
+            self.sync_stack_networks(emit)
             services = self.compose_ps_data(project)
             if code != 0:
                 self.report_failed_services(services, entry["runtime"], emit)
@@ -1613,6 +1633,7 @@ class Runner:
                 log(f"compose down {project} failed, removing its resources directly: {error}")
                 code = 1
         self.remove_owned(f"label={PROJECT_LABEL}={project}")
+        self.sync_stack_networks()
         with self.lock:
             entry = self.projects.pop(project, None)
             self.runc_fallback.discard(project)

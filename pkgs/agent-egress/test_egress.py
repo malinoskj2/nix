@@ -447,6 +447,29 @@ class Egress(unittest.TestCase):
             request = {"op": "register", "name": "sbx-e", "pid": os.getpid(), "networks": networks}
             self.assertFalse(self.control(request)["ok"], networks)
 
+    def test_zz_a_runner_replaces_its_sandboxs_stack_networks(self):
+        def peers():
+            with open(f"{self.gate_root}/peers.json") as f:
+                return json.load(f)
+
+        request = {"op": "register", "name": "sbx-s", "pid": os.getpid(), "networks": ["172.19.0.0/16"]}
+        self.assertTrue(self.control(request)["ok"])
+        stacks = {"op": "networks", "name": "sbx-s", "networks": ["172.20.0.0/16", "172.21.0.0/16"]}
+        self.assertTrue(self.control(stacks)["ok"])
+        self.assertEqual(peers()["sbx-s"]["networks"], ["172.19.0.0/16", "172.20.0.0/16", "172.21.0.0/16"])
+        self.assertTrue(self.control({"op": "networks", "name": "sbx-s", "networks": []})["ok"])
+        self.assertEqual(peers()["sbx-s"]["networks"], ["172.19.0.0/16"])
+        self.assertFalse(self.control({**stacks, "networks": ["8.8.8.0/24"]})["ok"])
+        self.assertFalse(self.control({**stacks, "name": "sbx-unknown"})["ok"])
+        sibling = {"op": "register", "name": "sbx-s-child", "pid": os.getpid(), "owner": "sbx-s"}
+        self.assertTrue(self.control(sibling)["ok"])
+        self.assertEqual(peers()["sbx-s-child"]["owner"], "sbx-s")
+        self.control({"op": "unregister", "name": "sbx-s-child"})
+        self.assertFalse(self.control({**sibling, "owner": "sbx-unknown"})["ok"])
+        self.assertFalse(self.control({**sibling, "owner": "sbx-s-child"})["ok"])
+        self.control({"op": "unregister", "name": "sbx-s"})
+        self.assertNotIn("sbx-s", peers())
+
 
 def load_addon():
     import importlib.util
@@ -482,7 +505,10 @@ class Internal(unittest.TestCase):
 
         broker.resolve = resolve
         broker.policy.peers = {
-            "s": {"preview": {"address": "192.168.1.10", "ports": [18080]}, "networks": list(networks)}
+            "s": {"preview": {"address": "192.168.1.10", "ports": [18080]}, "networks": list(networks)},
+            "sib": {"preview": {"address": "192.168.1.10", "ports": [18090]}, "owner": "s"},
+            "orphan": {"preview": {"address": "192.168.1.10", "ports": [18091]}, "owner": "gone"},
+            "other": {"preview": {}},
         }
         broker.policy.config = {**broker.policy.config, "allowPrivate": list(allow_private)}
         decisions = broker.decisions = []
@@ -515,6 +541,12 @@ class Internal(unittest.TestCase):
             ("172.18.0.1", 80, "s", True),
             ("192.168.1.10", 18080, "s", False),
             ("192.168.1.10", 18080, "other", True),
+            ("192.168.1.10", 18090, "s", False),
+            ("192.168.1.10", 18090, "sib", False),
+            ("192.168.1.10", 18080, "sib", True),
+            ("192.168.1.10", 18090, "other", True),
+            ("192.168.1.10", 18091, "s", True),
+            ("[::ffff:192.168.1.10]", 18090, "s", True),
             ("lan.example", 18081, "s", True),
             ("192.168.1.20", 80, "s", True),
             ("140.82.112.3", 80, "s", False),
