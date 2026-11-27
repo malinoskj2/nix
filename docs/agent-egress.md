@@ -23,8 +23,14 @@ bridge and published ports, as before.
   with the broker's addon. It decrypts TLS only for hosts that have a
   credential bound or are listed in `agentBroker.egress.inspect`; everything
   else passes through as an opaque tunnel, so sandboxes see the real
-  certificates. It refuses connections to the host's own loopback and to
-  link-local addresses (such as cloud metadata) in every mode.
+  certificates. Every decision is made on the address the proxy actually
+  connects to: HTTPS has to come through `CONNECT`, a request's `Host` header
+  has to name its connection's target (`421` otherwise), and a TLS
+  connection's SNI has to match the `CONNECT` target. The proxy resolves each
+  name once and connects to the address it checked. It refuses the host's own
+  addresses (loopback, its LAN addresses, Docker bridge gateways) and
+  link-local addresses such as cloud metadata in every mode, except a
+  sandbox's own preview ports.
 - **Gate.** `agent-broker-egress-gate` gives each sandbox its own Unix socket,
   `/run/agent-broker/egress-gate/sandbox/<name>/proxy.sock`, mounted in the
   sandbox at `/run/agent-egress`. The gate forwards each socket to the proxy
@@ -35,7 +41,11 @@ bridge and published ports, as before.
   exits; the gate also drops any whose launcher has died.
 - **Inside the sandbox.** The entrypoint listens on `127.0.0.1:3128` and
   forwards to the socket. `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and their
-  lowercase forms point there, with `NO_PROXY=localhost,127.0.0.1,::1`.
+  lowercase forms point there, with
+  `NO_PROXY=localhost,127.0.0.1,::1,172.16.0.0/12`. The last is Docker's
+  bridge pool, so siblings and stack services are reached directly on their
+  internal networks; reach them by the address `sandbox-runner` prints, since
+  a container name sent to the proxy doesn't resolve on the host.
   `/etc/ssh/ssh_config` sends SSH through the proxy with `socat`, so
   `ssh media` and `git@github.com:` keep working. DNS for outside names
   doesn't resolve in the sandbox, which is expected: clients hand the name to
@@ -61,7 +71,11 @@ bridge and published ports, as before.
 - **Media galleries.** `media-gallery` trusts the host hub's `hub.json` while
   the hub keeps refreshing it, instead of probing the hub's LAN address.
 - **Disposable sandboxes** from `sandbox-runner` get the same network, their
-  own gate socket and their own ingress forwarders.
+  own gate socket and their own ingress forwarders. A sandbox behind the
+  proxy can't start a `--steam` sibling.
+- **The Codex image server** that `codex-image` uses runs on the same network
+  behind its own gate socket, and its `/etc/codex/requirements.toml` allows
+  only read-only turns without approvals, whatever a client asks for.
 - **Compose stacks** have every network made internal and named `br-asb-*`,
   so the nftables table covers them too. Image pulls are done by dockerd and
   still work; stack containers have no egress at runtime.
@@ -127,11 +141,13 @@ the Nix list.
 
 ### The log
 
-`journalctl -u agent-broker-egress-proxy` holds one JSON line per connection
-and request: the sandbox, host, port, method, path without its query, the
-decision, which credential was added, the status and byte counts. Headers and
-bodies are never logged. `agent-broker-egress-gate`'s journal records
-registrations and Steam exceptions.
+`journalctl -u agent-broker-egress-proxy` holds JSON lines with the sandbox,
+host, port and decision. A tunnel the proxy doesn't decrypt, the usual case,
+gets a `CONNECT` line and a `close` line with its duration. A decrypted or
+plain-HTTP request also gets the method, the path without its query, which
+credential was added, the status and byte counts. Headers and bodies are
+never logged. `agent-broker-egress-gate`'s journal records registrations and
+Steam exceptions.
 
 ## Credential injection
 
@@ -182,13 +198,15 @@ The client bundles the commits GitHub doesn't have and sends them to
   default branch, `agentBroker.push.protectedBranches` (`main` and `master`),
   and always `main` of malinoskj2/nix;
 - refuses anything that isn't a fast-forward; it never force-pushes;
-- runs a Betterleaks scan over the new commits and refuses if it finds
-  anything, printing redacted findings;
+- runs a Betterleaks scan over the new commits, merges included, and refuses
+  if it finds anything, printing redacted findings; `gitleaks:allow` and
+  `betterleaks:allow` comments are ignored;
 - mints a token for that one repository with only `contents: write`, hands it
   to git through `GIT_ASKPASS`, and revokes it after the push.
 
 Until it is set up, every push is refused with a message saying what is
-missing.
+missing. Every sandbox shares the gateway's socket, so its journal names the
+pushing process's host pid rather than a sandbox.
 
 ### Setting it up
 
@@ -220,6 +238,9 @@ missing.
    `github-app-key` broker secret, which is why the key is added first.
 6. Check from a sandbox: `sandbox-push` on a test branch, then delete the
    branch on GitHub.
+7. On each repository, add a ruleset that protects the default branch and
+   doesn't list the App as a bypass actor, so GitHub refuses the App's pushes
+   there even if the gateway were wrong.
 
 To rotate the key, generate a new one on the App's page, `secret rotate
 github-app-key --file <new key>`, `secret apply`, then delete the old key on GitHub.
@@ -227,8 +248,10 @@ github-app-key --file <new key>`, `secret apply`, then delete the old key on Git
 ## Turning it off
 
 Set `agentBroker.egress.enable = false;` and switch. New sandboxes start on
-the default bridge again; the services, network and nftables table go away.
-Running sandboxes keep the network they started with until they restart.
+the default bridge again, and the services and nftables table go away. The
+`agent-sandbox` Docker network stays, since running sandboxes keep the
+network they started with until they restart; remove it afterwards with
+`docker network rm agent-sandbox`.
 
 ## What the proxy doesn't close
 
@@ -243,6 +266,14 @@ Running sandboxes keep the network they started with until they restart.
   network. `agentBroker.egress.buildNetwork` (on in log mode, off in enforce
   mode) decides whether they get one; when off, builds whose `RUN` steps need
   the network fail.
+- **dockerd's own fetches.** Even with `buildNetwork` off, BuildKit fetches
+  `ADD <url>` and `ADD <git repo>` sources, `# syntax=` frontends and
+  `FROM` images, and Compose pulls `image:`, from the host's network, so a
+  build can send data out in a URL and read the answer back in an image.
+  Closing it would take pointing dockerd and BuildKit at the egress proxy
+  with their own allowlist (registries only), or having the runner refuse
+  Dockerfiles with URL sources or `# syntax=` lines and images from
+  registries not on a list.
 - **Allowed hosts.** Anything allowed can carry data out: gists, issue
   comments, package registries, pastebins. The allowlist limits where, not
   what.

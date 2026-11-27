@@ -127,9 +127,14 @@ in
       };
     };
 
+    # Without the nftables table a sandbox on the bridge reaches the host, so nothing registers.
     systemd.services.agent-broker-egress-gate = {
-      after = [ "agent-broker-egress-proxy.service" ];
+      after = [
+        "agent-broker-egress-proxy.service"
+        "agent-sandbox-netfilter.service"
+      ];
       wants = [ "agent-broker-egress-proxy.service" ];
+      requires = [ "agent-sandbox-netfilter.service" ];
     };
 
     systemd.services.agent-sandbox-netfilter = {
@@ -151,7 +156,10 @@ in
         "docker.service"
         "agent-sandbox-netfilter.service"
       ];
-      requires = [ "docker.service" ];
+      requires = [
+        "docker.service"
+        "agent-sandbox-netfilter.service"
+      ];
       script = ''
         if ! ${docker} network inspect ${network} >/dev/null 2>&1; then
           ${docker} network create --internal --driver bridge \

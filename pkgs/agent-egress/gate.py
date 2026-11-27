@@ -67,16 +67,30 @@ class Gate:
         self.sandbox_root = os.path.join(root, "sandbox")
         self.entries = {}
         self.servers = {}
+        self.tunnels = {}
+        self.cursor = 0
         self.lock = asyncio.Lock()
 
     def allocate(self):
+        """The next free address after the last one handed out, so a dropped sandbox's address isn't reused at once."""
         used = {e["address"] for e in self.entries.values()}
-        for index, address in enumerate(POOL.hosts()):
-            if index == 0:
-                continue
-            if str(address) not in used:
-                return str(address)
+        size = POOL.num_addresses - 2
+        for step in range(1, size + 1):
+            index = (self.cursor + step - 1) % (size - 1) + 2
+            address = str(POOL[index])
+            if address not in used:
+                self.cursor = index - 1
+                return address
         raise RuntimeError("no free egress addresses")
+
+    async def read_ca(self):
+        for _ in range(150):
+            try:
+                with open(self.ca, "rb") as f:
+                    return f.read()
+            except FileNotFoundError:
+                await asyncio.sleep(0.2)
+        raise RuntimeError("the proxy's CA isn't ready; check systemctl status agent-broker-egress-proxy")
 
     def save(self):
         atomic_json(self.registry_path, self.entries, 0o600)
@@ -90,13 +104,11 @@ class Gate:
         entry = self.entries[name]
         directory = self.directory(name)
         make_dir(directory)
-        if os.path.exists(self.ca):
-            with open(self.ca, "rb") as f:
-                ca = f.read()
-            self.publish(directory, "ca.pem", ca)
-            if self.trust:
-                with open(self.trust, "rb") as f:
-                    self.publish(directory, "ca-bundle.crt", f.read().rstrip(b"\n") + b"\n" + ca)
+        ca = await self.read_ca()
+        self.publish(directory, "ca.pem", ca)
+        if self.trust:
+            with open(self.trust, "rb") as f:
+                self.publish(directory, "ca-bundle.crt", f.read().rstrip(b"\n") + b"\n" + ca)
         path = os.path.join(directory, "proxy.sock")
         try:
             os.unlink(path)
@@ -123,6 +135,8 @@ class Gate:
             log(event="proxy-unreachable", sandbox=entry["name"], error=str(error))
             writer.close()
             return
+        tunnels = self.tunnels.setdefault(entry["name"], set())
+        tunnels.update((writer, up_writer))
 
         async def pipe(src, dst):
             try:
@@ -137,14 +151,19 @@ class Gate:
                 except (OSError, RuntimeError):
                     dst.close()
 
-        await asyncio.gather(pipe(reader, up_writer), pipe(up_reader, writer))
-        for w in (writer, up_writer):
-            w.close()
+        try:
+            await asyncio.gather(pipe(reader, up_writer), pipe(up_reader, writer))
+        finally:
+            for w in (writer, up_writer):
+                tunnels.discard(w)
+                w.close()
 
     async def drop(self, name):
         server = self.servers.pop(name, None)
         if server:
             server.close()
+        for w in self.tunnels.pop(name, set()):
+            w.close()
         self.entries.pop(name, None)
         shutil.rmtree(self.directory(name), ignore_errors=True)
 
@@ -177,10 +196,10 @@ class Gate:
             await self.reap()
             if op == "register":
                 pid = request.get("pid")
-                if not isinstance(pid, int) or pid <= 1:
+                if type(pid) is not int or pid <= 1:
                     raise ValueError("register needs the launcher's pid")
                 preview = request.get("preview") or {}
-                ports = [p for p in preview.get("ports", []) if isinstance(p, int) and 0 < p < 65536]
+                ports = [p for p in preview.get("ports", []) if type(p) is int and 0 < p < 65536]
                 address = preview.get("address") if isinstance(preview.get("address"), str) else None
                 if name in self.entries:
                     await self.drop(name)

@@ -9,6 +9,7 @@ import sys
 import time
 
 from mitmproxy import http
+from OpenSSL import SSL
 from mitmproxy.proxy import layers
 
 WEB_PORTS = (80, 443)
@@ -57,6 +58,53 @@ def entry_matches(entry, host, port, default=WEB_PORTS):
     return want == "*" or int(want) == port
 
 
+def norm_host(host):
+    return (host or "").lower().rstrip(".").strip("[]")
+
+
+def split_authority(value):
+    value = value.strip()
+    if value.startswith("["):
+        host, _, rest = value[1:].partition("]")
+        port = rest[1:] if rest.startswith(":") else ""
+    elif value.count(":") == 1:
+        host, _, port = value.partition(":")
+    else:
+        host, port = value, ""
+    return norm_host(host), int(port) if port.isdigit() else None
+
+
+def literal_ip(host):
+    try:
+        return ipaddress.ip_address(norm_host(host).split("%", 1)[0])
+    except ValueError:
+        return None
+
+
+def local_addresses():
+    """Every address assigned to one of the host's interfaces."""
+    found = set()
+    try:
+        with open("/proc/self/net/fib_trie") as f:
+            last = None
+            for line in f:
+                part = line.strip()
+                if part.startswith("|--"):
+                    last = part[3:].strip()
+                elif part == "/32 host LOCAL" and last:
+                    found.add(last)
+    except OSError:
+        pass
+    try:
+        with open("/proc/self/net/if_inet6") as f:
+            for line in f:
+                raw = line.split()[0]
+                found.add(str(ipaddress.IPv6Address(int(raw, 16))))
+    except (OSError, ValueError, IndexError):
+        pass
+    return found
+
+
 def internal_address(ip):
     """Addresses that reach the host itself or cloud metadata, which no sandbox may reach through the proxy."""
     try:
@@ -73,7 +121,7 @@ def socket_owner(peer, local):
 
     def hexaddr(addr):
         ip, port = addr[0], addr[1]
-        return "%08X:%04X" % (struct.unpack("<I", socket.inet_aton(ip))[0], port)
+        return "%08X:%04X" % (struct.unpack("=I", socket.inet_aton(ip))[0], port)
 
     want_local, want_remote = hexaddr(peer), hexaddr(local)
     try:
@@ -113,19 +161,19 @@ class Policy:
     def mode(self):
         return "enforce" if self.config.get("mode") == "enforce" else "log"
 
-    def binding(self, host, port):
-        for b in self.config.get("inject", []):
-            if any(entry_matches(p, host, port, (80, 443)) for p in b["hosts"]):
-                return b
-        return None
+    def bindings(self, host, port):
+        return [b for b in self.config.get("inject", []) if any(entry_matches(p, host, port) for p in b["hosts"])]
 
     def inspected(self, host, port):
-        return self.binding(host, port) is not None or any(
+        return bool(self.bindings(host, port)) or any(
             entry_matches(p, host, port) for p in self.config.get("inspect", [])
         )
 
+    def preview(self, sandbox):
+        return (self.peers.get(sandbox) or {}).get("preview") or {}
+
     def allowed(self, sandbox, host, port):
-        if self.binding(host, port) is not None:
+        if self.bindings(host, port):
             return True
         if any(entry_matches(e, host, port) for e in self.config.get("allow", [])):
             return True
@@ -133,7 +181,7 @@ class Policy:
         for e in self.runtime:
             if (e.get("expires") is None or e["expires"] > now) and entry_matches(e["pattern"], host, port):
                 return True
-        preview = (self.peers.get(sandbox) or {}).get("preview") or {}
+        preview = self.preview(sandbox)
         return host == preview.get("address") and port in preview.get("ports", [])
 
     def secret(self, binding):
@@ -149,7 +197,7 @@ class Policy:
                 value = f.read().strip()
         except OSError:
             return None
-        if not value:
+        if not value or "\n" in value or "\r" in value:
             return None
         self.secret_cache[path] = (key, value)
         return value
@@ -165,6 +213,7 @@ class Broker:
         self.uid = os.getuid()
         self.check_owner = os.environ.get("AGENT_EGRESS_CHECK_OWNER", "1") == "1"
         self.allow_internal = os.environ.get("AGENT_EGRESS_ALLOW_INTERNAL") == "1"
+        self.local_checked, self.local_cache = float("-inf"), set()
         self.policy.refresh(self.emit)
 
     def emit(self, record):
@@ -197,11 +246,15 @@ class Broker:
             return "would-deny", True
         return "deny", False
 
+    def deny(self, flow, code, decision, message):
+        flow.metadata["agent"]["decision"] = decision
+        flow.response = http.Response.make(code, b"agent-broker: " + message + b"\n")
+
     def http_connect(self, flow: http.HTTPFlow):
         self.policy.refresh(self.emit)
         client = flow.client_conn
         sandbox = self.identify(client)
-        host, port = flow.request.host, flow.request.port
+        host, port = norm_host(flow.request.host), flow.request.port
         decision, ok = self.decide(sandbox, host, port)
         client.agent_target = (host, port)
         client.agent_decision = decision
@@ -209,24 +262,48 @@ class Broker:
         if not ok:
             flow.response = http.Response.make(403, b"agent-broker: egress to this host is not allowed\n")
 
+    def local(self):
+        now = time.monotonic()
+        if now - self.local_checked > 30:
+            self.local_checked, self.local_cache = now, local_addresses()
+        return self.local_cache
+
+    def refused(self, sandbox, ip, port):
+        if internal_address(ip):
+            return True
+        if ip not in self.local():
+            return False
+        preview = self.policy.preview(sandbox)
+        return not (ip == preview.get("address") and port in preview.get("ports", []))
+
+    async def resolve(self, host, port):
+        infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        return [info[4][0] for info in infos]
+
     async def server_connect(self, data):
-        if self.allow_internal:
-            return
         host, port = data.server.address
-        try:
-            infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
-        except OSError:
+        sandbox = getattr(data.client, "agent_sandbox", None)
+        literal = literal_ip(host)
+        if literal is not None:
+            addresses = [str(literal)]
+        else:
+            try:
+                addresses = await self.resolve(host, port)
+            except OSError as e:
+                data.server.error = f"agent-broker: cannot resolve {host}: {e}"
+                return
+            addresses.sort(key=lambda a: ":" in a)
+        if not addresses:
+            data.server.error = f"agent-broker: cannot resolve {host}"
             return
-        if any(internal_address(info[4][0]) for info in infos):
+        if not self.allow_internal and any(self.refused(sandbox, a, port) for a in addresses):
             data.server.error = "agent-broker: the host's own and link-local addresses are not reachable"
-            self.emit(
-                {
-                    "sandbox": getattr(data.client, "agent_sandbox", None),
-                    "host": host,
-                    "port": port,
-                    "decision": "deny-internal",
-                }
-            )
+            self.emit({"sandbox": sandbox, "host": host, "port": port, "decision": "deny-internal"})
+            return
+        if literal is None:
+            if data.server.sni is None:
+                data.server.sni = host
+            data.server.address = (addresses[0], port)
 
     def next_layer(self, nextlayer):
         context = nextlayer.context
@@ -234,44 +311,77 @@ class Broker:
         address = context.server.address
         if not target or not address or address[1] in WEB_PORTS:
             return
-        if not self.policy.inspected(target[0], address[1]):
+        if not self.policy.inspected(target[0], target[1]):
             nextlayer.layer = layers.TCPLayer(context, ignore=True)
 
     def tls_clienthello(self, data):
-        target = getattr(data.context.client, "agent_target", None)
-        host = data.client_hello.sni or (target[0] if target else "")
-        port = target[1] if target else 443
-        if not self.policy.inspected(host, port):
+        client = data.context.client
+        target = getattr(client, "agent_target", None)
+        if target is None:
+            client.agent_refuse_tls = True
+            return
+        sni = norm_host(data.client_hello.sni)
+        if sni and sni != target[0]:
+            client.agent_refuse_tls = True
+            self.emit(
+                {
+                    "sandbox": getattr(client, "agent_sandbox", None),
+                    "host": target[0],
+                    "port": target[1],
+                    "sni": sni[:255],
+                    "decision": "deny-sni",
+                }
+            )
+            return
+        if not self.policy.inspected(target[0], target[1]):
             data.ignore_connection = True
+
+    def tls_start_client(self, data):
+        if getattr(data.context.client, "agent_refuse_tls", False):
+            # A context without a certificate fails the handshake; tlsconfig only fills in an unset ssl_conn.
+            data.ssl_conn = SSL.Connection(SSL.Context(SSL.TLS_SERVER_METHOD))
+            data.ssl_conn.set_accept_state()
 
     def requestheaders(self, flow: http.HTTPFlow):
         if flow.request.method == "CONNECT":
             return
         self.policy.refresh(self.emit)
         flow.request.headers.pop("Proxy-Authorization", None)
-        sandbox = self.identify(flow.client_conn)
-        host, port = flow.request.pretty_host, flow.request.port
-        decision, ok = self.decide(sandbox, host, port)
-        flow.metadata["agent"] = {"sandbox": sandbox, "decision": decision, "injected": None}
-        if not ok:
-            flow.response = http.Response.make(403, b"agent-broker: egress to this host is not allowed\n")
+        client = flow.client_conn
+        sandbox = self.identify(client)
+        target = getattr(client, "agent_target", None)
+        host, port = target if target else (norm_host(flow.request.host), flow.request.port)
+        flow.metadata["agent"] = {"sandbox": sandbox, "decision": None, "injected": None, "host": host, "port": port}
+        if target is None and flow.request.scheme == "https":
+            self.deny(flow, 403, "deny-absolute-https", b"send https through CONNECT")
             return
-        binding = self.policy.binding(host, port)
-        if binding is None:
+        authority = flow.request.host_header
+        if authority is not None:
+            named, named_port = split_authority(authority)
+            if named != host or (named_port is not None and named_port != port):
+                self.deny(flow, 421, "deny-misdirected", b"the Host header doesn't match the connection's target")
+                return
+        decision, ok = self.decide(sandbox, host, port)
+        flow.metadata["agent"]["decision"] = decision
+        if not ok:
+            self.deny(flow, 403, decision, b"egress to this host is not allowed")
+            return
+        bindings = self.policy.bindings(host, port)
+        if not bindings:
             return
         if flow.request.scheme != "https":
-            flow.metadata["agent"]["decision"] = "deny-cleartext"
-            flow.response = http.Response.make(403, b"agent-broker: credentials are only sent over https\n")
+            self.deny(flow, 403, "deny-cleartext", b"credentials are only sent over https")
             return
-        value = self.policy.secret(binding)
-        header = binding.get("header", "Authorization")
-        flow.request.headers.pop(header, None)
-        if value is None:
+        values = [(b, self.policy.secret(b)) for b in bindings]
+        for b, _ in values:
+            flow.request.headers.pop(b.get("header", "Authorization"), None)
+        if any(value is None for _, value in values):
             flow.metadata["agent"]["decision"] = "deny-missing-secret"
             flow.response = http.Response.make(503, MISSING, {"Content-Type": "application/json"})
             return
-        flow.request.headers[header] = binding.get("format", "Bearer {}").replace("{}", value)
-        flow.metadata["agent"]["injected"] = binding["name"]
+        for b, value in values:
+            flow.request.headers[b.get("header", "Authorization")] = b.get("format", "Bearer {}").replace("{}", value)
+        flow.metadata["agent"]["injected"] = ",".join(b["name"] for b in bindings)
 
     def responseheaders(self, flow: http.HTTPFlow):
         flow.response.stream = True
@@ -291,8 +401,8 @@ class Broker:
         self.emit(
             {
                 "sandbox": agent.get("sandbox"),
-                "host": flow.request.pretty_host,
-                "port": flow.request.port,
+                "host": agent.get("host", norm_host(flow.request.host)),
+                "port": agent.get("port", flow.request.port),
                 "method": flow.request.method,
                 "path": flow.request.path.split("?", 1)[0][:512],
                 "decision": agent.get("decision"),

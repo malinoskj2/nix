@@ -107,7 +107,7 @@ def suggest(targets, allow, minimum):
         domain = domains.get(host, host)
         name = f"*.{domain}" if len(by_domain[domain]) >= minimum and host != domain else host
         entries.add(name if port in (80, 443) else f"{name}:{port}")
-    return sorted(entries - set(allow))
+    return sorted(e for e in entries - set(allow) if PATTERN.match(e))
 
 
 def cmd_report(args):

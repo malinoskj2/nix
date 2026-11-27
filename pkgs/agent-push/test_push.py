@@ -67,6 +67,7 @@ class PushGateway(unittest.TestCase):
         os.makedirs(f"{d}/github/owner")
         cls.remote = f"{d}/github/owner/repo.git"
         run("git", "init", "--bare", "--quiet", "--initial-branch=trunk", cls.remote, cwd=d)
+        run("git", "config", "uploadpack.allowFilter", "true", cwd=cls.remote)
         cls.work = f"{d}/work"
         run("git", "init", "--quiet", "--initial-branch=trunk", cls.work, cwd=d)
         cls.commit("README", "hello\n")
@@ -183,7 +184,7 @@ class PushGateway(unittest.TestCase):
 
     def test_6_refuses_commits_with_secrets(self):
         self.branch("feature-e")
-        fake = "ghp_" + "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(36))
+        fake = self.fake_token()
         self.commit("config.env", f"GITHUB_TOKEN={fake}\n")
         result = self.push()
         self.assertNotEqual(result.returncode, 0)
@@ -199,6 +200,75 @@ class PushGateway(unittest.TestCase):
         result = self.push()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.remote_head("feature-f"), tip)
+
+    def fake_token(self):
+        return "ghp_" + "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(36))
+
+    def test_7b_modifying_an_existing_file_scans_against_github(self):
+        self.branch("feature-g")
+        self.commit("README", "hello\nmore\n")
+        result = self.push()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_7c_a_secret_added_in_a_merge_is_found(self):
+        self.branch("side-h")
+        self.commit("h-side.txt", "side\n")
+        self.branch("feature-h")
+        self.commit("h.txt", "h\n")
+        run("git", "merge", "--quiet", "--no-ff", "--no-commit", "side-h", cwd=self.work, check=False)
+        fake = self.fake_token()
+        with open(f"{self.work}/merged.env", "w") as f:
+            f.write(f"GITHUB_TOKEN={fake}\n")
+        run("git", "add", "merged.env", cwd=self.work)
+        run("git", "commit", "--quiet", "--no-edit", cwd=self.work)
+        run("git", "rm", "--quiet", "merged.env", cwd=self.work)
+        run("git", "commit", "--quiet", "-m", "drop it", cwd=self.work)
+        result = self.push()
+        self.assertIn("Betterleaks", result.stderr)
+        self.assertNotIn(fake, result.stderr)
+        self.assertIsNone(self.remote_head("feature-h"))
+
+    def test_7d_allow_comments_are_ignored(self):
+        self.branch("feature-i")
+        fake = self.fake_token()
+        self.commit("allow.env", f"GITHUB_TOKEN={fake} # gitleaks:allow\n")
+        self.assertIn("Betterleaks", self.push().stderr)
+        self.assertIsNone(self.remote_head("feature-i"))
+
+    def test_7e_merging_the_default_branch_in_is_fine(self):
+        self.branch("feature-j")
+        self.commit("j.txt", "j\n")
+        run("git", "checkout", "--quiet", "trunk", cwd=self.work)
+        self.commit("trunk-j.txt", "trunk\n")
+        run("git", "push", "--quiet", self.remote, "trunk", cwd=self.work)
+        run("git", "checkout", "--quiet", "feature-j", cwd=self.work)
+        run("git", "merge", "--quiet", "--no-edit", "trunk", cwd=self.work)
+        result = self.push()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_7f_repo_spelling_comes_from_the_config(self):
+        self.branch("feature-k")
+        self.commit("k.txt", "k\n")
+        result = self.push("--repo", "OWNER/Repo")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        mint = [c for c in FakeGitHub.calls if c[0] == "POST"]
+        self.assertEqual(mint[-1][2]["repositories"], ["repo"])
+
+    def test_7g_refuses_before_reading_the_bundle(self):
+        self.configure(appId=None)
+        with socket.socket(socket.AF_UNIX) as s:
+            s.settimeout(10)
+            s.connect(self.socket)
+            request = {"op": "push", "repo": "owner/repo", "branch": "x", "tip": "0" * 40, "size": 1 << 29}
+            s.sendall((json.dumps(request) + "\n").encode())
+            reply = json.loads(s.makefile().readline())
+        self.assertIn("isn't set up yet", reply["error"])
+        for bad in (b"[]\n", b"null\n", b'{"op":"push","size":true}\n'):
+            with socket.socket(socket.AF_UNIX) as s:
+                s.settimeout(10)
+                s.connect(self.socket)
+                s.sendall(bad)
+                self.assertFalse(json.loads(s.makefile().readline())["ok"], bad)
 
     def test_8_missing_gateway_is_explained(self):
         os.environ["AGENT_PUSH_SOCKET"] = f"{self.d}/absent.sock"

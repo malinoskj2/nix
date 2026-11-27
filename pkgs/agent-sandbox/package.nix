@@ -354,7 +354,8 @@ let
         lib.genAttrs [ "HTTP_PROXY" "HTTPS_PROXY" "ALL_PROXY" "http_proxy" "https_proxy" "all_proxy" ] (
           _: egressProxy
         )
-        // lib.genAttrs [ "NO_PROXY" "no_proxy" ] (_: "localhost,127.0.0.1,::1")
+        # Docker's bridge pool: siblings and stacks are reached directly on their internal networks.
+        // lib.genAttrs [ "NO_PROXY" "no_proxy" ] (_: "localhost,127.0.0.1,::1,172.16.0.0/12")
         # Tools differ in which variable they read, and NIX_SSL_CERT_FILE overrides SSL_CERT_FILE.
         // lib.genAttrs [
           "SSL_CERT_FILE"
@@ -435,9 +436,19 @@ let
     exec ${lib.getExe nodejs} ${./codex-image.mjs} "$@"
   '';
 
+  # Sandboxes reach the app-server's socket directly, so the server itself holds every turn to
+  # what codex-image asks for.
+  codexRequirements = writeText "codex-requirements.toml" ''
+    allowed_sandbox_modes = ["read-only"]
+    allowed_approval_policies = ["never"]
+  '';
+
   codexServerEntrypoint = writeShellApplication {
     name = "agent-sandbox-codex-server-entrypoint";
-    runtimeInputs = [ jq ];
+    runtimeInputs = [
+      jq
+      socat
+    ];
     runtimeEnv.CODEX = lib.getExe codex;
     text = builtins.readFile ./codex-server-entrypoint.sh;
   };
@@ -823,9 +834,15 @@ let
     runtimeInputs = [
       coreutils
       findutils
+      getent
+      jq
+      socat
     ];
     runtimeEnv = imageEnv // {
       AGENT_SANDBOX_CODEX_SERVER_ENTRYPOINT = lib.getExe codexServerEntrypoint;
+      AGENT_SANDBOX_CODEX_REQUIREMENTS = "${codexRequirements}";
+      AGENT_SANDBOX_EGRESS_LIB = "${./egress.sh}";
+      AGENT_SANDBOX_EGRESS_ENV = egressEnv;
     };
     text = builtins.readFile ./agent-sandbox-codex-server.sh;
   };

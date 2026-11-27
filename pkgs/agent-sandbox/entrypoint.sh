@@ -11,7 +11,7 @@ mkdir -p "$log_dir"
 
 # On the internal network the broker's egress proxy is the only way out, and published ports
 # arrive as Unix sockets that the host forwards its ports to.
-if [[ -S /run/agent-egress/proxy.sock ]]; then
+if [[ ${AGENT_SANDBOX_EGRESS:-} == 1 ]]; then
   socat TCP-LISTEN:3128,bind=127.0.0.1,fork,reuseaddr UNIX-CONNECT:/run/agent-egress/proxy.sock \
     >"$log_dir/egress.log" 2>&1 &
 fi

@@ -42,8 +42,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    # Declaring a secret the encrypted file lacks holds back every secret, so the key is only
-    # declared once the owner has made the App.
+    # Declared only once the App exists, so a host without one has no missing secret to report.
     agentBroker.secrets = lib.mkIf configured { github-app-key = { }; };
 
     environment.etc."agent-broker/push.json".text = builtins.toJSON {

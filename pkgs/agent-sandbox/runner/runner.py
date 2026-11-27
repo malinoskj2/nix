@@ -932,6 +932,11 @@ class Runner:
         return name
 
     def sandbox_launch(self, request, emit):
+        if request.get("steam") and self.egress is not None:
+            refuse(
+                "a sandbox behind the egress proxy can't start a Steam sandbox, which would have no proxy; "
+                "ask the human to start one with sandbox --steam"
+            )
         image = self.allowed_image(request.get("image"))
         worktree = request.get("worktree")
         if isinstance(worktree, str) and re.search(r'[,"\n]', worktree):
@@ -1030,9 +1035,6 @@ class Runner:
     def egress_args(self, name, request):
         """Docker arguments that put a sibling on the internal network behind its own egress socket."""
         if self.egress is None:
-            return []
-        if request.get("steam"):
-            self.gate({"op": "exception", "name": name, "reason": "steam sandbox keeps the bridge network"})
             return []
         ingress = self.state / name / "ingress"
         ingress.mkdir(mode=0o700)

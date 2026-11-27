@@ -56,7 +56,11 @@ def write_ca_and_leaf(directory):
         .not_valid_after(now + datetime.timedelta(days=1))
         .add_extension(
             x509.SubjectAlternativeName(
-                [x509.IPAddress(ipaddress.ip_address("127.0.0.1")), x509.IPAddress(ipaddress.ip_address("127.0.0.2"))]
+                [
+                    x509.DNSName("localhost"),
+                    x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+                    x509.IPAddress(ipaddress.ip_address("127.0.0.2")),
+                ]
             ),
             critical=False,
         )
@@ -228,7 +232,7 @@ class Egress(unittest.TestCase):
         policy = {
             "mode": mode,
             "allow": [f"127.0.0.1:{cls.up_port}", f"127.0.0.1:{cls.banner_port}"],
-            "inspect": [],
+            "inspect": [f"localhost:{cls.up_port}"],
             "inject": [
                 {
                     "name": "fake",
@@ -350,28 +354,169 @@ class Egress(unittest.TestCase):
         with open(f"{self.d}/gate.log") as f:
             self.assertNotIn(self.secret, f.read())
 
+    def raw(self, data):
+        with socket.create_connection(("127.0.0.1", self.local_port), timeout=10) as s:
+            s.sendall(data)
+            reply = b""
+            while b"\r\n\r\n" not in reply:
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                reply += chunk
+        return reply
+
+    def tunnel(self, host, sni):
+        s = socket.create_connection(("127.0.0.1", self.local_port), timeout=10)
+        s.sendall(f"CONNECT {host}:{self.up_port} HTTP/1.1\r\nHost: {host}:{self.up_port}\r\n\r\n".encode())
+        reply = b""
+        while b"\r\n\r\n" not in reply:
+            reply += s.recv(4096)
+        self.assertIn(b" 200 ", reply.split(b"\r\n")[0])
+        ctx = ssl.create_default_context(cafile=self.trust)
+        ctx.check_hostname = False
+        return ctx.wrap_socket(s, server_hostname=sni)
+
+    def test_10_absolute_form_https_is_refused(self):
+        reply = self.raw(
+            f"GET https://127.0.0.1:{self.up_port}/steal HTTP/1.1\r\nHost: 127.0.0.2:{self.up_port}\r\n\r\n".encode()
+        )
+        self.assertIn(b" 403 ", reply.split(b"\r\n")[0])
+        rec = [r for r in self.records() if r.get("path") == "/steal"]
+        self.assertEqual(rec[-1]["decision"], "deny-absolute-https")
+        self.assertEqual(rec[-1]["host"], "127.0.0.1")
+
+    def test_11_host_header_must_match_the_target(self):
+        port = free_port()
+        reply = self.raw(
+            f"GET http://127.0.0.3:{port}/exfil HTTP/1.1\r\nHost: 127.0.0.1:{self.up_port}\r\n\r\n".encode()
+        )
+        self.assertIn(b" 421 ", reply.split(b"\r\n")[0])
+        rec = [r for r in self.records() if r.get("path") == "/exfil"]
+        self.assertEqual(
+            (rec[-1]["host"], rec[-1]["port"], rec[-1]["decision"]), ("127.0.0.3", port, "deny-misdirected")
+        )
+        body, codes = self.curl(f"https://localhost:{self.up_port}/cross", "-H", f"Host: 127.0.0.2:{self.up_port}")
+        self.assertTrue(codes.startswith("421"), codes)
+        self.assertNotIn("injected", body)
+        rec = [r for r in self.records() if r.get("path") == "/cross"]
+        self.assertEqual((rec[-1]["host"], rec[-1]["injected"]), ("localhost", None))
+
+    def test_12_inspected_hostname_is_pinned_and_verified(self):
+        body, codes = self.curl(f"https://localhost:{self.up_port}/pinned")
+        self.assertTrue(codes.startswith("200"), codes)
+        self.assertFalse(json.loads(body)["injected"])
+        rec = [r for r in self.records() if r.get("path") == "/pinned"]
+        self.assertEqual((rec[-1]["host"], rec[-1]["status"]), ("localhost", 200))
+
+    def test_13_sni_must_match_the_connect_target(self):
+        for host, sni in (("127.0.0.2", "localhost"), ("localhost", "uninspected.example")):
+            with self.assertRaises((ssl.SSLError, OSError)):
+                with self.tunnel(host, sni) as s:
+                    s.sendall(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+                    if not s.recv(100):
+                        raise OSError("closed")
+        rec = [r for r in self.records() if r.get("decision") == "deny-sni"]
+        self.assertEqual(
+            {(r["host"], r["sni"]) for r in rec[-2:]},
+            {("127.0.0.2", "localhost"), ("localhost", "uninspected.example")},
+        )
+        with self.tunnel("localhost", "localhost") as s:
+            s.sendall(b"GET /ok HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            self.assertIn(b"200", s.recv(100))
+
     def test_zz_unregister_removes_the_socket(self):
         reply = self.control({"op": "register", "name": "sbx-b", "pid": os.getpid()})
         self.assertTrue(os.path.exists(f"{reply['dir']}/proxy.sock"))
         with open(f"{self.gate_root}/peers.json") as f:
             self.assertIn("sbx-b", json.load(f))
+        held = socket.socket(socket.AF_UNIX)
+        held.settimeout(5)
+        held.connect(f"{reply['dir']}/proxy.sock")
+        held.sendall(f"CONNECT 127.0.0.1:{self.up_port} HTTP/1.1\r\nHost: x\r\n\r\n".encode())
+        self.assertIn(b" 200 ", held.recv(200))
         self.assertTrue(self.control({"op": "unregister", "name": "sbx-b"})["ok"])
+        self.assertEqual(held.recv(200), b"", "an unregistered sandbox's open tunnels are closed")
+        held.close()
         self.assertFalse(os.path.exists(reply["dir"]))
+        again = self.control({"op": "register", "name": "sbx-c", "pid": os.getpid()})
+        self.assertNotEqual(again["address"], reply["address"], "a dropped address isn't handed out at once")
+        self.control({"op": "unregister", "name": "sbx-c"})
+        self.assertFalse(self.control({"op": "register", "name": "sbx-d", "pid": True})["ok"])
         self.assertFalse(self.control({"op": "register", "name": "../x", "pid": os.getpid()})["ok"])
 
 
-class Internal(unittest.TestCase):
-    def test_host_and_metadata_addresses_are_internal(self):
-        import importlib.util
+def load_addon():
+    import importlib.util
 
-        spec = importlib.util.spec_from_file_location("addon", f"{HERE}/addon.py")
-        addon = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(addon)
-        internal = addon.internal_address
+    spec = importlib.util.spec_from_file_location("addon", f"{HERE}/addon.py")
+    addon = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(addon)
+    return addon
+
+
+class Internal(unittest.TestCase):
+    def connect(self, broker, host, port=443, sandbox="s"):
+        from types import SimpleNamespace
+
+        data = SimpleNamespace(
+            server=SimpleNamespace(address=(host, port), sni=None, error=None),
+            client=SimpleNamespace(agent_sandbox=sandbox),
+        )
+        import asyncio
+
+        asyncio.run(broker.server_connect(data))
+        return data.server
+
+    def broker(self, answers, local=()):
+        addon = load_addon()
+        broker = addon.addons[0]
+        broker.allow_internal = False
+        broker.emit = lambda record: None
+        broker.local = lambda: set(local)
+
+        async def resolve(host, port):
+            return list(answers.pop(0))
+
+        broker.resolve = resolve
+        broker.policy.peers = {"s": {"preview": {"address": "192.168.1.10", "ports": [18080]}}}
+        return broker
+
+    def test_host_and_metadata_addresses_are_internal(self):
+        internal = load_addon().internal_address
         for ip in ("127.0.0.1", "127.77.0.2", "::1", "0.0.0.0", "169.254.169.254", "::ffff:127.0.0.1", "fe80::1%eth0"):
             self.assertTrue(internal(ip), ip)
         for ip in ("192.168.1.10", "10.0.0.1", "140.82.112.3", "2606:4700::1"):
             self.assertFalse(internal(ip), ip)
+
+    def test_resolved_address_is_pinned(self):
+        answers = [["2606:4700::1", "140.82.112.3"], ["127.0.0.1"]]
+        broker = self.broker(answers)
+        server = self.connect(broker, "rebind.example")
+        self.assertIsNone(server.error)
+        self.assertEqual((server.address, server.sni), (("140.82.112.3", 443), "rebind.example"))
+        self.assertEqual(answers, [["127.0.0.1"]], "resolved once")
+
+    def test_any_internal_answer_is_refused(self):
+        server = self.connect(self.broker([["140.82.112.3", "127.0.0.1"]]), "rebind.example")
+        self.assertIn("not reachable", server.error)
+
+    def test_host_interface_addresses_are_refused_except_own_preview(self):
+        local = {"192.168.1.10", "172.18.0.1"}
+        for host, port, sandbox, refused in (
+            ("192.168.1.10", 22, "s", True),
+            ("172.18.0.1", 80, "s", True),
+            ("192.168.1.10", 18080, "s", False),
+            ("192.168.1.10", 18080, "other", True),
+            ("lan.example", 18081, "s", True),
+            ("192.168.1.20", 80, "s", False),
+        ):
+            broker = self.broker([["192.168.1.10"]], local)
+            server = self.connect(broker, host, port, sandbox)
+            self.assertEqual(server.error is not None, refused, (host, port, sandbox))
+
+    def test_local_addresses_reads_this_host(self):
+        local = load_addon().local_addresses()
+        self.assertIn("127.0.0.1", local)
 
 
 class Report(unittest.TestCase):
@@ -388,6 +533,7 @@ class Report(unittest.TestCase):
                 ("pypi.org", 443, "would-deny"),
                 ("media", 2222, "would-deny"),
                 ("github.com", 443, "allow"),
+                ('x"${builtins.abort "x"}', 443, "would-deny"),
             ]
         ] + ["not json"]
         targets = agent_egress.summarize(agent_egress.records(lines))
@@ -397,6 +543,7 @@ class Report(unittest.TestCase):
         self.assertIn("media:2222", entries)
         self.assertNotIn("pypi.org", entries)
         self.assertNotIn("github.com", entries)
+        self.assertFalse([e for e in entries if '"' in e or "$" in e], entries)
 
 
 if __name__ == "__main__":

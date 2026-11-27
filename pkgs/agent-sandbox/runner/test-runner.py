@@ -648,6 +648,13 @@ class RuntimeTest(unittest.TestCase):
             ["--security-opt", "seccomp=unconfined", "--security-opt", "systempaths=unconfined"],
         )
 
+    def test_a_sandbox_behind_the_proxy_cannot_start_a_steam_sibling(self):
+        r = self.runner()
+        r.egress = {"network": "agent-sandbox"}
+        r.allowed_image = unittest.mock.Mock(side_effect=AssertionError("launched"))
+        with self.assertRaisesRegex(runner.Refused, "Steam"):
+            r.sandbox_launch({"steam": True}, lambda *_: None)
+
 
 if __name__ == "__main__":
     unittest.main()

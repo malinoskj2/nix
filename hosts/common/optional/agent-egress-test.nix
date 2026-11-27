@@ -18,6 +18,14 @@ in
 
   node.specialArgs = { inherit inputs; };
 
+  nodes.outside = {
+    networking.firewall.enable = false;
+    systemd.services.web = {
+      wantedBy = [ "multi-user.target" ];
+      script = "exec ${pkgs.python3}/bin/python3 -m http.server 8000 --bind 0.0.0.0 --directory /etc";
+    };
+  };
+
   nodes.machine = {
     imports = [
       ./agent-broker.nix
@@ -52,7 +60,7 @@ in
       };
     };
 
-    networking.hosts."192.168.1.1" = [
+    networking.hosts."192.168.1.2" = [
       "allowed.test"
       "unlisted.test"
     ];
@@ -73,10 +81,18 @@ in
         )
         return json.loads(machine.succeed(as_user(user, f"python3 -c {shlex.quote(script)} {shlex.quote(json.dumps(request))}")))
 
+    def raw(request):
+        script = (
+            "import socket, sys; s = socket.create_connection(('127.0.0.1', 13128)); "
+            "s.sendall(sys.argv[1].encode()); print(s.recv(200).decode().split(chr(13))[0])"
+        )
+        return machine.succeed(f"python3 -c {shlex.quote(script)} {shlex.quote(request)}").strip()
+
     def records():
         lines = machine.succeed("journalctl -u agent-broker-egress-proxy.service -o cat").splitlines()
         return [json.loads(line) for line in lines if line.startswith("{")]
 
+    outside.wait_for_open_port(8000)
     machine.wait_for_unit("multi-user.target")
     machine.wait_for_unit("agent-broker-egress-proxy.service")
     machine.wait_for_unit("agent-broker-egress-gate.service")
@@ -99,6 +115,7 @@ in
         assert network["Internal"] is True, network
         assert network["Options"]["com.docker.network.bridge.name"] == "br-asb", network
         machine.succeed("nft list table inet agent_sandbox | grep -q br-asb")
+        gateway = network["IPAM"]["Config"][0]["Gateway"]
 
     machine.succeed("python3 -m http.server 8000 --bind 0.0.0.0 --directory /etc >/dev/null 2>&1 &")
     machine.wait_for_open_port(8000)
@@ -126,6 +143,16 @@ in
     with subtest("the host's own addresses are refused even in log mode"):
         assert machine.succeed(via_sandbox + "http://127.0.0.1:8000/hostname") == "502"
         assert machine.succeed(via_sandbox + "http://localhost:8000/hostname") == "502"
+        assert machine.succeed(via_sandbox + "http://192.168.1.1:8000/hostname") == "502"
+        assert machine.succeed(via_sandbox + f"http://{gateway}:8000/hostname") == "502"
+        assert ("sbx-test", "192.168.1.1", "deny-internal") in {(r.get("sandbox"), r.get("host"), r.get("decision")) for r in records()}
+
+    with subtest("the Host header can't redirect a request past the allowlist"):
+        assert machine.succeed(via_sandbox + "-H 'Host: allowed.test:8000' http://unlisted.test:8000/hostname") == "421"
+        assert raw("GET https://allowed.test:8000/ HTTP/1.1\r\nHost: allowed.test:8000\r\n\r\n") == "HTTP/1.1 403 Forbidden"
+        decisions = {(r.get("sandbox"), r.get("host"), r.get("decision")) for r in records()}
+        assert ("sbx-test", "unlisted.test", "deny-misdirected") in decisions, decisions
+        assert ("sbx-test", "allowed.test", "deny-absolute-https") in decisions, decisions
 
     with subtest("connections that don't come through a sandbox's socket are refused"):
         assert machine.succeed(as_user("other", "curl -s -o /dev/null -w '%{http_code}' -x http://127.0.0.1:3128 http://allowed.test:8000/hostname")) == "403"
@@ -166,7 +193,7 @@ in
         machine.wait_until_succeeds("docker exec ctr sh -c 'nc -z 127.0.0.1 3128'")
         assert machine.succeed("docker exec ctr curl -s -o /dev/null -w '%{http_code}' -x http://127.0.0.1:3128 http://allowed.test:8000/hostname") == "200"
         machine.fail("docker exec ctr curl -s -m 5 http://192.168.1.1:8000/hostname")
-        gateway = json.loads(machine.succeed("docker network inspect agent-sandbox"))[0]["IPAM"]["Config"][0]["Gateway"]
+        machine.fail("docker exec ctr curl -s -m 5 http://192.168.1.2:8000/hostname")
         machine.fail(f"docker exec ctr curl -s -m 5 http://{gateway}:8000/hostname")
         assert ("sbx-ctr", "allowed.test", "allow") in {(r.get("sandbox"), r.get("host"), r.get("decision")) for r in records()}
 
@@ -176,6 +203,9 @@ in
         machine.wait_for_open_port(18080, "127.0.0.1")
         assert machine.succeed("socat -T 5 - TCP:127.0.0.1:18080 </dev/null").strip() == "inside"
         machine.succeed("docker rm -f ctr")
+        # Compose stacks keep their loopback ports: on internal networks, which must not fail to start.
+        machine.succeed("docker run -d --name published --network agent-sandbox -p 127.0.0.1:18091:8080 egress-probe:latest sleep 60")
+        machine.succeed("docker rm -f published")
 
     with subtest("a sandbox whose launcher exits loses its socket"):
         machine.succeed("kill $(cat /tmp/launcher.pid)")

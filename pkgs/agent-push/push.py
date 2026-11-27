@@ -3,19 +3,24 @@ import base64
 import json
 import os
 import re
+import socket
 import socketserver
+import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
 
 REPO = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
-BRANCH = re.compile(r"^(?!.*\.\.)(?!.*//)(?!/)(?!.*/$)(?!.*\.lock$)[A-Za-z0-9._/-]{1,200}$")
+BRANCH = re.compile(r"^(?!.*\.\.)(?!.*//)(?!.*\.lock(?:/|$))(?![-./])(?!.*/[-.])(?!.*[/.]$)[A-Za-z0-9._/-]{1,200}$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 MAX_HEADER = 65536
 MAX_BUNDLE = 512 * 1024 * 1024
+MAX_REQUESTS = 4
+IDLE_TIMEOUT = 60
 ALWAYS_PROTECTED = {("malinoskj2/nix", "main")}
 
 
@@ -116,15 +121,19 @@ class Push:
         self.git_base = config.get("gitBase", "https://github.com")
 
     def check(self, repo, branch):
+        """The repository's spelling in agentBroker.push.repos, once repo and branch pass every policy check."""
         if not isinstance(repo, str) or not REPO.match(repo):
             raise Refused("repo must be owner/name")
         if not isinstance(branch, str) or not BRANCH.match(branch) or branch.startswith("refs/"):
             raise Refused("branch must be a plain branch name")
-        allowed = self.config.get("repos", [])
-        if repo.lower() not in {r.lower() for r in allowed}:
+        canonical = {r.lower(): r for r in self.config.get("repos", [])}.get(repo.lower())
+        if canonical is None:
             raise Refused(f"{repo} isn't in agentBroker.push.repos")
-        if (repo.lower(), branch) in ALWAYS_PROTECTED or branch in self.config.get("protectedBranches", []):
-            raise Refused(f"pushing to {branch} of {repo} is refused; push a feature branch and open a pull request")
+        if (canonical.lower(), branch) in ALWAYS_PROTECTED or branch in self.config.get("protectedBranches", []):
+            raise Refused(
+                f"pushing to {branch} of {canonical} is refused; push a feature branch and open a pull request"
+            )
+        return canonical
 
     def git(self, directory, *args, env=None, check=True, input=None):
         base = {
@@ -136,7 +145,16 @@ class Push:
             "LANG": "C.UTF-8",
         }
         result = subprocess.run(
-            ["git", "-c", "core.hooksPath=/dev/null", "-c", "protocol.file.allow=user", *args],
+            [
+                "git",
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "protocol.file.allow=user",
+                "-c",
+                "transfer.fsckObjects=true",
+                *args,
+            ],
             cwd=directory,
             env={**base, **(env or {})},
             capture_output=True,
@@ -167,8 +185,8 @@ class Push:
         return heads
 
     def prepare(self, request):
-        repo, branch = request.get("repo"), request.get("branch")
-        self.check(repo, branch)
+        repo = self.check(request.get("repo"), request.get("branch"))
+        branch = request["branch"]
         token = self.github.token(repo)
         try:
             default = self.github.default_branch(repo, token)
@@ -183,11 +201,18 @@ class Push:
     def url(self, repo):
         return f"{self.git_base}/{repo}.git"
 
-    def push(self, request, bundle_path):
-        repo, branch, tip = request.get("repo"), request.get("branch"), request.get("tip")
-        self.check(repo, branch)
+    def admit(self, request):
+        """Every check that needs no bundle, so a refused push is refused before it is read."""
+        repo = self.check(request.get("repo"), request.get("branch"))
+        tip = request.get("tip")
         if not isinstance(tip, str) or not SHA.match(tip):
             raise Refused("tip must be a full commit id")
+        self.github.configured()
+        return repo
+
+    def push(self, request, bundle_path):
+        repo = self.admit(request)
+        branch, tip = request["branch"], request["tip"]
         token = self.github.token(repo)
         try:
             default = self.github.default_branch(repo, token)
@@ -208,10 +233,12 @@ class Push:
         heads = self.remote_heads(git_dir, url, auth, [branch, default])
         refspecs = [f"+refs/heads/{b}:refs/remotes/origin/{b}" for b in heads]
         if refspecs:
-            self.git(git_dir, "fetch", "--quiet", "--filter=blob:none", "origin", *refspecs, env=auth)
+            self.git(git_dir, "fetch", "--quiet", "origin", *refspecs, env=auth)
         self.git(git_dir, "bundle", "verify", "--quiet", bundle_path)
         self.git(git_dir, "fetch", "--quiet", bundle_path, f"+refs/heads/{branch}:refs/push/tip")
         fetched = self.git(git_dir, "rev-parse", "refs/push/tip").stdout.strip()
+        if self.git(git_dir, "cat-file", "-t", fetched).stdout.strip() != "commit":
+            raise Refused("the bundle's branch doesn't point at a commit")
         if fetched != tip:
             raise Refused("the bundle's branch doesn't point at the claimed tip")
         current = heads.get(branch)
@@ -223,12 +250,14 @@ class Push:
             scan = f"{current}..{tip}"
         else:
             scan = f"{tip} --not --remotes=origin" if heads else tip
-        self.scan(git_dir, scan, auth)
+        self.scan(git_dir, scan)
         self.git(git_dir, "push", "--quiet", "origin", f"{tip}:refs/heads/{branch}", env=auth)
         log(event="push", repo=repo, branch=branch, tip=tip, scanned=scan)
         return {"ok": True, "message": f"pushed {tip[:12]} to {repo} {branch}"}
 
-    def scan(self, git_dir, log_opts, auth):
+    def scan(self, git_dir, log_opts):
+        # -m gives merges a diff against each parent, so a change made in a merge is scanned too;
+        # allow comments are the sandbox's own say-so.
         result = subprocess.run(
             [
                 "betterleaks",
@@ -236,9 +265,10 @@ class Push:
                 "--no-banner",
                 "--redact",
                 "--verbose",
+                "--ignore-gitleaks-allow",
                 "--log-level",
                 "warn",
-                f"--log-opts={log_opts}",
+                f"--log-opts=-m {log_opts}",
                 ".",
             ],
             cwd=git_dir,
@@ -247,7 +277,6 @@ class Push:
                 "HOME": git_dir,
                 "GIT_CONFIG_NOSYSTEM": "1",
                 "GIT_CONFIG_GLOBAL": "/dev/null",
-                **auth,
             },
             capture_output=True,
             text=True,
@@ -272,29 +301,57 @@ def read_exact(stream, size, target):
 
 
 class Handler(socketserver.StreamRequestHandler):
+    timeout = IDLE_TIMEOUT
+
     def handle(self):
+        if not self.server.slots.acquire(blocking=False):
+            self.wfile.write(b'{"ok": false, "error": "the push gateway is busy; try again shortly"}\n')
+            return
+        try:
+            self.serve()
+        finally:
+            self.server.slots.release()
+
+    def serve(self):
         request = {}
         try:
             line = self.rfile.readline(MAX_HEADER + 1)
             if len(line) > MAX_HEADER:
                 raise Refused("request too long")
-            request = json.loads(line or b"{}")
+            parsed = json.loads(line or b"{}")
+            if not isinstance(parsed, dict):
+                raise Refused("bad request: expected a JSON object")
+            request = parsed
             reply = self.server.dispatch(request, self.rfile)
         except Refused as error:
             reply = {"ok": False, "error": str(error)}
         except (ValueError, KeyError, TypeError) as error:
             reply = {"ok": False, "error": f"bad request: {error}"}
-        except subprocess.TimeoutExpired:
+        except (subprocess.TimeoutExpired, TimeoutError):
             reply = {"ok": False, "error": "timed out"}
-        if not reply.get("ok"):
-            op = request.get("op") if isinstance(request, dict) else None
+        if reply.get("ok"):
+            log(
+                event="served", op=str(request.get("op"))[:16], repo=str(request.get("repo"))[:200], pid=self.peer_pid()
+            )
+        else:
             log(
                 event="refused",
-                op=str(op)[:16],
-                repo=str(request.get("repo"))[:200] if isinstance(request, dict) else None,
+                op=str(request.get("op"))[:16],
+                repo=str(request.get("repo"))[:200],
+                pid=self.peer_pid(),
                 error=reply["error"][:300],
             )
-        self.wfile.write((json.dumps(reply) + "\n").encode())
+        try:
+            self.wfile.write((json.dumps(reply) + "\n").encode())
+        except OSError:
+            pass
+
+    def peer_pid(self):
+        try:
+            data = self.connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
+        except OSError:
+            return None
+        return struct.unpack("3i", data)[0]
 
 
 class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
@@ -302,6 +359,7 @@ class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
 
     def __init__(self, path, config_path):
         self.config_path = config_path
+        self.slots = threading.BoundedSemaphore(MAX_REQUESTS)
         super().__init__(path, Handler)
 
     def dispatch(self, request, stream):
@@ -313,8 +371,9 @@ class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
             return push.prepare(request)
         if op == "push":
             size = request.get("size")
-            if not isinstance(size, int) or not 0 < size <= MAX_BUNDLE:
+            if type(size) is not int or not 0 < size <= MAX_BUNDLE:
                 raise Refused(f"the bundle must be between 1 byte and {MAX_BUNDLE >> 20} MiB")
+            push.admit(request)
             with tempfile.NamedTemporaryFile(prefix="agent-push-", suffix=".bundle") as bundle:
                 read_exact(stream, size, bundle)
                 bundle.flush()
