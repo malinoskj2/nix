@@ -7,6 +7,8 @@ const [bpftrace, script] = process.argv.slice(2);
 const signals = { 4: "SIGILL", 6: "SIGABRT", 7: "SIGBUS", 8: "SIGFPE", 11: "SIGSEGV" };
 const containerCgroup = /\/(docker|libpod|cri-containerd|crio)-[0-9a-f]{12,}\.scope(\/|$)|\/docker\/[0-9a-f]{12,}(\/|$)|^\/machine\.slice\//;
 
+const handledWindowNs = 10e9;
+
 function coreId(cpu) {
   try {
     return readFileSync(`/sys/devices/system/cpu/cpu${cpu}/topology/core_id`, "utf8").trim();
@@ -21,10 +23,10 @@ function field(value) {
 
 function format(line) {
   const parts = line.split("\t");
-  if (parts.length < 11) return null;
-  const [time, sig, code, pid, tid, cpu, priorAgeNs, priorCpu, priorSig, cgroupPaths] = parts;
+  if (parts.length < 12) return null;
+  const [time, sig, code, pid, tid, cpu, deliverCpu, priorAgeNs, priorCpu, priorSig, cgroupPaths] = parts;
   const cgroup = cgroupPaths.replace(/^unified:/, "");
-  const comm = parts.slice(10).join("\t");
+  const comm = parts.slice(11).join("\t");
   const out = [
     `time=${time}`,
     `signal=${signals[sig] ?? `SIG${sig}`}`,
@@ -34,10 +36,11 @@ function format(line) {
     `tid=${tid}`,
     `cpu=${cpu}`,
     `core=${coreId(cpu)}`,
+    `deliver_cpu=${deliverCpu}`,
     `container=${containerCgroup.test(cgroup) ? "yes" : "no"}`,
     `cgroup=${field(cgroup)}`,
   ];
-  if (Number(priorCpu) >= 0) {
+  if (Number(priorCpu) >= 0 && Number(priorAgeNs) <= handledWindowNs) {
     out.push(
       `handled_signal=${signals[priorSig] ?? `SIG${priorSig}`}`,
       `handled_cpu=${priorCpu}`,

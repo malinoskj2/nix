@@ -1,26 +1,66 @@
 // Fields are tab-separated; comm comes last because it may contain anything.
+// Group-directed signals are keyed by the negated process ID.
+let @generated = lruhash(8192);
 let @handled = lruhash(4096);
 
 tracepoint:signal:signal_generate
 /(args->sig == 4 || args->sig == 6 || args->sig == 7 || args->sig == 8 || args->sig == 11)
-  && args->result != 1
-  && (args->pid == tid || args->pid == pid)/
+  && (args->result == 0 || args->result == 4)/
 {
-  $handler = (uint64)curtask->sighand->action[(uint64)(args->sig - 1)].sa.sa_handler;
-  if ($handler == 0) {
-    let $prior = ((uint64)0, (int32)-1, (int32)0);
-    if (find(@handled, tid, $prior)) {
-      $deleted = delete(@handled, tid);
-    }
-    printf("%s\t%d\t%d\t%d\t%d\t%d\t%llu\t%d\t%d\t%s\t%s\n",
-      strftime("%Y-%m-%dT%H:%M:%S.%f%z", nsecs), args->sig, args->code, pid, tid, cpu,
-      $prior.0 == 0 ? (uint64)0 : nsecs - $prior.0, $prior.1, $prior.2,
-      cgroup_path(cgroup), args->comm);
+  $target = args->group ? -(int64)args->pid : (int64)args->pid;
+  if (args->pid == tid || args->pid == pid) {
+    @generated[$target, args->sig] = (nsecs, (int32)cpu, (int32)args->code);
   } else {
-    @handled[tid] = (nsecs, (int32)cpu, (int32)args->sig);
+    $deleted = delete(@generated, ($target, args->sig));
+  }
+}
+
+tracepoint:signal:signal_deliver
+/args->sig == 4 || args->sig == 6 || args->sig == 7 || args->sig == 8 || args->sig == 11/
+{
+  let $gen = ((uint64)0, (int32)-1, (int32)0);
+  if (find(@generated, ((int64)tid, args->sig), $gen)) {
+    $deleted = delete(@generated, ((int64)tid, args->sig));
+  } else if (find(@generated, (-(int64)pid, args->sig), $gen)) {
+    $deleted = delete(@generated, (-(int64)pid, args->sig));
+  }
+  if ($gen.1 >= 0) {
+    if (args->sa_handler == 0) {
+      // SIGNAL_UNKILLABLE: an init process drops signals it has no handler for.
+      if ((curtask->signal->flags & 0x40) == 0) {
+        let $prior = ((uint64)0, (int32)-1, (int32)0);
+        if (find(@handled, (int64)tid, $prior)) {
+          $deleted = delete(@handled, (int64)tid);
+        }
+        printf("%s\t%d\t%d\t%d\t%d\t%d\t%d\t%llu\t%d\t%d\t%s\t%s\n",
+          strftime("%Y-%m-%dT%H:%M:%S.%f%z", $gen.0), args->sig, $gen.2, pid, tid, $gen.1, cpu,
+          $prior.0 == 0 ? (uint64)0 : nsecs - $prior.0, $prior.1, $prior.2,
+          cgroup_path(cgroup), comm);
+      }
+    } else if (args->sa_handler != 1) {
+      @handled[(int64)tid] = ($gen.0, $gen.1, (int32)args->sig);
+    }
+  }
+}
+
+tracepoint:sched:sched_process_exit
+{
+  $deleted = delete(@handled, (int64)args->pid);
+  $deleted = delete(@generated, ((int64)args->pid, (int32)4));
+  $deleted = delete(@generated, ((int64)args->pid, (int32)6));
+  $deleted = delete(@generated, ((int64)args->pid, (int32)7));
+  $deleted = delete(@generated, ((int64)args->pid, (int32)8));
+  $deleted = delete(@generated, ((int64)args->pid, (int32)11));
+  if (args->group_dead) {
+    $deleted = delete(@generated, (-(int64)pid, (int32)4));
+    $deleted = delete(@generated, (-(int64)pid, (int32)6));
+    $deleted = delete(@generated, (-(int64)pid, (int32)7));
+    $deleted = delete(@generated, (-(int64)pid, (int32)8));
+    $deleted = delete(@generated, (-(int64)pid, (int32)11));
   }
 }
 
 END {
+  clear(@generated);
   clear(@handled);
 }
