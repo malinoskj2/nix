@@ -1347,12 +1347,10 @@ class Runner:
                 entry = self.compose_submit(project, request, emit, runtime="runc")
                 code = self.compose_run(entry, project, argv, emit, self.timeout(request) + 60)
             self.connect_owner(project)
-            return {
-                "exit": code,
-                "project": project,
-                "runtime": entry["runtime"],
-                "services": self.compose_ps_data(project),
-            }
+            services = self.compose_ps_data(project)
+            if code != 0:
+                self.report_failed_services(services, entry["runtime"], emit)
+            return {"exit": code, "project": project, "runtime": entry["runtime"], "services": services}
 
     def compose_build(self, request, emit):
         project = self.project_name(request)
@@ -1452,6 +1450,24 @@ class Runner:
             entry["pins"].close()
             shutil.rmtree(entry["dir"], ignore_errors=True)
         return {"exit": code, "project": project, "removed": True}
+
+    def report_failed_services(self, services, runtime, emit):
+        """Show why an up failed: Compose reports only that a container exited or is unhealthy."""
+        for service in services:
+            if service["state"] not in ("exited", "dead", "restarting") and service["health"] != "unhealthy":
+                continue
+            logs = self.docker("logs", "--tail", "40", service["container"], check=False)
+            emit(
+                "err",
+                f"sandbox-runner: {service['container']} is {service['health'] or service['state']}"
+                f" (exit {service['exit_code']}) on {runtime}; its last log lines:\n{logs.stdout}{logs.stderr}",
+            )
+        if runtime == "runsc" and services:
+            emit(
+                "err",
+                "sandbox-runner: if a service fails only under gVisor, bring the stack down and up again "
+                "with --runtime runc\n",
+            )
 
     def connect_owner(self, project):
         # Docker isolates bridge networks from each other, so the caller joins the stack's networks

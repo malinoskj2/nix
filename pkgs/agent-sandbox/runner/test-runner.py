@@ -449,6 +449,28 @@ class PortTest(unittest.TestCase):
         self.assertEqual(sum(call[0] == "create" for call in calls), 3)
 
 
+class FailureReportTest(unittest.TestCase):
+    def test_a_failed_up_shows_the_failed_services_logs(self):
+        r = object.__new__(runner.Runner)
+        logged = []
+
+        def docker(*argv, check=True, timeout=300):
+            logged.append(argv)
+            return unittest.mock.Mock(stdout="could not resolve postgres\n", stderr="")
+
+        r.docker = docker
+        services = [
+            {"container": "db", "state": "running", "health": "healthy", "exit_code": 0},
+            {"container": "server", "state": "exited", "health": "unhealthy", "exit_code": 1},
+        ]
+        messages = []
+        r.report_failed_services(services, "runsc", lambda _stream, text: messages.append(text))
+        self.assertEqual(logged, [("logs", "--tail", "40", "server")])
+        self.assertIn("server is unhealthy (exit 1) on runsc", messages[0])
+        self.assertIn("could not resolve postgres", messages[0])
+        self.assertIn("--runtime runc", messages[1])
+
+
 class RuntimeTest(unittest.TestCase):
     def runner(self, runsc=True, seccomp=None):
         r = object.__new__(runner.Runner)
@@ -500,6 +522,7 @@ class RuntimeTest(unittest.TestCase):
         r.compose_down_locked = lambda *_args, **_kwargs: self.fail("fallback must not run the destructive down")
         r.connect_owner = lambda _project: None
         r.compose_ps_data = lambda _project: []
+        r.report_failed_services = lambda *_: None
         return r
 
     def test_a_stack_that_fails_under_gvisor_retries_on_runc(self):
