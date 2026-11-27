@@ -24,12 +24,13 @@ journalctl --user -u local-models-sync.service -f
 Weights can live in several stores, each a directory holding its own
 `huggingface/` cache and `files/` blobs. `services.local-models.stores` names
 them and `defaultStore` picks the one for entries without a `store` field; Nix
-writes both into the deployed catalog. `home` has two:
+writes both into the deployed catalog. `home` has three:
 
 | Store | Path | Holds |
 | --- | --- | --- |
 | `external` (default) | `/mnt/ext-ssd/models`, the root itself | every entry without `store` |
 | `install` | `~/.local/share/model-stores/install` on the NVMe system drive | entries with `"store": "install"` |
+| `media` | `/mnt/media-models`, the media host's `/media/models` over NFS | entries with `"store": "media"` |
 
 Consumers still see one root: `catalog.json`, `readiness.json`, `views/` and
 `by-name/` stay in `services.local-models.root`, and each view's absolute links
@@ -42,7 +43,39 @@ created or written reports `missing` without affecting other stores.
 Activation creates every store directory. `HF_HUB_CACHE` points only at the
 root's cache, so reach entries in other stores through `by-name`.
 The root stays on the external drive, so while it is unplugged the aliases
-for `install` entries are unreachable too, though their weights remain.
+for `install` and `media` entries are unreachable too, though their weights remain.
+
+### The media host's store
+
+The media host (`hosts/media/`) keeps `/media/models`, owned by Jesse, in the
+root of its 14 TB drive and exports it over NFS to `home` only, like
+`/mnt/media3`. `home` automounts it at `/mnt/media-models` on first access
+(`hosts/home/media-share.nix`); the mount is soft, so a lost connection
+returns I/O errors instead of hanging, and boot never waits for it.
+
+`services.local-models.mountedStores` lists `media` as a mount point of
+another filesystem. Sync and activation never create it, and an entry in it
+reads `missing` ("Store media at /mnt/media-models is unavailable") unless
+the share is mounted,
+so nothing is ever written into the empty mount point on the system drive.
+Pruning skips it while unmounted. `services.local-models.storeReserves.media`
+keeps 1 TiB free on that drive for the media host's own downloads: a file
+that would leave less is reported missing instead of downloaded.
+
+Weights in this store travel the network twice: from the Hub to `home`, then
+to the media host over NFS, and verification reads each file back once after
+it lands. An interrupted transfer resumes from its partial file on the next
+sync, and a soft-mount I/O error marks only that file missing.
+
+The DeepSeek V4.1 Flash entries live here as storage only, with `"status":
+"storage-only"`: no runtime or OpenCode profile uses them, and none fits
+`home`'s 94 GB RAM and 32 GB card. Together they are about 1.09 TB:
+
+| Alias | Source | Size |
+| --- | --- | --- |
+| `deepseek-v4.1-flash` | `deepseek-ai/DeepSeek-V4.1-Flash-1017`, the full snapshot with its 48 safetensors shards | 510 GB |
+| `deepseek-v4.1-flash-gguf-iq1s` | `unsloth/DeepSeek-V4.1-Flash-1017-GGUF`, `UD-IQ1_S/` only, shard 5 being the IQ4_NL Engram table | 233 GB |
+| `deepseek-v4.1-flash-abliterated-gguf` | `orcarouter/DeepSeek-V4.1-Flash-1017-abliterated-GGUF`, `Mix-256G/` only (gated) | 346 GB |
 
 `catalog.json` is the deployed source of truth. It lists only enabled entries
 and the dependencies they need. `readiness.json` reports each of them as ready,
@@ -162,6 +195,7 @@ the Nix store or model storage. Accept access to:
 - [SAM 3](https://huggingface.co/facebook/sam3)
 - [SAM 3.1](https://huggingface.co/facebook/sam3.1)
 - [Qwen3.8-27B Uncensored GGUF](https://huggingface.co/orcarouter/Qwen3.8-27B-Uncensored-GGUF)
+- [DeepSeek V4.1 Flash abliterated GGUF](https://huggingface.co/orcarouter/DeepSeek-V4.1-Flash-1017-abliterated-GGUF)
 
 The user unit uses `LoadCredential` with a non-secret `SetCredential=hf-token:unconfigured` fallback. This
 makes an absent source nonfatal, as documented by
@@ -175,6 +209,8 @@ Rotate by replacing the host file and starting a new sync invocation.
 
 New agent sandboxes get the complete root and every other store
 (`~/.config/local-models/stores`) read-only at the same absolute paths,
+leaving out a store that can't be reached within 15 seconds, such as an
+unmounted NFS share,
 with `MODEL_ROOT`, `HF_HUB_CACHE`, `IMG2VIDEO_MODELS` and `SAM` explicitly set.
 Recreate existing containers after deployment. Compilation and runtime caches
 must stay elsewhere. View and snapshot links resolve inside the mounted root and stores; packaged

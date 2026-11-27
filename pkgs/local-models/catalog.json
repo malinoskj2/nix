@@ -4563,6 +4563,907 @@
       "dependencies": [],
       "compatibility": "unverified",
       "loader": "diffusers WanImageToVideoPipeline(image=first, last_image=last, ...) with prompt embeds from a freed bf16 UMT5 and the transformer streamed to the GPU as fp8 block Linears plus bf16 with layerwise casting; plain from_pretrained in bf16 does not fit 20 GB RAM or 32 GB VRAM"
+    },
+    "deepseek-v4.1-flash": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "store": "media",
+      "status": "storage-only",
+      "compatibility": "unverified",
+      "loader": "Storage only; not loaded on home. DeepSeek's inference/ reference (convert.py, generate.py) or a runtime with DeepSeek V4 support",
+      "notes": [
+        "Official FP8/BF16 safetensors, 48 shards, about 510 GB.",
+        "Needs far more memory than home's 94 GB RAM and 32 GB VRAM; kept on the media host's drive for other machines."
+      ],
+      "dependencies": [],
+      "files": [
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "LICENSE",
+          "target": "LICENSE",
+          "size": 1084,
+          "gitSha1": "d62e3bef9f054f21b7fc616365850fbf879a99ff",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "README.md",
+          "target": "README.md",
+          "size": 5231,
+          "gitSha1": "3b2d135a2f20a462d773716575d793dcb0c71e84",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "chat_template.jinja",
+          "target": "chat_template.jinja",
+          "size": 16722,
+          "gitSha1": "35b5c61155f2ffbf911d0c836b3e92e7b32362cb",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "config.json",
+          "target": "config.json",
+          "size": 3311,
+          "gitSha1": "09917a9139b22d5bf8be52132787f435147b1020",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "encoding/README.md",
+          "target": "encoding/README.md",
+          "size": 12164,
+          "gitSha1": "1d094a2c20234cf6c04bcd1b4627cc30f42297d5",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "encoding/encoding.py",
+          "target": "encoding/encoding.py",
+          "size": 37962,
+          "gitSha1": "3c7c357dc9ae3ed37adacb8572a2e9498b7d1bcb",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "encoding/test_encoding.py",
+          "target": "encoding/test_encoding.py",
+          "size": 22449,
+          "gitSha1": "63ea61ae6d35efba3e35c5a5a50b9ac077b2d469",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "encoding/tests/test_input_1.json",
+          "target": "encoding/tests/test_input_1.json",
+          "size": 2761,
+          "gitSha1": "c7435727e24c5f7b5cf28b470cf03814101eb37a",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "encoding/tests/test_input_2.json",
+          "target": "encoding/tests/test_input_2.json",
+          "size": 527,
+          "gitSha1": "132bb05a51e79204324f160cfde2880b5d0077ba",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "encoding/tests/test_input_3.json",
+          "target": "encoding/tests/test_input_3.json",
+          "size": 2554,
+          "gitSha1": "6d2612113c71fb9a897255ec694b7b8a41d0432b",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "encoding/tests/test_input_4.json",
+          "target": "encoding/tests/test_input_4.json",
+          "size": 712,
+          "gitSha1": "86cd1f0a68075a412654ea10f9558c69162b271a",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "encoding/tests/test_input_5.json",
+          "target": "encoding/tests/test_input_5.json",
+          "size": 1143,
+          "gitSha1": "2a2fa6a89e8118e896ec47abcc5bda30789e6532",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "encoding/tests/test_output_1.txt",
+          "target": "encoding/tests/test_output_1.txt",
+          "size": 2476,
+          "gitSha1": "3dc9bfe936d251bf69f6db738d1302bfa8c4c705",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "encoding/tests/test_output_2.txt",
+          "target": "encoding/tests/test_output_2.txt",
+          "size": 294,
+          "gitSha1": "78eb6be5de6f3cda7c5065b3c3bd01bac28ef1dc",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "encoding/tests/test_output_3.txt",
+          "target": "encoding/tests/test_output_3.txt",
+          "size": 2481,
+          "gitSha1": "90b2b6b74beaa471dfbbba1d7e7a5eb88c9e7da0",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "encoding/tests/test_output_4.txt",
+          "target": "encoding/tests/test_output_4.txt",
+          "size": 574,
+          "gitSha1": "efad296eb4ff95754f322476db4d26e72682a586",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "encoding/tests/test_output_5.txt",
+          "target": "encoding/tests/test_output_5.txt",
+          "size": 408,
+          "gitSha1": "a130bcc2c5682c94b6fd5194def54209f1794939",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/README.md",
+          "target": "inference/README.md",
+          "size": 2029,
+          "gitSha1": "e0b1d6ddfb4ab06a0dc9b4542826e6d7aa07a77c",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/config.json",
+          "target": "inference/config.json",
+          "size": 1982,
+          "gitSha1": "7a915cc69e21abbc6d7fb939cef5d09c72aa0d24",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/convert.py",
+          "target": "inference/convert.py",
+          "size": 9458,
+          "gitSha1": "61bd2943648920ce599c4c86dc9bf6316e152fe8",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/engram.py",
+          "target": "inference/engram.py",
+          "size": 8138,
+          "gitSha1": "a36bc6c6b8cbf2d3dbac850863c23b55a7ecb5c7",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/examples/example.txt",
+          "target": "inference/examples/example.txt",
+          "size": 332,
+          "gitSha1": "9200d36c90f601c0648ee23279abbb29b2228f13",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/examples/example_harmony.json",
+          "target": "inference/examples/example_harmony.json",
+          "size": 2156,
+          "gitSha1": "fae1c2608f8e5b980fcc9dc311cda8e345ecde1c",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/examples/images/carrots.jpeg",
+          "target": "inference/examples/images/carrots.jpeg",
+          "size": 212495,
+          "sha256": "5df896a4a07e127281c60fc957f8b3d73f4735b3258a0bf762b4383557f8fa9a",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/examples/images/corn.jpeg",
+          "target": "inference/examples/images/corn.jpeg",
+          "size": 56122,
+          "gitSha1": "5777d198b83de15eb21243f8aac49074922053fb",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/generate.py",
+          "target": "inference/generate.py",
+          "size": 8722,
+          "gitSha1": "84d4873c4c59ea743e104920a77984f022bfb9f5",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/image_processor.py",
+          "target": "inference/image_processor.py",
+          "size": 7699,
+          "gitSha1": "a50311ece615b72be2c9d4b649a05619c27681e7",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/kernel.py",
+          "target": "inference/kernel.py",
+          "size": 23790,
+          "gitSha1": "6fa7bd5aafbe1bc62887080963cc9fdd838d89f5",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/model.py",
+          "target": "inference/model.py",
+          "size": 61669,
+          "gitSha1": "46cc8310bb64852f3c36c9cc5dd13d47acabf6ee",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/requirements.txt",
+          "target": "inference/requirements.txt",
+          "size": 98,
+          "gitSha1": "0ac24b86509757adc25e0d7518b16fffbf81a5b1",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/run.sh",
+          "target": "inference/run.sh",
+          "size": 1759,
+          "gitSha1": "e2d52080a88d3053d963bac4bba75116ce73aed4",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "inference/vision.py",
+          "target": "inference/vision.py",
+          "size": 4457,
+          "gitSha1": "77af0bdef9f4649edebac2876cd1df50a147ce98",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00001-of-00048.safetensors",
+          "target": "model-00001-of-00048.safetensors",
+          "size": 970533624,
+          "sha256": "13bd121075f0b68cb7e8e8021a1011d42a81a83f557a2602fd9c07d52fddb0ec",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00002-of-00048.safetensors",
+          "target": "model-00002-of-00048.safetensors",
+          "size": 1323858272,
+          "sha256": "43616eebd88dd4f1f1b642772356fc160478d1d9d04edd240431e7d065d2eda7",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00003-of-00048.safetensors",
+          "target": "model-00003-of-00048.safetensors",
+          "size": 7389759032,
+          "sha256": "41611994fc9b27829b757d72257570d65a976fe65b8c6df8641adcd139d65ded",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00004-of-00048.safetensors",
+          "target": "model-00004-of-00048.safetensors",
+          "size": 7389759032,
+          "sha256": "e8e901b3cb1ab46f32729c7eaab37bd774a09094f0a02c51a60e883f779f2c39",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00005-of-00048.safetensors",
+          "target": "model-00005-of-00048.safetensors",
+          "size": 7405953784,
+          "sha256": "c5df71c02d6a22bcb20a0dbbcda9c6b65aa104f44415102a9a6a03bee92bb9de",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00006-of-00048.safetensors",
+          "target": "model-00006-of-00048.safetensors",
+          "size": 7389759032,
+          "sha256": "a5d42afde2aee33619fb7a674b4c737c38d1f1d47a636a26f3edfb3b54164167",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00007-of-00048.safetensors",
+          "target": "model-00007-of-00048.safetensors",
+          "size": 7389759032,
+          "sha256": "24856942add8f73f5e1fbaea1e9c9b6ff597fd1b4aa4651d789833dd3a5a2ab9",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00008-of-00048.safetensors",
+          "target": "model-00008-of-00048.safetensors",
+          "size": 7389759032,
+          "sha256": "7bf5f7afb5d2bacad49feffb049989fb365d6dbf96986e76265bd7a7a3469564",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00009-of-00048.safetensors",
+          "target": "model-00009-of-00048.safetensors",
+          "size": 7389759032,
+          "sha256": "e6ae47e9daca138fda8c04f833c8328eb21671c37d1c8e2c3f7a82aac26649f6",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00010-of-00048.safetensors",
+          "target": "model-00010-of-00048.safetensors",
+          "size": 7389759032,
+          "sha256": "835e9a8b0a28cc571cb1cf9e6014b3d5eb84ac41990a8aa4519e1ac435d7e23c",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00011-of-00048.safetensors",
+          "target": "model-00011-of-00048.safetensors",
+          "size": 7405953784,
+          "sha256": "5df968edefe59033e451ff8512bef57da2cf97b57b4e7a1380118489dd02915b",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00012-of-00048.safetensors",
+          "target": "model-00012-of-00048.safetensors",
+          "size": 7389759032,
+          "sha256": "4f97bf292f58178ecdf593b55252a401d6e9102f18625a4fccc52b8ee57e7be0",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00013-of-00048.safetensors",
+          "target": "model-00013-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "1b8567854887396840eb5392ca763101308064a142cb36156159096e581659eb",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00014-of-00048.safetensors",
+          "target": "model-00014-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "e5ba6d7e4380728ad70b8208676075a898f80a64c3618060f1b81e4218a159d1",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00015-of-00048.safetensors",
+          "target": "model-00015-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "f4b29d936024e68f44fb14d0ffffb15b42b27be04b4a0296acdae695afa94c30",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00016-of-00048.safetensors",
+          "target": "model-00016-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "3aa67228351c80e708dab4ac7f6e56b19000649cce2cd655def3168a3de4115c",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00017-of-00048.safetensors",
+          "target": "model-00017-of-00048.safetensors",
+          "size": 7405956128,
+          "sha256": "b704eec7b7aa1bad6c9d57fa7f61f2db28862e8e5fc2468fd9d872689c778c7d",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00018-of-00048.safetensors",
+          "target": "model-00018-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "1405cf03376739f46e72e6cdd4d404969f1b94c717bb01782a300e2fbbd17e29",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00019-of-00048.safetensors",
+          "target": "model-00019-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "a84beaded1913e8d6119ac111f25040c8ec42e59f200dbe04c3a991cac512669",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00020-of-00048.safetensors",
+          "target": "model-00020-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "038914f79cf5499da90f0bfb8e1b7761cc37d5f4dd132e2431a6d02c9fb9fdfe",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00021-of-00048.safetensors",
+          "target": "model-00021-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "2ba49f59c8cec144e41370f9f820f268899d0b5cd0501e881908ca65bccd2dc2",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00022-of-00048.safetensors",
+          "target": "model-00022-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "52f12cceca5e2fdd0191dfbd33b808b6c7ce844cf9351c119413c5ba3bcd28c8",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00023-of-00048.safetensors",
+          "target": "model-00023-of-00048.safetensors",
+          "size": 7400713088,
+          "sha256": "d6e47e8b7147c64eb6619732694dda811e1a9f8af1894977919af9522724ca31",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00024-of-00048.safetensors",
+          "target": "model-00024-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "9d611d65374d37f5e02fdae14e680cb69bf55af8a8478802ac465b97c65be22b",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00025-of-00048.safetensors",
+          "target": "model-00025-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "8db532a7cbb23cd4b5aa775636ca13af95b758501290fb935074348f660a29cd",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00026-of-00048.safetensors",
+          "target": "model-00026-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "2d6d7261937d2a98c7398a55ed48dbf129d9b4f188aa9148e46ea9f720255115",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00027-of-00048.safetensors",
+          "target": "model-00027-of-00048.safetensors",
+          "size": 7395337384,
+          "sha256": "8e76de6a5cdc7ac0923526d1c1a2e6459c55bbfa692793b29cdfe07b4f9fbc52",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00028-of-00048.safetensors",
+          "target": "model-00028-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "3c0e5ad6a4e8e811c1a55fd8f5b59c9fa329b241c671997c28fc7a01944d5a77",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00029-of-00048.safetensors",
+          "target": "model-00029-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "392a950bcb062b89f683abc52d49a17e92c66f80cd1cb6fb92b71091da75319b",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00030-of-00048.safetensors",
+          "target": "model-00030-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "0b44d1364e578fc26dc0cc86564e49a92871a51063fb7f2f3b51cb020de44ab0",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00031-of-00048.safetensors",
+          "target": "model-00031-of-00048.safetensors",
+          "size": 7395337384,
+          "sha256": "d3230ffc32e11c5a34505c5acaeaff642aed5c770b297695e1f7a94071d361ac",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00032-of-00048.safetensors",
+          "target": "model-00032-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "96d284016ac885415859346d971c0de43bd9e7947337edfb53c34462866ef1d7",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00033-of-00048.safetensors",
+          "target": "model-00033-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "313953b3b6aaa6d4c60bbcfc177dda5d8d1380c9fe72d82560ba078f55278a8d",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00034-of-00048.safetensors",
+          "target": "model-00034-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "98eb27655774796bb3feadb35ec64a9849104b88c4c6ae7cabf6fc1ee317a056",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00035-of-00048.safetensors",
+          "target": "model-00035-of-00048.safetensors",
+          "size": 7395337384,
+          "sha256": "4a321a28c048389039e4595641fe0b1f130428c61fc8f655545afe0083d37cd9",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00036-of-00048.safetensors",
+          "target": "model-00036-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "97c7910a8a14002dd941f45f6ddb2bd335eaf6fa05f4a76b2ff9285d6557b65d",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00037-of-00048.safetensors",
+          "target": "model-00037-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "d37ee013b805344619536e299c73adf92df03744aa0a242f2c5465590015e5be",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00038-of-00048.safetensors",
+          "target": "model-00038-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "7713bf7a78319eb1c6214b312e0a2da8cac88d77dce851d50f1113d78f8975a4",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00039-of-00048.safetensors",
+          "target": "model-00039-of-00048.safetensors",
+          "size": 7395337384,
+          "sha256": "658a77d47d217995b9b78612e69ee0d0e33f6c2240f4ec629fecdca3ecb03f4c",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00040-of-00048.safetensors",
+          "target": "model-00040-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "6a9dbcc8d5894ba614b5e962764f45f6d0df7f14f1287b17f173d1f2cd762186",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00041-of-00048.safetensors",
+          "target": "model-00041-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "458308f08ed29b34850bd6b9d10bf769620729d3725c77f7bc0c1d14e01b47cc",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00042-of-00048.safetensors",
+          "target": "model-00042-of-00048.safetensors",
+          "size": 7389761368,
+          "sha256": "3d283a4ed6eb2d5013bacc97c3500361926a3261957943434513304df52adfd7",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00043-of-00048.safetensors",
+          "target": "model-00043-of-00048.safetensors",
+          "size": 1323837624,
+          "sha256": "4ae12b941c3facf8616ce62dd45bc6868076c2aeb82106f98123ea6c5bb64182",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00044-of-00048.safetensors",
+          "target": "model-00044-of-00048.safetensors",
+          "size": 2652728736,
+          "sha256": "3e8ac315c2bcca3e83c5e6e25c5758a75c03732063a6ff0c1b0e24b9ff49f6e6",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00045-of-00048.safetensors",
+          "target": "model-00045-of-00048.safetensors",
+          "size": 2573998176,
+          "sha256": "9c73b27c4343236790008979d5e0b565f687aa64440031b9e096fed1ab8039c5",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00046-of-00048.safetensors",
+          "target": "model-00046-of-00048.safetensors",
+          "size": 2706402896,
+          "sha256": "1dccc19a3741972c661de734572dc7d4b899e6e99bfbdf3ae4e057c707e5b339",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00047-of-00048.safetensors",
+          "target": "model-00047-of-00048.safetensors",
+          "size": 101535150936,
+          "sha256": "76a05106ece259be83d1bfea0dcb54f23377864ee60fd321690f35e6698a2af5",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model-00048-of-00048.safetensors",
+          "target": "model-00048-of-00048.safetensors",
+          "size": 101537926640,
+          "sha256": "9dc51433e195bc78b5ad846b68643cc0351d3b174e5e4309222d3b7402c83afd",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "model.safetensors.index.json",
+          "target": "model.safetensors.index.json",
+          "size": 7470294,
+          "gitSha1": "54c85064dd92c8550471302e9ae59bedbbf96ca4",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "tokenizer.json",
+          "target": "tokenizer.json",
+          "size": 6367257,
+          "gitSha1": "6a15814dd25c934028034531da744c689f87ff21",
+          "imports": []
+        },
+        {
+          "repository": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "revision": "08c8657f02291e11b6f6b63e0e16014f8e748518",
+          "path": "tokenizer_config.json",
+          "target": "tokenizer_config.json",
+          "size": 801,
+          "gitSha1": "f3dad388a2bbfd6a8605bd02754acd86d9ca5112",
+          "imports": []
+        }
+      ]
+    },
+    "deepseek-v4.1-flash-gguf-iq1s": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "store": "media",
+      "status": "storage-only",
+      "compatibility": "unverified",
+      "loader": "Storage only; not loaded on home. llama.cpp GGUF from Unsloth's DeepSeek V4.1 build; pass the first shard",
+      "notes": [
+        "Unsloth UD-IQ1_S, five shards, about 233 GB; shard 5 is the IQ4_NL Engram table.",
+        "Wants about 128 GB of combined memory, more than home has."
+      ],
+      "dependencies": [],
+      "files": [
+        {
+          "repository": "unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+          "revision": "dfcee0ec8d6b874c6663eca0fc55d90ab32534c8",
+          "path": "UD-IQ1_S/DeepSeek-V4.1-Flash-1017-UD-IQ1_S-00001-of-00005.gguf",
+          "target": "DeepSeek-V4.1-Flash-1017-UD-IQ1_S-00001-of-00005.gguf",
+          "size": 5780868,
+          "sha256": "5197c309479c7be06e3612dc696d7f18e13e5942cfe52e70c3c586b7e585a5ac",
+          "imports": []
+        },
+        {
+          "repository": "unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+          "revision": "dfcee0ec8d6b874c6663eca0fc55d90ab32534c8",
+          "path": "UD-IQ1_S/DeepSeek-V4.1-Flash-1017-UD-IQ1_S-00002-of-00005.gguf",
+          "target": "DeepSeek-V4.1-Flash-1017-UD-IQ1_S-00002-of-00005.gguf",
+          "size": 49120285248,
+          "sha256": "e83af39db628614d252d49a316af8cd5911d78ab96a9e7a5997b392ece26eaf7",
+          "imports": []
+        },
+        {
+          "repository": "unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+          "revision": "dfcee0ec8d6b874c6663eca0fc55d90ab32534c8",
+          "path": "UD-IQ1_S/DeepSeek-V4.1-Flash-1017-UD-IQ1_S-00003-of-00005.gguf",
+          "target": "DeepSeek-V4.1-Flash-1017-UD-IQ1_S-00003-of-00005.gguf",
+          "size": 48899707008,
+          "sha256": "6caa1da6302b532374d55da6510fc92a9031a0ee1bd2bb5bf7defca2477f3d98",
+          "imports": []
+        },
+        {
+          "repository": "unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+          "revision": "dfcee0ec8d6b874c6663eca0fc55d90ab32534c8",
+          "path": "UD-IQ1_S/DeepSeek-V4.1-Flash-1017-UD-IQ1_S-00004-of-00005.gguf",
+          "target": "DeepSeek-V4.1-Flash-1017-UD-IQ1_S-00004-of-00005.gguf",
+          "size": 24358544704,
+          "sha256": "71c6c54dd1f20008e2130188cc655742d3738a365de4571d21a56de503b206b7",
+          "imports": []
+        },
+        {
+          "repository": "unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+          "revision": "dfcee0ec8d6b874c6663eca0fc55d90ab32534c8",
+          "path": "UD-IQ1_S/DeepSeek-V4.1-Flash-1017-UD-IQ1_S-00005-of-00005.gguf",
+          "target": "DeepSeek-V4.1-Flash-1017-UD-IQ1_S-00005-of-00005.gguf",
+          "size": 110595290592,
+          "sha256": "771805301e695d72d268151dfc43043581ba904298574aa879d4349cbe67b020",
+          "imports": []
+        }
+      ]
+    },
+    "deepseek-v4.1-flash-abliterated-gguf": {
+      "enabled": true,
+      "kind": "checkpoint",
+      "store": "media",
+      "status": "storage-only",
+      "compatibility": "unverified",
+      "loader": "Storage only; not loaded on home. llama.cpp GGUF; pass the first shard",
+      "notes": [
+        "orcarouter's abliteration, Mix-256G build, seven shards, about 346 GB.",
+        "Gated Hub repository with automatic approval: accept its terms with the host token's account."
+      ],
+      "dependencies": [],
+      "files": [
+        {
+          "repository": "orcarouter/DeepSeek-V4.1-Flash-1017-abliterated-GGUF",
+          "revision": "83144a667924660c6ba0095585fd039d8daa9b91",
+          "path": "Mix-256G/DeepSeek-V4.1-Flash-1017-abliterated-Mix-256G-00001-of-00007.gguf",
+          "target": "DeepSeek-V4.1-Flash-1017-abliterated-Mix-256G-00001-of-00007.gguf",
+          "size": 709084736,
+          "sha256": "2cb066de483877f75b3dc79936b1fccf34aeecc60461701e5c39c98d7f922e03",
+          "imports": []
+        },
+        {
+          "repository": "orcarouter/DeepSeek-V4.1-Flash-1017-abliterated-GGUF",
+          "revision": "83144a667924660c6ba0095585fd039d8daa9b91",
+          "path": "Mix-256G/DeepSeek-V4.1-Flash-1017-abliterated-Mix-256G-00002-of-00007.gguf",
+          "target": "DeepSeek-V4.1-Flash-1017-abliterated-Mix-256G-00002-of-00007.gguf",
+          "size": 110595290592,
+          "sha256": "342b6ee30a33f02fcef1d261ec7e700907f8b114370ebe90c228339f686a8c1b",
+          "imports": []
+        },
+        {
+          "repository": "orcarouter/DeepSeek-V4.1-Flash-1017-abliterated-GGUF",
+          "revision": "83144a667924660c6ba0095585fd039d8daa9b91",
+          "path": "Mix-256G/DeepSeek-V4.1-Flash-1017-abliterated-Mix-256G-00003-of-00007.gguf",
+          "target": "DeepSeek-V4.1-Flash-1017-abliterated-Mix-256G-00003-of-00007.gguf",
+          "size": 46798562592,
+          "sha256": "b2583b9da6c3598f43d22714f3216709ab3160c618ad94e36d491a3bb20b5d2b",
+          "imports": []
+        },
+        {
+          "repository": "orcarouter/DeepSeek-V4.1-Flash-1017-abliterated-GGUF",
+          "revision": "83144a667924660c6ba0095585fd039d8daa9b91",
+          "path": "Mix-256G/DeepSeek-V4.1-Flash-1017-abliterated-Mix-256G-00004-of-00007.gguf",
+          "target": "DeepSeek-V4.1-Flash-1017-abliterated-Mix-256G-00004-of-00007.gguf",
+          "size": 47706985792,
+          "sha256": "de9c5f8f3462c7df3db7bb2b79301eeab9d7874f581a9fa574ae4fffe127c602",
+          "imports": []
+        },
+        {
+          "repository": "orcarouter/DeepSeek-V4.1-Flash-1017-abliterated-GGUF",
+          "revision": "83144a667924660c6ba0095585fd039d8daa9b91",
+          "path": "Mix-256G/DeepSeek-V4.1-Flash-1017-abliterated-Mix-256G-00005-of-00007.gguf",
+          "target": "DeepSeek-V4.1-Flash-1017-abliterated-Mix-256G-00005-of-00007.gguf",
+          "size": 46565998336,
+          "sha256": "1202e0ae311beb38de1b0899ab3cbba485385299a62e8e136e01fa922f0aeb13",
+          "imports": []
+        },
+        {
+          "repository": "orcarouter/DeepSeek-V4.1-Flash-1017-abliterated-GGUF",
+          "revision": "83144a667924660c6ba0095585fd039d8daa9b91",
+          "path": "Mix-256G/DeepSeek-V4.1-Flash-1017-abliterated-Mix-256G-00006-of-00007.gguf",
+          "target": "DeepSeek-V4.1-Flash-1017-abliterated-Mix-256G-00006-of-00007.gguf",
+          "size": 47857178816,
+          "sha256": "dc7ce9ee6910e8f46a201e54c96e47b6b3bc9380c88b6187be3c860a0d0b1074",
+          "imports": []
+        },
+        {
+          "repository": "orcarouter/DeepSeek-V4.1-Flash-1017-abliterated-GGUF",
+          "revision": "83144a667924660c6ba0095585fd039d8daa9b91",
+          "path": "Mix-256G/DeepSeek-V4.1-Flash-1017-abliterated-Mix-256G-00007-of-00007.gguf",
+          "target": "DeepSeek-V4.1-Flash-1017-abliterated-Mix-256G-00007-of-00007.gguf",
+          "size": 46145195616,
+          "sha256": "ed00667671a8ca5c48da45e022b6482fc2d88a21848a98d26fba1d1f2848b429",
+          "imports": []
+        }
+      ],
+      "gated": true
     }
   },
   "runtimeSources": {

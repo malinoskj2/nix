@@ -43,8 +43,12 @@
     stores = {
       external = "/mnt/ext-ssd/models";
       install = "${config.xdg.dataHome}/model-stores/install";
+      media = "/mnt/media-models";
     };
     defaultStore = "external";
+    mountedStores = [ "media" ];
+    # The media host's drive also takes its media downloads.
+    storeReserves.media = 1024;
   };
 
   services.discord-context.excludedGuilds = [
