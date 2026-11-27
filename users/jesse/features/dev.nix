@@ -4,6 +4,13 @@
   pkgs,
   ...
 }:
+let
+  playwrightArgs = [
+    "--headless"
+    "--output-dir"
+    "${config.xdg.cacheHome}/playwright-mcp"
+  ];
+in
 {
   imports = [
     ./unreal-mcp.nix
@@ -30,10 +37,10 @@
 
   programs.claude-code.mcpServers.playwright = {
     command = lib.getExe pkgs.playwright-mcp;
-    args = [
-      "--headless"
-      "--output-dir"
-      "${config.xdg.cacheHome}/playwright-mcp"
-    ];
+    args = playwrightArgs;
+  };
+  programs.opencode.settings.mcp.servers.playwright = {
+    type = "local";
+    command = [ (lib.getExe pkgs.playwright-mcp) ] ++ playwrightArgs;
   };
 }

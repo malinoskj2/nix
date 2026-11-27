@@ -169,6 +169,25 @@ Then pick a Venice model in OpenCode's `/models`. OpenCode reads the key when
 it loads its config, so after adding or rotating it, run `opencode service
 restart` and reopen any running OpenCode.
 
+OpenCode in an agent sandbox never sees that key. It gets the host's
+`~/.config/opencode` read-only, and the image's `/etc/opencode/opencode.json`,
+which outranks it, swaps the key for a placeholder. The egress proxy replaces
+the `Authorization` header on requests to `api.venice.ai` with a separate broker
+secret, `agentBroker.secrets.venice-api-key-agent`, so the two keys can be
+rotated and revoked separately. To add or replace it:
+
+```sh
+secret add venice-api-key-agent   # or rotate; prompts without echo
+secret apply
+```
+
+Use a separate Venice key for it, so revoking the agents' key leaves yours
+working. Until the egress proxy runs, sandboxed Venice requests go out with the
+placeholder and Venice refuses them as unauthenticated; with the proxy running
+but the secret missing, the proxy answers them itself with a missing-secret
+error. Local Qwen through `qwen-opencode` and everything else keeps working
+either way.
+
 ### Rotating a secret
 
 1. Create the new credential at the provider, leaving the old one valid.

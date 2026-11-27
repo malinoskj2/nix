@@ -67,5 +67,14 @@ in
       startup_timeout_sec = 10;
       tool_timeout_sec = 180;
     };
+    programs.opencode.settings.mcp.servers.discord-context = {
+      type = "remote";
+      inherit url;
+      oauth = false;
+      timeout = {
+        startup = 10000;
+        execution = 180000;
+      };
+    };
   };
 }

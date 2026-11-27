@@ -5,6 +5,7 @@ let
     inherit (pkgs.unstable)
       claude-code
       codex
+      opencode
       ;
   };
 

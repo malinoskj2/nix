@@ -104,6 +104,7 @@
   nodejs,
   novnc,
   nssTools,
+  opencode,
   openssh,
   openssl,
   orca-ade,
@@ -304,6 +305,50 @@ let
     fi
     exec ${lib.getExe claude-code} --plugin-dir ${claudePlugin} "$@"
   '';
+
+  # The system config outranks the host's ~/.config/opencode/opencode.json mounted under it.
+  opencodeSystemConfig = writeText "opencode.json" (
+    builtins.toJSON {
+      "$schema" = "https://opencode.ai/config.json";
+      instructions = [ "${instructions}" ];
+      # The container provides isolation, as with the other agents' permission bypasses.
+      permissions = [
+        {
+          action = "*";
+          resource = "*";
+          effect = "allow";
+        }
+      ];
+      # Never the real key: the egress proxy replaces this header for api.venice.ai.
+      providers.venice.settings.apiKey = "agent-egress-placeholder";
+      mcp.servers = {
+        playwright = {
+          type = "local";
+          command = [
+            (lib.getExe playwrightMcp)
+            "--output-dir"
+            "/tmp/playwright-mcp"
+          ];
+        };
+        unreal-mcp = {
+          type = "remote";
+          disabled = true;
+          inherit (unrealMcp) url;
+          oauth = false;
+          timeout.execution = 120000;
+        };
+        ghidra = {
+          type = "local";
+          command = [ (lib.getExe pyghidra-mcp) ];
+          disabled = !ghidraMcp.enabled;
+          timeout = {
+            startup = ghidraMcp.startup_timeout_sec * 1000;
+            execution = ghidraMcp.tool_timeout_sec * 1000;
+          };
+        };
+      };
+    }
+  );
 
   # The sandbox seeds its own writable Codex config once, so project trust persists but later host
   # changes never reach it. MCP servers go in as -c overrides, which apply on every launch.
@@ -578,6 +623,7 @@ let
       nixfmt
       nmap
       nodejs
+      opencode
       novnc
       nssTools
       openssh
@@ -696,7 +742,7 @@ let
     name = "agent-sandbox";
     includeStorePaths = false;
     extraCommands = ''
-      mkdir -p bin usr/bin lib64 etc/nix etc/claude-code etc/sway etc/fonts etc/ssl/certs tmp \
+      mkdir -p bin usr/bin lib64 etc/nix etc/claude-code etc/opencode etc/sway etc/fonts etc/ssl/certs tmp \
         etc/pipewire/pipewire.conf.d etc/wireplumber/wireplumber.conf.d
       # WebKit's media buffer writes to the hardcoded /var/tmp, which joins the on-disk /tmp.
       mkdir var
@@ -724,6 +770,7 @@ let
       ln -s ${./wireplumber.conf} etc/wireplumber/wireplumber.conf.d/50-agent-sandbox.conf
       ln -s ${instructions} etc/claude-code/CLAUDE.md
       ln -s ${claudeManagedSettings} etc/claude-code/managed-settings.json
+      ln -s ${opencodeSystemConfig} etc/opencode/opencode.json
       echo 'hosts: files dns' > etc/nsswitch.conf
     '';
     config = {
@@ -980,6 +1027,23 @@ symlinkJoin {
           python3 -B test-agent-sandbox-exec.py -v
           touch $out
         '';
+    launcherOpencodeTests =
+      runCommand "agent-sandbox-launcher-opencode-tests"
+        {
+          nativeBuildInputs = [
+            bashInteractive
+            coreutils
+            jq
+            python3
+            util-linux
+          ];
+        }
+        ''
+          cp ${./agent-sandbox.sh} agent-sandbox.sh
+          cp ${./test-launcher-opencode.py} test-launcher-opencode.py
+          python3 -B test-launcher-opencode.py -v
+          touch $out
+        '';
     codexTests =
       runCommand "agent-sandbox-codex-tests"
         {
@@ -1006,7 +1070,7 @@ symlinkJoin {
     sshProxy
   ];
   meta = {
-    description = "Run Claude Code, Codex or Antigravity in a Docker sandbox with the GPU and a headless Wayland session";
+    description = "Run Claude Code, Codex, Antigravity or OpenCode in a Docker sandbox with the GPU and a headless Wayland session";
     mainProgram = "agent-sandbox";
     platforms = [ "x86_64-linux" ];
   };
