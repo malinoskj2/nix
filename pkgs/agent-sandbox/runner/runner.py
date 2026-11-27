@@ -623,16 +623,12 @@ class Runner:
             args += ["--filter", item]
         return self.docker(*args, check=False).stdout.split()
 
-    def remove_owned(self, *filters, keep_stack_networks=False):
-        """Remove the owner's resources; keep_stack_networks leaves stack networks the proxy may still grant."""
+    def remove_owned(self, *filters, keep_networks=False):
+        """Remove the owner's resources; keep_networks leaves every network, since the proxy may still grant one."""
         containers = self.owned("ps", *filters)
         if containers:
             self.docker("rm", "--force", "--volumes", *containers, check=False)
-        networks = self.owned("network", *filters)
-        if keep_stack_networks:
-            kept = set(self.owned("network", f"label={PROJECT_LABEL}", *filters))
-            networks = [n for n in networks if n not in kept]
-        for network in networks:
+        for network in [] if keep_networks else self.owned("network", *filters):
             self.disconnect_owner(network)
             self.docker("network", "rm", network, check=False)
         # Never --force: a root volume binds a shared directory, and Docker must refuse to remove one
@@ -683,7 +679,7 @@ class Runner:
             released = owner not in self.gate_peers() or attempt(
                 f"withdrawing {owner}'s stack networks", sweeper.revoke_all_stack_networks
             )
-            sweeper.remove_owned(keep_stack_networks=not released)
+            sweeper.remove_owned(keep_networks=not released)
         for directory in self.state.parent.glob("*/"):
             try:
                 owner = (directory / "owner").read_text().strip()
@@ -726,10 +722,10 @@ class Runner:
     def cleanup(self):
         for project in list(self.projects):
             attempt(f"compose down {project}", self.compose_down_locked, project)
-        # Stack networks the proxy may still grant stay until a later runner's sweep finds the
+        # Networks the proxy may still grant stay until a later runner's sweep finds the
         # grant gone, so Docker can't hand their subnets to another sandbox meanwhile.
         released = attempt("withdrawing stack networks", self.revoke_all_stack_networks)
-        attempt("removing owned resources", lambda: self.remove_owned(keep_stack_networks=not released))
+        attempt("removing owned resources", lambda: self.remove_owned(keep_networks=not released))
         for name, sandbox in self.sandboxes.items():
             self.release_egress(name, sandbox)
             sandbox["pins"].close()

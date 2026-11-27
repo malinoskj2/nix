@@ -609,7 +609,7 @@ class StackNetworksTest(unittest.TestCase):
         r.state = Path(tempfile.mkdtemp())
         r.remove_candidate_images = lambda _: None
         removed = []
-        r.remove_owned = lambda *filters, keep_stack_networks=False: removed.append(keep_stack_networks)
+        r.remove_owned = lambda *filters, keep_networks=False: removed.append(keep_networks)
 
         def down(_):
             raise runner.Refused("gate down")
@@ -622,25 +622,19 @@ class StackNetworksTest(unittest.TestCase):
         r.state = Path(tempfile.mkdtemp())
         r.remove_candidate_images = lambda _: None
         removed = []
-        r.remove_owned = lambda *filters, keep_stack_networks=False: removed.append(keep_stack_networks)
+        r.remove_owned = lambda *filters, keep_networks=False: removed.append(keep_networks)
         r.cleanup()
         self.assertEqual(removed, [False])
         self.assertEqual(r.requests, [{"op": "networks", "name": "owner", "networks": []}])
 
-    def test_remove_owned_can_leave_stack_networks(self):
+    def test_remove_owned_can_leave_every_network(self):
         r = self.runner([])
         calls = []
-        r.owned = lambda kind, *filters: (
-            ["stack"]
-            if kind == "network" and filters == (f"label={runner.PROJECT_LABEL}",)
-            else ["stack", "sibling"]
-            if kind == "network"
-            else []
-        )
-        r.docker = lambda *argv, **_: calls.append(argv) or argparse.Namespace(stdout="", stderr="", returncode=0)
-        r.remove_owned(keep_stack_networks=True)
-        self.assertIn(("network", "rm", "sibling"), calls)
-        self.assertNotIn(("network", "rm", "stack"), calls)
+        r.owned = lambda kind, *filters: ["stack"] if kind == "network" else ["c"] if kind == "ps" else []
+        r.docker = lambda *argv, **_: calls.append(argv) or argparse.Namespace(stdout="", stderr="", returncode=1)
+        r.remove_owned(keep_networks=True)
+        self.assertIn(("rm", "--force", "--volumes", "c"), calls)
+        self.assertFalse([c for c in calls if c[:2] in (("network", "rm"), ("network", "disconnect"))], calls)
 
     def test_an_unreadable_peer_list_counts_every_owner_as_registered(self):
         r = self.runner([])
