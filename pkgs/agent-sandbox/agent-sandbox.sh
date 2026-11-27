@@ -507,6 +507,13 @@ fi
 if [[ -n $host_wayland ]]; then
   args+=(--volume "$host_wayland:$runtime/host-wayland-1:ro")
 fi
+# Tohru's desktop keeps rolling monitor captures here only while she is on screen, and empties
+# the folder (never removes it) when she goes, so this bind follows them. Only her bot sees them.
+tohru_screens=$runtime/tohru-screens
+if [[ $workdir == "$HOME/.orca/bots/tohru" || $workdir == "$HOME/.orca/bots/tohru"/* ]] &&
+  { [[ -d $tohru_screens ]] || mkdir -m 700 "$tohru_screens"; } && [[ -d $tohru_screens && ! -L $tohru_screens ]]; then
+  args+=(--volume "$tohru_screens:$tohru_screens:ro")
+fi
 
 mount_readonly "$HOME/.config/git"
 # Home Manager writes the image tag it installs here, so a session can tell it runs a stale image.

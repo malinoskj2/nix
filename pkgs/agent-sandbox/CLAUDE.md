@@ -54,6 +54,8 @@ A second headless sway, kept off `$WAYLAND_DISPLAY` and `$SWAYSOCK`, hosts a per
 
 The human's desktop Wayland socket is mounted at `$XDG_RUNTIME_DIR/host-wayland-1` when the sandbox started while the desktop was up. `WAYLAND_DISPLAY=host-wayland-1 <command>` puts windows on the human's actual screen, and `WAYLAND_DISPLAY=host-wayland-1 grim "$repo_root/.tmp/host.png"` screenshots it. Windows and input land in the human's live session next to their own apps, so use it only when explicitly asked. If it stops accepting connections, the desktop compositor restarted since the sandbox started; say so instead of retrying.
 
+Tohru's bot sandbox also mounts the desktop's `$XDG_RUNTIME_DIR/tohru-screens` read-only at the same path. While she is on screen, it holds a recent capture of each monitor (`<output>/latest.jpg`, `index.json`); it is empty otherwise. Read those for questions about the owner's screen, and never copy them anywhere.
+
 Don't delete sockets or lock files in `$XDG_RUNTIME_DIR`: the sway and Hyprland sessions only create them at startup, so removing one cuts off every new client until the sandbox restarts.
 
 ## Audio
