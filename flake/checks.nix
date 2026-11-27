@@ -138,6 +138,7 @@
           agent-sandbox-preview-ports = self'.packages.agent-sandbox.previewPortsTests;
           git-repo-guard = self'.packages.git-repo-guard.tests.guard;
           nix-land = self'.packages.nix-land.tests.landing;
+          bot-sandbox-refresh = self'.packages.bot-sandbox-refresh.tests.notify;
           orca-host-git = self'.packages.orca-ade.tests.hostGit;
           agent-sandbox-root-guard = self'.packages.agent-sandbox.rootGuardTests;
           sandbox-display = self'.packages.agent-sandbox.displayTests;

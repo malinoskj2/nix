@@ -72,10 +72,20 @@ port_open() {
   (: <"/dev/tcp/127.0.0.1/$1") 2>/dev/null
 }
 
-# Mails the bot that its sandbox restarted, once the stopped sandbox has let go of its
-# preview ports, so the relaunch the mail starts gets them back.
+block_free() {
+  local port
+  for ((port = $1; port < $1 + 5; port++)); do
+    if port_open "$port"; then
+      return 1
+    fi
+  done
+}
+
+# Mails the bot that its sandbox restarted. Its relaunch takes the bot's own preview ports
+# only if they are free then, so the mail names them only once the stopped sandbox has let
+# go of every one, and leaves the session's AGENT_PREVIEW_URL_* as the final word.
 notify() {
-  local bot=$1 name base port urls body
+  local bot=$1 name base port urls body free=
   if [[ -z $bot_names ]]; then
     bot_names=$("$orca" bot list --json 2>/dev/null | jq -r '.result.bots[].name' 2>/dev/null) || bot_names=
   fi
@@ -83,20 +93,26 @@ notify() {
     echo "notify $bot skipped (Orca lists no bot by that name)"
     return 0
   }
-  base=$("$preview_tool" "bot:$bot" 2>/dev/null) || {
-    echo "notify $bot skipped (no preview ports)"
-    return 0
-  }
-  for _ in {1..40}; do
-    port_open "$base" || port_open $((base + 4)) || break
-    sleep 0.25
-  done
-  urls=
-  for port in {0..4}; do
-    urls+="- AGENT_PREVIEW_URL_$((8080 + port)): http://$preview_address:$((base + port))"$'\n'
-  done
-  body="Your sandbox was restarted onto the new agent-sandbox image. Servers you had running in it and its /tmp are gone; start them again if you still need them. Your preview URLs, which now stay the same across restarts:
+  body="Your sandbox was restarted onto the new agent-sandbox image. Servers you had running in it and its /tmp are gone; start them again if you still need them."
+  if base=$("$preview_tool" "bot:$bot" 2>/dev/null); then
+    for _ in {1..40}; do
+      if block_free "$base"; then
+        free=1
+        break
+      fi
+      sleep "${BOT_SANDBOX_REFRESH_PORT_WAIT:-0.25}"
+    done
+  fi
+  if [[ -n $free ]]; then
+    urls=
+    for port in {0..4}; do
+      urls+="- AGENT_PREVIEW_URL_$((8080 + port)): http://$preview_address:$((base + port))"$'\n'
+    done
+    body+=" Your sandbox keeps these preview URLs across restarts, and should have them again; if a port was taken meanwhile, AGENT_PREVIEW_URL_* in the new session has the ones it got:
 $urls"
+  else
+    body+=" Your usual preview ports weren't free yet, so the new session may have others: use AGENT_PREVIEW_URL_* there."
+  fi
   if "$orca" orchestration send --to "bot:$name" --type status \
     --subject 'Sandbox restarted' --body "$body" >/dev/null 2>&1; then
     echo "notified $bot"
