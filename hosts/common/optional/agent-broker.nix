@@ -12,22 +12,38 @@ let
   socketRoot = "/run/agent-broker";
   unitName = name: "agent-broker-${name}";
   declaredKeys = lib.mapAttrsToList (_: secret: secret.key) cfg.secrets;
+  brokerUnits = map (name: "${unitName name}.service") (lib.attrNames cfg.services);
 
   # sops keeps key names in plaintext, so presence is checked without decrypting.
+  # When the inputs aren't ready, earlier deployments are withdrawn too, so a
+  # removed file, key or secret fails closed without waiting for a reboot.
   secretsReady = pkgs.writeShellApplication {
     name = "agent-secrets-ready";
-    runtimeInputs = [ pkgs.yq-go ];
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.yq-go
+      config.systemd.package
+    ];
     text = ''
       file=${lib.escapeShellArg cfg.secretsFile}
       key=${lib.escapeShellArg cfg.keyFile}
-      if [[ ! -s $key ]]; then
-        echo "agent secrets: no decryption key at $key; broker secrets stay undeployed" >&2
+      units=(${lib.escapeShellArgs brokerUnits})
+
+      withdraw() {
+        echo "agent secrets: $1; broker secrets are withdrawn and their services stopped" >&2
+        # --no-block: they're ordered after this unit, whose job is still running.
+        if ((''${#units[@]})); then
+          systemctl stop --no-block "''${units[@]}" || true
+        fi
+        # sops-nix's generations; /run/secrets links to the newest.
+        for name in ${lib.escapeShellArgs (lib.attrNames cfg.secrets)}; do
+          rm -f -- /run/secrets.d/*/"$name"
+        done
         exit 1
-      fi
-      if [[ ! -s $file ]]; then
-        echo "agent secrets: no encrypted file at $file; broker secrets stay undeployed" >&2
-        exit 1
-      fi
+      }
+
+      [[ -s $key ]] || withdraw "no decryption key at $key"
+      [[ -s $file ]] || withdraw "no encrypted file at $file"
       missing=()
       for name in ${lib.escapeShellArgs declaredKeys}; do
         if ! NAME=$name yq -e 'has(strenv(NAME))' "$file" >/dev/null 2>&1; then
@@ -35,8 +51,7 @@ let
         fi
       done
       if ((''${#missing[@]})); then
-        echo "agent secrets: $file lacks ''${missing[*]}; broker secrets stay undeployed" >&2
-        exit 1
+        withdraw "$file lacks ''${missing[*]}"
       fi
     '';
   };
@@ -230,7 +245,7 @@ in
       environment.etc."agent-secrets/config.json".text = builtins.toJSON {
         inherit (cfg) secretsFile keyFile;
         secrets = lib.mapAttrs (_: s: { inherit (s) key path inject; }) cfg.secrets;
-        services = map (name: "${unitName name}.service") (lib.attrNames cfg.services);
+        services = brokerUnits;
       };
 
       systemd.tmpfiles.rules = [
@@ -263,7 +278,11 @@ in
 
     (lib.mkIf (cfg.secrets != { }) {
       # A missing key, file or declared secret skips deployment instead of failing the switch.
-      systemd.services.sops-install-secrets.serviceConfig.ExecCondition = lib.getExe secretsReady;
+      systemd.services.sops-install-secrets = {
+        serviceConfig.ExecCondition = lib.getExe secretsReady;
+        # agent-secret apply restarts it on demand.
+        unitConfig.StartLimitIntervalSec = 0;
+      };
     })
 
     {

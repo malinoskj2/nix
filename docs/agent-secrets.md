@@ -11,7 +11,9 @@ an egress proxy that adds credentials to requests, or a push gateway.
 Nothing secret is ever committed, not even ciphertext: the repository is
 public. It only names the secrets and the services that use them. A flake
 check (`no-committed-secrets`) fails if sops or age ciphertext, or an age
-private key, is ever tracked.
+private key, is ever tracked. It recognises only those encodings: a plaintext
+token or another encrypted format gets past it, and the Betterleaks scan on
+push ([git-push-gate.md](git-push-gate.md)) is the check for those.
 
 `home` uses it today. Another host opts in by importing
 [`hosts/common/optional/agent-broker.nix`](../hosts/common/optional/agent-broker.nix).
@@ -64,9 +66,16 @@ Each file is encrypted to two age keys:
 3. Add the first secret (see below), then back the file up.
 
 Before this, or whenever the file, the host key or a declared secret is
-missing, switches still succeed: deployment is skipped, the reason is logged
-to `journalctl -u sops-install-secrets`, and broker services that need the
-missing secrets stay stopped. Nothing falls back to an unprotected copy.
+missing, switches still succeed and nothing is deployed: the reason is logged
+to `journalctl -u sops-install-secrets`, and broker services that need
+secrets stay stopped. Nothing falls back to an unprotected copy.
+
+The check runs at boot, on `agent-secret apply`, and on a switch that changes
+the declared secrets. If it fails after secrets were deployed, it withdraws
+all of them: it deletes every broker secret from `/run/secrets` and stops
+every broker service, even if only one secret is missing. Deleting the file
+or the key on its own changes nothing until one of those runs, so run
+`agent-secret apply` afterwards.
 
 ## Day-to-day commands
 
@@ -240,7 +249,10 @@ agentBroker.services.proxy = {
 
 **Sandboxed agents** see none of these values. The launcher never mounts
 `/run/secrets`, `/var/lib/agent-secrets` or `/var/lib/sops-nix`, and the
-`agent-sandbox-no-secret-mounts` flake check fails if it ever does. Once the
+`agent-sandbox-no-secret-mounts` flake check fails if its source ever names
+those paths or binds all of `/run` or `/var`. That check reads the launcher's
+source for known patterns; it doesn't prove what a running container can
+reach, so a mount built some other way would get past it. Once the
 egress proxy lands, a sandbox sees only placeholders and broker sockets: a
 request to a bound host gets its header added on the way out, and the value
 never enters the container.
@@ -258,7 +270,9 @@ never enters the container.
   password manager and use it only through a root-only file on `/run`, as in
   the restore steps.
 
-Some things still give jesse root, and therefore everything above:
+This holds only against agents that can't become root. Some things give jesse
+root, and through it everything above, so none of this isolates the secrets
+from an adversarial agent on the host that uses them:
 
 - **The `docker` group.** It is root-equivalent (`docker run -v /:/host`),
   and you chose to keep it. Any agent on the host as jesse can use it.

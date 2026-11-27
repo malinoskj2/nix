@@ -118,6 +118,40 @@
         machine.wait_for_file("/run/agent-broker/echo/echo.sock")
         machine.wait_until_succeeds(as_user("jesse", connect) + " | grep -qx 'ok 12'")
 
+    def assert_withdrawn():
+        machine.wait_until_fails("systemctl is-active agent-broker-echo.service")
+        machine.fail("systemctl is-failed sops-install-secrets.service")
+        machine.fail("test -e /run/secrets/test-token")
+        machine.fail("ls /run/secrets.d/*/test-token")
+        machine.fail(as_user("jesse", connect))
+        machine.succeed("journalctl -u sops-install-secrets -o cat | grep -F 'withdrawn and their services stopped'")
+
+    def assert_redeployed():
+        machine.succeed("agent-secret apply")
+        machine.wait_for_unit("agent-broker-echo.service")
+        machine.wait_until_succeeds(as_user("jesse", connect) + " | grep -qx 'ok 12'")
+
+    with subtest("removing the encrypted file withdraws deployed secrets"):
+        machine.succeed("mv /var/lib/agent-secrets/secrets.yaml /root/secrets.yaml")
+        machine.fail("agent-secret apply")
+        assert_withdrawn()
+        machine.succeed("mv /root/secrets.yaml /var/lib/agent-secrets/secrets.yaml")
+        assert_redeployed()
+
+    with subtest("removing the host key withdraws deployed secrets"):
+        machine.succeed("mv /var/lib/sops-nix/key.txt /root/key.txt")
+        machine.fail("agent-secret apply")
+        assert_withdrawn()
+        machine.succeed("mv /root/key.txt /var/lib/sops-nix/key.txt")
+        assert_redeployed()
+
+    with subtest("removing a declared secret withdraws deployed secrets"):
+        machine.succeed("agent-secret remove later-token")
+        machine.fail("agent-secret apply")
+        assert_withdrawn()
+        machine.succeed("printf 'fake-later-value' | agent-secret add later-token")
+        assert_redeployed()
+
     with subtest("the recovery key decrypts the file"):
         machine.succeed("SOPS_AGE_KEY_FILE=/root/recovery.txt sops decrypt --extract '[\"later-token\"]' /var/lib/agent-secrets/secrets.yaml | grep -qx fake-later-value")
 
