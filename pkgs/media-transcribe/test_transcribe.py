@@ -104,6 +104,19 @@ class TranscribeTests(unittest.TestCase):
             self.assertEqual(factory.call_args.args, (transcribe.HUB_MODEL,))
             self.assertIn("MODEL_ROOT is not set", stderr)
 
+    def test_malformed_readiness_or_missing_weights_fall_back(self):
+        for damage, message in [
+            (lambda root, alias: (root / "readiness.json").write_text("{"), "JSONDecodeError"),
+            (lambda root, alias: (root / "readiness.json").unlink(), "FileNotFoundError"),
+            (lambda root, alias: (alias / "model.bin").unlink(), "has no model.bin"),
+        ]:
+            with self.subTest(message), tempfile.TemporaryDirectory() as directory:
+                root, alias = self.catalog(directory, "ready")
+                damage(root, alias)
+                *_, factory, stderr = self.run_with_model(directory, {"HOME": directory, "MODEL_ROOT": str(root)})
+                self.assertEqual(factory.call_args.args, (transcribe.HUB_MODEL,))
+                self.assertIn(message, stderr)
+
     def test_explicit_model_skips_the_catalog(self):
         with tempfile.TemporaryDirectory() as directory:
             root, _ = self.catalog(directory, "ready")
