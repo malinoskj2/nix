@@ -136,17 +136,41 @@ swaps the dense 27B for Qwen3.8-Flash-Next, a 512-expert mixture-of-experts
 model, served through [Strata](https://github.com/Niko1221/Strata) instead of
 llama.cpp. It uses the GSQ-RCO IQ3_XXS files (`qwen3.8-flash-next`, or SC117's
 abliteration `qwen3.8-flash-next-uncensored` with `--uncensored`).
-`qwen-opencode --moe` serves 256k and `qwen-prompt --moe` 16k, with an int8
-KV cache kept in VRAM.
+Both keep an int8 KV cache in VRAM.
 
-The 42.9 GB of routed experts don't fit the card, and pinning all of them in
-system RAM, Strata's default, would take most of the sandboxes' shared memory.
-So it runs Strata's resident low-RAM mode (`--resident-experts`): the GPU's
-expert cache holds the most-used experts, and RAM holds only the rest, about
-22 to 24 GiB at 64k to 256k. The 28.8 GB n-gram table stays on disk and is
-read a few rows per token. Strata fits its buffers and cache to the whole free
-card, above what a shared request may take, so `--moe` books the GPU with
-`--exclusive`; the idle unload frees both the VRAM and the pinned RAM.
+The 42.9 GB (about 40 GiB) of routed experts don't fit the card, so it runs
+Strata's resident low-RAM mode (`--resident-experts`): the GPU caches a fixed
+number of the most-used experts and page-locked system RAM holds the rest. The
+28.8 GB n-gram table stays on disk and is read a few rows per token. Every GiB
+of experts taken off the card goes into RAM, so `qwen-opencode --moe` offers
+four VRAM profiles as models in OpenCode's model list:
+
+| Model | Context | Booking | Peak VRAM | Pinned RAM | Prompt tok/s | Generation tok/s |
+| --- | --- | --- | --- | --- | --- | --- |
+| `flash-next-20g` (default) | 256k | 23 GiB | 22.0 GiB | 32 + 4 GiB | 5,740 | 80 |
+| `flash-next-16g` | 256k | 17 GiB | 16.0 GiB | 36 + 1 GiB | 4,180 | 40 |
+| `flash-next-12g` | 128k | 13 GiB | 11.6 GiB | 36 + 1 GiB | 3,040 | 45 |
+| `flash-next-8g` | 64k | 9 GiB | 8.0 GiB | 34 + 1 GiB | 980 | 26 |
+
+Pinned RAM is the expert budget plus the parked-conversation cache. Speeds
+were measured with an 8.6k-token prompt and 512 tokens out; time to the first
+token was 1.5, 2.1, 2.9 and 8.9 s. Each booking is a shared `--vram` request,
+so Flash-Next runs next to other GPU work, but the lower profiles take most of
+the sandboxes' 64 GiB of RAM. An expert budget short of what the GPU doesn't
+hold reads the rest from the SSD and swaps the host, so the budgets aren't
+trimmed further. `qwen-prompt --moe` uses the default profile at 16k.
+
+The proxy reads the model ID from each request. Picking another profile in
+OpenCode waits for any request still being served, unloads Strata and starts it
+again under the new profile's booking; requests for the new profile queue
+behind the reload, which takes about 20-30 seconds plus any wait for the GPU.
+The `qwen` model, which OpenCode uses as its small model for titles, takes
+whichever profile is loaded (the default when none is) and has the smallest
+context, so it never triggers a reload. Only one Flash-Next runs at a time
+across all sandboxes, since two would not fit in RAM: each `--moe` server
+holds `~/.cache/qwen-prompt/strata/serve.lock`, and another one waits for it
+before booking the GPU, which is up to `--idle-minutes` after the other one
+was last used. The idle unload frees both the VRAM and the pinned RAM.
 
 The first `--moe` launch for a model builds Strata's pack in
 `~/.cache/qwen-prompt/strata/<shard>/`, before booking the GPU: the tensor

@@ -13,16 +13,19 @@ import sys
 import tempfile
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from qwen_local import (
-    MOE_BOOKING,
+    MOE_DEFAULT,
+    MOE_PROFILES,
     checked_opencode_major,
     configuration,
     guarded,
     healthy,
     mode_of,
     model_alias,
+    moe_booking,
     opencode_environment,
     refuse_nesting,
     require,
@@ -38,86 +41,149 @@ CONTEXT = 65536
 # f16 KV cache costs 64 KiB per token, 4 GiB at 64k. Regular weights are
 # 19.5 GiB; measured peak with a full context is in docs/gpu-scheduler.md.
 BOOKING = ("--vram", "26GiB")
-MODES = {
-    "dense": (CONTEXT, BOOKING),
-    "moe": (262144, MOE_BOOKING),
-}
+# "qwen" is OpenCode's small model. On --moe it takes whichever profile is
+# loaded, so titles and summaries never reload Strata, and the smallest
+# context, since it can land on any of them.
+ANY_PROFILE = "qwen"
 KEEPALIVE = 15
+
+
+@dataclass(frozen=True)
+class Profile:
+    title: str
+    context: int
+    booking: tuple
+    moe: object = None
+
+
+def profiles(mode):
+    """The models the proxy serves, by OpenCode model ID, and the default one."""
+    if mode == "dense":
+        return {ANY_PROFILE: Profile("Local Qwen", CONTEXT, BOOKING)}, ANY_PROFILE
+    return {
+        name: Profile(profile.title, profile.context, moe_booking(profile), profile)
+        for name, profile in MOE_PROFILES.items()
+    }, MOE_DEFAULT
+
+
+def listed_models(served):
+    models = {name: (profile.title, profile.context) for name, profile in served.items()}
+    if ANY_PROFILE not in served:
+        models[ANY_PROFILE] = ("Flash-Next, loaded profile", min(profile.context for profile in served.values()))
+    return models
+
+
+class Ticket:
+    def __init__(self, profile):
+        self.profile = profile
+        self.serving = False
 
 
 class Backend:
     """One llama-server or strata-server under its own gpu-run, started and stopped only by the main thread.
 
-    Request threads only ask for it. The kernel's parent-death signal follows the
-    forking thread, so gpu-run must be forked by the thread that outlives the rest.
+    Request threads only ask for it, each with a ticket naming the profile its
+    model ID selects. A ticket is served once that profile is loaded and no older
+    ticket waits for another one; when the oldest waiting ticket wants another
+    profile, the server is unloaded as soon as nothing is being served and the
+    new one starts under its own booking. The kernel's parent-death signal
+    follows the forking thread, so gpu-run must be forked by the thread that
+    outlives the rest.
     """
 
     def __init__(self, model, label, idle, log, directory, mode="dense"):
         self.model = model
         self.directory = directory
         self.mode = mode
-        self.context, self.booking = MODES[mode]
+        self.profiles, self.default = profiles(mode)
         self.log = log
         self.label = label
         self.idle = idle
         self.key = secrets.token_hex(24)
         self.port = None
         self.process = None
+        self.profile = None
         self.ready = False
         self.error = None
         self.wanted = False
-        self.inflight = 0
+        self.waiting = []
+        self.serving = 0
         self.last = time.monotonic()
         self.generation = 0
         self.condition = threading.Condition()
         self.closed = False
 
-    def acquire(self, timeout):
-        """Count a request and wait up to timeout for a serving backend. Returns (ready, error)."""
+    def servable(self, ticket):
+        if not self.ready or self.profile != ticket.profile:
+            return False
+        return all(other.profile == ticket.profile for other in self.waiting[: self.waiting.index(ticket)])
+
+    def acquire(self, name, timeout):
+        """Queue a request for model ID name and wait up to timeout for it. Returns (ticket, ready, error)."""
         with self.condition:
-            if self.inflight == 0 and not self.ready:
+            if not self.waiting and not self.serving and not self.ready:
                 self.error = None
-            self.inflight += 1
+            if name in self.profiles:
+                profile = name
+            elif self.profile is not None:
+                profile = self.profile
+            else:
+                profile = self.waiting[0].profile if self.waiting else self.default
+            ticket = Ticket(profile)
+            self.waiting.append(ticket)
             self.wanted = True
             self.condition.notify_all()
-            self.condition.wait_for(lambda: self.ready or self.error or self.closed, timeout)
+        return (ticket, *self.wait(ticket, timeout))
+
+    def wait(self, ticket, timeout):
+        with self.condition:
+            self.condition.wait_for(lambda: self.closed or self.error or self.servable(ticket), timeout)
             if self.closed:
                 return False, "qwen-opencode is shutting down"
-            return self.ready, self.error
+            if self.servable(ticket):
+                self.waiting.remove(ticket)
+                ticket.serving = True
+                self.serving += 1
+                return True, None
+            return False, self.error
 
-    def wait(self, timeout):
+    def release(self, ticket):
         with self.condition:
-            self.condition.wait_for(lambda: self.ready or self.error or self.closed, timeout)
-            if self.closed:
-                return False, "qwen-opencode is shutting down"
-            return self.ready, self.error
-
-    def release(self):
-        with self.condition:
-            self.inflight -= 1
+            if ticket.serving:
+                self.serving -= 1
+            else:
+                self.waiting.remove(ticket)
             self.last = time.monotonic()
             self.condition.notify_all()
 
-    def start(self):
+    def start(self, name):
+        profile = self.profiles[name]
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             self.port = probe.getsockname()[1]
         self.generation += 1
-        print(f"qwen-opencode: requesting a GPU reservation for {self.label}", file=self.log, flush=True)
+        label = self.label if self.mode == "dense" else f"{self.label}, {profile.title}"
+        print(f"qwen-opencode: requesting a GPU reservation for {label}", file=self.log, flush=True)
+        command = server_command(
+            self.model, self.port, self.key, profile.context, self.mode, self.directory, profile.moe
+        )
         self.process = subprocess.Popen(
             guarded(
+                *(() if self.mode == "dense" else ("--strata-lock",)),
                 "gpu-run",
-                *self.booking,
+                *profile.booking,
                 "--name",
-                self.label,
+                label,
                 "--",
-                *guarded(*server_command(self.model, self.port, self.key, self.context, self.mode, self.directory)),
+                *guarded(*command),
             ),
             stdin=subprocess.DEVNULL,
             stdout=self.log,
             stderr=self.log,
             start_new_session=True,
         )
+        with self.condition:
+            self.profile = name
 
     def unload(self, reason):
         print(f"qwen-opencode: unloading Qwen ({reason})", file=self.log, flush=True)
@@ -125,24 +191,37 @@ class Backend:
             self.ready = False
         stop(self.process, grace=30)
         self.process = None
+        with self.condition:
+            self.profile = None
+            self.condition.notify_all()
 
     def tick(self):
         """Advance the backend's state; called repeatedly from the main thread."""
         with self.condition:
-            wanted, inflight, last = self.wanted, self.inflight, self.last
+            wanted, serving, last = self.wanted, self.serving, self.last
+            target = self.waiting[0].profile if self.waiting else None
         if self.process is None:
-            if wanted:
-                self.start()
+            if wanted and target is not None:
+                self.start(target)
             return
         if self.process.poll() is not None:
             code = self.process.returncode
             self.process = None
             with self.condition:
                 self.ready = False
+                self.profile = None
                 self.wanted = False
                 self.error = f"the Qwen server under gpu-run exited with code {code}; see {self.log.name}"
                 self.condition.notify_all()
             print(f"qwen-opencode: {self.error}", file=self.log, flush=True)
+            return
+        if target is not None and target != self.profile and serving == 0:
+            with self.condition:
+                if self.serving:
+                    return
+                # Under the same lock as the check, so no request can pick up a dying server.
+                self.ready = False
+            self.unload(f"switching to {target}")
             return
         if not self.ready:
             if healthy(self.port, self.key):
@@ -150,13 +229,12 @@ class Backend:
                     self.ready = True
                     self.last = time.monotonic()
                     self.condition.notify_all()
-                print("qwen-opencode: Qwen is loaded", file=self.log, flush=True)
+                print(f"qwen-opencode: Qwen is loaded ({self.profile})", file=self.log, flush=True)
             return
-        if inflight == 0 and time.monotonic() - last >= self.idle:
+        if target is None and serving == 0 and time.monotonic() - last >= self.idle:
             with self.condition:
-                if self.inflight:
+                if self.waiting or self.serving:
                     return
-                # Under the same lock as the check, so no request can pick up a dying server.
                 self.ready = False
                 self.wanted = False
             self.unload(f"idle for {self.idle:g}s")
@@ -207,7 +285,14 @@ def handler_for(backend, key):
                 return
             # Answer listings without loading the model, so opening OpenCode stays free.
             if self.path.rstrip("/") == "/v1/models":
-                self.reply(200, {"object": "list", "data": [{"id": "qwen", "object": "model", "owned_by": "local"}]})
+                models = listed_models(backend.profiles)
+                self.reply(
+                    200,
+                    {
+                        "object": "list",
+                        "data": [{"id": name, "object": "model", "owned_by": "local"} for name in models],
+                    },
+                )
             elif self.path == "/health":
                 self.reply(200, {"status": "ok"})
             else:
@@ -220,11 +305,13 @@ def handler_for(backend, key):
 
         def forward(self, body):
             try:
-                streaming = bool(body) and json.loads(body).get("stream") is True
+                request = json.loads(body) if body else {}
+                streaming = request.get("stream") is True
+                name = request.get("model")
             except (ValueError, AttributeError):
-                streaming = False
+                streaming, name = False, None
             started = False
-            ready, error = backend.acquire(0 if streaming else None)
+            ticket, ready, error = backend.acquire(name, 0 if streaming else None)
             try:
                 if streaming and not ready and not error:
                     # Queued behind other GPU work: commit to an event stream and keep it
@@ -237,7 +324,7 @@ def handler_for(backend, key):
                     started = True
                     while not ready and not error:
                         self.chunk(b": waiting for a GPU reservation\n\n")
-                        ready, error = backend.wait(KEEPALIVE)
+                        ready, error = backend.wait(ticket, KEEPALIVE)
                 if not ready:
                     raise ConnectionError(error)
                 self.relay(body, started)
@@ -252,7 +339,7 @@ def handler_for(backend, key):
                 else:
                     self.reply(503, {"error": {"message": message, "type": "server_error"}})
             finally:
-                backend.release()
+                backend.release(ticket)
 
         def relay(self, body, started):
             upstream = http.client.HTTPConnection("127.0.0.1", backend.port, timeout=None)
@@ -294,8 +381,9 @@ def main():
     parser.add_argument(
         "--moe",
         action="store_true",
-        help="Serve Qwen3.8-Flash-Next through Strata at 256k, with the experts the GPU doesn't hold in system RAM, "
-        "instead of the dense 27B at 64k; books the whole GPU",
+        help="Serve Qwen3.8-Flash-Next through Strata, with the experts the GPU doesn't hold in system RAM, instead "
+        "of the dense 27B at 64k. OpenCode's model list picks a VRAM profile: 20G at 256k (the default), 16G at "
+        "256k, 12G at 128k or 8G at 64k; picking another one reloads Strata",
     )
     parser.add_argument(
         "--idle-minutes",
@@ -359,7 +447,8 @@ def main():
             file=sys.stderr,
             flush=True,
         )
-        env = opencode_environment(configuration(proxy.server_port, major, backend.context), key, directory)
+        models = listed_models(backend.profiles)
+        env = opencode_environment(configuration(proxy.server_port, major, models, backend.default), key, directory)
         try:
             harness = subprocess.Popen(guarded("opencode", "--standalone", *opencode_args), env=env)
             while harness.poll() is None:

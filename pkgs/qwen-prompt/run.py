@@ -12,10 +12,13 @@ from pathlib import Path
 
 from qwen_local import (
     MODELS,
-    MOE_BOOKING,
+    MOE_DEFAULT,
+    MOE_PROFILES,
     checked_opencode_major,
     configuration,
+    hold_strata_lock,
     mode_of,
+    moe_booking,
     opencode_environment,
     refuse_nesting,
     require,
@@ -39,7 +42,7 @@ def main():
     parser.add_argument(
         "--moe",
         action="store_true",
-        help="Run Qwen3.8-Flash-Next through Strata instead of the dense 27B; books the whole GPU",
+        help="Run Qwen3.8-Flash-Next through Strata instead of the dense 27B, in qwen-opencode's default profile",
     )
     parser.add_argument("--allocated", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -55,11 +58,13 @@ def main():
         refuse_nesting()
         if mode == "moe":
             strata_pack(model)
+            hold_strata_lock()
         # Fixed 16k context, one slot. 26 GiB covers the dense 27B's full GPU
-        # offload: weights, KV cache and workspace margin.
+        # offload: weights, KV cache and workspace margin; Flash-Next's default
+        # profile books its 256k peak.
         command = [
             "gpu-run",
-            *(MOE_BOOKING if mode == "moe" else ("--vram", "26GiB")),
+            *(moe_booking(MOE_PROFILES[MOE_DEFAULT]) if mode == "moe" else ("--vram", "26GiB")),
             "--name",
             f"Qwen prompt ({args.model}{'' if mode == 'dense' else ', ' + mode})",
             "--",

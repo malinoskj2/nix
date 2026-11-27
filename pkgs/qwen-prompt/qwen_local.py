@@ -13,6 +13,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 
 MODELS = {
@@ -20,11 +21,6 @@ MODELS = {
     "uncensored": ("qwen3.8-27b-uncensored", "Qwen3.8-27B-Uncensored-Q5_K_M.gguf"),
 }
 
-# --moe serves Qwen3.8-Flash-Next through Strata. Its 512-expert layers only fit
-# in Strata's low-RAM resident mode: the GPU's expert cache is fixed at load, and
-# system RAM holds only the experts it doesn't (about 22-24 GiB of the 42.9 GB at
-# 64k-256k). Strata fits its buffers and cache to the whole free card (29.3-30.3
-# GiB measured), above the 28.5 GiB the scheduler grants a shared request.
 MOE_MODELS = {
     "regular": ("qwen3.8-flash-next", "Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf"),
     "uncensored": (
@@ -32,12 +28,42 @@ MOE_MODELS = {
         "Qwen3.8-Flash-Next-GSQ-RCO-abliterated-IQ3_XXS-00001-of-00002.gguf",
     ),
 }
-MOE_BOOKING = ("--exclusive",)
-# Strata sizes its RAM from the host's MemAvailable, not the sandboxes' shared
-# cgroup, so it would pin every lendable expert and load the 28.8 GB n-gram table.
-# Cap it under half the 64 GiB slice: the experts the GPU doesn't hold, a few GiB
-# of prompt-path lend slots and parked conversations, with the table read from disk.
-STRATA_RAM_GIB = {"experts": 24, "conversations": 4}
+
+
+@dataclass(frozen=True)
+class MoeProfile:
+    title: str
+    booking_gib: int
+    context: int
+    expert_cache: int
+    ram_gib: int
+    conversations_gib: int
+
+
+# --moe serves Qwen3.8-Flash-Next through Strata's low-RAM resident mode. Its
+# experts total about 40 GiB: the GPU caches a fixed number of them (about 1.7
+# MiB each, plus about 190 slots Strata adds) and page-locked RAM holds the
+# rest, so every GiB a profile takes off the card it puts in RAM. The rest of
+# the card holds about 7 GiB of weights and buffers plus 1 GiB of int8 KV per
+# 64k of context. Strata sizes RAM from the host's MemAvailable, not the
+# sandboxes' 64 GiB slice, so each budget is explicit; a budget short of the
+# experts the GPU doesn't hold reads them from the SSD and thrashes the page
+# cache. Measured on the RTX 5090 with an 8.6k-token prompt, 512 tokens out
+# (peak VRAM; prompt and generation tokens/s):
+#   20g: 22.0 GiB, 5740 and 80     12g: 11.6 GiB, 3040 and 45
+#   16g: 16.0 GiB, 4180 and 40      8g:  8.0 GiB,  980 and 26
+MOE_PROFILES = {
+    "flash-next-20g": MoeProfile("Flash-Next 20G, 256k", 23, 262144, 5200, 32, 4),
+    "flash-next-16g": MoeProfile("Flash-Next 16G, 256k", 17, 262144, 2800, 36, 1),
+    "flash-next-12g": MoeProfile("Flash-Next 12G, 128k", 13, 131072, 1650, 36, 1),
+    "flash-next-8g": MoeProfile("Flash-Next 8G, 64k", 9, 65536, 160, 34, 1),
+}
+MOE_DEFAULT = "flash-next-20g"
+
+
+def moe_booking(profile):
+    return ("--vram", f"{profile.booking_gib}GiB")
+
 
 PR_SET_PDEATHSIG = 1
 
@@ -118,12 +144,13 @@ def stop(process, grace=10):
     process.wait()
 
 
-def configuration(port, major, context=16384):
-    model = {"name": "Local Qwen", "limit": {"context": context, "output": 4096}}
+def configuration(port, major, models=None, default="qwen"):
+    """OpenCode's configuration for the local provider; models maps each model ID to its title and context."""
+    models = models or {"qwen": ("Local Qwen", 16384)}
     if major == 2:
         return {
             "$schema": "https://opencode.ai/config.json",
-            "model": "local-qwen/qwen",
+            "model": f"local-qwen/{default}",
             "small_model": "local-qwen/qwen",
             "enabled_providers": ["local-qwen"],
             "update": "disable",
@@ -135,7 +162,10 @@ def configuration(port, major, context=16384):
                     "name": "Local Qwen",
                     "env": ["QWEN_LOCAL_API_KEY"],
                     "settings": {"baseURL": f"http://127.0.0.1:{port}/v1"},
-                    "models": {"qwen": model},
+                    "models": {
+                        name: {"name": title, "limit": {"context": context, "output": 4096}}
+                        for name, (title, context) in models.items()
+                    },
                 }
             },
         }
@@ -203,6 +233,28 @@ def pack_complete(pack, source):
         return False
 
 
+def strata_cache():
+    return Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "qwen-prompt" / "strata"
+
+
+def hold_strata_lock():
+    """Wait for, then hold, the lock that lets one Flash-Next run at a time; the descriptor outlives exec.
+
+    Its RAM copy takes most of the sandboxes' shared memory, and its shared GPU
+    booking would let a second one start. Sandboxes share the home holding it.
+    """
+    root = strata_cache()
+    root.mkdir(parents=True, exist_ok=True)
+    lock = os.open(root / "serve.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("Waiting for another Flash-Next to unload ...", file=sys.stderr, flush=True)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+    os.set_inheritable(lock, True)
+    return lock
+
+
 def strata_pack(model):
     """Strata's pack for a Flash-Next GGUF: its tensor index, tokenizer and experts.bin, built once per source.
 
@@ -213,7 +265,7 @@ def strata_pack(model):
     outright leaves its staging directory behind; the next build removes it.
     """
     source = pack_source(model)
-    root = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "qwen-prompt" / "strata"
+    root = strata_cache()
     final = root / model.name
     if pack_complete(final, source):
         return final
@@ -249,7 +301,7 @@ def strata_share():
     return Path(shutil.which("strata") or "strata").resolve().parent.parent / "share" / "strata" / "terminal"
 
 
-def strata_command(model, port, key, context, directory):
+def strata_command(model, port, key, context, directory, profile=MOE_PROFILES[MOE_DEFAULT]):
     """Strata's server for Flash-Next: one slot, MTP drafts, an int8 KV cache in VRAM and the resident low-RAM mode.
 
     The n-gram table (shard 2) stays on disk and is read a few rows per token.
@@ -276,7 +328,7 @@ def strata_command(model, port, key, context, directory):
                     "--expert-profile",
                     str(share / "data" / "expert-profile.bin"),
                     "--expert-cache",
-                    "auto",
+                    str(profile.expert_cache),
                     "--prefill",
                     "auto",
                     "--spec",
@@ -291,9 +343,9 @@ def strata_command(model, port, key, context, directory):
                     "int8",
                     "--resident-experts",
                     "--resident-budget-gib",
-                    str(STRATA_RAM_GIB["experts"]),
+                    str(profile.ram_gib),
                     "--conversation-cache-mib",
-                    str(STRATA_RAM_GIB["conversations"] * 1024),
+                    str(profile.conversations_gib * 1024),
                     "--ple-io",
                     "direct",
                 ],
@@ -316,9 +368,9 @@ def strata_command(model, port, key, context, directory):
     ]
 
 
-def server_command(model, port, key, context, mode, directory):
+def server_command(model, port, key, context, mode, directory, profile=MOE_PROFILES[MOE_DEFAULT]):
     if mode == "moe":
-        return strata_command(model, port, key, context, directory)
+        return strata_command(model, port, key, context, directory, profile)
     return llama_command(model, port, key, context)
 
 
@@ -362,10 +414,14 @@ def guard(argv):
 
     A program can ask for this itself after exec, unlike from a preexec hook in a
     threaded parent. llama-server additionally must run inside a reservation.
+    A leading --strata-lock first waits for and holds hold_strata_lock's lock.
     """
     if argv[0] in ("llama-server", "strata-server") and not os.environ.get("GPU_LEASE_ID"):
         raise RuntimeError("The Qwen server requires a GPU reservation")
     die_with_parent()
+    if argv[0] == "--strata-lock":
+        argv = argv[1:]
+        hold_strata_lock()
     os.execvp(argv[0], argv)
 
 
