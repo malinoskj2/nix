@@ -57,18 +57,22 @@ record instead, and so does one thread's `pthread_kill` of a sibling, unless it
 targets the main thread. A signal that is ignored, or already pending, records
 nothing new.
 
-On `signal:signal_deliver`, after a debugger has had its say, it takes the
-record for that thread or its process. If the default action runs, the process
-dies (unless it is an init process, which drops it), and the line is logged.
-If the thread's own handler runs, only the CPU is remembered for the
-`handled_*` fields. A signal that is blocked and consumed with `sigwait` or
-`signalfd` is never delivered, so it is never logged. A thread's records are
-dropped when it exits (`sched:sched_process_exit`), so a reused thread ID
-never inherits them. A Node formatter adds the core id and container flag and
+A kprobe on `dequeue_signal` sees which queue, the thread's or the process's,
+each signal is taken from, and takes that queue's record with it, and delivery
+uses only that record. A fault, which `get_signal` takes from the thread's
+queue without `dequeue_signal`, uses the thread's record. So a signal blocked and consumed with
+`sigwait` or `signalfd` is never logged, and its record can't be mistaken for
+a later signal from another process.
+
+On `signal:signal_deliver`, after a debugger has had its say: if the default
+action runs, the process dies (unless it is an init process, which drops it),
+and the line is logged. If the thread's own handler runs, only the CPU is
+remembered for the `handled_*` fields. A thread's records are dropped when it
+exits (`sched:sched_process_exit`), so a reused thread ID never inherits them. A Node formatter adds the core id and container flag and
 writes to the journal as `crash-core`.
 
-Nothing runs per syscall; the tracepoints fire only when a signal is generated
-or delivered, or a thread exits.
+Nothing runs per syscall; the probes fire only when a signal is generated,
+dequeued or delivered, or a thread exits.
 
 ## How reliable the CPU is
 
@@ -90,6 +94,7 @@ a read-only filesystem, a system call filter and no W+X memory (Node runs
 `--jitless`), and restarts five seconds after any exit. While it restarts, crashes
 go unrecorded. The `crash-core-vm` check boots it, aborts and segfaults test
 programs and checks the lines, including the container flag; that an external
-`kill -ABRT` and a blocked SIGABRT consumed with `sigwait` aren't logged; that a
+`kill -ABRT` and a blocked SIGABRT consumed with `sigwait` aren't logged, nor
+is another process's SIGABRT that follows a consumed one; that a
 recovered SIGSEGV doesn't attach to a later process with the same PID; and that
 the service restarts when bpftrace dies.

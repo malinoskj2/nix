@@ -2,6 +2,8 @@
 // Group-directed signals are keyed by the negated process ID.
 let @generated = lruhash(8192);
 let @handled = lruhash(4096);
+let @dequeued = lruhash(4096);
+let @dequeue_type = lruhash(4096);
 
 tracepoint:signal:signal_generate
 /(args->sig == 4 || args->sig == 6 || args->sig == 7 || args->sig == 8 || args->sig == 11)
@@ -15,14 +17,50 @@ tracepoint:signal:signal_generate
   }
 }
 
+// sigwait and signalfd dequeue through dequeue_signal too, which consumes their record; get_signal
+// takes faults from the private queue first without it.
+fentry:vmlinux:get_signal
+{
+  $deleted = delete(@dequeued, (int64)tid);
+}
+
+// fexit can't read this function's arguments, so the pid_type pointer is kept from entry.
+kprobe:dequeue_signal
+{
+  @dequeue_type[(int64)tid] = arg2;
+}
+
+kretprobe:dequeue_signal
+{
+  let $type = (uint64)0;
+  if (!find(@dequeue_type, (int64)tid, $type)) {
+    return;
+  }
+  $deleted = delete(@dequeue_type, (int64)tid);
+  $sig = (int32)retval;
+  if ($sig != 4 && $sig != 6 && $sig != 7 && $sig != 8 && $sig != 11) {
+    return;
+  }
+  $source = *(int32 *)$type == 0 ? (int64)tid : -(int64)pid;
+  let $gen = ((uint64)0, (int32)-1, (int32)0);
+  if (find(@generated, ($source, $sig), $gen)) {
+    $deleted = delete(@generated, ($source, $sig));
+  }
+  @dequeued[(int64)tid] = ($sig, $gen);
+}
+
 tracepoint:signal:signal_deliver
 /args->sig == 4 || args->sig == 6 || args->sig == 7 || args->sig == 8 || args->sig == 11/
 {
   let $gen = ((uint64)0, (int32)-1, (int32)0);
-  if (find(@generated, ((int64)tid, args->sig), $gen)) {
+  let $taken = ((int32)0, $gen);
+  if (find(@dequeued, (int64)tid, $taken)) {
+    $deleted = delete(@dequeued, (int64)tid);
+    if ($taken.0 == args->sig) {
+      $gen = $taken.1;
+    }
+  } else if (find(@generated, ((int64)tid, args->sig), $gen)) {
     $deleted = delete(@generated, ((int64)tid, args->sig));
-  } else if (find(@generated, (-(int64)pid, args->sig), $gen)) {
-    $deleted = delete(@generated, (-(int64)pid, args->sig));
   }
   if ($gen.1 >= 0) {
     if (args->sa_handler == 0) {
@@ -46,6 +84,8 @@ tracepoint:signal:signal_deliver
 tracepoint:sched:sched_process_exit
 {
   $deleted = delete(@handled, (int64)args->pid);
+  $deleted = delete(@dequeued, (int64)args->pid);
+  $deleted = delete(@dequeue_type, (int64)args->pid);
   $deleted = delete(@generated, ((int64)args->pid, (int32)4));
   $deleted = delete(@generated, ((int64)args->pid, (int32)6));
   $deleted = delete(@generated, ((int64)args->pid, (int32)7));
@@ -63,4 +103,6 @@ tracepoint:sched:sched_process_exit
 END {
   clear(@generated);
   clear(@handled);
+  clear(@dequeued);
+  clear(@dequeue_type);
 }

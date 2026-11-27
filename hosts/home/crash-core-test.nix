@@ -35,18 +35,37 @@ let
     }
   '';
   # Generates SIGABRT twice while it is blocked, so the second is already pending, and consumes it.
+  # `kill` sends it to the process instead of the thread; `wait` then unblocks it and waits.
   abortBlocked = pkgs.writeCBin "abort-blocked" ''
     #include <signal.h>
-    int main(void) {
+    #include <string.h>
+    #include <unistd.h>
+    int main(int argc, char **argv) {
       sigset_t set;
       int sig;
       sigemptyset(&set);
       sigaddset(&set, SIGABRT);
       sigprocmask(SIG_BLOCK, &set, 0);
-      raise(SIGABRT);
-      raise(SIGABRT);
+      for (int i = 0; i < 2; i++) {
+        if (argc > 1 && !strcmp(argv[1], "kill")) kill(getpid(), SIGABRT);
+        else raise(SIGABRT);
+      }
       sigwait(&set, &sig);
+      if (argc > 2) {
+        sigprocmask(SIG_UNBLOCK, &set, 0);
+        for (;;) pause();
+      }
       return 0;
+    }
+  '';
+  threadKill = pkgs.writeCBin "thread-kill" ''
+    #include <signal.h>
+    #include <stdlib.h>
+    #include <sys/syscall.h>
+    #include <unistd.h>
+    int main(int argc, char **argv) {
+      int pid = atoi(argv[1]);
+      return syscall(SYS_tgkill, pid, pid, SIGABRT) != 0;
     }
   '';
   victim = pkgs.writeCBin "kill-victim" ''
@@ -67,6 +86,7 @@ in
       segvHandled
       segvRecover
       abortBlocked
+      threadKill
       victim
     ];
   };
@@ -88,10 +108,15 @@ in
 
     machine.succeed("kill-victim >/dev/null 2>&1 & pid=$!; sleep 1; kill -ABRT $pid; wait $pid || true")
     machine.succeed("abort-blocked")
+    # A consumed signal's record must not be taken for a later one from another process, sent to the
+    # process after a consumed thread signal, or to the thread after a consumed process signal.
+    machine.succeed("abort-blocked raise wait & pid=$!; sleep 1; kill -ABRT $pid; wait $pid || test $? = 134")
+    machine.succeed("abort-blocked kill wait & pid=$!; sleep 1; thread-kill $pid; wait $pid || test $? = 134")
     machine.succeed("segv-recover recover-then-abort || true")
     # A recovered SIGSEGV must not attach to whatever process later reuses its PID.
     recovered = int(machine.succeed("segv-recover").strip())
     machine.succeed(f"echo {recovered - 1} > /proc/sys/kernel/ns_last_pid; abort-self || true")
+    machine.succeed("bash -c 'kill -ABRT $$' || true")
     machine.succeed("segv-self || true")
     machine.succeed("segv-handled || true")
     machine.succeed("systemd-run --scope --unit=docker-0123456789abcdef.scope abort-self || true")
@@ -102,7 +127,7 @@ in
     assert re.search(r" signal=SIGABRT code=-6 ", abort), abort
     assert re.search(r" cpu=\d+ core=\d+ deliver_cpu=\d+ container=no cgroup=/system.slice/backdoor.service$", abort), abort
 
-    assert not any("comm=abort-blocked" in l for l in lines()), "a blocked, consumed SIGABRT was logged"
+    assert not any("comm=abort-blocked" in l for l in lines()), "a consumed SIGABRT, or a later one from another process, was logged"
 
     recover = line_for("segv-recover")
     assert re.search(r" signal=SIGABRT .* handled_signal=SIGSEGV handled_cpu=\d+ ", recover), recover
@@ -110,6 +135,9 @@ in
     reused = [l for l in lines() if " comm=abort-self " in l and f" pid={recovered} " in l]
     assert len(reused) == 1, f"PID {recovered} was not reused by abort-self: {lines()}"
     assert "handled_" not in reused[0], reused[0]
+
+    group = line_for("bash")
+    assert re.search(r" signal=SIGABRT code=0 .* cpu=\d+ core=\d+ ", group), group
 
     segv = line_for("segv-self")
     assert re.search(r" signal=SIGSEGV code=1 .* cpu=\d+ core=\d+ ", segv), segv
