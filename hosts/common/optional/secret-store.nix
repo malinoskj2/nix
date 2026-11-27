@@ -10,6 +10,10 @@ let
   manifest = config.system.build.sops-nix-manifest;
   storeSecrets = lib.filterAttrs (_: s: s.sopsFile == cfg.file) config.sops.secrets;
   keys = lib.mapAttrsToList (_: s: s.key) storeSecrets;
+  # sops-install-secrets joins the name onto /run/secrets, so it must stay one plain component.
+  badNames = lib.filter (name: builtins.match "[A-Za-z0-9_-]+" name == null) (
+    lib.attrNames storeSecrets
+  );
   noncanonical = lib.attrNames (
     lib.filterAttrs (name: s: s.name != name || s.path != "/run/secrets/${name}") storeSecrets
   );
@@ -174,6 +178,10 @@ in
           # and withdrawal doesn't track rendered files.
           assertion = config.sops.templates == { };
           message = "sops.templates aren't supported with the secret store: they can copy a secret to another owner";
+        }
+        {
+          assertion = badNames == [ ];
+          message = "secret names may use only letters, digits, - and _: ${lib.concatStringsSep ", " badNames}";
         }
         {
           assertion = noncanonical == [ ];
