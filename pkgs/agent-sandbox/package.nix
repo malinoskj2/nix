@@ -1001,6 +1001,7 @@ symlinkJoin {
         }
         ''
           cp ${./agent-sandbox.sh} agent-sandbox.sh
+          cp ${./egress.sh} egress.sh
           cp ${./test-launcher-mounts.py} test-launcher-mounts.py
           python3 -B test-launcher-mounts.py -v
           touch $out

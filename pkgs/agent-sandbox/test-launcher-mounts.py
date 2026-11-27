@@ -80,6 +80,8 @@ class LauncherMounts(unittest.TestCase):
             "AGENT_SANDBOX_INSTRUCTIONS": "/dev/null",
             "AGENT_SANDBOX_ORCA_PATH": "/usr/bin",
             "AGENT_SANDBOX_ORCA_RELAY": str(bin_dir / "orca-relay"),
+            "AGENT_SANDBOX_EGRESS_LIB": str(LAUNCHER.with_name("egress.sh")),
+            "AGENT_SANDBOX_EGRESS_CONFIG": str(self.root / "no-egress.json"),
             **GIT_ENV,
         }
         self.nix = self.home / "nix"
