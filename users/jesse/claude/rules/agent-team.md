@@ -11,5 +11,5 @@
 - Their findings come back in your `orchestration check` mail.
 - Use Kanna for code first, Lucoa for anything visual (UI, art, animation, 3D, site design) before or alongside Elma, and Elma for user-facing behaviour. Request them before reporting finished work, or when asked; each is optional for trivial changes. Address or answer each finding, then report.
 - Kanna may run the `council` skill when she judges a review warrants it, then weighs the three sets of findings and reports only those she judges warranted, with her reasoning.
-- Kanna, Elma and Lucoa comment only; they never approve or merge. Merging stays with Jesse or Tohru.
+- Kanna and Elma comment only, and so does Lucoa when reviewing. None of the three approves or merges. Merging stays with Jesse or Tohru.
 - If Orca or a bot is unavailable (outside an Orca context, or the send fails), say so and skip that step. Never substitute another reviewer, tester or designer silently.
