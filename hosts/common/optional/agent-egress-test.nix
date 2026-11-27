@@ -24,6 +24,10 @@ in
       wantedBy = [ "multi-user.target" ];
       script = "exec ${pkgs.python3}/bin/python3 -m http.server 8000 --bind 0.0.0.0 --directory /etc";
     };
+    systemd.services.web-lan = {
+      wantedBy = [ "multi-user.target" ];
+      script = "exec ${pkgs.python3}/bin/python3 -m http.server 8001 --bind 0.0.0.0 --directory /etc";
+    };
   };
 
   nodes.machine = {
@@ -57,6 +61,10 @@ in
       egress = {
         enable = true;
         allow = [ "allowed.test:8000" ];
+        allowPrivate = [
+          "192.168.1.2:8000"
+          "lan.test:8001"
+        ];
       };
     };
 
@@ -64,6 +72,7 @@ in
       "192.168.1.2" = [
         "allowed.test"
         "unlisted.test"
+        "lan.test"
       ];
       "::ffff:192.168.1.1" = [ "mapped.test" ];
     };
@@ -96,6 +105,7 @@ in
         return [json.loads(line) for line in lines if line.startswith("{")]
 
     outside.wait_for_open_port(8000)
+    outside.wait_for_open_port(8001)
     machine.wait_for_unit("multi-user.target")
     machine.wait_for_unit("agent-broker-egress-proxy.service")
     machine.wait_for_unit("agent-broker-egress-gate.service")
@@ -152,6 +162,19 @@ in
             assert machine.succeed(via_sandbox + f"http://{target}:8000/hostname") == "502", target
         assert ("sbx-test", "192.168.1.1", "deny-internal") in {(r.get("sandbox"), r.get("host"), r.get("decision")) for r in records()}
 
+    with subtest("private addresses need an allowPrivate entry, even in log mode"):
+        assert machine.succeed(via_sandbox + "http://lan.test:8001/hostname") == "200"
+        assert machine.succeed(via_sandbox + "http://allowed.test:8001/hostname") == "502"
+        assert machine.succeed(via_sandbox + "http://192.168.1.2:8001/hostname") == "502"
+        assert machine.succeed(via_sandbox + "http://[::ffff:192.168.1.2]:8001/hostname") == "502"
+        assert machine.succeed(via_sandbox + "http://[64:ff9b::c0a8:102]:8001/hostname") == "502"
+        assert machine.succeed(via_sandbox + "http://10.20.30.40:8000/hostname") == "502"
+        assert machine.succeed(via_sandbox + "http://169.254.169.254/latest/meta-data/") == "502"
+        decisions = {(r.get("sandbox"), r.get("host"), r.get("decision")) for r in records()}
+        assert ("sbx-test", "allowed.test", "deny-private") in decisions, decisions
+        assert ("sbx-test", "10.20.30.40", "deny-private") in decisions, decisions
+        assert ("sbx-test", "169.254.169.254", "deny-internal") in decisions, decisions
+
     with subtest("a sandbox reaches its own preview port on the host, and no other sandbox's"):
         machine.succeed("sleep infinity >/dev/null 2>&1 & echo $! > /tmp/preview-launcher.pid")
         reply = control("jesse", {"op": "register", "name": "sbx-preview", "pid": int(machine.succeed("cat /tmp/preview-launcher.pid")), "preview": {"address": "192.168.1.1", "ports": [8000]}})
@@ -197,7 +220,8 @@ in
         gid = machine.succeed("getent group agent-broker-clients | cut -d: -f3").strip()
         uid = machine.succeed("id -u jesse").strip()
         machine.succeed("sleep infinity >/dev/null 2>&1 & echo $! > /tmp/container-launcher.pid")
-        reply = control("jesse", {"op": "register", "name": "sbx-ctr", "pid": int(machine.succeed("cat /tmp/container-launcher.pid"))})
+        subnet = network["IPAM"]["Config"][0]["Subnet"]
+        reply = control("jesse", {"op": "register", "name": "sbx-ctr", "pid": int(machine.succeed("cat /tmp/container-launcher.pid")), "networks": [subnet]})
         assert reply["ok"], reply
         machine.succeed(as_user("jesse", "mkdir -m 700 /tmp/ingress"))
         machine.succeed(
@@ -213,6 +237,15 @@ in
         machine.fail("docker exec ctr curl -s -m 5 http://192.168.1.2:8000/hostname")
         machine.fail(f"docker exec ctr curl -s -m 5 http://{gateway}:8000/hostname")
         assert ("sbx-ctr", "allowed.test", "allow") in {(r.get("sandbox"), r.get("host"), r.get("decision")) for r in records()}
+
+    with subtest("through the proxy a sandbox reaches its own network's containers, and no other sandbox does"):
+        machine.succeed("docker run -d --name sibling --network agent-sandbox egress-probe:latest sh -c 'mkdir -p /srv && echo sibling > /srv/index.html && exec httpd -f -p 8081 -h /srv'")
+        sibling = machine.succeed("docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' sibling").strip()
+        machine.wait_until_succeeds(f"docker exec ctr nc -z {sibling} 8081")
+        assert machine.succeed(f"docker exec ctr curl -s -x http://127.0.0.1:3128 http://{sibling}:8081/").strip() == "sibling"
+        assert machine.succeed(via_sandbox + f"http://{sibling}:8081/") == "502"
+        assert ("sbx-test", sibling, "deny-private") in {(r.get("sandbox"), r.get("host"), r.get("decision")) for r in records()}
+        machine.succeed("docker rm -f sibling")
 
     with subtest("published ports reach the container through its ingress socket"):
         machine.wait_for_file("/tmp/ingress/8080.sock")

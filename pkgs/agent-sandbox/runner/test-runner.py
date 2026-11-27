@@ -493,6 +493,7 @@ class EgressIngressTest(unittest.TestCase):
         r.args = argparse.Namespace(socat=socat, preview_address="192.0.2.7")
         state = {"ingress": Path(tmp.name), "forwarders": []}
         r.sandboxes = {"n": {"egress": state}}
+        r.egress_subnets = lambda: ["172.19.0.0/16"]
         requests = []
         r.gate = lambda request: requests.append(request) or {"ok": True, "dir": "/gate/sandbox/n"}
         ports = []
@@ -507,6 +508,7 @@ class EgressIngressTest(unittest.TestCase):
         args = r.ingress("n", publish)
         self.assertEqual(args, ["--env", "X=1", "--volume", "/gate/sandbox/n:/run/agent-egress:ro"])
         self.assertEqual(requests[0]["preview"], {"address": "192.0.2.7", "ports": [ports[1]]})
+        self.assertEqual(requests[0]["networks"], ["172.19.0.0/16"])
         client = socket.create_connection(("127.0.0.1", ports[1]), timeout=5)
         conn, _ = backend.accept()
         client.sendall(b"ping")

@@ -1100,10 +1100,20 @@ class Runner:
                 "name": name,
                 "pid": os.getpid(),
                 "preview": {"address": self.args.preview_address, "ports": previews},
+                "networks": self.egress_subnets(),
             }
         )
         state["registered"] = True
         return [*kept, "--volume", f"{reply['dir']}:/run/agent-egress:ro"]
+
+    def egress_subnets(self):
+        result = self.docker(
+            "network", "inspect", self.egress["network"], "--format", "{{json .IPAM.Config}}", check=False
+        )
+        try:
+            return [c["Subnet"] for c in json.loads(result.stdout or "[]") if c.get("Subnet")]
+        except (ValueError, TypeError, AttributeError):
+            return []
 
     @staticmethod
     def stop_forwarders(state):

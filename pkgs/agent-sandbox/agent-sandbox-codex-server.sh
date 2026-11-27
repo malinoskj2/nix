@@ -58,7 +58,6 @@ exec docker run \
   --volume "$data/passwd:/etc/passwd:ro" \
   --volume "$data/group:/etc/group:ro" \
   --volume /etc/localtime:/etc/localtime:ro \
-  --volume "$AGENT_SANDBOX_CODEX_REQUIREMENTS:/etc/codex/requirements.toml:ro" \
   --volume "$sandbox_home:$HOME" \
   --workdir "$HOME" \
   --env HOME \

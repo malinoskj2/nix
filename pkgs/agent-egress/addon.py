@@ -103,6 +103,10 @@ def local_addresses():
 
 
 NAT64 = ipaddress.ip_network("64:ff9b::/96")
+PRIVATE = [
+    ipaddress.ip_network(n)
+    for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "fc00::/7", "fe80::/10")
+]
 COMPATIBLE = ipaddress.ip_network("::/96")
 
 
@@ -131,6 +135,26 @@ def internal_address(ip):
     if address is None:
         return False
     return any(a.is_loopback or a.is_link_local or a.is_unspecified or a.is_multicast for a in forms(address))
+
+
+def private_address(address):
+    return any(a in n for a in forms(address) for n in PRIVATE if a.version == n.version)
+
+
+def private_allowed(entry, host, address, port):
+    """Whether an agentBroker.egress.allowPrivate entry covers this name or address and port."""
+    pattern, want = split_target(entry)
+    if want is None:
+        port_ok = port in WEB_PORTS
+    else:
+        port_ok = want == "*" or int(want) == port
+    if not port_ok:
+        return False
+    try:
+        network = ipaddress.ip_network(pattern.strip("[]"), strict=False)
+    except ValueError:
+        return host_matches(host, pattern)
+    return any(a in network for a in forms(address) if a.version == network.version)
 
 
 def socket_owner(peer, local):
@@ -188,6 +212,15 @@ class Policy:
 
     def preview(self, sandbox):
         return (self.peers.get(sandbox) or {}).get("preview") or {}
+
+    def networks(self, sandbox):
+        found = []
+        for text in (self.peers.get(sandbox) or {}).get("networks") or []:
+            try:
+                found.append(ipaddress.ip_network(text, strict=False))
+            except (ValueError, TypeError):
+                pass
+        return found
 
     def allowed(self, sandbox, host, port):
         if self.bindings(host, port):
@@ -285,16 +318,27 @@ class Broker:
             self.local_checked, self.local_cache = now, local_addresses()
         return self.local_cache
 
-    def refused(self, sandbox, ip, port):
+    def refused(self, sandbox, host, ip, port):
+        """deny-internal or deny-private when the sandbox may not reach this address, else None."""
         address = parse_ip(ip)
         if address is None or internal_address(ip):
-            return True
+            return "deny-internal"
         local = {a for text in self.local() if (p := parse_ip(text)) for a in forms(p)}
-        if not forms(address) & local:
-            return False
-        preview = self.policy.preview(sandbox)
-        own = parse_ip(preview.get("address") or "")
-        return not (own is not None and address == own and port in preview.get("ports", []))
+        if forms(address) & local:
+            preview = self.policy.preview(sandbox)
+            own = parse_ip(preview.get("address") or "")
+            if own is not None and address == own and port in preview.get("ports", []):
+                return None
+            return "deny-internal"
+        if not private_address(address):
+            return None
+        # The Docker networks the sandbox is on, which it reaches directly anyway; clients that
+        # ignore a CIDR in NO_PROXY send those addresses here.
+        if any(a in n for a in forms(address) for n in self.policy.networks(sandbox) if a.version == n.version):
+            return None
+        if any(private_allowed(e, host, address, port) for e in self.policy.config.get("allowPrivate", [])):
+            return None
+        return "deny-private"
 
     async def resolve(self, host, port):
         infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
@@ -316,9 +360,17 @@ class Broker:
         if not addresses:
             data.server.error = f"agent-broker: cannot resolve {host}"
             return
-        if not self.allow_internal and any(self.refused(sandbox, a, port) for a in addresses):
-            data.server.error = "agent-broker: the host's own and link-local addresses are not reachable"
-            self.emit({"sandbox": sandbox, "host": host, "port": port, "decision": "deny-internal"})
+        refusals = [] if self.allow_internal else [r for a in addresses if (r := self.refused(sandbox, host, a, port))]
+        if refusals:
+            if "deny-internal" in refusals:
+                data.server.error = "agent-broker: the host's own and link-local addresses are not reachable"
+            else:
+                data.server.error = (
+                    "agent-broker: private and LAN addresses are only reachable when listed in "
+                    "agentBroker.egress.allowPrivate"
+                )
+            decision = "deny-internal" if "deny-internal" in refusals else "deny-private"
+            self.emit({"sandbox": sandbox, "host": host, "port": port, "decision": decision})
             return
         if literal is None:
             if data.server.sni is None:

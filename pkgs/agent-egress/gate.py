@@ -94,7 +94,10 @@ class Gate:
 
     def save(self):
         atomic_json(self.registry_path, self.entries, 0o600)
-        peers = {name: {"address": e["address"], "preview": e.get("preview") or {}} for name, e in self.entries.items()}
+        peers = {
+            name: {"address": e["address"], "preview": e.get("preview") or {}, "networks": e.get("networks") or []}
+            for name, e in self.entries.items()
+        }
         atomic_json(self.peers_path, peers)
 
     def directory(self, name):
@@ -201,6 +204,12 @@ class Gate:
                 preview = request.get("preview") or {}
                 ports = [p for p in preview.get("ports", []) if type(p) is int and 0 < p < 65536]
                 address = preview.get("address") if isinstance(preview.get("address"), str) else None
+                networks = []
+                for text in request.get("networks") or []:
+                    network = ipaddress.ip_network(text, strict=False) if isinstance(text, str) else None
+                    if network is None or not network.is_private or network.prefixlen < 8:
+                        raise ValueError(f"not a private Docker network: {text!r}")
+                    networks.append(str(network))
                 if name in self.entries:
                     await self.drop(name)
                 self.entries[name] = {
@@ -209,6 +218,7 @@ class Gate:
                     "pid": pid,
                     "uid": uid,
                     "preview": {"address": address, "ports": ports[:32]} if address else {},
+                    "networks": networks[:16],
                     "since": int(time.time()),
                 }
                 await self.listen(name)

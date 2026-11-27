@@ -482,13 +482,6 @@ let
     exec ${lib.getExe nodejs} ${./codex-image.mjs} "$@"
   '';
 
-  # Sandboxes reach the app-server's socket directly, so the server itself holds every turn to
-  # what codex-image asks for.
-  codexRequirements = writeText "codex-requirements.toml" ''
-    allowed_sandbox_modes = ["read-only"]
-    allowed_approval_policies = ["never"]
-  '';
-
   codexServerEntrypoint = writeShellApplication {
     name = "agent-sandbox-codex-server-entrypoint";
     runtimeInputs = [
@@ -882,7 +875,6 @@ let
     ];
     runtimeEnv = imageEnv // {
       AGENT_SANDBOX_CODEX_SERVER_ENTRYPOINT = lib.getExe codexServerEntrypoint;
-      AGENT_SANDBOX_CODEX_REQUIREMENTS = "${codexRequirements}";
       AGENT_SANDBOX_EGRESS_LIB = "${./egress.sh}";
       AGENT_SANDBOX_EGRESS_ENV = egressEnv;
     };

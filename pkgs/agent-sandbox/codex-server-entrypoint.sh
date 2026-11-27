@@ -11,4 +11,7 @@ while read -r name; do
   overrides+=(-c "mcp_servers.$name.enabled=false")
 done < <("$CODEX" mcp list --json | jq -r '.[].name')
 
-exec "$CODEX" "${overrides[@]}" app-server --listen "unix:///tmp/codex-daemon-$(id -u)/app-server.sock"
+# Defaults only: a client can still ask a thread for more, which reaches no further than the
+# sandbox asking, since this server shares the sandbox home and network. A requirements.toml
+# that enforced read-only made Codex 0.171 fail every model request.
+exec "$CODEX" "${overrides[@]}" -c 'sandbox_mode="read-only"' -c 'approval_policy="never"' app-server --listen "unix:///tmp/codex-daemon-$(id -u)/app-server.sock"

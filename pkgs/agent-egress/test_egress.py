@@ -443,6 +443,9 @@ class Egress(unittest.TestCase):
         self.control({"op": "unregister", "name": "sbx-c"})
         self.assertFalse(self.control({"op": "register", "name": "sbx-d", "pid": True})["ok"])
         self.assertFalse(self.control({"op": "register", "name": "../x", "pid": os.getpid()})["ok"])
+        for networks in (["8.8.8.0/24"], ["10.0.0.0/4"], "172.19.0.0/16", ["x"]):
+            request = {"op": "register", "name": "sbx-e", "pid": os.getpid(), "networks": networks}
+            self.assertFalse(self.control(request)["ok"], networks)
 
 
 def load_addon():
@@ -467,7 +470,7 @@ class Internal(unittest.TestCase):
         asyncio.run(broker.server_connect(data))
         return data.server
 
-    def broker(self, answers, local=()):
+    def broker(self, answers, local=(), allow_private=(), networks=()):
         addon = load_addon()
         broker = addon.addons[0]
         broker.allow_internal = False
@@ -478,7 +481,12 @@ class Internal(unittest.TestCase):
             return list(answers.pop(0))
 
         broker.resolve = resolve
-        broker.policy.peers = {"s": {"preview": {"address": "192.168.1.10", "ports": [18080]}}}
+        broker.policy.peers = {
+            "s": {"preview": {"address": "192.168.1.10", "ports": [18080]}, "networks": list(networks)}
+        }
+        broker.policy.config = {**broker.policy.config, "allowPrivate": list(allow_private)}
+        decisions = broker.decisions = []
+        broker.emit = lambda record: decisions.append(record.get("decision"))
         return broker
 
     def test_host_and_metadata_addresses_are_internal(self):
@@ -508,7 +516,8 @@ class Internal(unittest.TestCase):
             ("192.168.1.10", 18080, "s", False),
             ("192.168.1.10", 18080, "other", True),
             ("lan.example", 18081, "s", True),
-            ("192.168.1.20", 80, "s", False),
+            ("192.168.1.20", 80, "s", True),
+            ("140.82.112.3", 80, "s", False),
         ):
             broker = self.broker([["192.168.1.10"]], local)
             server = self.connect(broker, host, port, sandbox)
@@ -544,6 +553,60 @@ class Internal(unittest.TestCase):
         for host in ("2130706433", "0177.0.0.1", "0x7f.1"):
             self.assertIsNotNone(self.connect(broker, host).error, host)
 
+    def test_private_ranges_are_refused(self):
+        for host in (
+            "10.1.2.3",
+            "172.16.0.1",
+            "172.31.255.254",
+            "192.168.1.1",
+            "100.64.0.1",
+            "100.127.255.254",
+            "fd00::1",
+            "fc12::1",
+            "fe80::1",
+            "::ffff:10.1.2.3",
+            "::ffff:c0a8:101",
+            "::192.168.1.1",
+            "64:ff9b::a01:203",
+            "2002:c0a8:0101::1",
+        ):
+            broker = self.broker([])
+            self.assertIsNotNone(self.connect(broker, host, 80).error, host)
+        for host in ("172.32.0.1", "100.128.0.1", "11.0.0.1", "2606:4700::1"):
+            self.assertIsNone(self.connect(self.broker([]), host, 80).error, host)
+
+    def test_a_name_resolving_to_a_private_address_is_refused(self):
+        broker = self.broker([["192.168.1.5"]])
+        server = self.connect(broker, "router.example", 80)
+        self.assertIn("allowPrivate", server.error)
+        self.assertEqual(broker.decisions, ["deny-private"])
+        broker = self.broker([["140.82.112.3", "::ffff:10.0.0.7"]])
+        self.assertIsNotNone(self.connect(broker, "mixed.example", 443).error)
+
+    def test_allow_private_entries(self):
+        allow = ["192.168.1.5:2222", "10.0.0.0/8:443", "media.lan:8080", "[fd00::/8]:*"]
+        for host, answers, port, allowed in (
+            ("192.168.1.5", [], 2222, True),
+            ("192.168.1.5", [], 22, False),
+            ("::ffff:192.168.1.5", [], 2222, True),
+            ("10.9.8.7", [], 443, True),
+            ("10.9.8.7", [], 80, False),
+            ("media.lan", [["192.168.1.9"]], 8080, True),
+            ("media.lan", [["192.168.1.9"]], 22, False),
+            ("other.lan", [["192.168.1.9"]], 8080, False),
+            ("fd00::5", [], 9000, True),
+            ("172.20.0.4", [], 80, False),
+        ):
+            server = self.connect(self.broker(answers, allow_private=allow), host, port)
+            self.assertEqual(server.error is None, allowed, (host, port))
+
+    def test_a_sandbox_reaches_its_own_docker_networks(self):
+        nets = ["172.19.0.0/16"]
+        self.assertIsNone(self.connect(self.broker([], networks=nets), "172.19.0.8", 8080).error)
+        self.assertIsNotNone(self.connect(self.broker([], networks=nets), "172.20.0.8", 8080).error)
+        self.assertIsNotNone(self.connect(self.broker([]), "172.19.0.8", 8080).error)
+        self.assertIsNotNone(self.connect(self.broker([], local={"172.19.0.1"}, networks=nets), "172.19.0.1", 22).error)
+
     def test_local_addresses_reads_this_host(self):
         local = load_addon().local_addresses()
         self.assertIn("127.0.0.1", local)
@@ -564,6 +627,8 @@ class Report(unittest.TestCase):
                 ("media", 2222, "would-deny"),
                 ("github.com", 443, "allow"),
                 ('x"${builtins.abort "x"}', 443, "would-deny"),
+                ("nas.lan", 8080, "would-deny"),
+                ("nas.lan", 8080, "deny-private"),
             ]
         ] + ["not json"]
         targets = agent_egress.summarize(agent_egress.records(lines))
@@ -573,6 +638,7 @@ class Report(unittest.TestCase):
         self.assertIn("media:2222", entries)
         self.assertNotIn("pypi.org", entries)
         self.assertNotIn("github.com", entries)
+        self.assertNotIn("nas.lan:8080", entries, "a private refusal isn't the allowlist's to lift")
         self.assertFalse([e for e in entries if '"' in e or "$" in e], entries)
 
 

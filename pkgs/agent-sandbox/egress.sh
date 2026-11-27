@@ -48,6 +48,7 @@ egress_init() {
       docker network inspect "$network" >/dev/null
   fi
   egress=1
+  egress_network=$network
   ingress_dir=$runtime/agent-sandbox-ingress/$sandbox_instance
   mkdir -p "$ingress_dir"
   chmod 700 "$runtime/agent-sandbox-ingress" "$ingress_dir"
@@ -70,7 +71,7 @@ egress_init() {
 # which allows it its own preview URLs. Binding here also holds the ports until it starts.
 egress_publish() {
   local -a kept=() previews=()
-  local spec bind host_port port pid reply
+  local spec bind host_port port pid reply subnets
   ingress_stop
   while (($#)); do
     if [[ $1 == --publish ]]; then
@@ -100,9 +101,13 @@ egress_publish() {
       return 1
     fi
   done
+  # The proxy lets the sandbox reach its own network's addresses, as it can directly.
+  subnets=$(docker network inspect "$egress_network" --format '{{json .IPAM.Config}}' 2>/dev/null | jq -c '[.[]?.Subnet // empty]' 2>/dev/null) || true
+  [[ -n $subnets ]] || subnets='[]'
   reply=$(egress_control "$(jq -nc --arg name "$sandbox_instance" --argjson pid $$ \
     --arg address "$preview_address" --argjson ports "$(printf '%s\n' "${previews[@]}" | jq -sc 'map(tonumber)')" \
-    '{op: "register", name: $name, pid: $pid, preview: {address: $address, ports: $ports}}')") || exit 1
+    --argjson networks "$subnets" \
+    '{op: "register", name: $name, pid: $pid, preview: {address: $address, ports: $ports}, networks: $networks}')") || exit 1
   publish_args=("${kept[@]}" --volume "$(jq -r .dir <<<"$reply"):/run/agent-egress:ro")
 }
 

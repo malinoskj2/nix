@@ -15,7 +15,12 @@ let
   docker = "${config.virtualisation.docker.package}/bin/docker";
 
   policy = {
-    inherit (cfg) mode allow inspect;
+    inherit (cfg)
+      mode
+      allow
+      allowPrivate
+      inspect
+      ;
     inject = lib.mapAttrsToList (name: secret: {
       inherit name;
       inherit (secret.inject) hosts header format;
@@ -69,6 +74,21 @@ in
       );
       default = [ ];
       description = "Hosts sandboxes may reach: `host` (ports 80 and 443), `*.domain`, `host:port` or `host:*`.";
+    };
+    allowPrivate = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      example = [
+        "media.lan:8096"
+        "192.168.1.5:2222"
+        "10.0.0.0/8:443"
+        "[fd00::/8]:*"
+      ];
+      description = ''
+        Private, LAN and CGNAT destinations sandboxes may reach through the proxy, in every mode: a
+        hostname or `*.domain`, an IP address or a CIDR range (IPv6 in brackets), each with `:port`,
+        `:*` or no port for 80 and 443. Link-local addresses stay refused.
+      '';
     };
     inspect = lib.mkOption {
       type = lib.types.listOf lib.types.str;

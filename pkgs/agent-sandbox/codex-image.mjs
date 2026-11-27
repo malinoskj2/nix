@@ -255,5 +255,6 @@ try {
   await main();
 } catch (error) {
   console.error(`codex-image: ${error.message}`);
-  process.exitCode = 1;
+  // The app-server's socket would keep the process alive.
+  process.exit(1);
 }

@@ -94,7 +94,13 @@ def summarize(stream):
 
 def suggest(targets, allow, minimum):
     """Allowlist entries for what was seen and not yet allowed, collapsing busy domains to wildcards."""
-    unseen = {k: v for k, v in targets.items() if v["decisions"].get("would-deny") or v["decisions"].get("deny")}
+    # A private or internal refusal isn't lifted by the allowlist, so listing those would mislead.
+    unseen = {
+        k: v
+        for k, v in targets.items()
+        if (v["decisions"].get("would-deny") or v["decisions"].get("deny"))
+        and not (v["decisions"].get("deny-private") or v["decisions"].get("deny-internal"))
+    }
     hosts = sorted({h for h, _ in unseen if not is_ip(h)})
     domains = registrable(hosts)
     by_domain = collections.defaultdict(set)
