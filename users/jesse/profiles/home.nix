@@ -16,6 +16,7 @@
     ../agent-sandbox.nix
     ../datagrip
     ../git.nix
+    ../opencode.nix
     ../hyprland-desktop
     ../target-sweep.nix
   ];

@@ -150,6 +150,22 @@ secret, and starts any that were waiting for one. Boot deploys it too.
    stays undeployed until you add it and apply.
 4. Back the file up.
 
+### The Venice API key
+
+`home` declares `secrets.host.venice-api-key` for jesse, and plain `opencode`
+reads it from `/run/secrets/venice-api-key` for its Venice models. Until it is
+deployed, OpenCode still starts, and Venice requests fail with `VENICE_API_KEY
+is not set`. To add or replace it:
+
+```sh
+secret add venice-api-key      # or rotate, to replace it; prompts without echo
+secret apply
+```
+
+Then pick a Venice model in OpenCode's `/models`. OpenCode reads the key when
+it loads its config, so after adding or rotating it, run `opencode service
+restart` and reopen any running OpenCode.
+
 ### Rotating a secret
 
 1. Create the new credential at the provider, leaving the old one valid.
