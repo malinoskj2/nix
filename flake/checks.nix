@@ -34,6 +34,7 @@
           media-web = self'.packages.media-web.tests.stubs;
           devshell = self'.devShells.default;
           gpu-scheduler = self'.packages.gpu-scheduler.tests.scheduler;
+          secret-scrub = self'.packages.secret-scrub.tests.scrub;
           cargo-preferences = self'.packages.cargo-preferences;
           rust-lints-library = self'.packages.rust-lints.lintLibrary;
           rust-lints-fixture = self'.packages.rust-lints.tests.fixture;
