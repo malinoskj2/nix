@@ -241,9 +241,22 @@ write_accounts() {
   printf 'root:x:0:\n%s:x:%s:%s\n' "$group" "$gid" "$user" >"$data/group"
 }
 
+# Host ports every container publishes, including created ones that don't listen yet.
+reserved_ports=" "
+read_reserved_ports() {
+  local ids
+  mapfile -t ids < <(docker ps -aq)
+  reserved_ports=" "
+  if [[ ${#ids[@]} -gt 0 ]]; then
+    reserved_ports+=$(docker container inspect --format \
+      '{{range $p, $b := .HostConfig.PortBindings}}{{range $b}}{{.HostPort}} {{end}}{{end}}' "${ids[@]}" |
+      tr '\n' ' ')
+  fi
+}
+
 free_port() {
   local port=$1
-  while (: <"/dev/tcp/127.0.0.1/$port") 2>/dev/null; do
+  while [[ $reserved_ports == *" $port "* ]] || (: <"/dev/tcp/127.0.0.1/$port") 2>/dev/null; do
     port=$((port + 1))
   done
   echo "$port"
@@ -571,13 +584,13 @@ case $agent in
 esac
 
 # Serialize port selection with container creation across concurrent
-# launches: a created container reserves its publishes, so a launcher that
-# picks the same ports loses the create and retries with freshly probed
-# ports instead of failing to bind.
+# launches. A created container binds its ports only when it starts, so the
+# probe also skips every port an existing container publishes.
 exec 9>"$runtime/agent-sandbox-ports.lock"
 cid=
 for _ in {1..5}; do
   flock 9
+  read_reserved_ports
   vnc_port=$(free_port 5900)
   hyprland_vnc_port=$(free_port $((vnc_port + 1)))
   novnc_port=$(free_port 6080)

@@ -860,6 +860,20 @@ class Runner:
         taken.add(port)
         return port
 
+    def reserved_ports(self):
+        """Host ports every container publishes, including created ones that don't listen yet."""
+        ids = self.docker("ps", "-aq", check=False).stdout.split()
+        if not ids:
+            return set()
+        result = self.docker("container", "inspect", "--format", "{{json .HostConfig.PortBindings}}", *ids, check=False)
+        ports = set()
+        for line in result.stdout.splitlines():
+            for bindings in (json.loads(line or "null") or {}).values():
+                for binding in bindings or []:
+                    if str(binding.get("HostPort", "")).isdigit():
+                        ports.add(int(binding["HostPort"]))
+        return ports
+
     @staticmethod
     def port_open(port):
         with socket.socket() as probe:
@@ -920,6 +934,34 @@ class Runner:
         if self.args.seccomp_profile:
             return ["--security-opt", f"seccomp={self.args.seccomp_profile}"]
         return []
+
+    def publish_and_start(self, name, image, args, attempt):
+        """Create and start the sandbox with free host ports; the caller holds the ports lock."""
+        taken = self.reserved_ports()
+        # A retry skips past the ports the failed attempt chose.
+        vnc = self.free_port(5900 + 3 * attempt, taken)
+        hyprland_vnc = self.free_port(vnc + 1, taken)
+        novnc = self.free_port(6080 + attempt, taken)
+        publish = [
+            "--publish",
+            f"127.0.0.1:{vnc}:5900",
+            "--publish",
+            f"127.0.0.1:{hyprland_vnc}:5901",
+            "--publish",
+            f"127.0.0.1:{novnc}:6080",
+            "--env",
+            f"AGENT_SANDBOX_VNC_URL=http://127.0.0.1:{novnc}/vnc.html?autoconnect=1&resize=scale",
+        ]
+        ports = {}
+        host_port = 18080 + 5 * attempt
+        for port in PREVIEW_PORTS:
+            host_port = self.free_port(host_port, taken)
+            url = f"http://{self.args.preview_address}:{host_port}"
+            ports[port] = url
+            publish += ["--publish", f"{host_port}:{port}", "--env", f"AGENT_PREVIEW_URL_{port}={url}"]
+        self.docker("create", *args, *publish, image, "sleep", "infinity", timeout=120)
+        self.docker("start", name, timeout=120)
+        return ports, novnc
 
     def create_sandbox(self, name, image, pins, worktree, request, emit):
         uid, gid = os.getuid(), os.getgid()
@@ -1003,31 +1045,17 @@ class Runner:
                 args += ["--mount", f"type=bind,src={self.args.gpu_lease_dir},dst={self.args.gpu_lease_dir}"]
         if os.path.exists("/run/opengl-driver-32"):
             args += ["--volume", "/run/opengl-driver-32:/run/opengl-driver-32:ro"]
-        ports = {}
         with open(self.args.ports_lock, "a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
-            taken = set()
-            vnc = self.free_port(5900, taken)
-            hyprland_vnc = self.free_port(vnc + 1, taken)
-            novnc = self.free_port(6080, taken)
-            publish = [
-                "--publish",
-                f"127.0.0.1:{vnc}:5900",
-                "--publish",
-                f"127.0.0.1:{hyprland_vnc}:5901",
-                "--publish",
-                f"127.0.0.1:{novnc}:6080",
-                "--env",
-                f"AGENT_SANDBOX_VNC_URL=http://127.0.0.1:{novnc}/vnc.html?autoconnect=1&resize=scale",
-            ]
-            host_port = 18080
-            for port in PREVIEW_PORTS:
-                host_port = self.free_port(host_port, taken)
-                url = f"http://{self.args.preview_address}:{host_port}"
-                ports[port] = url
-                publish += ["--publish", f"{host_port}:{port}", "--env", f"AGENT_PREVIEW_URL_{port}={url}"]
-            self.docker("create", *args, *publish, image, "sleep", "infinity", timeout=120)
-        self.docker("start", name, timeout=120)
+            # Another engine client can still take a port between the probe and the start.
+            for attempt in range(3):
+                try:
+                    ports, novnc = self.publish_and_start(name, image, args, attempt)
+                    break
+                except Refused as error:
+                    if "port is already allocated" not in str(error) or attempt == 2:
+                        raise
+                    self.docker("rm", "--force", name, check=False)
         emit("err", f"started {name}\n")
         for _ in range(300):
             if self.docker("exec", name, "test", "-s", f"{runtime}/sshd_config", check=False).returncode == 0:

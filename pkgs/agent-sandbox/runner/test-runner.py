@@ -400,6 +400,48 @@ class TeardownTest(unittest.TestCase):
         self.assertEqual(len(downed), 2)
 
 
+class PortTest(unittest.TestCase):
+    def runner(self, docker):
+        r = object.__new__(runner.Runner)
+        r.args = argparse.Namespace(preview_address="192.0.2.1")
+        r.docker = docker
+        r.port_open = lambda _port: False
+        return r
+
+    def test_ports_of_created_containers_are_reserved(self):
+        def docker(*argv, check=True, timeout=300):
+            if argv[0] == "ps":
+                return unittest.mock.Mock(stdout="a\nb\n")
+            bindings = {"5900/tcp": [{"HostIp": "127.0.0.1", "HostPort": "5900"}], "8080/tcp": None}
+            return unittest.mock.Mock(stdout=json.dumps(bindings) + "\nnull\n")
+
+        self.assertEqual(self.runner(docker).reserved_ports(), {5900})
+
+    def test_a_bind_conflict_at_start_retries_with_other_ports(self):
+        calls = []
+
+        def docker(*argv, check=True, timeout=300):
+            calls.append(argv)
+            if argv[0] == "ps":
+                return unittest.mock.Mock(stdout="")
+            if argv[0] == "start" and sum(call[0] == "start" for call in calls) == 1:
+                raise runner.Refused("docker start failed: Bind for 127.0.0.1:5900 failed: port is already allocated")
+            return unittest.mock.Mock(stdout="", returncode=0)
+
+        r = self.runner(docker)
+        ports = []
+        for attempt in range(2):
+            try:
+                ports.append(r.publish_and_start("n", "img", [], attempt))
+            except runner.Refused:
+                docker("rm", "--force", "n")
+        creates = [call for call in calls if call[0] == "create"]
+        self.assertEqual(len(creates), 2)
+        self.assertIn("127.0.0.1:5900:5900", creates[0])
+        self.assertNotIn("127.0.0.1:5900:5900", creates[1])
+        self.assertEqual(len(ports), 1)
+
+
 class RuntimeTest(unittest.TestCase):
     def runner(self, runsc=True, seccomp=None):
         r = object.__new__(runner.Runner)
