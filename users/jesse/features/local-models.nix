@@ -9,6 +9,8 @@ let
   inherit (cfg) root stores;
   storePaths = lib.unique (lib.attrValues stores);
   extraStores = lib.filter (path: path != root) storePaths;
+  mountedPaths = map (name: stores.${name}) cfg.mountedStores;
+  creatableStores = lib.filter (path: !lib.elem path mountedPaths) extraStores;
   executable = lib.getExe pkgs.local-models;
   source = builtins.fromJSON (builtins.readFile ../../../pkgs/local-models/catalog.json);
   packaged = model: {
@@ -33,7 +35,8 @@ let
       source
       // {
         inherit stores;
-        inherit (cfg) defaultStore;
+        inherit (cfg) defaultStore mountedStores;
+        storeReserves = lib.mapAttrs (_: gib: gib * 1024 * 1024 * 1024) cfg.storeReserves;
         importCaches = [
           "${config.home.homeDirectory}/.cache/huggingface/hub"
           "${config.xdg.dataHome}/agent-sandbox/home/.cache/huggingface/hub"
@@ -76,6 +79,16 @@ in
       default = "main";
       description = "Store for catalog entries without a `store` field.";
     };
+    mountedStores = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "Stores that are mount points of another filesystem, such as an NFS share. Sync never creates them and treats them as unavailable unless that filesystem is mounted.";
+    };
+    storeReserves = lib.mkOption {
+      type = lib.types.attrsOf lib.types.ints.unsigned;
+      default = { };
+      description = "Free space in GiB that downloads and imports must leave on a store's filesystem, beyond the usual 2 GiB.";
+    };
   };
   config = {
     home.packages = [
@@ -97,9 +110,20 @@ in
         assertion = lib.all (lib.hasPrefix "/") storePaths;
         message = "services.local-models.stores must be absolute paths";
       }
+      {
+        assertion = lib.all (name: stores ? ${name}) (cfg.mountedStores ++ lib.attrNames cfg.storeReserves);
+        message = "services.local-models.mountedStores and storeReserves must name stores";
+      }
+      {
+        assertion = !lib.elem root mountedPaths;
+        message = "services.local-models.root can't be a mounted store";
+      }
     ];
     xdg.configFile."local-models/root".text = root;
     xdg.configFile."local-models/stores".text = lib.concatMapStrings (path: "${path}\n") extraStores;
+    xdg.configFile."local-models/mounted-stores".text = lib.concatMapStrings (
+      path: "${path}\n"
+    ) mountedPaths;
     home.file.".config/local-models/voice-compose.yaml".text =
       let
         bind = source: target: {
@@ -168,7 +192,7 @@ in
       if ! run mkdir -p ${root}/.state 2>/dev/null; then
         echo "Model root ${root} is unavailable; skipping model synchronization"
       else
-        for store in ${lib.escapeShellArgs extraStores}; do
+        for store in ${lib.escapeShellArgs creatableStores}; do
           run mkdir -p "$store" 2>/dev/null || echo "Model store $store is unavailable; its entries stay missing"
         done
         run ln -sfn ${catalog}/catalog.json ${root}/catalog.json

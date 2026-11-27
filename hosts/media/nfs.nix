@@ -2,13 +2,15 @@ let
   lanInterface = "enp4s0";
   client = "192.168.1.131";
   nfsRule = "-i ${lanInterface} -s ${client} -p tcp --dport 2049 -j nixos-fw-accept";
+  options = "rw,sync,no_subtree_check,root_squash,sec=sys";
 in
 {
   services.nfs = {
     server = {
       enable = true;
       exports = ''
-        /mnt/media3 ${client}(rw,sync,no_subtree_check,root_squash,sec=sys)
+        /mnt/media3 ${client}(${options})
+        /media/models ${client}(${options})
       '';
     };
     # NFSv4 needs only port 2049; v3's rpcbind and mountd stay behind the firewall.
@@ -18,8 +20,15 @@ in
     };
   };
 
-  # Without the disk, writes would land in the empty mountpoint on the root disk.
-  systemd.services.nfs-server.unitConfig.RequiresMountsFor = [ "/mnt/media3" ];
+  # Without the disks, writes would land in the empty mountpoints on the root disk.
+  systemd.services.nfs-server = {
+    unitConfig.RequiresMountsFor = [
+      "/mnt/media3"
+      "/media"
+    ];
+    wants = [ "models-directory.service" ];
+    after = [ "models-directory.service" ];
+  };
 
   networking.firewall = {
     extraCommands = "iptables -A nixos-fw ${nfsRule}";

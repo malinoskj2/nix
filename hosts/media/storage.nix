@@ -18,6 +18,18 @@ let
   };
 in
 {
+  systemd.services.models-directory = {
+    wantedBy = [ "multi-user.target" ];
+    unitConfig = {
+      RequiresMountsFor = [ "/media" ];
+      ConditionPathIsMountPoint = "/media";
+    };
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.coreutils}/bin/install -d -m 0755 -o jesse -g users /media/models";
+    };
+  };
+
   systemd.services.agent-share-directory = {
     wantedBy = [ "multi-user.target" ];
     unitConfig = {
