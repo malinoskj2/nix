@@ -4,6 +4,7 @@ import collections
 import copy
 import errno
 import fcntl
+import grp
 import hashlib
 import io
 import json
@@ -295,8 +296,9 @@ def add_labels(entry, labels):
 
 
 class ComposeModel:
-    def __init__(self, model, project, pins, labels, root_volume="asr-root", files=None, runtime="runc"):
+    def __init__(self, model, project, pins, labels, root_volume="asr-root", files=None, runtime="runc", egress=None):
         self.model = copy.deepcopy(model)
+        self.egress = egress
         self.runtime = runtime
         self.project = project
         self.pins = pins
@@ -334,7 +336,21 @@ class ComposeModel:
             self.service(name, service, services, networks, volumes)
         if self.uses_root:
             model.setdefault("volumes", {})[ROOT_VOLUME] = {"external": True, "name": self.root_volume}
+        if self.egress is not None:
+            for key, network in networks.items():
+                self.internal(key, network)
         return self.model
+
+    def internal(self, key, network):
+        """The sandbox joins every stack network, so none may give it a route out.
+
+        The bridge name puts it under the host's agent-sandbox nftables drop, which stops stack
+        containers reaching the host through the gateway address.
+        """
+        network["internal"] = True
+        network.setdefault("driver_opts", {})["com.docker.network.bridge.name"] = (
+            f"br-asb-{short_hash(f'{self.project}_{key}', 8)}"
+        )
 
     @staticmethod
     def image_suffix(image):
@@ -496,6 +512,12 @@ class ComposeModel:
                 refuse(f"{where}.build: dockerfile must be a normalized path inside the worktree")
         if build.get("network") not in (None, "default", "none"):
             refuse(f"{where}.build: network must be default or none")
+        if self.egress is not None and self.egress.get("buildNetwork") == "none" and build.get("network") != "none":
+            # RUN steps would otherwise reach the network directly, around the egress proxy.
+            build["network"] = "none"
+            self.warnings.append(
+                f"{where}.build: RUN steps have no network on this host (agentBroker.egress.buildNetwork)"
+            )
         for reference in build.get("secrets") or []:
             source = reference.get("source") if isinstance(reference, dict) else reference
             if source not in (self.model.get("secrets") or {}):
@@ -567,6 +589,10 @@ class Runner:
         self.base_labels = {OWNER_LABEL: self.owner}
         self.runc_fallback = set()
         self.runsc_available = None
+        self.egress = None
+        if getattr(args, "egress_config", None) and os.path.exists(args.egress_config):
+            with open(args.egress_config) as f:
+                self.egress = json.load(f).get("sandbox")
 
     # Docker helpers
 
@@ -684,7 +710,8 @@ class Runner:
         for project in list(self.projects):
             attempt(f"compose down {project}", self.compose_down_locked, project)
         attempt("removing owned resources", self.remove_owned)
-        for sandbox in self.sandboxes.values():
+        for name, sandbox in self.sandboxes.items():
+            self.release_egress(name, sandbox)
             sandbox["pins"].close()
         attempt("removing candidate images", self.remove_candidate_images, self.oid)
         subprocess.run(["chmod", "-R", "u+w", str(self.state)], capture_output=True)
@@ -910,6 +937,11 @@ class Runner:
         return name
 
     def sandbox_launch(self, request, emit):
+        if request.get("steam") and self.egress is not None:
+            refuse(
+                "a sandbox behind the egress proxy can't start a Steam sandbox, which would have no proxy; "
+                "ask the human to start one with sandbox --steam"
+            )
         image = self.allowed_image(request.get("image"))
         worktree = request.get("worktree")
         if isinstance(worktree, str) and re.search(r'[,"\n]', worktree):
@@ -925,8 +957,10 @@ class Runner:
             return self.create_sandbox(name, image, pins, worktree, request, emit)
         except BaseException:
             with self.lock:
-                self.sandboxes.pop(name, None)
+                entry = self.sandboxes.pop(name, None)
             self.docker("rm", "--force", "--volumes", name, check=False)
+            if entry:
+                self.release_egress(name, entry)
             pins.close()
             shutil.rmtree(self.state / name, ignore_errors=True)
             raise
@@ -979,9 +1013,116 @@ class Runner:
             ports[port] = url
             publish += ["--publish", f"{host_port}:{port}", "--env", f"AGENT_PREVIEW_URL_{port}={url}"]
         excluded.update(taken)
+        if self.egress_for(name):
+            publish = self.ingress(name, publish)
         self.docker("create", *args, *publish, image, "sleep", "infinity", timeout=120)
         self.docker("start", name, timeout=120)
         return ports, novnc
+
+    # Egress
+
+    def egress_for(self, name):
+        return (getattr(self, "sandboxes", {}).get(name) or {}).get("egress")
+
+    def gate(self, request):
+        with socket.socket(socket.AF_UNIX) as client:
+            client.settimeout(10)
+            try:
+                client.connect(self.egress["gate"])
+                client.sendall((json.dumps(request) + "\n").encode())
+                reply = json.loads(client.makefile().readline() or "{}")
+            except (OSError, ValueError) as error:
+                refuse(f"the egress gate isn't answering ({error}); check systemctl status agent-broker-egress-gate")
+        if not reply.get("ok"):
+            refuse(f"the egress gate refused: {reply.get('error')}")
+        return reply
+
+    def egress_args(self, name, request):
+        """Docker arguments that put a sibling on the internal network behind its own egress socket."""
+        if self.egress is None:
+            return []
+        ingress = self.state / name / "ingress"
+        ingress.mkdir(mode=0o700)
+        with self.lock:
+            self.sandboxes[name]["egress"] = {"ingress": ingress, "forwarders": []}
+        try:
+            gid = grp.getgrnam(self.egress["group"]).gr_gid
+        except KeyError:
+            refuse(f"group {self.egress['group']} is missing")
+        args = [
+            "--network",
+            self.egress["network"],
+            "--group-add",
+            str(gid),
+            "--volume",
+            f"{ingress}:/run/agent-ingress",
+        ]
+        if self.args.egress_env:
+            args += ["--env-file", self.args.egress_env]
+        if self.egress.get("push") and os.path.isdir(self.egress["push"]):
+            args += ["--volume", f"{self.egress['push']}:/run/agent-push:ro"]
+        return args
+
+    def ingress(self, name, publish):
+        """Swap --publish for host forwarders into the sibling's ingress sockets, then register it."""
+        state = self.egress_for(name)
+        self.stop_forwarders(state)
+        kept, previews = [], []
+        index = 0
+        while index < len(publish):
+            if publish[index] != "--publish":
+                kept.append(publish[index])
+                index += 1
+                continue
+            parts = publish[index + 1].split(":")
+            bind, host_port, port = parts if len(parts) == 3 else ["0.0.0.0", *parts]
+            if len(parts) == 2:
+                previews.append(int(host_port))
+            forwarder = subprocess.Popen(
+                [
+                    self.args.socat,
+                    f"TCP-LISTEN:{host_port},bind={bind},fork,reuseaddr",
+                    f"UNIX-CONNECT:{state['ingress']}/{port}.sock",
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            state["forwarders"].append(forwarder)
+            index += 2
+        time.sleep(0.2)
+        if any(forwarder.poll() is not None for forwarder in state["forwarders"]):
+            self.stop_forwarders(state)
+            refuse("port is already allocated")
+        reply = self.gate(
+            {
+                "op": "register",
+                "name": name,
+                "pid": os.getpid(),
+                "preview": {"address": self.args.preview_address, "ports": previews},
+            }
+        )
+        state["registered"] = True
+        return [*kept, "--volume", f"{reply['dir']}:/run/agent-egress:ro"]
+
+    @staticmethod
+    def stop_forwarders(state):
+        for forwarder in state.get("forwarders", []):
+            forwarder.terminate()
+        for forwarder in state.get("forwarders", []):
+            try:
+                forwarder.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                forwarder.kill()
+        state["forwarders"] = []
+
+    def release_egress(self, name, entry):
+        state = entry.get("egress")
+        if not state:
+            return
+        self.stop_forwarders(state)
+        if state.get("registered"):
+            attempt(f"unregistering {name}", self.gate, {"op": "unregister", "name": name})
 
     def create_sandbox(self, name, image, pins, worktree, request, emit):
         uid, gid = os.getuid(), os.getgid()
@@ -1065,6 +1206,7 @@ class Runner:
                 args += ["--mount", f"type=bind,src={self.args.gpu_lease_dir},dst={self.args.gpu_lease_dir}"]
         if os.path.exists("/run/opengl-driver-32"):
             args += ["--volume", "/run/opengl-driver-32:/run/opengl-driver-32:ro"]
+        args += self.egress_args(name, request)
         with open(self.args.ports_lock, "a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
             ports, novnc = self.start_with_free_ports(name, image, args)
@@ -1079,9 +1221,15 @@ class Runner:
                 logs = self.docker("logs", "--tail", "50", name, check=False)
                 refuse(f"{name} exited during startup:\n{logs.stdout}{logs.stderr}")
             time.sleep(0.2)
-        address = self.docker(
-            "container", "inspect", "--format", "{{.NetworkSettings.IPAddress}}", name, check=False
-        ).stdout.strip()
+        addresses = self.docker(
+            "container",
+            "inspect",
+            "--format",
+            "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}",
+            name,
+            check=False,
+        ).stdout.split()
+        address = addresses[0] if addresses else ""
         return {
             "id": name,
             "image": image,
@@ -1128,6 +1276,7 @@ class Runner:
     def sandbox_rm(self, request, emit):
         name, sandbox = self.sandbox(request)
         self.docker("rm", "--force", "--volumes", name, check=False)
+        self.release_egress(name, sandbox)
         sandbox["pins"].close()
         root = self.state / name
         subprocess.run(["chmod", "-R", "u+w", str(root)], capture_output=True)
@@ -1200,7 +1349,9 @@ class Runner:
             directory = self.state / "compose" / project
             directory.mkdir(parents=True, exist_ok=True)
             runtime = runtime or self.compose_runtime(project, request, emit)
-            checker = ComposeModel(model, project, pins, labels, self.root_volume(pins.root), directory, runtime)
+            checker = ComposeModel(
+                model, project, pins, labels, self.root_volume(pins.root), directory, runtime, self.egress
+            )
             validated = checker.validate()
         except BaseException:
             pins.close()
@@ -1659,6 +1810,9 @@ def parse_args(argv):
     parser.add_argument("--compose", default="docker-compose")
     parser.add_argument("--buildx", default="/usr/libexec/docker/cli-plugins/docker-buildx")
     parser.add_argument("--docker-socket", default="/run/docker.sock")
+    parser.add_argument("--socat", default="socat")
+    parser.add_argument("--egress-config", help="the broker's egress policy; siblings join its internal network")
+    parser.add_argument("--egress-env", help="the proxy and CA environment for siblings on the internal network")
     parser.add_argument("--ttl", type=int, default=12 * 3600, help="seconds a sandbox or stack may sit idle")
     return parser.parse_args(argv)
 

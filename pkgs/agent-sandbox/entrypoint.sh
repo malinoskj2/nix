@@ -9,6 +9,20 @@ fi
 log_dir=$XDG_RUNTIME_DIR/logs
 mkdir -p "$log_dir"
 
+# On the internal network the broker's egress proxy is the only way out, and published ports
+# arrive as Unix sockets that the host forwards its ports to.
+if [[ ${AGENT_SANDBOX_EGRESS:-} == 1 ]]; then
+  socat TCP-LISTEN:3128,bind=127.0.0.1,fork,reuseaddr UNIX-CONNECT:/run/agent-egress/proxy.sock \
+    >"$log_dir/egress.log" 2>&1 &
+fi
+if [[ -d /run/agent-ingress && -w /run/agent-ingress ]]; then
+  for ingress_port in 5900 5901 6080 ${AGENT_PREVIEW_PORTS:-}; do
+    rm -f "/run/agent-ingress/$ingress_port.sock"
+    socat "UNIX-LISTEN:/run/agent-ingress/$ingress_port.sock,fork,mode=600" "TCP:127.0.0.1:$ingress_port" \
+      >>"$log_dir/ingress.log" 2>&1 &
+  done
+fi
+
 # sshd starts sessions with a bare environment, so hand them this one. sshd
 # honours only the first SetEnv line, so every variable goes on one.
 write_sshd_config() {

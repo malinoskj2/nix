@@ -1,0 +1,2 @@
+Match !host localhost,127.0.0.1,::1,agent-sandbox exec "test -S /run/agent-egress/proxy.sock"
+  ProxyCommand socat - PROXY:127.0.0.1:%h:%p,proxyport=3128

@@ -491,10 +491,18 @@ def running_server(gallery):
         return None
 
 
+HUB_FRESH = 90
+
+
 def hub():
     """The host's gallery hub, when it answers."""
     try:
-        info = json.loads((REGISTRY / "hub.json").read_text())
+        path = REGISTRY / "hub.json"
+        info = json.loads(path.read_text())
+        # A running hub refreshes the file every 30 s. Sandboxes behind the egress proxy can't
+        # reach its LAN address to probe it.
+        if time.time() - path.stat().st_mtime < HUB_FRESH:
+            return info
         target = urllib.parse.urlsplit(info["url"])
         with socket.create_connection((target.hostname, target.port or 80), timeout=1):
             return info
@@ -776,6 +784,7 @@ def discover(roots):
 def publish_hub(url, port):
     try:
         if json.loads((REGISTRY / "hub.json").read_text()).get("url") == url:
+            os.utime(REGISTRY / "hub.json")
             return
     except (OSError, ValueError, AttributeError):
         pass

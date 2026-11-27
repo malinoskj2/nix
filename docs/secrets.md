@@ -12,8 +12,8 @@ secret has exactly one kind of consumer:
 - **Broker**: only `agent-broker` can read it, a system user that neither
   jesse nor any agent runs as. Services running as `agent-broker` use it on
   the agents' behalf: an egress proxy that adds it to requests, or a push
-  gateway. This is the only way agents ever get to use a secret; it is never
-  mounted or readable in a sandbox.
+  gateway ([agent-egress.md](agent-egress.md)). This is the only way agents
+  ever get to use a secret; it is never mounted or readable in a sandbox.
 
 A secret can't be both. Evaluation fails if one name is declared as both
 kinds, if two secrets share a key in the file, if a broker secret's owner,
@@ -331,10 +331,10 @@ never mounts `/run/secrets`, `/var/lib/secrets` or `/var/lib/sops-nix`, and the
 `agent-sandbox-no-secret-mounts` flake check fails if its source ever names
 those paths or binds all of `/run` or `/var`. That check reads the launcher's
 source for known patterns; it doesn't prove what a running container can
-reach, so a mount built some other way would get past it. Once the
-egress proxy lands, a sandbox sees only placeholders and broker sockets: a
-request to a bound host gets its header added on the way out, and the value
-never enters the container.
+reach, so a mount built some other way would get past it. With the egress
+proxy ([agent-egress.md](agent-egress.md)), a sandbox sees only placeholders
+and broker sockets: a request to a bound host gets its header added on the
+way out, and the value never enters the container.
 
 **Agents on the host, running as jesse,** can read host secrets owned by
 jesse, since they are jesse's by design, but not broker secrets:

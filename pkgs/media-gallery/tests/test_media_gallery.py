@@ -1,9 +1,11 @@
 import contextlib
 import io
 import json
+import os
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -248,6 +250,17 @@ class HubTest(unittest.TestCase):
                 self.get("/g/other-000000/api/gallery")
         finally:
             entry.unlink()
+
+    def test_a_fresh_hub_file_counts_without_a_probe(self):
+        unreachable = "http://192.0.2.1:9"
+        mg.publish_hub(unreachable, 9)
+        self.addCleanup((mg.REGISTRY / "hub.json").unlink)
+        self.assertEqual(mg.hub()["url"], unreachable)
+        stale = time.time() - mg.HUB_FRESH - 10
+        os.utime(mg.REGISTRY / "hub.json", (stale, stale))
+        self.assertIsNone(mg.hub())
+        mg.publish_hub(unreachable, 9)
+        self.assertIsNotNone(mg.hub())
 
     def test_discover_registers_existing_galleries(self):
         self.gallery.unregister()

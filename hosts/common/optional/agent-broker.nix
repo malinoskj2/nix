@@ -124,6 +124,11 @@ let
           default = "${socketRoot}/${name}";
           description = "Directory for the service's client sockets, connectable by the agent-broker-clients group.";
         };
+        socketDirMode = lib.mkOption {
+          type = lib.types.strMatching "[0-7]{4}";
+          default = "2750";
+          description = "Mode of `socketDir`. 2755 lets clients outside the group reach sockets that check the peer themselves.";
+        };
       };
     }
   );
@@ -219,7 +224,9 @@ in
       systemd.tmpfiles.rules = [
         "d ${socketRoot} 0755 root root -"
       ]
-      ++ lib.mapAttrsToList (_: svc: "d ${svc.socketDir} 2750 ${user} ${socketGroup} -") cfg.services;
+      ++ lib.mapAttrsToList (
+        _: svc: "d ${svc.socketDir} ${svc.socketDirMode} ${user} ${socketGroup} -"
+      ) cfg.services;
 
       sops = {
         secrets = lib.mapAttrs (name: secret: {

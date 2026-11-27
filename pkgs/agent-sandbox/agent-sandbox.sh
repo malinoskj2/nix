@@ -319,6 +319,9 @@ cleanup() {
   if [[ -n ${cid:-} ]]; then
     docker rm --force "$cid" >/dev/null 2>&1 || true
   fi
+  if declare -F egress_cleanup >/dev/null; then
+    egress_cleanup
+  fi
   # The runner removes the sandboxes and stacks this one started before it exits.
   if [[ -n ${runner_pid:-} ]]; then
     kill "$runner_pid" 2>/dev/null || true
@@ -407,6 +410,12 @@ sandbox_instance=${AGENT_SANDBOX_NAME:-agent-sandbox-$(basename "$workdir")-$$}
 preview_address=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
 preview_address=${preview_address:-127.0.0.1}
 
+egress_args=()
+egress_runner_args=()
+# shellcheck source=/dev/null
+source "$AGENT_SANDBOX_EGRESS_LIB"
+egress_init
+
 # The runner is this sandbox's only way to the host engine: disposable sibling sandboxes and
 # review Compose stacks, which it labels with this instance and removes when the sandbox goes.
 docker_socket=/run/docker.sock
@@ -426,7 +435,7 @@ runner_roots+=(--deny "$tohru_home")
   --image "$image_ref" "${runner_roots[@]}" --passwd "$data/passwd" --group "$data/group" \
   --ports-lock "$runtime/agent-sandbox-ports.lock" --gpu-lease-dir "$gpu_lease_dir" \
   --seccomp-profile "$AGENT_SANDBOX_SECCOMP" \
-  --preview-address "$preview_address" \
+  --preview-address "$preview_address" "${egress_runner_args[@]}" \
   --docker-socket "$docker_socket" >"$runner_dir/runner.log" 2>&1 &
 runner_pid=$!
 
@@ -670,7 +679,7 @@ if [[ ${#data_dirs[@]} -gt 0 ]]; then
   args+=(--env "XDG_DATA_DIRS=${joined%:}")
 fi
 
-args+=("${mounts[@]}")
+args+=("${mounts[@]}" "${egress_args[@]}")
 
 args+=(--interactive)
 if [[ -t 0 && -t 1 ]]; then
@@ -717,6 +726,9 @@ for _ in {1..5}; do
     preview_origins+=("http://$preview_address:$preview_host_port")
     preview_host_port=$((preview_host_port + 1))
   done
+  if [[ -n $egress ]] && ! egress_publish "${publish_args[@]}"; then
+    continue
+  fi
   if cid=$(docker create "${args[@]}" "${publish_args[@]}" "$image_ref" "$@"); then
     break
   fi

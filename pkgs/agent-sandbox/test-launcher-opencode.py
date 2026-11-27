@@ -70,6 +70,9 @@ class LauncherOpenCode(unittest.TestCase):
             "AGENT_SANDBOX_INSTRUCTIONS": "/dev/null",
             "AGENT_SANDBOX_ORCA_PATH": "/usr/bin",
             "AGENT_SANDBOX_ORCA_RELAY": str(bin_dir / "orca-relay"),
+            "AGENT_SANDBOX_EGRESS_LIB": str(LAUNCHER.with_name("egress.sh")),
+            "AGENT_SANDBOX_EGRESS_CONFIG": str(self.root / "no-egress.json"),
+            "AGENT_SANDBOX_EGRESS_ENV": "/dev/null",
         }
 
     def launched(self, *args):

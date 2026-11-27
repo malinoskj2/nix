@@ -1,4 +1,5 @@
 {
+  agent-push,
   antigravity-cli,
   at-spi2-core,
   bacon,
@@ -45,6 +46,7 @@
   gawk,
   gcc,
   ghidra,
+  getent,
   git,
   git-commitu,
   git-open-branch,
@@ -391,9 +393,40 @@ let
   orcaRelay = pythonScript "agent-sandbox-orca-relay" python3 ./orca-relay.py;
   prepareOrcaHooks = pythonScript "agent-sandbox-prepare-orca-hooks" python3 ./prepare-orca-hooks.py;
 
+  egressProxy = "http://127.0.0.1:3128";
+  egressEnv = writeText "agent-sandbox-egress.env" (
+    lib.concatStrings (
+      lib.mapAttrsToList (name: value: "${name}=${value}\n") (
+        lib.genAttrs [ "HTTP_PROXY" "HTTPS_PROXY" "ALL_PROXY" "http_proxy" "https_proxy" "all_proxy" ] (
+          _: egressProxy
+        )
+        # Docker's bridge pool: siblings and stacks are reached directly on their internal networks.
+        // lib.genAttrs [ "NO_PROXY" "no_proxy" ] (_: "localhost,127.0.0.1,::1,172.16.0.0/12")
+        # Tools differ in which variable they read, and NIX_SSL_CERT_FILE overrides SSL_CERT_FILE.
+        // lib.genAttrs [
+          "SSL_CERT_FILE"
+          "NIX_SSL_CERT_FILE"
+          "CURL_CA_BUNDLE"
+          "REQUESTS_CA_BUNDLE"
+          "GIT_SSL_CAINFO"
+          "CARGO_HTTP_CAINFO"
+          "PIP_CERT"
+          "CODEX_CA_CERTIFICATE"
+        ] (_: "/run/agent-egress/ca-bundle.crt")
+        // {
+          NODE_EXTRA_CA_CERTS = "/run/agent-egress/ca.pem";
+          NODE_USE_ENV_PROXY = "1";
+          AGENT_SANDBOX_EGRESS = "1";
+          AGENT_PUSH_SOCKET = "/run/agent-push/push.sock";
+        }
+      )
+    )
+  );
+
   runner = writeShellScriptBin "agent-sandbox-runner" ''
     exec ${lib.getExe python3} ${./runner/runner.py} \
       --docker ${lib.getExe docker-client} \
+      --socat ${lib.getExe socat} \
       --compose ${lib.getExe docker-compose} \
       --buildx ${docker-buildx}/libexec/docker/cli-plugins/docker-buildx "$@"
   '';
@@ -449,9 +482,19 @@ let
     exec ${lib.getExe nodejs} ${./codex-image.mjs} "$@"
   '';
 
+  # Sandboxes reach the app-server's socket directly, so the server itself holds every turn to
+  # what codex-image asks for.
+  codexRequirements = writeText "codex-requirements.toml" ''
+    allowed_sandbox_modes = ["read-only"]
+    allowed_approval_policies = ["never"]
+  '';
+
   codexServerEntrypoint = writeShellApplication {
     name = "agent-sandbox-codex-server-entrypoint";
-    runtimeInputs = [ jq ];
+    runtimeInputs = [
+      jq
+      socat
+    ];
     runtimeEnv.CODEX = lib.getExe codex;
     text = builtins.readFile ./codex-server-entrypoint.sh;
   };
@@ -602,6 +645,7 @@ let
       ]))
       redis
       ripgrep
+      agent-push.client
       runnerClient
       rust-analyzer
       rust-lints
@@ -714,6 +758,8 @@ let
       # Steam's bundled libcurl ignores SSL_CERT_FILE and reads Debian's bundle path.
       ln -s ${caBundle} etc/ssl/certs/ca-bundle.crt
       ln -s ${caBundle} etc/ssl/certs/ca-certificates.crt
+      mkdir -p etc/ssh
+      ln -s ${./ssh_config} etc/ssh/ssh_config
       ln -s ${./sway.conf} etc/sway/config
       ln -s ${./nested-sway.conf} etc/sway/nested
       ln -s ${./pipewire.conf} etc/pipewire/pipewire.conf.d/50-agent-sandbox.conf
@@ -799,15 +845,20 @@ let
     name = "agent-sandbox";
     runtimeInputs = [
       coreutils
+      getent
       gnugrep
       gnused
       iproute2
+      jq
       openssh
       procps
+      socat
       systemd
       util-linux
     ];
     runtimeEnv = imageEnv // {
+      AGENT_SANDBOX_EGRESS_LIB = "${./egress.sh}";
+      AGENT_SANDBOX_EGRESS_ENV = egressEnv;
       # The PATH an agent with an Orca hook bridge runs with: the curl shim leads,
       # so hook URLs route through the private relay socket.
       AGENT_SANDBOX_ORCA_PATH = "${orcaCurl}/bin:${env}/bin:/usr/bin";
@@ -825,9 +876,15 @@ let
     runtimeInputs = [
       coreutils
       findutils
+      getent
+      jq
+      socat
     ];
     runtimeEnv = imageEnv // {
       AGENT_SANDBOX_CODEX_SERVER_ENTRYPOINT = lib.getExe codexServerEntrypoint;
+      AGENT_SANDBOX_CODEX_REQUIREMENTS = "${codexRequirements}";
+      AGENT_SANDBOX_EGRESS_LIB = "${./egress.sh}";
+      AGENT_SANDBOX_EGRESS_ENV = egressEnv;
     };
     text = builtins.readFile ./agent-sandbox-codex-server.sh;
   };
@@ -921,6 +978,7 @@ symlinkJoin {
           nativeBuildInputs = [
             git
             python3
+            socat
           ];
         }
         ''
@@ -1009,6 +1067,7 @@ symlinkJoin {
         }
         ''
           cp ${./agent-sandbox.sh} agent-sandbox.sh
+          cp ${./egress.sh} egress.sh
           cp ${./test-launcher-opencode.py} test-launcher-opencode.py
           python3 -B test-launcher-opencode.py -v
           touch $out

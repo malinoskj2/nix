@@ -22,6 +22,7 @@ in
 
     ../common/global.nix
     ../common/optional/agent-broker.nix
+    ../common/optional/agent-egress.nix
     ../common/optional/docker.nix
     ../common/optional/fonts.nix
     ../common/optional/gvisor.nix
@@ -48,6 +49,11 @@ in
 
   agentBroker = {
     clients = [ "jesse" ];
+    egress = {
+      enable = true;
+      # OpenCode's model catalogue; api.venice.ai is allowed by its credential binding.
+      allow = [ "models.opencode.ai" ];
+    };
     # Sandboxed OpenCode holds a placeholder; the egress proxy adds this one for Venice.
     secrets.venice-api-key-agent.inject.hosts = [ "api.venice.ai" ];
   };

@@ -50,7 +50,11 @@ for kind in network volume; do
   fi
 done
 pkill -f -- "--state-dir $data/runner/" || true
-rm -rf -- "$runtime"/agent-sandbox-runner/* "$data/runner"
+# Ingress forwarders on the host ports, left by a launcher or runner that died hard; the egress
+# gate drops their registrations once the launcher's pid is gone.
+pkill -f -- "UNIX-CONNECT:$data/runner/" || true
+pkill -f -- "UNIX-CONNECT:$runtime/agent-sandbox-ingress/" || true
+rm -rf -- "$runtime"/agent-sandbox-runner/* "$data/runner" "$runtime/agent-sandbox-ingress"
 
 pkill -f -- "--data $runtime/agent-sandbox-orca-relay/" || true
 rm -rf -- "$runtime"/agent-sandbox-orca/session.* "$runtime"/agent-sandbox-orca-relay/relay.*

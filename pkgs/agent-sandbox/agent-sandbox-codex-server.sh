@@ -28,6 +28,17 @@ if ! docker image inspect "$image_ref" >/dev/null 2>&1; then
 fi
 docker rm --force "$name" >/dev/null 2>&1 || true
 
+# Behind the egress proxy like the sandboxes it serves; the gate drops it once this process exits.
+# shellcheck disable=SC2034
+steam='' preview_address='' runtime=$XDG_RUNTIME_DIR sandbox_instance=$name
+egress_args=() publish_args=()
+# shellcheck source=/dev/null
+source "$AGENT_SANDBOX_EGRESS_LIB"
+egress_init
+if [[ -n $egress ]]; then
+  egress_publish
+fi
+
 # Codex puts the socket in /tmp/codex-daemon-$UID and leaves only a symlink at
 # the listen path, so that directory is the one sandboxes see.
 exec docker run \
@@ -47,9 +58,12 @@ exec docker run \
   --volume "$data/passwd:/etc/passwd:ro" \
   --volume "$data/group:/etc/group:ro" \
   --volume /etc/localtime:/etc/localtime:ro \
+  --volume "$AGENT_SANDBOX_CODEX_REQUIREMENTS:/etc/codex/requirements.toml:ro" \
   --volume "$sandbox_home:$HOME" \
   --workdir "$HOME" \
   --env HOME \
   --env USER="$(id -un)" \
+  "${egress_args[@]}" \
+  "${publish_args[@]}" \
   --entrypoint "$AGENT_SANDBOX_CODEX_SERVER_ENTRYPOINT" \
   "$image_ref"

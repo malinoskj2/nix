@@ -139,6 +139,25 @@ class ComposeTest(Tree):
     def validate(self, model):
         return runner.ComposeModel(model, PROJECT, self.pins(), LABELS, "asr-root").validate()
 
+    def test_egress_makes_every_network_internal_and_builds_offline(self):
+        model = runner.ComposeModel(
+            social_hub(self.worktree), PROJECT, self.pins(), LABELS, "asr-root", egress={"buildNetwork": "none"}
+        )
+        validated = model.validate()
+        for network in validated["networks"].values():
+            self.assertTrue(network["internal"])
+            self.assertRegex(network["driver_opts"]["com.docker.network.bridge.name"], r"^br-asb-[0-9a-f]{8}$")
+        builds = [s["build"] for s in validated["services"].values() if "build" in s]
+        self.assertTrue(builds)
+        self.assertTrue(all(build["network"] == "none" for build in builds))
+        self.assertTrue(any("buildNetwork" in warning for warning in model.warnings))
+        logged = runner.ComposeModel(
+            social_hub(self.worktree), PROJECT, self.pins(), LABELS, "asr-root", egress={"buildNetwork": "default"}
+        ).validate()
+        self.assertTrue(all("network" not in s.get("build", {}) for s in logged["services"].values()))
+        plain = self.validate(social_hub(self.worktree))
+        self.assertTrue(all("internal" not in n for n in plain["networks"].values()))
+
     def test_accepts_and_confines_a_real_stack(self):
         model = self.validate(social_hub(self.worktree))
         server, worker = model["services"]["server"], model["services"]["worker"]
@@ -460,6 +479,50 @@ class PortTest(unittest.TestCase):
         self.assertEqual(sum(call[0] == "create" for call in calls), 3)
 
 
+class EgressIngressTest(unittest.TestCase):
+    def test_published_ports_become_forwarders_into_ingress_sockets(self):
+        import shutil
+        import time
+
+        socat = shutil.which("socat")
+        if socat is None:
+            self.skipTest("socat isn't installed")
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        r = object.__new__(runner.Runner)
+        r.args = argparse.Namespace(socat=socat, preview_address="192.0.2.7")
+        state = {"ingress": Path(tmp.name), "forwarders": []}
+        r.sandboxes = {"n": {"egress": state}}
+        requests = []
+        r.gate = lambda request: requests.append(request) or {"ok": True, "dir": "/gate/sandbox/n"}
+        ports = []
+        for _ in range(2):
+            with socket.socket() as probe:
+                probe.bind(("127.0.0.1", 0))
+                ports.append(probe.getsockname()[1])
+        backend = socket.socket(socket.AF_UNIX)
+        backend.bind(f"{tmp.name}/8080.sock")
+        backend.listen()
+        publish = ["--publish", f"127.0.0.1:{ports[0]}:5900", "--publish", f"{ports[1]}:8080", "--env", "X=1"]
+        args = r.ingress("n", publish)
+        self.assertEqual(args, ["--env", "X=1", "--volume", "/gate/sandbox/n:/run/agent-egress:ro"])
+        self.assertEqual(requests[0]["preview"], {"address": "192.0.2.7", "ports": [ports[1]]})
+        client = socket.create_connection(("127.0.0.1", ports[1]), timeout=5)
+        conn, _ = backend.accept()
+        client.sendall(b"ping")
+        self.assertEqual(conn.recv(4), b"ping")
+        client.close()
+        conn.close()
+        state["registered"] = True
+        r.release_egress("n", r.sandboxes["n"])
+        self.assertEqual(state["forwarders"], [])
+        self.assertEqual(requests[-1], {"op": "unregister", "name": "n"})
+        time.sleep(0.1)
+        with self.assertRaises(OSError):
+            socket.create_connection(("127.0.0.1", ports[1]), timeout=1)
+        backend.close()
+
+
 class FailureReportTest(unittest.TestCase):
     def report(self, services, output="could not resolve postgres\n", hint=True):
         r = object.__new__(runner.Runner)
@@ -595,6 +658,13 @@ class RuntimeTest(unittest.TestCase):
             r.sandbox_security({"steam": True}),
             ["--security-opt", "seccomp=unconfined", "--security-opt", "systempaths=unconfined"],
         )
+
+    def test_a_sandbox_behind_the_proxy_cannot_start_a_steam_sibling(self):
+        r = self.runner()
+        r.egress = {"network": "agent-sandbox"}
+        r.allowed_image = unittest.mock.Mock(side_effect=AssertionError("launched"))
+        with self.assertRaisesRegex(runner.Refused, "Steam"):
+            r.sandbox_launch({"steam": True}, lambda *_: None)
 
 
 if __name__ == "__main__":
