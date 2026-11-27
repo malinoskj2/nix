@@ -80,6 +80,7 @@ in
       agent-team = ./rules/agent-team.md;
       documentation = ./rules/documentation.md;
       git-push = ./rules/git-push.md;
+      languages = ./rules/languages.md;
       local-models = ./rules/local-models.md;
       media = ./rules/media.md;
       nix-run = ./rules/nix-run.md;

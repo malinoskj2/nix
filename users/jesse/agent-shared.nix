@@ -17,6 +17,7 @@ in
       ./claude/rules/agent-team.md
       ./claude/rules/documentation.md
       ./claude/rules/git-push.md
+      ./claude/rules/languages.md
       ./claude/rules/local-models.md
       ./claude/rules/media.md
       ./claude/rules/nix-run.md
