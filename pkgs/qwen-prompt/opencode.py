@@ -48,6 +48,7 @@ BOOKING = ("--vram", "26GiB")
 ANY_PROFILE = "qwen"
 KEEPALIVE = 15
 LOG_LIMIT = 8 * 1024 * 1024
+READ_CHUNK = 65536
 # OpenCode closing an idle keep-alive connection, or going away mid-stream.
 DISCONNECTS = (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, TimeoutError)
 
@@ -89,16 +90,27 @@ class Log:
         self.limit = limit
         self.lock = threading.Lock()
         self.failed = False
+        self.readers = []
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.file = open(path, "a", buffering=1, errors="replace")
+        self.file = open(path, "ab", buffering=0)
+        self.size = self.file.seek(0, os.SEEK_END)
 
     def write(self, text):
+        self.write_bytes(text.encode("utf-8", "replace"))
+
+    def write_bytes(self, data):
+        """Append data, splitting it at the size limit so neither file grows past it."""
         with self.lock:
-            if self.file.tell() >= self.limit:
-                self.file.close()
-                os.replace(self.name, self.name + ".1")
-                self.file = open(self.name, "a", buffering=1, errors="replace")
-            self.file.write(text)
+            while data:
+                if self.size >= self.limit:
+                    self.file.close()
+                    os.replace(self.name, self.name + ".1")
+                    self.file = open(self.name, "ab", buffering=0)
+                    self.size = 0
+                piece = data[: self.limit - self.size]
+                self.file.write(piece)
+                self.size += len(piece)
+                data = data[len(piece) :]
 
     def flush(self):
         pass
@@ -115,10 +127,12 @@ class Log:
 
         def copy():
             with stream:
-                for data in iter(stream.readline, b""):
-                    self.write(data.decode("utf-8", "replace"))
+                while data := stream.read1(READ_CHUNK):
+                    self.write_bytes(data)
 
-        threading.Thread(target=copy, daemon=True).start()
+        thread = threading.Thread(target=copy, daemon=True)
+        thread.start()
+        self.readers = [reader for reader in self.readers if reader.is_alive()] + [thread]
 
     def close(self):
         with self.lock:

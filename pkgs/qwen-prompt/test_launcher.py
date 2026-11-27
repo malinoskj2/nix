@@ -443,6 +443,39 @@ class LogTest(unittest.TestCase):
             self.assertTrue(Path(log.name + ".1").exists())
 
 
+class BoundedLogTest(unittest.TestCase):
+    def test_a_line_longer_than_the_limit_is_split_across_the_backup(self):
+        from opencode import Log
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "large.log"
+            log = Log(path, limit=256)
+            log.write("x" * 4096 + "\n")
+            log.close()
+            self.assertEqual(path.stat().st_size, 1)
+            self.assertEqual(Path(f"{path}.1").stat().st_size, 256)
+
+    def test_child_output_without_newlines_is_copied_in_bounded_chunks(self):
+        import opencode
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "progress.log"
+            log = opencode.Log(path, limit=1024)
+            reader, writer = os.pipe()
+            sizes = []
+            original = log.write_bytes
+            log.write_bytes = lambda data: (sizes.append(len(data)), original(data))
+            log.follow(os.fdopen(reader, "rb"))
+            progress = "".join(f"\rloading λ {n}%" for n in range(100)).encode() * 100
+            os.write(writer, progress)
+            os.close(writer)
+            for thread in log.readers:
+                thread.join(5)
+            log.close()
+            self.assertTrue(sizes and max(sizes) <= opencode.READ_CHUNK, sizes[:5])
+            self.assertTrue(progress.endswith(path.read_bytes()))
+
+
 class QueueTest(unittest.TestCase):
     def test_the_small_model_follows_a_pending_switch(self):
         from opencode import Backend
