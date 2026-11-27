@@ -58,6 +58,10 @@ in
     secrets.venice-api-key-agent.inject.hosts = [ "api.venice.ai" ];
   };
   secrets.host.venice-api-key.owner = "jesse";
+  secrets.unlock = {
+    enable = true;
+    user = "jesse";
+  };
 
   networking = {
     hostName = "home";

@@ -1,8 +1,9 @@
 # Secrets
 
 All of a host's secrets live in one
-[sops](https://github.com/getsops/sops)-encrypted file, decrypted at boot by
-[sops-nix](https://github.com/Mic92/sops-nix) into `/run/secrets`. Each
+[sops](https://github.com/getsops/sops)-encrypted file, decrypted by
+[sops-nix](https://github.com/Mic92/sops-nix) into `/run/secrets` once jesse
+logs in (see [Locked and unlocked](#locked-and-unlocked)). Each
 secret has exactly one kind of consumer:
 
 - **Host**: a host user or service, such as jesse's own tools (the Venice API
@@ -42,7 +43,8 @@ broker secrets and services on top.
 | --- | --- | --- |
 | Encrypted secrets | `/var/lib/secrets/secrets.yaml` | root, directory `0700` |
 | Recipients (public keys) | `/var/lib/secrets/.sops.yaml` | root |
-| Host decryption key | `/var/lib/sops-nix/key.txt` | root, `0600`, directory `0700` |
+| Host decryption key, wrapped | `/var/lib/sops-nix/key.sealed` | root, `0600`, directory `0700` |
+| Host decryption key, while unlocked | `/run/secrets-key/key.txt` (ramfs) | root, `0600`, directory `0700` |
 | Decrypted values | `/run/secrets/<name>` (ramfs, never on disk) | broker: `agent-broker`, `0400`; host: as declared |
 | Broker sockets | `/run/agent-broker/<service>/` | `agent-broker:agent-broker-clients`, `2750` |
 | Your recovery key | offline, in your password manager | you |
@@ -52,11 +54,16 @@ Each file is encrypted to two age keys:
 - **The host key**, a dedicated age key that only root can read. `home` runs
   no SSH server, so it has no SSH host key to reuse. A dedicated key also
   keeps decryption separate from SSH identity, so rotating either one doesn't
-  touch the other.
-- **Your recovery key**, a personal age key that never needs to be on the
-  host. Day-to-day editing on the host decrypts with the host key, through
-  `sudo`. You only need the recovery key to restore a backup onto a new or
-  rebuilt machine.
+  touch the other. At rest it is wrapped twice: with jesse's login password
+  (scrypt and ChaCha20-Poly1305), then sealed with `systemd-creds` to this
+  machine's TPM and its host credential secret. Unwrapping it needs both the
+  password and this machine, so a copy of the disk or of the file alone is
+  useless. See [Locked and unlocked](#locked-and-unlocked).
+- **Your recovery key**, a personal age key with its own passphrase that
+  never needs to be on the host. Day-to-day editing on the host decrypts with
+  the host key, through `sudo`. You only need the recovery key to restore a
+  backup onto a new or rebuilt machine, or to replace a host key nobody can
+  unwrap any more.
 
 ## One-time setup on a host
 
@@ -67,9 +74,9 @@ Each file is encrypted to two age keys:
    ```
 
    It prints a `# public key: age1…` line and an `AGE-SECRET-KEY-1…` line.
-   Save the whole output in your password manager, and don't leave it on disk
-   anywhere agents run. Skip this step if you already have one: one recovery
-   key covers every host.
+   Save the whole output in your password manager under its own passphrase,
+   and don't leave it on disk anywhere agents run. Skip this step if you
+   already have one: one recovery key covers every host.
 
 2. On the host, after switching to a configuration that imports the module,
    create the host key and `.sops.yaml`:
@@ -78,8 +85,12 @@ Each file is encrypted to two age keys:
    secret init age1…your-recovery-public-key…
    ```
 
-   It asks for your sudo password, writes `/var/lib/sops-nix/key.txt` if
-   there isn't one, and prints the host's public key.
+   It asks for your sudo password, then for jesse's login password twice.
+   It creates the host key, wraps it into `/var/lib/sops-nix/key.sealed`,
+   leaves it unlocked until the next reboot, and prints the host's public key.
+   The host needs a working TPM (`systemd-creds has-tpm2` reports `yes`); the
+   key is always sealed to it. If it reports anything else, stop: that is an
+   unmet requirement for the owner to resolve, not something to work around.
 
 3. Add the first secret (see below), then back the file up.
 
@@ -98,26 +109,129 @@ deletes that secret and stops its consumers only. Deleting the file or the key
 on its own changes nothing until one of those runs, so run `secret apply`
 afterwards.
 
+### Moving a plain host key to a wrapped one
+
+A host set up before login unlock has its host key unwrapped in
+`/var/lib/sops-nix/key.txt`. Switching it to a configuration with
+`secrets.unlock.enable` fails closed: the switch succeeds, but the store now
+looks for the key in `/run/secrets-key`, finds none, and withdraws every
+secret and stops every consumer until the key is wrapped. The plain key is
+left where it is. `secret list` says so. Then:
+
+```sh
+secret migrate   # asks for jesse's login password twice
+```
+
+It checks that the plain key is the host recipient in `.sops.yaml` (the
+first one, never the recovery key) and decrypts the file. It then wraps that
+same key with the login password and the TPM and makes the wrap durable on
+disk. Only after that does it unlock with the key, check it still decrypts the
+file, delete the plain copy and deploy. A wrong password or any failed check
+leaves the plain key in place and the secrets withdrawn.
+
+If it is interrupted after the wrap is written, `secret list` keeps warning
+while the plain key exists. Run `secret migrate` again: it asks for the
+password once, checks that the existing wrap holds exactly the plain key, then
+finishes. A wrap of any other key is refused, and the plain key is kept. If
+the interruption came while the plain copy was being overwritten, so it is no
+longer a key, `secret migrate` instead unwraps the existing wrap with your
+password, checks that it is this host's recipient and decrypts the file, and
+only then removes what's left of the plain copy. The key itself doesn't
+change, so `.sops.yaml`, the file and its backups stay as they are. Deleting
+the plain copy can't scrub it from the disk or its snapshots; if that matters,
+replace the key with `secret reset-key` afterwards.
+
+## Locked and unlocked
+
+The secrets are locked whenever the unwrapped host key isn't in memory:
+
+- **At boot** nothing is deployed. Every consumer, host or broker, stays
+  stopped, and switches still succeed.
+- **At login** on the Tohru greeter (greetd) or a text console (`login`),
+  unlocking takes two PAM steps. While you authenticate, a hook reads the
+  password you typed and unwraps the key into a staging directory under
+  `/run/secrets-key` that only root can read. Only when PAM has accepted the
+  login, password and account checks both, and opens the session does a
+  second hook move it into place and deploy the secrets; consumers start a
+  moment later. A rejected login, such as an old password after a change, or
+  a locked or expired account, never opens a session, so its staged key is
+  discarded within a minute and nothing deploys. The greeter only preselects
+  jesse, it never logs in on its own, so this happens only when you type the
+  password. The hooks never affect whether the login succeeds or make it
+  wait: any failure in them just leaves the secrets locked, they give up after
+  30 seconds, and while a `secret` command is working on the key (say a
+  `secret rewrap` that hasn't finished) the login skips unlocking rather than
+  waiting for it. A `secret` command sitting at its password prompt doesn't
+  hold the key, so it doesn't get in the way. They never log, store or pass on the
+  password.
+- **The screen locker, `sudo` and SSH** don't unlock. SSH logins use keys,
+  with no password to unwrap with.
+- **Logging out** keeps the secrets unlocked until the next reboot.
+  `secret lock` locks them again by hand, withdrawing every secret.
+- **After a crash or power loss** the key and every decrypted value, which
+  live only in ramfs, are gone; the next login unlocks again.
+- **From an SSH session or a console that's already logged in**,
+  `secret unlock` asks for the password and does the same.
+
+When you change jesse's password with `passwd`, a hook rewraps the key with
+the new password, as long as the secrets are unlocked at the time and the new
+password is confirmed in `/etc/shadow`; a change the shadow file refused
+keeps the old wrap. The new wrap is written beside the old one, checked to
+unwrap to the same key, and only then replaces it, so the key is never left
+unwrapped on disk and a failure part-way keeps the old wrap. If the secrets
+are locked at the time (say the password was changed as root before you
+logged in), or rewrapping fails, the old wrap stays, logins with the new
+password succeed but leave the secrets locked, and the journal
+(`journalctl -t secret-unlock`) and `secret list` say a rewrap is pending.
+Then:
+
+```sh
+secret rewrap   # asks for the old password if locked, then the new one twice
+secret apply
+```
+
+If nobody knows the old password any more, or the TPM was reset or replaced,
+replace the host key using the recovery key. `reset-key` first checks that the
+recovery key decrypts the file, then builds the new key, its wrap, the new
+`.sops.yaml` and the re-encrypted file in a staging directory on
+`/run/secrets-key`, and checks the new key decrypts the result. Only then does
+it move them into place, one file at a time, keeping the old wrap until the
+last step. Those moves aren't a single atomic step, but the file stays
+encrypted to the recovery key throughout, so if it is interrupted, run it
+again. Keep the recovery key on `/run/secrets-key`, the root-only ramfs
+that holds the host key, which is never swapped:
+
+```sh
+sudo install -m 600 /dev/stdin /run/secrets-key/recovery.txt   # paste, then Ctrl-D
+secret reset-key --identity /run/secrets-key/recovery.txt     # asks for the login password
+sudo rm /run/secrets-key/recovery.txt
+```
+
 ## Day-to-day commands
 
-Every `secret` command elevates with `sudo`. None of them prints a
+Every `secret` command elevates with `sudo`, and those that read or change
+values need the secrets unlocked. None of them prints a
 value except `edit`, which opens the decrypted file in `$EDITOR`.
 
 ```sh
-secret list                              # names, kinds, in the file, deployed
-secret add github-token            # prompts twice, without echo
+secret list                            # names, kinds, in the file, deployed
+secret add github-token                # prompts twice, without echo
 secret add gh-app-key --file key.pem
 printf %s "$value" | secret add name   # or read from stdin
 secret rotate github-token
 secret remove github-token
-secret edit                        # shows every value
-secret apply                       # deploy the file's current values now
+secret edit                            # shows every value
+secret apply                           # deploy the file's current values now
+secret unlock                          # unlock without logging in again
+secret lock                            # withdraw everything until the next unlock
+secret rewrap                          # rewrap the host key with a new login password
 ```
 
 Editing the encrypted file doesn't change the system configuration, so a
 switch doesn't redeploy it. `secret apply` decrypts it into
 `/run/secrets` straight away, restarts the services that use a changed
-secret, and starts any that were waiting for one. Boot deploys it too.
+secret, and starts any that were waiting for one. Unlocking at login deploys
+it too.
 
 ### Adding a secret
 
@@ -235,14 +349,14 @@ To restore onto a new or rebuilt host:
 
 1. Switch it to a configuration that imports the module, then run
    `secret init age1…your-recovery-public-key…`.
-2. Put your recovery key in a root-only file on tmpfs, use it, then delete
-   it:
+2. Put your recovery key in a root-only file on the `/run/secrets-key`
+   ramfs, use it, then delete it:
 
    ```sh
-   sudo install -m 600 /dev/stdin /run/secrets-recovery.txt   # paste, then Ctrl-D
+   sudo install -m 600 /dev/stdin /run/secrets-key/recovery.txt   # paste, then Ctrl-D
    secret restore /mnt/media3/backups/secrets/secrets-home-….yaml \
-     --identity /run/secrets-recovery.txt
-   sudo rm /run/secrets-recovery.txt
+     --identity /run/secrets-key/recovery.txt
+   sudo rm /run/secrets-key/recovery.txt
    secret apply
    ```
 
@@ -268,16 +382,10 @@ It updates `.sops.yaml` and re-encrypts the file. To drop a recipient, edit
 any copy it could decrypt before stays readable to it, so rotate the secrets
 if the key was compromised.
 
-To replace the host key:
-
-```sh
-sudo age-keygen -o /var/lib/sops-nix/key.new
-secret recipient-add "$(sudo age-keygen -y /var/lib/sops-nix/key.new)"
-sudo mv /var/lib/sops-nix/key.new /var/lib/sops-nix/key.txt
-sudoedit /var/lib/secrets/.sops.yaml   # remove the old host key
-secret rekey
-secret apply
-```
+To replace the host key, for example because it may have leaked, use
+`secret reset-key` with your recovery key, as in
+[Locked and unlocked](#locked-and-unlocked), then rotate the secrets it could
+decrypt.
 
 ## How consumers use secrets
 
@@ -342,13 +450,22 @@ jesse, since they are jesse's by design, but not broker secrets:
 - Broker secrets are `agent-broker`'s, mode `0400`, inside sops-nix's
   `root:keys` directory, and jesse is in neither `agent-broker` nor `keys`. A
   NixOS assertion keeps every user but `agent-broker` out of both groups.
-- The encrypted file and the host key are root's, in `0700` directories.
+- The encrypted file and the wrapped and unwrapped host key are root's, in
+  `0700` directories. The unwrapped key and decrypted values live on ramfs,
+  which the kernel never swaps. `secret-unlock` locks its memory
+  (`mlockall`) and clears its password and key buffers after use, but
+  `secret`'s other commands run `sops` and `age`, which don't lock theirs,
+  so a value they handle can reach swap if the host has it. `home` currently
+  has a 32 GiB unencrypted `/swapfile`, so that gap is open there; whether to
+  encrypt or drop it is Jesse's call. The password itself also passes through
+  the greeter, `login` and PAM before the helper sees it, and none of those
+  lock their memory, so nothing here keeps it out of swap end to end.
 - jesse can't `ptrace` or read the environment of `agent-broker`'s processes.
 - `secret` needs jesse's sudo password.
 - Your recovery key isn't on the host. If you ever put it on disk as jesse,
   any host agent can read it and decrypt every backup, so keep it in your
-  password manager and use it only through a root-only file on `/run`, as in
-  the restore steps.
+  password manager and use it only through a root-only file on
+  `/run/secrets-key`, as in the restore steps.
 
 This holds only against agents that can't become root. Some things give jesse
 root, and through it everything above, so none of this isolates the secrets
@@ -358,7 +475,10 @@ from an adversarial agent on the host that uses them:
   and you chose to keep it. Any agent on the host as jesse can use it.
 - **jesse's passwordless sudo for `nixos-rebuild` and `switch-to-configuration`.**
   Activating a configuration runs arbitrary code as root.
-- **jesse's sudo password**, for anyone who has it.
+- **jesse's sudo password**, for anyone who has it. It is also the login
+  password that unwraps the host key, so it guards both; anything that can
+  capture it as you type it, such as a malicious program in your desktop
+  session, can unwrap the key on this machine.
 
 Broker services also must not log values: jesse can read the system journal.
 

@@ -7,6 +7,8 @@
 }:
 let
   cfg = config.secrets;
+  helper = cfg.unlock.helper;
+  pamExec = "${config.security.pam.package}/lib/security/pam_exec.so";
   manifest = config.system.build.sops-nix-manifest;
   storeSecrets = lib.filterAttrs (_: s: s.sopsFile == cfg.file) config.sops.secrets;
   keys = lib.mapAttrsToList (_: s: s.key) storeSecrets;
@@ -148,8 +150,33 @@ in
     };
     keyFile = lib.mkOption {
       type = lib.types.str;
-      default = "/var/lib/sops-nix/key.txt";
+      default = if cfg.unlock.enable then "/run/secrets-key/key.txt" else "/var/lib/sops-nix/key.txt";
+      defaultText = lib.literalMD "on a ramfs while unlocked, or `/var/lib/sops-nix/key.txt` without `unlock`";
       description = "The host's root-only age identity.";
+    };
+    unlock = {
+      enable = lib.mkEnableOption "keeping the host key wrapped with a user's login password, unwrapped at login";
+      user = lib.mkOption {
+        type = lib.types.str;
+        description = "User whose login password wraps the key.";
+      };
+      helper = lib.mkOption {
+        type = lib.types.str;
+        readOnly = true;
+        default = "${pkgs.secret}/bin/secret-unlock";
+      };
+      sealedKeyFile = lib.mkOption {
+        type = lib.types.str;
+        default = "/var/lib/sops-nix/key.sealed";
+      };
+      pamServices = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [
+          "greetd"
+          "login"
+        ];
+        description = "Login services whose password unlocks the key. Screen lockers, sudo and SSH stay out.";
+      };
     };
     host = lib.mkOption {
       type = lib.types.attrsOf hostSecretType;
@@ -215,6 +242,14 @@ in
       environment.systemPackages = [ pkgs.secret ];
       environment.etc."secrets/config.json".text = builtins.toJSON {
         inherit (cfg) file keyFile;
+        unlock = {
+          inherit (cfg.unlock) enable sealedKeyFile helper;
+          user = if cfg.unlock.enable then cfg.unlock.user else null;
+          systemdCreds = "${config.systemd.package}/bin/systemd-creds";
+          systemctl = "${config.systemd.package}/bin/systemctl";
+          systemdRun = "${config.systemd.package}/bin/systemd-run";
+          libcrypt = "${pkgs.libxcrypt}/lib/libcrypt.so.2";
+        };
         secrets = cfg.catalog;
         units = lib.unique cfg.startUnits;
       };
@@ -255,6 +290,93 @@ in
         # secret apply restarts it on demand.
         unitConfig.StartLimitIntervalSec = 0;
       };
+    })
+
+    (lib.mkIf cfg.unlock.enable {
+      assertions = [
+        {
+          assertion = lib.hasPrefix "/run/" cfg.keyFile;
+          message = "secrets.unlock keeps the unwrapped key in memory, so secrets.keyFile must be under /run";
+        }
+      ];
+
+      # ramfs never swaps, unlike tmpfs.
+      systemd.mounts = [
+        {
+          what = "ramfs";
+          where = dirOf cfg.keyFile;
+          type = "ramfs";
+          options = "mode=0700";
+          wantedBy = [ "local-fs.target" ];
+        }
+      ];
+      systemd.tmpfiles.rules = [ "d ${dirOf cfg.unlock.sealedKeyFile} 0700 root root -" ];
+
+      systemd.services.secrets-apply = {
+        description = "Deploy secrets after the host key is unlocked";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${lib.getExe pkgs.secret} apply";
+        };
+      };
+
+      security.pam.services = lib.mkMerge (
+        map (service: {
+          ${service}.rules = {
+            # Stages the unwrapped key: before pam_unix, which ends the stack on success.
+            auth.secrets-unlock = {
+              order = config.security.pam.services.${service}.rules.auth.unix.order - 10;
+              control = "optional";
+              modulePath = pamExec;
+              args = [
+                "expose_authtok"
+                "quiet"
+                "seteuid"
+                helper
+                "pam"
+              ];
+            };
+            # The session stack only runs for a login that passed authentication and the account checks.
+            session.secrets-unlock = {
+              order = config.security.pam.services.${service}.rules.session.unix.order + 10;
+              control = "optional";
+              modulePath = pamExec;
+              args = [
+                "quiet"
+                "seteuid"
+                "type=open_session"
+                helper
+                "pam"
+              ];
+            };
+          };
+        }) cfg.unlock.pamServices
+        ++
+          map
+            (service: {
+              ${service}.rules.password = {
+                # pam_unix is the stack's only module, so required means the same as sufficient,
+                # except that the rewrap still runs after it; it checks the shadow file itself.
+                unix.control = lib.mkForce "required";
+                secrets-rewrap = {
+                  order = config.security.pam.services.${service}.rules.password.unix.order + 10;
+                  control = "optional";
+                  modulePath = pamExec;
+                  args = [
+                    "expose_authtok"
+                    "quiet"
+                    "seteuid"
+                    helper
+                    "pam"
+                  ];
+                };
+              };
+            })
+            [
+              "passwd"
+              "chpasswd"
+            ]
+      );
     })
   ];
 }

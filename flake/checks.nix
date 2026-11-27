@@ -73,6 +73,9 @@
         }
         // lib.optionalAttrs (system == "x86_64-linux") {
           secrets-eval = import ../hosts/common/optional/secret-store-eval-test.nix { inherit inputs pkgs; };
+          secrets-unlock-vm = pkgs.testers.runNixOSTest (
+            import ../hosts/common/optional/secret-unlock-test.nix { inherit inputs pkgs; }
+          );
           secrets-vm = pkgs.testers.runNixOSTest (
             import ../hosts/common/optional/secret-store-test.nix { inherit inputs pkgs; }
           );
