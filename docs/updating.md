@@ -141,8 +141,9 @@ with `nix flake update`. [Secrets](secrets.md) depend on its
 `hosts/common/optional/secret-store.nix` gives the unit an `ExecCondition`, so
 a missing file or key withdraws everything instead of failing the switch, and
 replaces its `ExecStart` with a wrapper that deploys only the secrets present
-in the file. After an update, build `checks.x86_64-linux.secrets-vm` and
-`secrets-eval`: they boot without the file, add, rotate and remove secrets
+in the file. After an update, build `checks.x86_64-linux.secrets-vm`,
+`secrets-unlock-vm` (login unlock, password changes and the TPM seal, with a
+software TPM) and `secrets-eval`: they boot without the file, add, rotate and remove secrets
 with `secret`, check the decrypted files' owners and modes, and check that the
 declaration rules fail evaluation. A renamed option, a moved unit or a changed
 manifest fails them.
